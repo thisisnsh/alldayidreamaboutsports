@@ -56,8 +56,15 @@ enum TeamCatalog {
         Team(code: "UZB", name: "Uzbekistan", flag: "🇺🇿"),
     ]
 
+    /// Placeholder teams for the Settings preview — generic on purpose so the
+    /// preview reads as an example, never as a real match.
+    static let previewHome = Team(code: "TMA", name: "Team A", flag: "🏳️")
+    static let previewAway = Team(code: "TMB", name: "Team B", flag: "🏳️")
+
     static func team(for code: String, in teams: [Team]) -> Team {
-        teams.first { $0.code == code }
+        if code == previewHome.code { return previewHome }
+        if code == previewAway.code { return previewAway }
+        return teams.first { $0.code == code }
             ?? Team(code: code, name: code, flag: "⚽")
     }
 }

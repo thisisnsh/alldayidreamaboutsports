@@ -44,16 +44,22 @@ struct ConfettiView: View {
     private static func makeBursts(in size: CGSize) -> [Particle] {
         let colors: [Color] = [.yellow, .green, .blue, .pink, .orange, .white, .red]
         var all: [Particle] = []
-        for (corner, dir) in [(CGPoint(x: 0, y: size.height), 1.0), (CGPoint(x: size.width, y: size.height), -1.0)] {
-            for _ in 0..<70 {
-                let angle = Double.random(in: 0.9...1.45) // up and inward
-                let speed = Double.random(in: 450...950)
+        // Spawn just outside the bottom-left and bottom-right corners so the
+        // burst visibly enters from the edges of the screen.
+        let corners: [(CGPoint, Double)] = [
+            (CGPoint(x: -20, y: size.height + 20), 1.0),
+            (CGPoint(x: size.width + 20, y: size.height + 20), -1.0),
+        ]
+        for (corner, dir) in corners {
+            for _ in 0..<80 {
+                let angle = Double.random(in: 0.7...1.45) // up and inward
+                let speed = Double.random(in: 500...1100)
                 all.append(Particle(
                     origin: corner,
                     velocity: CGVector(dx: cos(angle) * speed * dir, dy: -sin(angle) * speed),
                     color: colors.randomElement()!,
                     spin: Double.random(in: -8...8),
-                    size: CGFloat.random(in: 6...12),
+                    size: CGFloat.random(in: 10...18),
                     delay: Double.random(in: 0...0.4)
                 ))
             }
