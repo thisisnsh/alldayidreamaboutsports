@@ -1,19 +1,22 @@
 import SwiftUI
 
-/// Content of the small interactive panel shown during the tap window: the
-/// tappable ball plus a hover-revealed ✕ at the cluster's top-right.
+/// Content of the small interactive panel shown while the ball is tappable:
+/// one ball carrying every celebrated team's flag, plus a hover-revealed ✕
+/// at the cluster's top-right. The ✕ dismisses ONLY the ball — the
+/// notification set keeps its own ✕ and its own life.
 struct InteractiveBallView: View {
     @EnvironmentObject var overlay: OverlayManager
     @State private var hovering = false
     @State private var pulse = false
 
-    private var team: Team {
-        TeamCatalog.team(for: overlay.currentEvent?.teamCode ?? "", in: AppSession.shared.teams)
+    private var teams: [Team] {
+        overlay.ballEvents.compactMap { $0.teamCode }
+            .map { TeamCatalog.team(for: $0, in: AppSession.shared.teams) }
     }
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
-            BallView(team: team, diameter: 160)
+            BallView(teams: teams, diameter: 160)
                 .scaleEffect(pulse ? 1.06 : 1.0)
                 .animation(.easeInOut(duration: 0.7).repeatForever(autoreverses: true), value: pulse)
                 .contentShape(Circle())
@@ -24,7 +27,7 @@ struct InteractiveBallView: View {
 
             if hovering {
                 Button {
-                    overlay.dismissCurrent()
+                    overlay.dismissBall()
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 22))

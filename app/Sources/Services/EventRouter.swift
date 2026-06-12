@@ -26,7 +26,6 @@ final class EventRouter {
                   let totals = try? JSONDecoder().decode([String: Int].self, from: json)
             else { return }
             AppSession.shared.celebrationTotals[fixtureId] = totals
-            OverlayManager.shared.updateCelebrationCount(fixtureId: fixtureId, totals: totals)
         default:
             break
         }
@@ -48,17 +47,14 @@ final class EventRouter {
 
         let isFanGoal = event.type == .goal && event.teamCode.map(fans.contains) == true
 
-        // The pill is the information channel: real time, every event, always.
-        OverlayManager.shared.showPill(for: event, celebratory: isFanGoal)
+        // One queue for everything: the event joins the next notification
+        // set; fan goals additionally drive confetti + the center ball when
+        // their set displays.
+        OverlayManager.shared.submit(event, isFanGoal: isFanGoal)
 
-        // The center celebration is the experience channel on top of it.
-        if isFanGoal, settings.goalCenter ?? true {
-            OverlayManager.shared.enqueueCelebration(event)
-        }
-
-        // VAR took the goal back — its celebration (queued or playing) dies.
+        // VAR took the goal back — stop celebrating it.
         if event.type == .goalCancelled {
-            OverlayManager.shared.cancelCelebration(fixtureId: event.fixtureId, teamCode: event.teamCode)
+            OverlayManager.shared.cancelGoal(fixtureId: event.fixtureId, teamCode: event.teamCode)
         }
         Task { await AppSession.shared.refreshFixtures() }
     }

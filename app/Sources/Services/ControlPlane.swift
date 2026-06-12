@@ -4,11 +4,9 @@ import SwiftUI
 
 struct AnimationParams: Codable {
     var ballDropSeconds: Double = 1.5
-    var tapWindowSeconds: Double = 5
-    /// Tap window while another celebration waits — drain the queue fast.
-    var tapWindowBusySeconds: Double = 3
+    /// How long each notification set (and the ball with it) stays on screen.
     var pillHoldSeconds: Double = 5
-    /// Max pills visible in the notch stack; the oldest leaves early beyond it.
+    /// Notification set size — how many pills display at once.
     var notchStackMax: Int = 4
 }
 

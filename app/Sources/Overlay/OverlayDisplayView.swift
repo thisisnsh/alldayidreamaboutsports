@@ -1,48 +1,47 @@
 import SwiftUI
 
-/// Full-screen, click-through layer hosting both lanes at once:
-/// the notch stack (real-time pills) and the center celebration scene.
+/// Full-screen, click-through layer hosting everything at once: the pill set
+/// under the notch, fire-and-forget confetti bursts, and the center ball
+/// scene for the set's fan goals.
 struct OverlayDisplayView: View {
     @EnvironmentObject var overlay: OverlayManager
 
     var body: some View {
         GeometryReader { geo in
             ZStack {
-                if let event = overlay.currentEvent, overlay.phase != .idle {
-                    // Keyed by event so back-to-back celebrations rebuild
-                    // their views (confetti clocks, mini-ball state) fresh.
-                    CelebrationScene(event: event, size: geo.size)
-                        .id(event.eventId)
+                if overlay.ballPhase != .hidden, !overlay.ballEvents.isEmpty {
+                    BallScene(events: overlay.ballEvents, size: geo.size)
+                        // Keyed per set so confetti clocks / mini-ball state
+                        // never leak between consecutive sets.
+                        .id(overlay.ballEvents.first?.eventId ?? "")
+                        .transition(.opacity)
                 }
 
-                // Fan goal shown only as a pill (goal-in-center off) still
-                // gets confetti — one burst per celebratory item.
-                if AppSession.shared.prefs.settings.confetti ?? true,
-                   !(AppSession.shared.prefs.settings.goalCenter ?? true) {
-                    ForEach(overlay.notchItems.filter(\.celebratory)) { item in
-                        ConfettiView(size: geo.size).id(item.id)
-                    }
+                // Bursts overlap freely and outlive their set — each token is
+                // an independent ConfettiView with its own clock.
+                ForEach(overlay.confettiBursts) { burst in
+                    ConfettiView(size: geo.size)
+                        .id(burst.id)
                 }
 
-                NotchStackView(items: overlay.notchItems)
+                NotchStackView(items: overlay.activeSet)
             }
+            .animation(.easeOut(duration: 0.35), value: overlay.ballPhase)
             .frame(width: geo.size.width, height: geo.size.height)
         }
         .ignoresSafeArea()
     }
 }
 
-private struct CelebrationScene: View {
-    let event: MatchEvent
+/// The center celebration for one set: a single ball carrying the flags of
+/// every team that scored, with the goals stacked vertically beneath it.
+private struct BallScene: View {
+    let events: [MatchEvent]
     let size: CGSize
     @EnvironmentObject var overlay: OverlayManager
 
-    private var team: Team {
-        TeamCatalog.team(for: event.teamCode ?? "", in: AppSession.shared.teams)
-    }
-
-    private var confettiWanted: Bool {
-        AppSession.shared.prefs.settings.confetti ?? true
+    private var teams: [Team] {
+        events.compactMap { $0.teamCode }.map { TeamCatalog.team(for: $0, in: AppSession.shared.teams) }
     }
 
     var body: some View {
@@ -56,23 +55,15 @@ private struct CelebrationScene: View {
             )
             .allowsHitTesting(false)
 
-            if overlay.phase == .ballDropping {
-                FallingBall(team: team, size: size)
+            if overlay.ballPhase == .dropping {
+                FallingBall(teams: teams, size: size)
             }
 
-            // Confetti fires the moment the celebration appears — it
-            // doesn't wait for the ball to land or for any click.
-            if confettiWanted {
-                ConfettiView(size: size)
-            }
+            if overlay.ballPhase == .tapping {
+                goalLines
+                MiniBallBursts(teams: teams, size: size, bursts: overlay.tapBursts)
 
-            if overlay.phase != .ballDropping {
-                scoreboard
-                MiniBallBursts(team: team, size: size, bursts: overlay.tapBursts)
-            }
-
-            // Small tip floating just above the ball — not a notch drop.
-            if overlay.phase == .tapWindow {
+                // Small tip floating just above the ball — not a notch drop.
                 Text("Tap the ball to show support")
                     .font(.system(size: 11, weight: .medium, design: .rounded))
                     .foregroundStyle(.white.opacity(0.8))
@@ -80,19 +71,16 @@ private struct CelebrationScene: View {
                     .allowsHitTesting(false)
             }
         }
-        .opacity(overlay.phase == .fadeOut ? 0 : 1)
-        .animation(.easeOut(duration: 0.7), value: overlay.phase)
     }
 
-    private var scoreboard: some View {
-        VStack(spacing: 10) {
-            Spacer().frame(height: size.height / 2 + 90)
-            Text("\(flag(event.homeTeam)) \(event.homeName)  \(event.homeGoals) – \(event.awayGoals)  \(event.awayName) \(flag(event.awayTeam))")
-                .font(.system(size: 26, weight: .bold, design: .rounded))
-            if let player = event.player {
-                Text("\(player)\(event.minute.map { " · \($0)′" } ?? "")")
-                    .font(.system(size: 15, weight: .medium, design: .rounded))
-                    .opacity(0.85)
+    /// One line per fan goal in the set, stacked vertically under the ball.
+    private var goalLines: some View {
+        VStack(spacing: 8) {
+            Spacer().frame(height: size.height / 2 + 95)
+            ForEach(events, id: \.eventId) { event in
+                Text(goalLine(for: event))
+                    .font(.system(size: events.count > 2 ? 16 : 22, weight: .bold, design: .rounded))
+                    .lineLimit(1)
             }
             Spacer()
         }
@@ -100,6 +88,12 @@ private struct CelebrationScene: View {
         .shadow(radius: 6)
         .transition(.opacity)
         .allowsHitTesting(false)
+    }
+
+    private func goalLine(for event: MatchEvent) -> String {
+        let scorer = event.player ?? event.teamCode ?? ""
+        let minute = event.minute.map { " \($0)′" } ?? ""
+        return "\(flag(event.teamCode ?? "")) \(scorer)\(minute) · \(event.homeName) \(event.homeGoals) – \(event.awayGoals) \(event.awayName)"
     }
 
     private func flag(_ code: String) -> String {
@@ -110,7 +104,7 @@ private struct CelebrationScene: View {
 /// Drops from the notch, bounces off the bottom edge, settles center while
 /// growing — all analytic (time-based), so it stays smooth and interruptible.
 private struct FallingBall: View {
-    let team: Team
+    let teams: [Team]
     let size: CGSize
     @State private var start = Date()
 
@@ -118,10 +112,11 @@ private struct FallingBall: View {
         TimelineView(.animation) { context in
             let total = ControlPlane.shared.animationParams.ballDropSeconds
             let t = min(max(context.date.timeIntervalSince(start) / total, 0), 1)
-            BallView(team: team, diameter: 60 + 100 * t)
+            BallView(teams: teams, diameter: 60 + 100 * t)
                 .position(position(at: t))
         }
         .allowsHitTesting(false)
+        .onAppear { start = Date() }
     }
 
     private func position(at t: Double) -> CGPoint {
@@ -146,10 +141,10 @@ private struct FallingBall: View {
     }
 }
 
-/// The ball: SF soccerball.inverse in white (white ball, dark hexagons), plus
-/// the team's flag emoji badge. No images.
+/// The ball: SF soccerball.inverse in white, with a flag badge for EVERY team
+/// being celebrated. No images.
 struct BallView: View {
-    let team: Team
+    let teams: [Team]
     let diameter: CGFloat
 
     var body: some View {
@@ -159,9 +154,13 @@ struct BallView: View {
                 .foregroundStyle(.white)
                 .frame(width: diameter, height: diameter)
                 .shadow(color: .black.opacity(0.5), radius: 8, y: 4)
-            Text(team.flag)
-                .font(.system(size: diameter * 0.34))
-                .offset(x: diameter * 0.1, y: -diameter * 0.1)
+            HStack(spacing: -diameter * 0.08) {
+                ForEach(teams) { team in
+                    Text(team.flag)
+                        .font(.system(size: diameter * (teams.count > 2 ? 0.24 : 0.34)))
+                }
+            }
+            .offset(x: diameter * 0.1, y: -diameter * 0.1)
         }
     }
 }
