@@ -27,20 +27,28 @@ struct NotchPillView: View {
                 Image(systemName: icon)
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(iconColor)
-                VStack(alignment: .leading, spacing: 2) {
+                // Text block is centered; the icon hangs on the left.
+                VStack(alignment: .center, spacing: 2) {
                     Text(text)
                         .font(.system(size: 13, weight: .semibold, design: .rounded))
                         .foregroundStyle(.white)
                         .lineLimit(1)
                     if let matchLine {
-                        HStack(spacing: 5) {
-                            if isLive {
-                                Circle().fill(.red).frame(width: 5, height: 5)
-                            }
-                            Text(matchLine + (minute.map { " · \($0)′" } ?? ""))
+                        HStack(spacing: 4) {
+                            Text(matchLine)
                                 .font(.system(size: 10, weight: .medium, design: .rounded))
                                 .foregroundStyle(.white.opacity(0.75))
                                 .lineLimit(1)
+                            // Live dot rides with the timer, both red — same
+                            // treatment as the menu bar fixture rows.
+                            if isLive {
+                                Circle().fill(.red).frame(width: 5, height: 5)
+                                if let minute {
+                                    Text("\(minute)′")
+                                        .font(.system(size: 10, weight: .bold, design: .rounded))
+                                        .foregroundStyle(.red)
+                                }
+                            }
                         }
                     }
                 }

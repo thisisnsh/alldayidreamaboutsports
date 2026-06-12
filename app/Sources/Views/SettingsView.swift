@@ -11,13 +11,17 @@ struct SettingsView: View {
     @State private var autoInstall = true
 
     var body: some View {
+        VStack(spacing: 0) {
+            // Fixed heading — left-aligned, tucked under the traffic lights;
+            // only the cards below it scroll.
+            Text("Settings")
+                .font(.system(size: 18, weight: .bold, design: .rounded))
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.leading, 16)
+                .padding(.top, 26)
+
             ScrollView {
                 VStack(spacing: 14) {
-                    // In-content heading — left-aligned, tucked under the traffic lights.
-                    Text("Settings")
-                        .font(.system(size: 18, weight: .bold, design: .rounded))
-                        .frame(maxWidth: .infinity, alignment: .leading)
-
                     #if DEV_BACKEND
                     Text("🧪 dev session — fake backend, hardcoded data, auto events")
                         .font(.caption2)
@@ -90,9 +94,18 @@ struct SettingsView: View {
                     }
                 }
                 .padding(.horizontal, 16)
-                .padding(.top, 34) // clear of the traffic lights (no title bar)
+                .padding(.top, 12)
                 .padding(.bottom, 16)
             }
+            // Cards fade out as they slide up under the heading.
+            .mask(
+                VStack(spacing: 0) {
+                    LinearGradient(colors: [.clear, .black], startPoint: .top, endPoint: .bottom)
+                        .frame(height: 18)
+                    Rectangle()
+                }
+            )
+        }
         .onAppear {
             autoCheck = updater.automaticallyChecksForUpdates
             autoInstall = updater.automaticallyDownloadsUpdates
@@ -215,7 +228,7 @@ extension MatchEventType {
     var sampleText: String {
         switch self {
         case .kickoff: "Kickoff — Brazil vs USA"
-        case .goal: "73′ Goal 🇧🇷 Vinícius Jr"
+        case .goal: "73′ Goal — Vinícius Jr 🇧🇷"
         case .goalCancelled: "75′ VAR: goal disallowed 🇧🇷"
         case .yellowCard: "38′ Yellow card — Adams 🇺🇸"
         case .redCard: "81′ Red card — Ramos 🇺🇸"

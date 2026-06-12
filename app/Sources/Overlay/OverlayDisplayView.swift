@@ -21,9 +21,8 @@ struct OverlayDisplayView: View {
                             minute: event.minute,
                             isLive: event.type != .fullTime
                         )
-                        // Fan goal in pill style still gets its confetti.
-                        if event.type == .goal,
-                           event.teamCode.map(AppSession.shared.fanTeamCodes.contains) == true,
+                        // Fan goal shown as a pill still gets its confetti.
+                        if overlay.pillCelebratory,
                            AppSession.shared.prefs.settings.confetti ?? true {
                             ConfettiView(size: geo.size)
                         }
@@ -53,44 +52,37 @@ private struct CelebrationScene: View {
 
     var body: some View {
         ZStack {
-            // Center dark gradient so text stays readable over any wallpaper.
-            RadialGradient(
-                colors: [Color.black.opacity(0.55), .clear],
-                center: .center,
-                startRadius: 40,
-                endRadius: min(size.width, size.height) * 0.45
-            )
-            .allowsHitTesting(false)
+            if overlay.phase != .count {
+                // Center dark gradient so text stays readable over any wallpaper.
+                RadialGradient(
+                    colors: [Color.black.opacity(0.55), .clear],
+                    center: .center,
+                    startRadius: 40,
+                    endRadius: min(size.width, size.height) * 0.45
+                )
+                .allowsHitTesting(false)
 
-            if overlay.phase == .ballDropping {
-                FallingBall(team: team, size: size)
-            }
+                if overlay.phase == .ballDropping {
+                    FallingBall(team: team, size: size)
+                }
 
-            // The *interactive* panel draws the ball while it's tappable
-            // (tap window + count); this static twin takes over only for the
-            // fade, so ball, score and minis all dissolve together.
-            if overlay.phase == .fadeOut {
-                BallView(team: team, diameter: 160)
-                    .position(x: size.width / 2, y: size.height / 2)
-                    .allowsHitTesting(false)
-            }
+                // Confetti fires the moment the celebration appears — it
+                // doesn't wait for the ball to land or for any click.
+                if confettiWanted {
+                    ConfettiView(size: size)
+                }
 
-            // Confetti fires the moment the celebration appears — it doesn't
-            // wait for the ball to land or for any click.
-            if confettiWanted {
-                ConfettiView(size: size)
-            }
+                if overlay.phase != .ballDropping {
+                    scoreboard
+                    MiniBallBursts(team: team, size: size, bursts: overlay.tapBursts)
+                }
 
-            if overlay.phase != .ballDropping {
-                scoreboard
-                MiniBallBursts(team: team, size: size, bursts: overlay.tapBursts)
-            }
-
-            // Notch drops: "Tap the ball…" then the cumulative match count.
-            if overlay.phase == .tapWindow {
-                NotchTextDrop(text: "Tap the ball to show support")
-            }
-            if overlay.phase == .count || overlay.phase == .fadeOut {
+                if overlay.phase == .tapWindow {
+                    NotchTextDrop(text: "Tap the ball to show support")
+                }
+            } else {
+                // Everything has faded; only now does the celebration total
+                // drop from the notch, so the number means something.
                 NotchTextDrop(text: countText)
             }
         }
@@ -117,7 +109,8 @@ private struct CelebrationScene: View {
     }
 
     /// Only the team that scored — and the celebration itself only runs for
-    /// teams the user is a fan of, so this is always "your" team.
+    /// teams the user is a fan of, so this is always "your" team. The manager
+    /// skips this phase entirely if there's no count and the user never tapped.
     private var countText: String {
         let count = overlay.countTotals[event.teamCode ?? ""] ?? 0
         return count > 0

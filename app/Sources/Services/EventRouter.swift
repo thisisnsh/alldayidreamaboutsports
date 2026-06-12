@@ -54,7 +54,7 @@ final class EventRouter {
         if isFanGoal && goalCenter {
             OverlayManager.shared.enqueue(.celebration(event))
         } else {
-            OverlayManager.shared.enqueue(.pill(event))
+            OverlayManager.shared.enqueue(.pill(event, celebratory: isFanGoal))
         }
         Task { await AppSession.shared.refreshFixtures() }
     }
@@ -91,7 +91,7 @@ func pillText(for event: MatchEvent) -> String {
     let minute = event.minute.map { "\($0)′ " } ?? ""
     switch event.type {
     case .kickoff: return "Kickoff — \(event.homeName) vs \(event.awayName)"
-    case .goal: return "\(minute)Goal \(flag) \(event.player ?? event.teamCode ?? "")"
+    case .goal: return "\(minute)Goal — \(event.player ?? event.teamCode ?? "") \(flag)"
     case .goalCancelled: return "\(minute)VAR: goal disallowed \(flag)"
     case .yellowCard: return "\(minute)Yellow card — \(event.player ?? "") \(flag)"
     case .redCard: return "\(minute)Red card — \(event.player ?? "") \(flag)"

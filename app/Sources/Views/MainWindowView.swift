@@ -24,17 +24,23 @@ struct MainWindowView: View {
     var body: some View {
         ZStack {
             AppBackground()
-            switch session.mainScreen {
-            case .login:
-                LoginView()
-            case .teamPicker:
-                TeamPickerView()
-            case .settings:
-                SettingsView(updater: updater)
+            Group {
+                switch session.mainScreen {
+                case .login:
+                    LoginView()
+                case .teamPicker:
+                    TeamPickerView()
+                case .settings:
+                    SettingsView(updater: updater)
+                }
             }
+            // Crossfade between screens; the frame eases without bounce so
+            // the window resize tracks it cleanly (spring overshoot makes the
+            // window server stutter).
+            .transition(.opacity)
         }
         .frame(width: session.mainScreen.size.width, height: session.mainScreen.size.height)
-        .animation(.spring(duration: 0.35, bounce: 0.15), value: session.mainScreen)
+        .animation(.easeInOut(duration: 0.28), value: session.mainScreen)
         .installsWindowOpener()
         .appTheme(session.prefs.settings.theme ?? .system)
     }
