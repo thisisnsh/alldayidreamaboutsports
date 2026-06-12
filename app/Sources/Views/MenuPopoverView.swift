@@ -26,7 +26,15 @@ struct MenuPopoverView: View {
         .background(AppBackground())
         .installsWindowOpener()
         .appTheme(session.prefs.settings.theme ?? .system)
-        .onAppear { Task { await session.refreshFixtures() } }
+        // Every menu open refreshes match data — all of it comes from the
+        // CDN-cached JSON (R2, zero egress), never the backend API. Fan
+        // teams are deliberately NOT fetched here; they're local state.
+        .onAppear {
+            Task {
+                await session.refreshTeams()
+                await session.refreshFixtures()
+            }
+        }
     }
 
     private func header(_ profile: Profile) -> some View {

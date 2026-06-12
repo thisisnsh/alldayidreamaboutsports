@@ -54,7 +54,25 @@ final class AppSession: ObservableObject {
         #endif
         Task { await refreshTeams() }
         Task { await refreshFixtures() }
+        // Fan teams sync with the backend ONCE per app start; every other
+        // read is local. Changes go up via setFanTeams as they happen.
+        Task { await syncFanTeamsOnLaunch() }
         startFixturesTimer()
+        PushService.shared.syncTopics(to: fanTeamCodes)
+    }
+
+    /// One launch-time reconciliation: server teams win on a fresh machine,
+    /// local teams backfill an empty server. Never called again until the
+    /// next launch — the menu always reads from local state.
+    private func syncFanTeamsOnLaunch() async {
+        guard isSignedIn, let server = try? await api.fetchPrefs() else { return }
+        let serverTeams = server.fanOf["football"]?[String(AppEnvironment.leagueId)] ?? []
+        if !serverTeams.isEmpty && prefs.footballTeams.isEmpty {
+            prefs.fanOf = server.fanOf
+            persistPrefs()
+        } else if serverTeams != prefs.footballTeams {
+            try? await api.putPrefs(roamingPrefs)
+        }
         PushService.shared.syncTopics(to: fanTeamCodes)
     }
 

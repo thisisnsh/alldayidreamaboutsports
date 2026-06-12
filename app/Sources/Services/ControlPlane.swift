@@ -23,6 +23,9 @@ final class ControlPlane: ObservableObject {
     @Published var updateRequired = false
     @Published var celebrationEnabled = true
     @Published var animationParams = AnimationParams()
+    /// How many teams a user can follow — remote-tunable, fetched at app
+    /// start alongside the rest of the config.
+    @Published var maxFanTeams = 10
 
     var pollingIntervalSeconds: Double = 30
 
@@ -62,6 +65,9 @@ final class ControlPlane: ObservableObject {
         if rc["polling_interval_s"].numberValue.doubleValue > 0 {
             pollingIntervalSeconds = rc["polling_interval_s"].numberValue.doubleValue
         }
+        if rc["max_fan_teams"].numberValue.intValue > 0 {
+            maxFanTeams = rc["max_fan_teams"].numberValue.intValue
+        }
         if let data = rc["animation_params"].stringValue.data(using: .utf8),
            let params = try? JSONDecoder().decode(AnimationParams.self, from: data) {
             animationParams = params
@@ -77,6 +83,9 @@ final class ControlPlane: ObservableObject {
         }
         if let minBuild = config.minBuild, AppEnvironment.buildNumber < minBuild {
             updateRequired = true
+        }
+        if let max = config.maxFanTeams, max > 0 {
+            maxFanTeams = max
         }
         reactToState()
     }
