@@ -43,7 +43,6 @@ struct BackupConfig: Codable {
     let killSwitch: Bool?
     let message: String?
     let minBuild: Int?
-    let maxFanTeams: Int?
 }
 
 extension ISO8601DateFormatter {

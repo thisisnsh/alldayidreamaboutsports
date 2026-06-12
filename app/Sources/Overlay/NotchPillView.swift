@@ -1,51 +1,56 @@
 import AppKit
 import SwiftUI
 
-/// Black pill that slides down from the notch for non-celebration events
-/// (cards, opponent goals, kickoff, HT/FT), holds, and slides back up.
-/// Styled to read as an extension of the notch hardware — same idea as the
-/// NotchView in aithing-mac, reduced to a one-shot toast.
-struct NotchPillView: View {
-    let icon: String
-    let iconColor: Color
-    let text: String
-    @State private var shown = false
+/// The real-time notification stack hanging off the notch: every match event
+/// appears the moment it arrives — newest at the bottom, oldest sliding up
+/// and out at the top. Styled to read as an extension of the notch hardware.
+struct NotchStackView: View {
+    let items: [NotchItem]
 
     private var topInset: CGFloat {
         let inset = NSScreen.main?.safeAreaInsets.top ?? 0
-        return inset > 0 ? inset : 26
+        return inset > 0 ? inset : 26 // just below the menu bar when no notch
     }
 
     var body: some View {
-        VStack {
-            HStack(spacing: 10) {
-                Image(systemName: icon)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(iconColor)
-                Text(text)
-                    .font(.system(size: 13, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
+        VStack(spacing: 8) {
+            ForEach(items) { item in
+                NotchPillRow(item: item)
+                    .transition(.asymmetric(
+                        // New arrivals fade in at the bottom of the stack…
+                        insertion: .opacity.combined(with: .scale(scale: 0.9, anchor: .top)),
+                        // …expiry always happens at the top, sliding up.
+                        removal: .move(edge: .top).combined(with: .opacity)
+                    ))
             }
-            .padding(.horizontal, 18)
-            .padding(.vertical, 10)
-            .background(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(.black)
-                    .shadow(color: .black.opacity(0.4), radius: 10, y: 4)
-            )
-            .offset(y: shown ? topInset + 6 : -80)
-            .animation(.spring(duration: 0.55, bounce: 0.2), value: shown)
             Spacer()
         }
+        .padding(.top, topInset + 6)
         .frame(maxWidth: .infinity)
         .allowsHitTesting(false)
-        .onAppear {
-            shown = true
-            let hold = ControlPlane.shared.animationParams.pillHoldSeconds
-            DispatchQueue.main.asyncAfter(deadline: .now() + hold) {
-                shown = false // slides back up; OverlayManager finishes shortly after
-            }
+        .clipped() // the top exit slides "into" the notch, not over the bar
+    }
+}
+
+private struct NotchPillRow: View {
+    let item: NotchItem
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: item.icon)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(item.iconColor)
+            Text(item.text)
+                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                .foregroundStyle(.white)
+                .lineLimit(1)
         }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 10)
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(.black)
+                .shadow(color: .black.opacity(0.4), radius: 10, y: 4)
+        )
     }
 }

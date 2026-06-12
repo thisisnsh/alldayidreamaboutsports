@@ -102,7 +102,7 @@ final class FakeScores: ScoresProviding {
         return FakeStore.shared.celebrations[fixtureId] ?? [:]
     }
     func fetchBackupConfig() async throws -> BackupConfig {
-        BackupConfig(killSwitch: false, message: nil, minBuild: nil, maxFanTeams: nil)
+        BackupConfig(killSwitch: false, message: nil, minBuild: nil)
     }
 }
 
@@ -162,6 +162,16 @@ enum DevSimulator {
             "fixtureId": String(fixture.fixtureId),
             "totals": "{\"BRA\": \(Int.random(in: 2_000_000...9_000_000)), \"USA\": 412000}",
         ])
+    }
+
+    /// Several events in the same instant — exercises the notch stack
+    /// (real-time arrival, cap, oldest-leaves-early) and the celebration
+    /// queue in one shot.
+    static func burst() {
+        fanGoal()
+        yellowCard()
+        opponentGoal()
+        fullTime()
     }
 
     // MARK: Auto loop — random events on a timer (knobs in DevConfig)
