@@ -27,15 +27,15 @@ enum DevConfig {
     static let autoEventsEnabled = true
 
     /// Seconds after launch until the first auto event.
-    static let firstAutoEventAfterSeconds: Double = 8
+    static let firstAutoEventAfterSeconds: Double = 2
 
     /// Gap between auto events (a random value in this range each time).
-    static let autoEventIntervalSeconds: ClosedRange<Double> = 20 ... 40
+    static let autoEventIntervalSeconds: ClosedRange<Double> = 2 ... 4
 
     /// Relative weights for which event the auto loop fires.
     /// fanGoal = full ball-drop celebration; the rest are notch pills.
     static let autoEventWeights: [(weight: Int, fire: @MainActor () -> Void)] = [
-        (5, DevSimulator.fanGoal),
+        (1, DevSimulator.fanGoal),
         (1, DevSimulator.opponentGoal),
         (1, DevSimulator.yellowCard),
         (1, DevSimulator.varCancelled),

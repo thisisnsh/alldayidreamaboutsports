@@ -3,8 +3,27 @@ import SwiftUI
 struct LoginView: View {
     @EnvironmentObject var session: AppSession
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
+        ZStack {
+            AppBackground()
+            loginContent
+        }
+        .frame(width: 380, height: 420)
+        .installsWindowOpener()
+        .appTheme(session.prefs.settings.theme ?? .system)
+        .onChange(of: session.profile) { _, profile in
+            guard profile != nil else { return }
+            dismiss()
+            // Straight into the team picker — an empty app is a dead app.
+            if session.fanTeamCodes.isEmpty {
+                openWindow(id: WindowID.teamPicker)
+            }
+        }
+    }
+
+    private var loginContent: some View {
         VStack(spacing: 22) {
             Spacer()
             Image(systemName: "soccerball")
@@ -47,15 +66,5 @@ struct LoginView: View {
                 .padding(.bottom, 14)
         }
         .padding(28)
-        .onChange(of: session.profile) { _, profile in
-            guard profile != nil else { return }
-            // The window morphs straight into the team picker — an empty app
-            // is a dead app. Returning users just close the window.
-            if session.fanTeamCodes.isEmpty {
-                session.mainScreen = .teamPicker
-            } else {
-                dismiss()
-            }
-        }
     }
 }

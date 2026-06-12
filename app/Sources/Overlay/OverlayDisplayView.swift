@@ -10,14 +10,18 @@ struct OverlayDisplayView: View {
             ZStack {
                 if let event = overlay.currentEvent {
                     switch overlay.phase {
-                    case .ballDropping, .tapWindow, .count, .fadeOut:
+                    case .ballDropping, .tapWindow, .fadeOut:
                         CelebrationScene(event: event, size: geo.size)
+                    case .count:
+                        // Rendered OUTSIDE the scene: the faded scene must be
+                        // fully gone before this appears, otherwise its dying
+                        // views flash for a frame as the opacity comes back.
+                        NotchTextDrop(text: countText(for: event))
                     case .pill:
                         NotchPillView(
                             icon: pillIcon(for: event),
                             iconColor: pillIconColor(for: event),
-                            text: pillText(for: event),
-                            matchLine: pillMatchLine(for: event)
+                            text: pillText(for: event)
                         )
                         // Fan goal shown as a pill still gets its confetti.
                         if overlay.pillCelebratory,
@@ -32,6 +36,17 @@ struct OverlayDisplayView: View {
             .frame(width: geo.size.width, height: geo.size.height)
         }
         .ignoresSafeArea()
+    }
+
+    /// Only the team that scored — the celebration only runs for fan teams,
+    /// so this is always "your" team. OverlayManager skips the count phase
+    /// when there's no total and the user never tapped.
+    private func countText(for event: MatchEvent) -> String {
+        let team = TeamCatalog.team(for: event.teamCode ?? "", in: AppSession.shared.teams)
+        let count = overlay.countTotals[event.teamCode ?? ""] ?? 0
+        return count > 0
+            ? "🎉 \(count.formattedCompact) celebrations for \(team.name) this match"
+            : "🎉 You celebrated with \(team.name)!"
     }
 }
 
@@ -50,38 +65,32 @@ private struct CelebrationScene: View {
 
     var body: some View {
         ZStack {
-            if overlay.phase != .count {
-                // Center dark gradient so text stays readable over any wallpaper.
-                RadialGradient(
-                    colors: [Color.black.opacity(0.55), .clear],
-                    center: .center,
-                    startRadius: 40,
-                    endRadius: min(size.width, size.height) * 0.45
-                )
-                .allowsHitTesting(false)
+            // Center dark gradient so text stays readable over any wallpaper.
+            RadialGradient(
+                colors: [Color.black.opacity(0.55), .clear],
+                center: .center,
+                startRadius: 40,
+                endRadius: min(size.width, size.height) * 0.45
+            )
+            .allowsHitTesting(false)
 
-                if overlay.phase == .ballDropping {
-                    FallingBall(team: team, size: size)
-                }
+            if overlay.phase == .ballDropping {
+                FallingBall(team: team, size: size)
+            }
 
-                // Confetti fires the moment the celebration appears — it
-                // doesn't wait for the ball to land or for any click.
-                if confettiWanted {
-                    ConfettiView(size: size)
-                }
+            // Confetti fires the moment the celebration appears — it
+            // doesn't wait for the ball to land or for any click.
+            if confettiWanted {
+                ConfettiView(size: size)
+            }
 
-                if overlay.phase != .ballDropping {
-                    scoreboard
-                    MiniBallBursts(team: team, size: size, bursts: overlay.tapBursts)
-                }
+            if overlay.phase != .ballDropping {
+                scoreboard
+                MiniBallBursts(team: team, size: size, bursts: overlay.tapBursts)
+            }
 
-                if overlay.phase == .tapWindow {
-                    NotchTextDrop(text: "Tap the ball to show support")
-                }
-            } else {
-                // Everything has faded; only now does the celebration total
-                // drop from the notch, so the number means something.
-                NotchTextDrop(text: countText)
+            if overlay.phase == .tapWindow {
+                NotchTextDrop(text: "Tap the ball to show support")
             }
         }
         .opacity(overlay.phase == .fadeOut ? 0 : 1)
@@ -104,16 +113,6 @@ private struct CelebrationScene: View {
         .shadow(radius: 6)
         .transition(.opacity)
         .allowsHitTesting(false)
-    }
-
-    /// Only the team that scored — and the celebration itself only runs for
-    /// teams the user is a fan of, so this is always "your" team. The manager
-    /// skips this phase entirely if there's no count and the user never tapped.
-    private var countText: String {
-        let count = overlay.countTotals[event.teamCode ?? ""] ?? 0
-        return count > 0
-            ? "🎉 \(count.formattedCompact) celebrations for \(team.name) this match"
-            : "🎉 You celebrated with \(team.name)!"
     }
 
     private func flag(_ code: String) -> String {

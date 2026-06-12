@@ -15,6 +15,16 @@ struct TeamPickerView: View {
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 12), count: 4)
 
     var body: some View {
+        ZStack {
+            AppBackground()
+            pickerContent
+        }
+        .frame(width: 520, height: 560)
+        .installsWindowOpener()
+        .appTheme(session.prefs.settings.theme ?? .system)
+    }
+
+    private var pickerContent: some View {
         VStack(spacing: 0) {
             // In-content heading — left-aligned, tucked under the traffic lights.
             Text("Become a Fan")
