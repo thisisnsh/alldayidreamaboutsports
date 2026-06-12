@@ -41,6 +41,7 @@ enum DevConfig {
         (1, DevSimulator.varCancelled),
         (1, DevSimulator.countPush),
         (1, DevSimulator.fullTime),
+        (1, DevSimulator.burst), // 4 events at once — stack stress test
     ]
 }
 #endif

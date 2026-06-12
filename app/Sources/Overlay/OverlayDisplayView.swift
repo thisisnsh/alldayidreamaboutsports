@@ -1,61 +1,34 @@
 import SwiftUI
 
-/// Full-screen, click-through layer: dropping ball, scoreboard, confetti,
-/// mini-ball bursts, and everything that hangs off the notch.
+/// Full-screen, click-through layer hosting both lanes at once:
+/// the notch stack (real-time pills) and the center celebration scene.
 struct OverlayDisplayView: View {
     @EnvironmentObject var overlay: OverlayManager
 
     var body: some View {
         GeometryReader { geo in
             ZStack {
-                if let event = overlay.currentEvent {
-                    // Keyed by event: back-to-back queue items run in the
-                    // same run-loop turn, so without this the views (and
-                    // their @State — confetti clocks!) survive across events.
-                    eventContent(event, size: geo.size)
+                if let event = overlay.currentEvent, overlay.phase != .idle {
+                    // Keyed by event so back-to-back celebrations rebuild
+                    // their views (confetti clocks, mini-ball state) fresh.
+                    CelebrationScene(event: event, size: geo.size)
                         .id(event.eventId)
                 }
+
+                // Fan goal shown only as a pill (goal-in-center off) still
+                // gets confetti — one burst per celebratory item.
+                if AppSession.shared.prefs.settings.confetti ?? true,
+                   !(AppSession.shared.prefs.settings.goalCenter ?? true) {
+                    ForEach(overlay.notchItems.filter(\.celebratory)) { item in
+                        ConfettiView(size: geo.size).id(item.id)
+                    }
+                }
+
+                NotchStackView(items: overlay.notchItems)
             }
             .frame(width: geo.size.width, height: geo.size.height)
         }
         .ignoresSafeArea()
-    }
-
-    @ViewBuilder
-    private func eventContent(_ event: MatchEvent, size: CGSize) -> some View {
-        switch overlay.phase {
-        case .ballDropping, .tapWindow, .fadeOut:
-            CelebrationScene(event: event, size: size)
-        case .count:
-            // Rendered OUTSIDE the scene: the faded scene must be fully gone
-            // before this appears, otherwise its dying views flash for a
-            // frame as the opacity comes back.
-            NotchTextDrop(text: countText(for: event))
-        case .pill:
-            NotchPillView(
-                icon: pillIcon(for: event),
-                iconColor: pillIconColor(for: event),
-                text: pillText(for: event)
-            )
-            // Fan goal shown as a pill still gets its confetti.
-            if overlay.pillCelebratory,
-               AppSession.shared.prefs.settings.confetti ?? true {
-                ConfettiView(size: size)
-            }
-        case .idle:
-            EmptyView()
-        }
-    }
-
-    /// Only the team that scored — the celebration only runs for fan teams,
-    /// so this is always "your" team. OverlayManager skips the count phase
-    /// when there's no total and the user never tapped.
-    private func countText(for event: MatchEvent) -> String {
-        let team = TeamCatalog.team(for: event.teamCode ?? "", in: AppSession.shared.teams)
-        let count = overlay.countTotals[event.teamCode ?? ""] ?? 0
-        return count > 0
-            ? "🎉 \(count.formattedCompact) celebrations for \(team.name) this match"
-            : "🎉 You celebrated with \(team.name)!"
     }
 }
 
@@ -98,8 +71,13 @@ private struct CelebrationScene: View {
                 MiniBallBursts(team: team, size: size, bursts: overlay.tapBursts)
             }
 
+            // Small tip floating just above the ball — not a notch drop.
             if overlay.phase == .tapWindow {
-                NotchTextDrop(text: "Tap the ball to show support")
+                Text("Tap the ball to show support")
+                    .font(.system(size: 11, weight: .medium, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.8))
+                    .position(x: size.width / 2, y: size.height / 2 - 110)
+                    .allowsHitTesting(false)
             }
         }
         .opacity(overlay.phase == .fadeOut ? 0 : 1)
@@ -185,34 +163,6 @@ struct BallView: View {
                 .font(.system(size: diameter * 0.34))
                 .offset(x: diameter * 0.1, y: -diameter * 0.1)
         }
-    }
-}
-
-/// Text pinned to drop from the notch (or top-center on notchless Macs).
-struct NotchTextDrop: View {
-    let text: String
-    @State private var shown = false
-
-    private var topInset: CGFloat {
-        let inset = NSScreen.main?.safeAreaInsets.top ?? 0
-        return inset > 0 ? inset : 26 // just below the menu bar when no notch
-    }
-
-    var body: some View {
-        VStack {
-            Text(text)
-                .font(.system(size: 13, weight: .semibold, design: .rounded))
-                .foregroundStyle(.white)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
-                .background(Capsule().fill(.black)) // matches the notch hardware
-                .offset(y: shown ? topInset + 8 : -60)
-                .animation(.spring(duration: 0.6, bounce: 0.25), value: shown)
-            Spacer()
-        }
-        .frame(maxWidth: .infinity)
-        .onAppear { shown = true }
-        .allowsHitTesting(false)
     }
 }
 

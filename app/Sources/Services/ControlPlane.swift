@@ -5,9 +5,11 @@ import SwiftUI
 struct AnimationParams: Codable {
     var ballDropSeconds: Double = 1.5
     var tapWindowSeconds: Double = 5
-    var countHoldSeconds: Double = 4
+    /// Tap window while another celebration waits — drain the queue fast.
+    var tapWindowBusySeconds: Double = 3
     var pillHoldSeconds: Double = 5
-    var maxQueuedAnimations: Int = 3
+    /// Max pills visible in the notch stack; the oldest leaves early beyond it.
+    var notchStackMax: Int = 4
 }
 
 /// Kill switch + forced updates + remote tunables.
@@ -23,9 +25,6 @@ final class ControlPlane: ObservableObject {
     @Published var updateRequired = false
     @Published var celebrationEnabled = true
     @Published var animationParams = AnimationParams()
-    /// How many teams a user can follow — remote-tunable, fetched at app
-    /// start alongside the rest of the config.
-    @Published var maxFanTeams = 10
 
     var pollingIntervalSeconds: Double = 30
 
@@ -65,9 +64,6 @@ final class ControlPlane: ObservableObject {
         if rc["polling_interval_s"].numberValue.doubleValue > 0 {
             pollingIntervalSeconds = rc["polling_interval_s"].numberValue.doubleValue
         }
-        if rc["max_fan_teams"].numberValue.intValue > 0 {
-            maxFanTeams = rc["max_fan_teams"].numberValue.intValue
-        }
         if let data = rc["animation_params"].stringValue.data(using: .utf8),
            let params = try? JSONDecoder().decode(AnimationParams.self, from: data) {
             animationParams = params
@@ -83,9 +79,6 @@ final class ControlPlane: ObservableObject {
         }
         if let minBuild = config.minBuild, AppEnvironment.buildNumber < minBuild {
             updateRequired = true
-        }
-        if let max = config.maxFanTeams, max > 0 {
-            maxFanTeams = max
         }
         reactToState()
     }

@@ -88,6 +88,10 @@ flavors.
 Key invariants:
 - Overlay panels use `sharingType = .none` (invisible to screen sharing) and
   never take focus (`nonactivatingPanel`).
+- Two presentation lanes: the notch stack shows every event as a pill in
+  real time (newest at the bottom, oldest exits at the top, capped — never
+  queued, never stale); fan-goal celebrations queue separately (cap 4) and
+  shorten their tap window while others wait.
 - Celebration taps are batched: ONE `/celebrate` request per goal, sent when
   the ball disappears.
 - `ControlPlane` gates everything; `kill_switch`/`min_build` from Remote Config

@@ -47,14 +47,18 @@ final class EventRouter {
         guard fans.contains(event.homeTeam) || fans.contains(event.awayTeam) else { return }
 
         let isFanGoal = event.type == .goal && event.teamCode.map(fans.contains) == true
-        // "Goal in center" off = fan goals drop from the notch like any other
-        // event (confetti, if enabled, still fires alongside the pill).
-        let goalCenter = settings.goalCenter ?? true
 
-        if isFanGoal && goalCenter {
-            OverlayManager.shared.enqueue(.celebration(event))
-        } else {
-            OverlayManager.shared.enqueue(.pill(event, celebratory: isFanGoal))
+        // The pill is the information channel: real time, every event, always.
+        OverlayManager.shared.showPill(for: event, celebratory: isFanGoal)
+
+        // The center celebration is the experience channel on top of it.
+        if isFanGoal, settings.goalCenter ?? true {
+            OverlayManager.shared.enqueueCelebration(event)
+        }
+
+        // VAR took the goal back — its celebration (queued or playing) dies.
+        if event.type == .goalCancelled {
+            OverlayManager.shared.cancelCelebration(fixtureId: event.fixtureId, teamCode: event.teamCode)
         }
         Task { await AppSession.shared.refreshFixtures() }
     }
