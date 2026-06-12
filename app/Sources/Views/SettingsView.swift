@@ -238,14 +238,14 @@ extension MatchEventType {
     /// reads as an example, never as a real match.
     var sampleText: String {
         switch self {
-        case .kickoff: "Kickoff — 🏳️ Team – Team 🏳️"
+        case .kickoff: "Kickoff — 🏳️ Team vs Team 🏳️"
         case .goal: "73′ Goal — Player 🏳️"
         case .goalCancelled: "75′ VAR: goal disallowed 🏳️"
         case .yellowCard: "38′ Yellow card — Player 🏳️"
         case .redCard: "81′ Red card — Player 🏳️"
-        case .halfTime: "Half-time — 🏳️ Team – Team 🏳️"
-        case .fullTime: "Full-time — 🏳️ Team – Team 🏳️"
-        case .penaltyShootout: "Penalty shootout! — 🏳️ Team – Team 🏳️"
+        case .halfTime: "Half-time — 🏳️ Team vs Team 🏳️"
+        case .fullTime: "Full-time — 🏳️ Team vs Team 🏳️"
+        case .penaltyShootout: "Penalty shootout! — 🏳️ Team vs Team 🏳️"
         }
     }
 }

@@ -9,33 +9,42 @@ struct OverlayDisplayView: View {
         GeometryReader { geo in
             ZStack {
                 if let event = overlay.currentEvent {
-                    switch overlay.phase {
-                    case .ballDropping, .tapWindow, .fadeOut:
-                        CelebrationScene(event: event, size: geo.size)
-                    case .count:
-                        // Rendered OUTSIDE the scene: the faded scene must be
-                        // fully gone before this appears, otherwise its dying
-                        // views flash for a frame as the opacity comes back.
-                        NotchTextDrop(text: countText(for: event))
-                    case .pill:
-                        NotchPillView(
-                            icon: pillIcon(for: event),
-                            iconColor: pillIconColor(for: event),
-                            text: pillText(for: event)
-                        )
-                        // Fan goal shown as a pill still gets its confetti.
-                        if overlay.pillCelebratory,
-                           AppSession.shared.prefs.settings.confetti ?? true {
-                            ConfettiView(size: geo.size)
-                        }
-                    case .idle:
-                        EmptyView()
-                    }
+                    // Keyed by event: back-to-back queue items run in the
+                    // same run-loop turn, so without this the views (and
+                    // their @State — confetti clocks!) survive across events.
+                    eventContent(event, size: geo.size)
+                        .id(event.eventId)
                 }
             }
             .frame(width: geo.size.width, height: geo.size.height)
         }
         .ignoresSafeArea()
+    }
+
+    @ViewBuilder
+    private func eventContent(_ event: MatchEvent, size: CGSize) -> some View {
+        switch overlay.phase {
+        case .ballDropping, .tapWindow, .fadeOut:
+            CelebrationScene(event: event, size: size)
+        case .count:
+            // Rendered OUTSIDE the scene: the faded scene must be fully gone
+            // before this appears, otherwise its dying views flash for a
+            // frame as the opacity comes back.
+            NotchTextDrop(text: countText(for: event))
+        case .pill:
+            NotchPillView(
+                icon: pillIcon(for: event),
+                iconColor: pillIconColor(for: event),
+                text: pillText(for: event)
+            )
+            // Fan goal shown as a pill still gets its confetti.
+            if overlay.pillCelebratory,
+               AppSession.shared.prefs.settings.confetti ?? true {
+                ConfettiView(size: size)
+            }
+        case .idle:
+            EmptyView()
+        }
     }
 
     /// Only the team that scored — the celebration only runs for fan teams,
