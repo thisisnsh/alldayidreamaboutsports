@@ -1,0 +1,214 @@
+/* ── All Day I Dream About Sports — daydream sky ─────────────────────── */
+
+:root {
+  --sky-top: #87c7f8;
+  --sky-bottom: #cdeaff;
+  --ink: #0d2b4e;
+  --ink-soft: #3a5d85;
+  --cloud: #ffffff;
+  --accent: #2973d9;
+  --accent-ink: #ffffff;
+  --pill: #0b0b0f;
+  --card: rgba(255, 255, 255, 0.55);
+  --star-opacity: 0;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --sky-top: #0a1430;
+    --sky-bottom: #1a2a55;
+    --ink: #eaf2ff;
+    --ink-soft: #9db4d8;
+    --cloud: rgba(255, 255, 255, 0.07);
+    --accent: #5ea0ff;
+    --accent-ink: #061027;
+    --card: rgba(255, 255, 255, 0.06);
+    --star-opacity: 1;
+  }
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: "Atkinson Hyperlegible", sans-serif;
+  color: var(--ink);
+  background: linear-gradient(var(--sky-top), var(--sky-bottom)) fixed;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+.display { font-family: "Fredoka", sans-serif; }
+
+/* ── stars (night only) ── */
+.stars {
+  position: fixed; inset: 0; pointer-events: none; opacity: var(--star-opacity);
+  background-image:
+    radial-gradient(1.5px 1.5px at 12% 18%, #fff, transparent),
+    radial-gradient(1px 1px at 34% 8%, #fff9, transparent),
+    radial-gradient(2px 2px at 58% 24%, #fff, transparent),
+    radial-gradient(1px 1px at 76% 12%, #fffb, transparent),
+    radial-gradient(1.5px 1.5px at 89% 30%, #fff8, transparent),
+    radial-gradient(1px 1px at 22% 38%, #fff7, transparent),
+    radial-gradient(1.5px 1.5px at 67% 44%, #fff9, transparent);
+  transition: opacity 1s;
+}
+
+/* ── drifting clouds ── */
+.cloud {
+  position: fixed; pointer-events: none; z-index: 0;
+  background: var(--cloud);
+  border-radius: 999px;
+  filter: blur(2px);
+  opacity: 0.9;
+  animation: drift linear infinite;
+}
+.cloud::before, .cloud::after {
+  content: ""; position: absolute; background: inherit; border-radius: 50%;
+}
+.cloud::before { width: 55%; height: 160%; left: 18%; top: -78%; }
+.cloud::after { width: 38%; height: 110%; right: 16%; top: -45%; }
+
+.cloud.c1 { width: 220px; height: 60px; top: 14%; animation-duration: 65s; }
+.cloud.c2 { width: 320px; height: 84px; top: 36%; animation-duration: 95s; animation-delay: -40s; filter: blur(5px); }
+.cloud.c3 { width: 150px; height: 44px; top: 62%; animation-duration: 50s; animation-delay: -22s; }
+.cloud.c4 { width: 260px; height: 70px; top: 80%; animation-duration: 110s; animation-delay: -70s; filter: blur(7px); opacity: 0.6; }
+
+@keyframes drift {
+  from { transform: translateX(-30vw); }
+  to { transform: translateX(130vw); }
+}
+
+/* ── the notch pill demo ── */
+.notch-pill {
+  position: fixed; top: 0; left: 50%;
+  transform: translate(-50%, -120%);
+  z-index: 50;
+  background: var(--pill); color: #fff;
+  font-family: "Fredoka", sans-serif; font-weight: 500; font-size: 0.95rem;
+  padding: 0.65rem 1.4rem;
+  border-radius: 0 0 18px 18px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
+  white-space: nowrap;
+  transition: transform 0.55s cubic-bezier(0.34, 1.4, 0.5, 1);
+}
+.notch-pill.show { transform: translate(-50%, 0); }
+
+/* ── layout ── */
+main { position: relative; z-index: 1; max-width: 920px; margin: 0 auto; padding: 0 1.5rem; }
+
+.hero { min-height: 92vh; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; gap: 1.6rem; padding-top: 3rem; }
+
+.kicker {
+  font-family: "Fredoka", sans-serif; font-weight: 500;
+  letter-spacing: 0.18em; text-transform: uppercase; font-size: 0.8rem;
+  color: var(--ink-soft);
+  animation: rise 0.7s 0.05s both;
+}
+
+h1.title {
+  font-family: "Fredoka", sans-serif; font-weight: 600;
+  font-size: clamp(2.6rem, 7.5vw, 5.2rem);
+  line-height: 1.02; letter-spacing: -0.015em;
+  animation: rise 0.7s 0.15s both;
+}
+h1 .dream { display: block; color: var(--accent); }
+
+.sub {
+  font-size: clamp(1.05rem, 2.2vw, 1.3rem); color: var(--ink-soft);
+  max-width: 34ch; line-height: 1.5;
+  animation: rise 0.7s 0.3s both;
+}
+
+.ball {
+  font-size: 4.2rem; line-height: 1;
+  animation: bounce-in 1.4s cubic-bezier(0.34, 1.3, 0.45, 1) 0.1s both;
+  filter: drop-shadow(0 12px 18px rgba(0, 0, 0, 0.25));
+  cursor: pointer; user-select: none;
+  transition: transform 0.15s;
+}
+.ball:active { transform: scale(0.86); }
+
+@keyframes bounce-in {
+  0% { transform: translateY(-70vh) scale(0.4); }
+  55% { transform: translateY(0) scale(0.95); }
+  70% { transform: translateY(-9vh) scale(1.02); }
+  85% { transform: translateY(0) scale(1); }
+  92% { transform: translateY(-2.5vh); }
+  100% { transform: translateY(0) scale(1); }
+}
+
+@keyframes rise {
+  from { opacity: 0; transform: translateY(18px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.cta {
+  display: inline-flex; align-items: center; gap: 0.6rem;
+  font-family: "Fredoka", sans-serif; font-weight: 600; font-size: 1.15rem;
+  background: var(--accent); color: var(--accent-ink);
+  padding: 0.95rem 2.1rem; border-radius: 999px; text-decoration: none;
+  box-shadow: 0 10px 30px color-mix(in srgb, var(--accent) 45%, transparent);
+  transition: transform 0.18s, box-shadow 0.18s;
+  animation: rise 0.7s 0.45s both;
+}
+.cta:hover { transform: translateY(-3px) scale(1.03); box-shadow: 0 16px 40px color-mix(in srgb, var(--accent) 55%, transparent); }
+
+.meta { font-size: 0.85rem; color: var(--ink-soft); animation: rise 0.7s 0.55s both; }
+
+/* ── features ── */
+.features {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1.2rem; padding: 4rem 0 2rem;
+}
+.card {
+  background: var(--card); backdrop-filter: blur(14px);
+  border: 1px solid color-mix(in srgb, var(--ink) 8%, transparent);
+  border-radius: 22px; padding: 1.6rem;
+}
+.card .emoji { font-size: 2rem; display: block; margin-bottom: 0.7rem; }
+.card h3 { font-family: "Fredoka", sans-serif; font-weight: 600; font-size: 1.12rem; margin-bottom: 0.45rem; }
+.card p { color: var(--ink-soft); font-size: 0.95rem; line-height: 1.55; }
+.card:nth-child(2) { transform: translateY(14px); }
+.card:nth-child(3) { transform: translateY(-8px); }
+
+/* ── how ── */
+.how { padding: 3rem 0; text-align: center; }
+.how h2 { font-family: "Fredoka", sans-serif; font-weight: 600; font-size: 1.8rem; margin-bottom: 1.8rem; }
+.steps { display: flex; flex-wrap: wrap; justify-content: center; gap: 2.2rem; color: var(--ink-soft); }
+.steps span { font-family: "Fredoka", sans-serif; font-size: 1.02rem; }
+.steps b { color: var(--ink); }
+
+/* ── footer ── */
+footer {
+  position: relative; z-index: 1;
+  text-align: center; padding: 3.5rem 1.5rem 2.5rem;
+  color: var(--ink-soft); font-size: 0.85rem; line-height: 1.9;
+}
+footer a { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
+.disclaimer { opacity: 0.7; font-size: 0.78rem; max-width: 54ch; margin: 0.6rem auto 0; }
+
+/* ── confetti (download click) ── */
+.confetto {
+  position: fixed; width: 9px; height: 5px; z-index: 60; pointer-events: none;
+  animation: confetti-fall 1.6s ease-out forwards;
+}
+@keyframes confetti-fall {
+  to { transform: translate(var(--dx), 105vh) rotate(720deg); opacity: 0; }
+}
+
+/* ── privacy page ── */
+.prose { padding: 7rem 0 4rem; max-width: 640px; }
+.prose h1 { font-family: "Fredoka", sans-serif; font-weight: 600; font-size: 2.2rem; margin-bottom: 0.4rem; }
+.prose .updated { color: var(--ink-soft); font-size: 0.85rem; margin-bottom: 2.2rem; }
+.prose h2 { font-family: "Fredoka", sans-serif; font-weight: 600; font-size: 1.25rem; margin: 2rem 0 0.6rem; }
+.prose p, .prose li { line-height: 1.7; color: var(--ink-soft); }
+.prose ul { padding-left: 1.3rem; margin: 0.5rem 0; }
+.prose b { color: var(--ink); }
+.back { position: fixed; top: 1.2rem; left: 1.4rem; z-index: 10; font-family: "Fredoka", sans-serif; text-decoration: none; color: var(--ink); font-size: 0.95rem; }
+
+@media (prefers-reduced-motion: reduce) {
+  .cloud, .ball { animation: none !important; }
+  .notch-pill { transition: none; }
+}

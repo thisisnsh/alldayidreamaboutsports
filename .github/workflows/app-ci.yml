@@ -1,0 +1,46 @@
+name: app-ci
+
+# Builds both flavors on every app change:
+#   Debug   = DEV_BACKEND (fake services, no sign-in, no quota)
+#   Release = real services
+# No signing, no GoogleService-Info.plist needed — both are runtime-optional.
+
+on:
+  pull_request:
+    paths: ["app/**", ".github/workflows/app-ci.yml"]
+  push:
+    branches: [main]
+    paths: ["app/**", ".github/workflows/app-ci.yml"]
+
+jobs:
+  build:
+    runs-on: macos-15
+    strategy:
+      matrix:
+        configuration: [Debug, Release]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        working-directory: app
+        run: xcodegen
+
+      - name: Cache SPM packages
+        uses: actions/cache@v4
+        with:
+          path: app/build/DerivedData/SourcePackages
+          key: spm-${{ runner.os }}-${{ hashFiles('app/project.yml') }}
+
+      - name: Build ${{ matrix.configuration }}
+        working-directory: app
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project AllDayIDreamAboutSports.xcodeproj \
+            -scheme AllDayIDreamAboutSports \
+            -configuration ${{ matrix.configuration }} \
+            -derivedDataPath build/DerivedData \
+            CODE_SIGNING_ALLOWED=NO | tail -20

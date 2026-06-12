@@ -1,0 +1,140 @@
+name: app-release
+
+# Tag v1.2.3 → notarized build 1.2.3, Sparkle appcast, R2 upload, GitHub Release.
+# Build number = GitHub run number (monotonic), used by the Remote Config
+# min_build force-update gate.
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+env:
+  APP_NAME: All Day I Dream About Sports
+  SCHEME: AllDayIDreamAboutSports
+  DOWNLOAD_HOST: https://download.alldayidreamaboutsports.com
+
+jobs:
+  release:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Restore Firebase config
+        run: |
+          mkdir -p app/Resources
+          echo "${{ secrets.GOOGLE_SERVICE_INFO_PLIST_B64 }}" | base64 --decode > app/Resources/GoogleService-Info.plist
+
+      - name: Generate Xcode project
+        working-directory: app
+        run: xcodegen
+
+      - name: Import Developer ID certificate
+        env:
+          CERT_P12_B64: ${{ secrets.MACOS_CERT_P12_B64 }}
+          CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+        run: |
+          KEYCHAIN=build.keychain
+          KEYCHAIN_PASSWORD=$(uuidgen)
+          echo "$CERT_P12_B64" | base64 --decode > cert.p12
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security default-keychain -s "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -t 3600 -u "$KEYCHAIN"
+          security import cert.p12 -k "$KEYCHAIN" -P "$CERT_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          rm cert.p12
+
+      - name: Build and archive
+        working-directory: app
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          xcodebuild archive \
+            -project AllDayIDreamAboutSports.xcodeproj \
+            -scheme "$SCHEME" \
+            -configuration Release \
+            -archivePath build/App.xcarchive \
+            MARKETING_VERSION="$VERSION" \
+            CURRENT_PROJECT_VERSION="${GITHUB_RUN_NUMBER}" \
+            DEVELOPMENT_TEAM="${{ secrets.APPLE_TEAM_ID }}" \
+            CODE_SIGN_IDENTITY="Developer ID Application"
+
+      - name: Export app
+        working-directory: app
+        run: |
+          xcodebuild -exportArchive \
+            -archivePath build/App.xcarchive \
+            -exportPath build/export \
+            -exportOptionsPlist ExportOptions.plist
+
+      - name: Notarize and staple
+        working-directory: app
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: |
+          APP="build/export/${APP_NAME}.app"
+          ditto -c -k --keepParent "$APP" build/notarize.zip
+          xcrun notarytool submit build/notarize.zip \
+            --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" \
+            --password "$APPLE_APP_PASSWORD" --wait
+          xcrun stapler staple "$APP"
+
+      - name: Package as DMG (signed, notarized, stapled)
+        working-directory: app
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          DMG="AllDayIDreamAboutSports-${VERSION}.dmg"
+          mkdir -p build/dist build/dmg
+          cp -R "build/export/${APP_NAME}.app" build/dmg/
+          ln -s /Applications build/dmg/Applications
+          hdiutil create -volname "$APP_NAME" -srcfolder build/dmg \
+            -format UDZO -imagekey zlib-level=9 -fs HFS+ -ov "build/dist/$DMG"
+          codesign --sign "Developer ID Application" --timestamp "build/dist/$DMG"
+          xcrun notarytool submit "build/dist/$DMG" \
+            --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" \
+            --password "$APPLE_APP_PASSWORD" --wait
+          xcrun stapler staple "build/dist/$DMG"
+
+      - name: Generate Sparkle appcast
+        working-directory: app
+        env:
+          SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
+        run: |
+          SPARKLE_VERSION=2.6.4
+          curl -fsSL -o sparkle.tar.xz \
+            "https://github.com/sparkle-project/Sparkle/releases/download/${SPARKLE_VERSION}/Sparkle-${SPARKLE_VERSION}.tar.xz"
+          mkdir sparkle && tar -xf sparkle.tar.xz -C sparkle
+          KEY_FILE=$(mktemp)
+          printf '%s' "$SPARKLE_ED_PRIVATE_KEY" > "$KEY_FILE"
+          ./sparkle/bin/generate_appcast \
+            --ed-key-file "$KEY_FILE" \
+            --download-url-prefix "${DOWNLOAD_HOST}/" \
+            build/dist
+          rm "$KEY_FILE"
+
+      - name: Upload to R2
+        working-directory: app
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+        run: |
+          aws s3 sync build/dist "s3://alldayidreamaboutsports-downloads/" \
+            --endpoint-url "$R2_ENDPOINT" --checksum-algorithm CRC32
+
+      - name: GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: app/build/dist/*.dmg
+          generate_release_notes: true

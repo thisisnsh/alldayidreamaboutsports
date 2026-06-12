@@ -1,0 +1,36 @@
+{
+  "parameters": {
+    "kill_switch": {
+      "defaultValue": { "value": "false" },
+      "description": "true = app disables itself and shows kill_message. Reversible."
+    },
+    "kill_message": {
+      "defaultValue": { "value": "We're fixing something — back soon. Thanks for your patience! ⚽" },
+      "description": "Shown in the blocking window when kill_switch is on."
+    },
+    "min_build": {
+      "defaultValue": { "value": "1" },
+      "description": "Builds below this are blocked behind a forced Sparkle update."
+    },
+    "latest_build": {
+      "defaultValue": { "value": "1" },
+      "description": "Informational: newest available build."
+    },
+    "update_url": {
+      "defaultValue": { "value": "https://alldayidreamaboutsports.com" },
+      "description": "Fallback download link if Sparkle itself is broken."
+    },
+    "celebration_enabled": {
+      "defaultValue": { "value": "true" },
+      "description": "false = hide tap-to-support and stop sending /celebrate (cost kill switch)."
+    },
+    "polling_interval_s": {
+      "defaultValue": { "value": "30" },
+      "description": "App live.json reconciliation poll interval while a followed match is live."
+    },
+    "animation_params": {
+      "defaultValue": { "value": "{\"ballDropSeconds\":1.5,\"tapWindowSeconds\":5,\"countHoldSeconds\":4,\"pillHoldSeconds\":5,\"maxQueuedAnimations\":3}" },
+      "description": "Tune animation feel without shipping a build."
+    }
+  }
+}
