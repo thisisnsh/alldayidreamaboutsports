@@ -118,22 +118,25 @@ final class OverlayManager: ObservableObject {
                     CelebrationService.shared.endWindow()
                     phase = .fadeOut
                     fadeOutInteractPanel(duration: 0.7)
-                    Task { @MainActor in
-                        if let totals = try? await Services.scores.fetchCelebrations(fixtureId: event.fixtureId) {
-                            self.countTotals = totals
-                        }
-                    }
                     schedule(after: 0.7) { [self] in
                         hideInteractPanel()
-                        // …then, with the ball gone, the celebration total
-                        // drops from the notch. Skip it entirely if there's
-                        // nothing to report and the user never tapped.
-                        let count = countTotals[event.teamCode ?? ""] ?? 0
-                        if count > 0 || tapBursts > 0 {
-                            phase = .count
-                            schedule(after: params.countHoldSeconds) { [self] in finishCurrent() }
-                        } else {
-                            finishCurrent()
+                        // …then fetch the totals. This is a real round trip:
+                        // the batched POST has to land in the DB before the
+                        // total means anything, so the count arrives a beat
+                        // after the ball is gone — never instantly.
+                        Task { @MainActor in
+                            if let totals = try? await Services.scores.fetchCelebrations(fixtureId: event.fixtureId) {
+                                self.countTotals = totals
+                            }
+                            // The user may have dismissed it while we fetched.
+                            guard currentEvent?.eventId == event.eventId, phase == .fadeOut else { return }
+                            let count = countTotals[event.teamCode ?? ""] ?? 0
+                            if count > 0 || tapBursts > 0 {
+                                phase = .count
+                                schedule(after: params.countHoldSeconds) { [self] in finishCurrent() }
+                            } else {
+                                finishCurrent()
+                            }
                         }
                     }
                 }

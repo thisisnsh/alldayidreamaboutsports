@@ -10,10 +10,9 @@ struct NotchPillView: View {
     let iconColor: Color
     let text: String
     /// Match context — several matches run in parallel, so every pill says
-    /// which one it belongs to, with the live score.
+    /// which one it belongs to, with the live score. (No clock here: the
+    /// event line above already carries the minute.)
     var matchLine: String?
-    var minute: Int?
-    var isLive: Bool = false
     @State private var shown = false
 
     private var topInset: CGFloat {
@@ -34,22 +33,10 @@ struct NotchPillView: View {
                         .foregroundStyle(.white)
                         .lineLimit(1)
                     if let matchLine {
-                        HStack(spacing: 4) {
-                            Text(matchLine)
-                                .font(.system(size: 10, weight: .medium, design: .rounded))
-                                .foregroundStyle(.white.opacity(0.75))
-                                .lineLimit(1)
-                            // Live dot rides with the timer, both red — same
-                            // treatment as the menu bar fixture rows.
-                            if isLive {
-                                Circle().fill(.red).frame(width: 5, height: 5)
-                                if let minute {
-                                    Text("\(minute)′")
-                                        .font(.system(size: 10, weight: .bold, design: .rounded))
-                                        .foregroundStyle(.red)
-                                }
-                            }
-                        }
+                        Text(matchLine)
+                            .font(.system(size: 10, weight: .medium, design: .rounded))
+                            .foregroundStyle(.white.opacity(0.75))
+                            .lineLimit(1)
                     }
                 }
             }

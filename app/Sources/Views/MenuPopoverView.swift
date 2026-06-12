@@ -138,6 +138,9 @@ private struct FixtureRow: View {
                 if hovering, let totals = session.celebrationTotals[fixture.fixtureId] {
                     // Hover: the row becomes the celebration tally — both
                     // teams, regardless of who you're a fan of.
+                    Text("Celebrations 🎉")
+                        .font(.system(size: 10))
+                        .opacity(0.7)
                     HStack(spacing: 6) {
                         Text(flag(fixture.home.code))
                         Text((totals[fixture.home.code] ?? 0).formattedCompact)
@@ -149,14 +152,14 @@ private struct FixtureRow: View {
                         Spacer()
                         trailing
                     }
-                    Text("Celebrations 🎉")
-                        .font(.system(size: 10))
-                        .opacity(0.7)
                 } else {
                     HStack(spacing: 6) {
                         Text(flag(fixture.home.code))
+                        // Long names truncate with … — score, flags and the
+                        // time on the right never get squeezed.
                         Text(fixture.home.name).font(.system(size: 12)).lineLimit(1)
                         Text(score).font(.system(size: 12, weight: .bold))
+                            .fixedSize().layoutPriority(1)
                         Text(fixture.away.name).font(.system(size: 12)).lineLimit(1)
                         Text(flag(fixture.away.code))
                         Spacer()
@@ -189,7 +192,7 @@ private struct FixtureRow: View {
                     .foregroundStyle(.red)
             }
         } else if fixture.status == "FINISHED" {
-            Text("FT").font(.system(size: 10, weight: .semibold)).opacity(0.6)
+            Text("FT").font(.system(size: 10, weight: .semibold)).foregroundStyle(.green)
         } else if let kickoff = fixture.kickoff {
             Text(kickoff, style: .time).font(.system(size: 11)).opacity(0.7)
         }

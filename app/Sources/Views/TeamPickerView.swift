@@ -21,7 +21,7 @@ struct TeamPickerView: View {
                 .font(.system(size: 18, weight: .bold, design: .rounded))
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.leading, 16)
-                .padding(.top, 26)
+                .padding(.top, 8)
 
             HStack {
                 Image(systemName: "magnifyingglass").opacity(0.5)

@@ -18,7 +18,7 @@ struct SettingsView: View {
                 .font(.system(size: 18, weight: .bold, design: .rounded))
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.leading, 16)
-                .padding(.top, 26)
+                .padding(.top, 8)
 
             ScrollView {
                 VStack(spacing: 14) {
@@ -37,14 +37,14 @@ struct SettingsView: View {
                         caption("Each event shows as a drop from the notch.")
                     }
 
-                    SettingsCard("Celebration") {
+                    SettingsCard("Goal celebration") {
                         toggleRow("Show goal in center", isOn: settingsBinding(\.goalCenter, default: true))
                         toggleRow("Show confetti in corners", isOn: settingsBinding(\.confetti, default: true))
                         Button("Preview animation") {
                             OverlayManager.shared.preview()
                         }
                         .buttonStyle(.cardButton)
-                        caption("Goal in center off = your goals drop from the notch like every other event. Preview plays exactly the combination you picked. Celebrations are hidden from screen sharing and recordings.")
+                        caption("When a team you're a fan of scores, you'll see a celebration. Configure it here: just the goal in center, just confetti, both — or neither, for a quiet notch drop like every other event. Preview plays exactly what you picked. Celebrations are hidden from screen sharing and recordings.")
                     }
 
                     SettingsCard("Appearance") {
@@ -224,14 +224,15 @@ private struct SettingsCard<Content: View>: View {
 }
 
 extension MatchEventType {
-    /// The literal pill text a user would see, with sample names.
+    /// The literal pill layout a user would see — generic placeholders so it
+    /// reads as an example, never as a real match.
     var sampleText: String {
         switch self {
-        case .kickoff: "Kickoff — Brazil vs USA"
-        case .goal: "73′ Goal — Vinícius Jr 🇧🇷"
-        case .goalCancelled: "75′ VAR: goal disallowed 🇧🇷"
-        case .yellowCard: "38′ Yellow card — Adams 🇺🇸"
-        case .redCard: "81′ Red card — Ramos 🇺🇸"
+        case .kickoff: "Kickoff — Team vs Team"
+        case .goal: "73′ Goal — Player 🏳️"
+        case .goalCancelled: "75′ VAR: goal disallowed 🏳️"
+        case .yellowCard: "38′ Yellow card — Player 🏳️"
+        case .redCard: "81′ Red card — Player 🏳️"
         case .halfTime: "Half-time"
         case .fullTime: "Full-time"
         case .penaltyShootout: "Penalty shootout!"
