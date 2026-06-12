@@ -34,13 +34,13 @@ struct MainWindowView: View {
                     SettingsView(updater: updater)
                 }
             }
-            // Crossfade between screens; the frame eases without bounce so
-            // the window resize tracks it cleanly (spring overshoot makes the
-            // window server stutter).
+            // Crossfade between screens. The animation modifier sits INSIDE
+            // the frame, so the frame (and the window with it) snaps to the
+            // new shape instantly while only the content fades.
             .transition(.opacity)
         }
+        .animation(.easeInOut(duration: 0.25), value: session.mainScreen)
         .frame(width: session.mainScreen.size.width, height: session.mainScreen.size.height)
-        .animation(.easeInOut(duration: 0.28), value: session.mainScreen)
         .installsWindowOpener()
         .appTheme(session.prefs.settings.theme ?? .system)
     }

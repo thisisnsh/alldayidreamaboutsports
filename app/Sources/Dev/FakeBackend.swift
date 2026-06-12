@@ -76,6 +76,7 @@ final class FakeBackendAPI: BackendAPI {
     }
 
     func celebrate(fixtureId: Int, teamCode: String, taps: Int) async throws {
+        try? await Task.sleep(for: .milliseconds(250)) // feel like a network hop
         // POST appends to the fake data — visible on the next GET.
         FakeStore.shared.celebrations[fixtureId, default: [:]][teamCode, default: 0] += taps
         NSLog("🧪 FakeBackend: +%d celebrations for %@ in fixture %d (total %d)",
@@ -95,7 +96,10 @@ final class FakeScores: ScoresProviding {
     func fetchLive() async throws -> [Fixture] { [FakeStore.shared.liveFixture] }
     func fetchTodayFixtures() async throws -> [Fixture] { FakeStore.shared.todayFixtures }
     func fetchCelebrations(fixtureId: Int) async throws -> [String: Int] {
-        FakeStore.shared.celebrations[fixtureId] ?? [:]
+        // Production fetches this from the CDN after the batched POST lands
+        // in the DB — simulate that beat so dev timing matches reality.
+        try? await Task.sleep(for: .milliseconds(450))
+        return FakeStore.shared.celebrations[fixtureId] ?? [:]
     }
     func fetchBackupConfig() async throws -> BackupConfig {
         BackupConfig(killSwitch: false, message: nil, minBuild: nil)

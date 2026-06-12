@@ -17,9 +17,7 @@ struct OverlayDisplayView: View {
                             icon: pillIcon(for: event),
                             iconColor: pillIconColor(for: event),
                             text: pillText(for: event),
-                            matchLine: pillMatchLine(for: event),
-                            minute: event.minute,
-                            isLive: event.type != .fullTime
+                            matchLine: pillMatchLine(for: event)
                         )
                         // Fan goal shown as a pill still gets its confetti.
                         if overlay.pillCelebratory,
