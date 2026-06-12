@@ -89,26 +89,21 @@ func pillText(for event: MatchEvent) -> String {
     let teams = AppSession.shared.teams
     let flag = event.teamCode.map { TeamCatalog.team(for: $0, in: teams).flag } ?? ""
     let minute = event.minute.map { "\($0)′ " } ?? ""
+    // Match-level events carry the matchup themselves — goals and cards
+    // identify their match by the team flag.
+    let homeFlag = TeamCatalog.team(for: event.homeTeam, in: teams).flag
+    let awayFlag = TeamCatalog.team(for: event.awayTeam, in: teams).flag
+    let matchup = "\(homeFlag) \(event.homeName) – \(event.awayName) \(awayFlag)"
     switch event.type {
-    case .kickoff: return "Kickoff — \(event.homeName) vs \(event.awayName)"
+    case .kickoff: return "Kickoff — \(matchup)"
     case .goal: return "\(minute)Goal — \(event.player ?? event.teamCode ?? "") \(flag)"
     case .goalCancelled: return "\(minute)VAR: goal disallowed \(flag)"
     case .yellowCard: return "\(minute)Yellow card — \(event.player ?? "") \(flag)"
     case .redCard: return "\(minute)Red card — \(event.player ?? "") \(flag)"
-    case .halfTime: return "Half-time"
-    case .fullTime: return "Full-time"
-    case .penaltyShootout: return "Penalty shootout!"
+    case .halfTime: return "Half-time — \(matchup)"
+    case .fullTime: return "Full-time — \(matchup)"
+    case .penaltyShootout: return "Penalty shootout! — \(matchup)"
     }
-}
-
-/// Subheading under the pill text: the match context, since several matches
-/// run in parallel. "🇧🇷 Brazil 2 – 1 USA 🇺🇸"
-@MainActor
-func pillMatchLine(for event: MatchEvent) -> String {
-    let teams = AppSession.shared.teams
-    let homeFlag = TeamCatalog.team(for: event.homeTeam, in: teams).flag
-    let awayFlag = TeamCatalog.team(for: event.awayTeam, in: teams).flag
-    return "\(homeFlag) \(event.homeName) \(event.homeGoals) – \(event.awayGoals) \(event.awayName) \(awayFlag)"
 }
 
 func pillIcon(for event: MatchEvent) -> String {

@@ -91,6 +91,9 @@ final class OverlayManager: ObservableObject {
         ]
         guard let event = MatchEvent(fcmData: data) else { return }
         let goalCenter = AppSession.shared.prefs.settings.goalCenter ?? true
+        // A direct user action: jump the queue instead of lining up behind
+        // whatever is already playing or waiting.
+        dismissAll()
         enqueue(goalCenter ? .celebration(event) : .pill(event, celebratory: true))
     }
 

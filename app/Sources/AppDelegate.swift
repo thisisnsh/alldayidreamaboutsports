@@ -44,8 +44,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         #else
         LaunchAtLogin.registerByDefault()
         if !AppSession.shared.isSignedIn {
-            AppSession.shared.mainScreen = .login
-            openWindow(WindowID.main)
+            openWindow(WindowID.login)
         }
         #endif
     }
@@ -59,8 +58,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // App is invisible except the menu bar — reopening from Finder/Spotlight
     // should surface something useful.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
-        AppSession.shared.mainScreen = AppSession.shared.isSignedIn ? .settings : .login
-        openWindow(WindowID.main)
+        openWindow(AppSession.shared.isSignedIn ? WindowID.settings : WindowID.login)
         return false
     }
 

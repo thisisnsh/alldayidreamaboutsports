@@ -78,15 +78,13 @@ struct MenuPopoverView: View {
     private var actions: some View {
         VStack(alignment: .leading, spacing: 8) {
             Button {
-                session.mainScreen = .teamPicker
-                openWindow(id: WindowID.main)
+                openWindow(id: WindowID.teamPicker)
                 NSApp.activate(ignoringOtherApps: true)
             } label: {
                 Label("Become a Fan", systemImage: "heart.circle.fill")
             }
             Button {
-                session.mainScreen = .settings
-                openWindow(id: WindowID.main)
+                openWindow(id: WindowID.settings)
                 NSApp.activate(ignoringOtherApps: true)
             } label: {
                 Label("Settings", systemImage: "gearshape")
@@ -111,8 +109,7 @@ struct MenuPopoverView: View {
             Text("⚽ Sign in to follow your teams")
                 .font(.system(size: 13, weight: .medium))
             Button("Sign in") {
-                session.mainScreen = .login
-                openWindow(id: WindowID.main)
+                openWindow(id: WindowID.login)
                 NSApp.activate(ignoringOtherApps: true)
             }
             .buttonStyle(.primaryPill)
@@ -138,9 +135,6 @@ private struct FixtureRow: View {
                 if hovering, let totals = session.celebrationTotals[fixture.fixtureId] {
                     // Hover: the row becomes the celebration tally — both
                     // teams, regardless of who you're a fan of.
-                    Text("Celebrations 🎉")
-                        .font(.system(size: 10))
-                        .opacity(0.7)
                     HStack(spacing: 6) {
                         Text(flag(fixture.home.code))
                         Text((totals[fixture.home.code] ?? 0).formattedCompact)
@@ -152,6 +146,9 @@ private struct FixtureRow: View {
                         Spacer()
                         trailing
                     }
+                    Text("Celebrations 🎉")
+                        .font(.system(size: 10))
+                        .opacity(0.7)
                 } else {
                     HStack(spacing: 6) {
                         Text(flag(fixture.home.code))

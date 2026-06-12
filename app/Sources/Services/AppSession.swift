@@ -9,7 +9,6 @@ final class AppSession: ObservableObject {
     static let shared = AppSession()
 
     @Published var profile: Profile?
-    @Published var mainScreen: MainScreen = .login
     @Published var prefs: UserPrefs = .empty
     @Published var teams: [Team] = TeamCatalog.fallback
     @Published var fixtures: [Fixture] = []
@@ -84,8 +83,7 @@ final class AppSession: ObservableObject {
         Keychain.delete("sessionToken")
         defaults.removeObject(forKey: "profile")
         profile = nil
-        mainScreen = .login
-        openWindow(WindowID.main)
+        openWindow(WindowID.login)
     }
 
     func deleteAccount() async {

@@ -11,6 +11,28 @@ struct SettingsView: View {
     @State private var autoInstall = true
 
     var body: some View {
+        ZStack {
+            AppBackground()
+            settingsContent
+        }
+        .frame(width: 440, height: 640)
+        .installsWindowOpener()
+        .appTheme(session.prefs.settings.theme ?? .system)
+        .onAppear {
+            autoCheck = updater.automaticallyChecksForUpdates
+            autoInstall = updater.automaticallyDownloadsUpdates
+        }
+        .confirmationDialog(
+            "Delete your account and all preferences?",
+            isPresented: $confirmDelete
+        ) {
+            Button("Delete", role: .destructive) {
+                Task { await session.deleteAccount() }
+            }
+        }
+    }
+
+    private var settingsContent: some View {
         VStack(spacing: 0) {
             // Fixed heading — left-aligned, tucked under the traffic lights;
             // only the cards below it scroll.
@@ -105,18 +127,6 @@ struct SettingsView: View {
                     Rectangle()
                 }
             )
-        }
-        .onAppear {
-            autoCheck = updater.automaticallyChecksForUpdates
-            autoInstall = updater.automaticallyDownloadsUpdates
-        }
-        .confirmationDialog(
-            "Delete your account and all preferences?",
-            isPresented: $confirmDelete
-        ) {
-            Button("Delete", role: .destructive) {
-                Task { await session.deleteAccount() }
-            }
         }
     }
 
@@ -228,14 +238,14 @@ extension MatchEventType {
     /// reads as an example, never as a real match.
     var sampleText: String {
         switch self {
-        case .kickoff: "Kickoff — Team vs Team"
+        case .kickoff: "Kickoff — 🏳️ Team – Team 🏳️"
         case .goal: "73′ Goal — Player 🏳️"
         case .goalCancelled: "75′ VAR: goal disallowed 🏳️"
         case .yellowCard: "38′ Yellow card — Player 🏳️"
         case .redCard: "81′ Red card — Player 🏳️"
-        case .halfTime: "Half-time"
-        case .fullTime: "Full-time"
-        case .penaltyShootout: "Penalty shootout!"
+        case .halfTime: "Half-time — 🏳️ Team – Team 🏳️"
+        case .fullTime: "Full-time — 🏳️ Team – Team 🏳️"
+        case .penaltyShootout: "Penalty shootout! — 🏳️ Team – Team 🏳️"
         }
     }
 }

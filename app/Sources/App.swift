@@ -18,15 +18,30 @@ struct AllDayIDreamAboutSportsApp: App {
         }
         .menuBarExtraStyle(.window)
 
-        // ONE window for login/picker/settings — it morphs between screens.
-        // No title bar; just the traffic lights over content.
-        Window("All Day I Dream About Sports", id: WindowID.main) {
-            MainWindowView(updater: appDelegate.updaterController.updater)
+        // Separate windows, all without title bars — just the traffic
+        // lights over content; headings live in the views themselves.
+        Window("Sign In", id: WindowID.login) {
+            LoginView()
                 .environmentObject(session)
         }
         .windowStyle(.hiddenTitleBar)
         .windowResizability(.contentSize)
         .defaultPosition(.center)
+
+        Window("Become a Fan", id: WindowID.teamPicker) {
+            TeamPickerView()
+                .environmentObject(session)
+        }
+        .windowStyle(.hiddenTitleBar)
+        .windowResizability(.contentSize)
+        .defaultPosition(.center)
+
+        Window("Settings", id: WindowID.settings) {
+            SettingsView(updater: appDelegate.updaterController.updater)
+                .environmentObject(session)
+        }
+        .windowStyle(.hiddenTitleBar)
+        .windowResizability(.contentSize)
 
         Window("Update Required", id: WindowID.gate) {
             GateView()
@@ -39,6 +54,8 @@ struct AllDayIDreamAboutSportsApp: App {
 }
 
 enum WindowID {
-    static let main = "main"
+    static let login = "login"
+    static let teamPicker = "teamPicker"
+    static let settings = "settings"
     static let gate = "gate"
 }

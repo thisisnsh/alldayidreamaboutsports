@@ -9,10 +9,6 @@ struct NotchPillView: View {
     let icon: String
     let iconColor: Color
     let text: String
-    /// Match context — several matches run in parallel, so every pill says
-    /// which one it belongs to, with the live score. (No clock here: the
-    /// event line above already carries the minute.)
-    var matchLine: String?
     @State private var shown = false
 
     private var topInset: CGFloat {
@@ -26,19 +22,10 @@ struct NotchPillView: View {
                 Image(systemName: icon)
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(iconColor)
-                // Text block is centered; the icon hangs on the left.
-                VStack(alignment: .center, spacing: 2) {
-                    Text(text)
-                        .font(.system(size: 13, weight: .semibold, design: .rounded))
-                        .foregroundStyle(.white)
-                        .lineLimit(1)
-                    if let matchLine {
-                        Text(matchLine)
-                            .font(.system(size: 10, weight: .medium, design: .rounded))
-                            .foregroundStyle(.white.opacity(0.75))
-                            .lineLimit(1)
-                    }
-                }
+                Text(text)
+                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
             }
             .padding(.horizontal, 18)
             .padding(.vertical, 10)
