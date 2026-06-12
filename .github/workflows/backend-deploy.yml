@@ -1,0 +1,60 @@
+name: backend-deploy
+
+on:
+  push:
+    branches: [main]
+    paths: ["backend/**", ".github/workflows/backend-deploy.yml"]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Target environment"
+        type: choice
+        options: [staging, prod]
+        default: staging
+
+concurrency: backend-deploy-${{ inputs.environment || 'staging' }}
+
+permissions:
+  contents: read
+  id-token: write # Workload Identity Federation — no JSON keys in secrets
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment || 'staging' }}
+    env:
+      # Per-environment GitHub environment variables:
+      #   GCP_PROJECT_ID  e.g. dreamaboutsports-staging / dreamaboutsports-prod
+      #   GCP_REGION      e.g. us-central1
+      SERVICE: alldayidreamaboutsports-backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy "$SERVICE" \
+            --source backend \
+            --project "${{ vars.GCP_PROJECT_ID }}" \
+            --region "${{ vars.GCP_REGION }}" \
+            --allow-unauthenticated \
+            --min-instances 0 \
+            --max-instances 50 \
+            --memory 512Mi \
+            --cpu 1 \
+            --set-env-vars "GCP_PROJECT_ID=${{ vars.GCP_PROJECT_ID }}" \
+            --set-secrets "API_FOOTBALL_KEY=api-football-key:latest,SESSION_JWT_SECRET=session-jwt-secret:latest,R2_ACCESS_KEY_ID=r2-access-key-id:latest,R2_SECRET_ACCESS_KEY=r2-secret-access-key:latest,R2_ENDPOINT=r2-endpoint:latest,GOOGLE_OAUTH_CLIENT_ID=google-oauth-client-id:latest"
+
+      - name: Smoke test
+        run: |
+          URL=$(gcloud run services describe "$SERVICE" \
+            --project "${{ vars.GCP_PROJECT_ID }}" \
+            --region "${{ vars.GCP_REGION }}" \
+            --format 'value(status.url)')
+          curl -fsS "$URL/healthz"

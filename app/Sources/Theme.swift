@@ -1,0 +1,150 @@
+import SwiftUI
+
+/// Monochrome surfaces: pure white app in light mode, pure black in dark.
+/// No gradients, no clouds — the flags and animations carry the color.
+struct AppBackground: View {
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        (scheme == .dark ? Color.black : Color.white)
+            .ignoresSafeArea()
+    }
+}
+
+extension View {
+    /// Applies the user's theme preference on top of the system appearance.
+    func appTheme(_ theme: ThemeChoice) -> some View {
+        preferredColorScheme(theme.colorScheme)
+    }
+}
+
+enum ThemeChoice: String, CaseIterable, Codable {
+    case system, light, dark
+
+    var colorScheme: ColorScheme? {
+        switch self {
+        case .system: nil
+        case .light: .light
+        case .dark: .dark
+        }
+    }
+
+    var label: String {
+        switch self {
+        case .system: "System"
+        case .light: "Light"
+        case .dark: "Dark"
+        }
+    }
+}
+
+// MARK: Buttons — every clickable thing reacts to hover.
+
+/// Row/list buttons: soft highlight + tiny lift on hover, press squish.
+struct HoverHighlightButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HighlightBody(configuration: configuration)
+    }
+
+    private struct HighlightBody: View {
+        let configuration: Configuration
+        @State private var hovering = false
+
+        var body: some View {
+            configuration.label
+                .padding(.horizontal, 8)
+                .padding(.vertical, 5)
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(Color.primary.opacity(hovering ? 0.08 : 0))
+                )
+                .scaleEffect(configuration.isPressed ? 0.97 : (hovering ? 1.02 : 1.0))
+                .animation(.easeOut(duration: 0.12), value: hovering)
+                .animation(.easeOut(duration: 0.08), value: configuration.isPressed)
+                .onHover { hovering = $0 }
+        }
+    }
+}
+
+extension ButtonStyle where Self == HoverHighlightButtonStyle {
+    static var hoverHighlight: HoverHighlightButtonStyle { .init() }
+}
+
+/// Primary call-to-action: filled pill, inverted text, grows slightly on hover.
+struct PrimaryPillButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        PillBody(configuration: configuration)
+    }
+
+    private struct PillBody: View {
+        let configuration: Configuration
+        @Environment(\.colorScheme) private var scheme
+        @State private var hovering = false
+
+        var body: some View {
+            configuration.label
+                .fontWeight(.semibold)
+                .foregroundStyle(scheme == .dark ? .black : .white)
+                .padding(.horizontal, 22)
+                .padding(.vertical, 10)
+                .background(Capsule().fill(Color.primary.opacity(configuration.isPressed ? 0.75 : 1)))
+                .scaleEffect(configuration.isPressed ? 0.97 : (hovering ? 1.04 : 1.0))
+                .animation(.easeOut(duration: 0.12), value: hovering)
+                .animation(.easeOut(duration: 0.08), value: configuration.isPressed)
+                .onHover { hovering = $0 }
+        }
+    }
+}
+
+extension ButtonStyle where Self == PrimaryPillButtonStyle {
+    static var primaryPill: PrimaryPillButtonStyle { .init() }
+}
+
+/// Buttons sitting on tinted surfaces (settings cards): always-visible chrome
+/// one step stronger than the card, brighter on hover.
+struct CardButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        CardBody(configuration: configuration)
+    }
+
+    private struct CardBody: View {
+        let configuration: Configuration
+        @State private var hovering = false
+
+        var body: some View {
+            configuration.label
+                .font(.system(size: 12, weight: .medium))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(Color.primary.opacity(hovering ? 0.20 : 0.12))
+                )
+                .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
+                .animation(.easeOut(duration: 0.12), value: hovering)
+                .animation(.easeOut(duration: 0.08), value: configuration.isPressed)
+                .onHover { hovering = $0 }
+        }
+    }
+}
+
+extension ButtonStyle where Self == CardButtonStyle {
+    static var cardButton: CardButtonStyle { .init() }
+}
+
+/// Bare hover lift for things that already have their own chrome.
+struct HoverLift: ViewModifier {
+    @State private var hovering = false
+
+    func body(content: Content) -> some View {
+        content
+            .scaleEffect(hovering ? 1.03 : 1)
+            .animation(.easeOut(duration: 0.12), value: hovering)
+            .onHover { hovering = $0 }
+    }
+}
+
+extension View {
+    func hoverLift() -> some View { modifier(HoverLift()) }
+}
+

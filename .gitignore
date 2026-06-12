@@ -1,0 +1,26 @@
+# macOS
+.DS_Store
+
+# Xcode
+app/*.xcodeproj
+app/build/
+DerivedData/
+*.xcresult
+xcuserdata/
+
+# Secrets — never commit
+app/Resources/GoogleService-Info.plist
+*.p12
+*.p8
+.env
+.env.*
+!.env.example
+
+# Node
+node_modules/
+dist/
+*.tsbuildinfo
+
+# Web
+web/dist/
+.wrangler/
