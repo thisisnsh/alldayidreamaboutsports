@@ -102,7 +102,7 @@ final class FakeScores: ScoresProviding {
         return FakeStore.shared.celebrations[fixtureId] ?? [:]
     }
     func fetchBackupConfig() async throws -> BackupConfig {
-        BackupConfig(killSwitch: false, message: nil, minBuild: nil)
+        BackupConfig(killSwitch: false, message: nil, minBuild: nil, maxFanTeams: nil)
     }
 }
 

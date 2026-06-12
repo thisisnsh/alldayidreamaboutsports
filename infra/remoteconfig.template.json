@@ -31,6 +31,10 @@
     "animation_params": {
       "defaultValue": { "value": "{\"ballDropSeconds\":1.5,\"tapWindowSeconds\":5,\"countHoldSeconds\":4,\"pillHoldSeconds\":5,\"maxQueuedAnimations\":3}" },
       "description": "Tune animation feel without shipping a build."
+    },
+    "max_fan_teams": {
+      "defaultValue": { "value": "10" },
+      "description": "How many teams a user can follow. Client-enforced in the team picker; fetched at app start."
     }
   }
 }

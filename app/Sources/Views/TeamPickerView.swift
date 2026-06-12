@@ -75,10 +75,19 @@ struct TeamPickerView: View {
                         .font(.system(size: 18))
                 }
                 Spacer()
+                Text(atLimit
+                     ? "Limit reached — unfollow to add another"
+                     : "\(session.fanTeams.count)/\(ControlPlane.shared.maxFanTeams)")
+                    .font(.caption)
+                    .opacity(0.6)
             }
             .padding(14)
             .background(.thinMaterial)
         }
+    }
+
+    private var atLimit: Bool {
+        session.fanTeamCodes.count >= ControlPlane.shared.maxFanTeams
     }
 
     private func toggle(_ team: Team) {
@@ -86,6 +95,8 @@ struct TeamPickerView: View {
         if let index = codes.firstIndex(of: team.code) {
             codes.remove(at: index)
         } else {
+            // Limit comes from remote config (max_fan_teams), default 10.
+            guard !atLimit else { return }
             codes.append(team.code)
         }
         session.setFanTeams(codes)

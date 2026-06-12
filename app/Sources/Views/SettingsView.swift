@@ -59,14 +59,18 @@ struct SettingsView: View {
                         caption("Each event shows as a drop from the notch.")
                     }
 
-                    SettingsCard("Goal celebration") {
-                        toggleRow("Show goal in center", isOn: settingsBinding(\.goalCenter, default: true))
-                        toggleRow("Show confetti in corners", isOn: settingsBinding(\.confetti, default: true))
-                        Button("Preview animation") {
-                            OverlayManager.shared.preview()
+                    // No goal events = nothing to celebrate; the whole
+                    // section disappears (its switches were zeroed too).
+                    if session.prefs.settings.eventEnabled(.goal) {
+                        SettingsCard("Goal celebration") {
+                            toggleRow("Show goal in center", isOn: settingsBinding(\.goalCenter, default: true))
+                            toggleRow("Show confetti in corners", isOn: settingsBinding(\.confetti, default: true))
+                            Button("Preview animation") {
+                                OverlayManager.shared.preview()
+                            }
+                            .buttonStyle(.cardButton)
+                            caption("When a team you're a fan of scores, you'll see a celebration. Configure it here: just the goal in center, just confetti, both — or neither, for a quiet notch drop like every other event. Preview plays exactly what you picked. Celebrations are hidden from screen sharing and recordings.")
                         }
-                        .buttonStyle(.cardButton)
-                        caption("When a team you're a fan of scores, you'll see a celebration. Configure it here: just the goal in center, just confetti, both — or neither, for a quiet notch drop like every other event. Preview plays exactly what you picked. Celebrations are hidden from screen sharing and recordings.")
                     }
 
                     SettingsCard("Appearance") {
@@ -182,6 +186,11 @@ struct SettingsView: View {
             set: { on in
                 session.updateSettings {
                     $0.notifications = ($0.notifications ?? [:]).merging([type.settingsKey: on]) { _, new in new }
+                    // Muting goals mutes the celebration with it.
+                    if type == .goal && !on {
+                        $0.goalCenter = false
+                        $0.confetti = false
+                    }
                 }
             }
         )
