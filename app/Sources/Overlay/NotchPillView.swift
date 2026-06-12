@@ -23,14 +23,39 @@ struct NotchStackView: View {
                         .transition(.move(edge: .top).combined(with: .opacity))
                 }
             }
-            // Clip to the stack's own box so pills visibly emerge from (and
-            // disappear into) the notch line instead of sliding over the bar.
-            .clipped()
+            // Clip ONLY above the top edge so pills visibly emerge from (and
+            // disappear into) the notch line — sides and bottom stay open so
+            // the pills' soft shadows aren't cut into rectangles.
+            .clipShape(TopOnlyClip())
+            // Report the real rendered height — the ✕ panel is positioned
+            // from it (estimates break: emoji lines make pills taller).
+            .background(
+                GeometryReader { proxy in
+                    Color.clear
+                        .onAppear { OverlayManager.shared.reportStackHeight(proxy.size.height) }
+                        .onChange(of: proxy.size.height) { _, height in
+                            OverlayManager.shared.reportStackHeight(height)
+                        }
+                }
+            )
             Spacer()
         }
         .padding(.top, topInset + 6)
         .frame(maxWidth: .infinity)
         .allowsHitTesting(false)
+    }
+}
+
+/// Clips at the top edge only; extends generously on the other three sides
+/// so shadows survive while the slide-into-the-notch illusion holds.
+private struct TopOnlyClip: Shape {
+    func path(in rect: CGRect) -> Path {
+        Path(CGRect(
+            x: rect.minX - 60,
+            y: rect.minY,
+            width: rect.width + 120,
+            height: rect.height + 60
+        ))
     }
 }
 

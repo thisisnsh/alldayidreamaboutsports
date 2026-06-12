@@ -35,7 +35,7 @@ enum DevConfig {
     /// Relative weights for which event the auto loop fires.
     /// fanGoal = full ball-drop celebration; the rest are notch pills.
     static let autoEventWeights: [(weight: Int, fire: @MainActor () -> Void)] = [
-        (1, DevSimulator.fanGoal),
+        (5, DevSimulator.fanGoal),
         (1, DevSimulator.opponentGoal),
         (1, DevSimulator.yellowCard),
         (1, DevSimulator.varCancelled),

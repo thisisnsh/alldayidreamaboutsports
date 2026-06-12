@@ -109,9 +109,10 @@ final class OverlayManager: ObservableObject {
                 }
             }
         }
-        // The ✕ appears once the last pill has landed.
+        // The ✕ appears once the last pill has landed; its position comes
+        // from the stack's MEASURED height (see reportStackHeight).
         schedule(after: Double(set.count - 1) * Self.pillDropStagger + 0.35) { [self] in
-            showDismissPanel(stackCount: set.count)
+            showDismissPanel()
         }
 
         let fanGoals = set.compactMap(\.fanGoal)
@@ -198,13 +199,13 @@ final class OverlayManager: ObservableObject {
                 let team = TeamCatalog.team(for: target.teamCode, in: AppSession.shared.teams)
                 let count = totals[target.teamCode] ?? 0
                 let text: String? = count > 0
-                    ? "🎉 \(count.formattedCompact) celebrations for \(team.name) this match"
-                    : (taps > 0 ? "🎉 You celebrated with \(team.name)!" : nil)
+                    ? "\(count.formattedCompact) celebrations for \(team.name) this match"
+                    : (taps > 0 ? "You celebrated with \(team.name)!" : nil)
                 if let text {
                     enqueue(NotchItem(
                         id: "count:\(target.fixtureId):\(target.teamCode):\(Date().timeIntervalSince1970)",
-                        icon: "party.popper.fill",
-                        iconColor: .yellow,
+                        icon: "party.popper",
+                        iconColor: .blue,
                         text: text,
                         fanGoal: nil
                     ))
@@ -304,21 +305,34 @@ final class OverlayManager: ObservableObject {
         displayPanel?.orderOut(nil)
     }
 
-    /// Small clickable ✕ floating just below the pill stack (the display
-    /// panel is click-through, so the button needs its own panel). Its gap
-    /// to the last pill equals the gap between pills (8pt).
-    private func showDismissPanel(stackCount: Int) {
+    /// The pill stack reports its real rendered height (emoji lines make
+    /// pills taller than any estimate) so the ✕ always sits exactly one
+    /// pill-gap below the last pill.
+    private var measuredStackHeight: CGFloat = 0
+
+    func reportStackHeight(_ height: CGFloat) {
+        measuredStackHeight = height
+        if dismissPanel?.isVisible == true {
+            dismissPanel?.setFrame(dismissPanelRect(), display: true)
+        }
+    }
+
+    private func dismissPanelRect() -> NSRect {
         let inset = (NSScreen.main?.safeAreaInsets.top).flatMap { $0 > 0 ? $0 : nil } ?? 26
-        let pillHeight: CGFloat = 38
         let pillSpacing: CGFloat = 8
-        let stackHeight = CGFloat(stackCount) * pillHeight + CGFloat(max(0, stackCount - 1)) * pillSpacing
         let size: CGFloat = 22
-        let rect = NSRect(
+        return NSRect(
             x: screen.frame.midX - size / 2,
-            y: screen.frame.maxY - inset - 6 - stackHeight - pillSpacing - size,
+            y: screen.frame.maxY - inset - 6 - measuredStackHeight - pillSpacing - size,
             width: size,
             height: size
         )
+    }
+
+    /// Small clickable ✕ floating just below the pill stack (the display
+    /// panel is click-through, so the button needs its own panel).
+    private func showDismissPanel() {
+        let rect = dismissPanelRect()
         if dismissPanel == nil {
             let panel = Self.makePanel(frame: rect, clickThrough: false)
             panel.contentView = NSHostingView(rootView: SetDismissButton().environmentObject(self))
