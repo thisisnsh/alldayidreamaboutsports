@@ -26,7 +26,7 @@ struct NotchStackView: View {
             // Clip ONLY above the top edge so pills visibly emerge from (and
             // disappear into) the notch line — sides and bottom stay open so
             // the pills' soft shadows aren't cut into rectangles.
-            .clipShape(TopOnlyClip())
+            // .clipShape(TopOnlyClip())
             // Report the real rendered height — the ✕ panel is positioned
             // from it (estimates break: emoji lines make pills taller).
             .background(
