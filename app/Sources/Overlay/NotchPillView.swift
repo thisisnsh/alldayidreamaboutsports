@@ -13,22 +13,24 @@ struct NotchStackView: View {
     }
 
     var body: some View {
-        VStack(spacing: 8) {
-            ForEach(items) { item in
-                NotchPillRow(item: item)
-                    .transition(.asymmetric(
-                        // New arrivals fade in at the bottom of the stack…
-                        insertion: .opacity.combined(with: .scale(scale: 0.9, anchor: .top)),
-                        // …expiry always happens at the top, sliding up.
-                        removal: .move(edge: .top).combined(with: .opacity)
-                    ))
+        VStack(spacing: 0) {
+            VStack(spacing: 8) {
+                ForEach(items) { item in
+                    NotchPillRow(item: item)
+                        // Drop down out of the notch; rise back into it.
+                        // (Each new pill is inserted at the top, so the ones
+                        // already showing get pushed down by the layout.)
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                }
             }
+            // Clip to the stack's own box so pills visibly emerge from (and
+            // disappear into) the notch line instead of sliding over the bar.
+            .clipped()
             Spacer()
         }
         .padding(.top, topInset + 6)
         .frame(maxWidth: .infinity)
         .allowsHitTesting(false)
-        .clipped() // the top exit slides "into" the notch, not over the bar
     }
 }
 

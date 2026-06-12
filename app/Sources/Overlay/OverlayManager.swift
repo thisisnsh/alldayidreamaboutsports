@@ -91,15 +91,28 @@ final class OverlayManager: ObservableObject {
 
     // MARK: Set lifecycle
 
+    /// Stagger between pill drops within a set.
+    private static let pillDropStagger = 0.18
+
     private func startNextSetIfIdle() {
         guard activeSet.isEmpty, !queue.isEmpty else { return }
         let set = Array(queue.prefix(setSize))
         queue.removeFirst(set.count)
-        withAnimation(.spring(duration: 0.45, bounce: 0.2)) {
-            activeSet = set
-        }
         showDisplayPanel()
-        showDismissPanel(stackCount: set.count)
+
+        // Pills drop from the notch one by one — each new one takes the top
+        // spot and pushes the existing ones down.
+        for (index, item) in set.enumerated() {
+            schedule(after: Double(index) * Self.pillDropStagger) { [self] in
+                withAnimation(.spring(duration: 0.45, bounce: 0.25)) {
+                    activeSet.insert(item, at: 0)
+                }
+            }
+        }
+        // The ✕ appears once the last pill has landed.
+        schedule(after: Double(set.count - 1) * Self.pillDropStagger + 0.35) { [self] in
+            showDismissPanel(stackCount: set.count)
+        }
 
         let fanGoals = set.compactMap(\.fanGoal)
         let settings = AppSession.shared.prefs.settings
@@ -292,15 +305,17 @@ final class OverlayManager: ObservableObject {
     }
 
     /// Small clickable ✕ floating just below the pill stack (the display
-    /// panel is click-through, so the button needs its own panel).
+    /// panel is click-through, so the button needs its own panel). Its gap
+    /// to the last pill equals the gap between pills (8pt).
     private func showDismissPanel(stackCount: Int) {
         let inset = (NSScreen.main?.safeAreaInsets.top).flatMap { $0 > 0 ? $0 : nil } ?? 26
         let pillHeight: CGFloat = 38
-        let stackHeight = CGFloat(stackCount) * pillHeight + CGFloat(max(0, stackCount - 1)) * 8
-        let size: CGFloat = 30
+        let pillSpacing: CGFloat = 8
+        let stackHeight = CGFloat(stackCount) * pillHeight + CGFloat(max(0, stackCount - 1)) * pillSpacing
+        let size: CGFloat = 22
         let rect = NSRect(
             x: screen.frame.midX - size / 2,
-            y: screen.frame.maxY - inset - 6 - stackHeight - 8 - size,
+            y: screen.frame.maxY - inset - 6 - stackHeight - pillSpacing - size,
             width: size,
             height: size
         )
@@ -364,6 +379,6 @@ struct SetDismissButton: View {
         }
         .buttonStyle(.plain)
         .hoverLift()
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 }
