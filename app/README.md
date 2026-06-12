@@ -88,12 +88,13 @@ flavors.
 Key invariants:
 - Overlay panels use `sharingType = .none` (invisible to screen sharing) and
   never take focus (`nonactivatingPanel`).
-- Two presentation lanes: the notch stack shows every event as a pill in
-  real time (newest at the bottom, oldest exits at the top, capped — never
-  queued, never stale); fan-goal celebrations queue separately (cap 4) and
-  shorten their tap window while others wait.
-- Celebration taps are batched: ONE `/celebrate` request per goal, sent when
-  the ball disappears.
+- ONE event queue, displayed in sets: up to `notchStackMax` pills show at
+  once for `pillHoldSeconds`, then the next set follows — nothing is ever
+  dropped. A ✕ under the stack ends the set early. Fan goals in the
+  displayed set fire one confetti burst each (fire-and-forget) and share a
+  single center ball carrying every scorer's flag; taps celebrate them all.
+- Celebration taps are batched: ONE `/celebrate` request per celebrated
+  team, sent when the ball disappears.
 - `ControlPlane` gates everything; `kill_switch`/`min_build` from Remote Config
   (real-time) with `config.json` on the scores CDN as backup.
 

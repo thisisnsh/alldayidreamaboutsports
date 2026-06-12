@@ -29,7 +29,7 @@
       "description": "App live.json reconciliation poll interval while a followed match is live."
     },
     "animation_params": {
-      "defaultValue": { "value": "{\"ballDropSeconds\":1.5,\"tapWindowSeconds\":5,\"tapWindowBusySeconds\":3,\"pillHoldSeconds\":5,\"notchStackMax\":4}" },
+      "defaultValue": { "value": "{\"ballDropSeconds\":1.5,\"pillHoldSeconds\":5,\"notchStackMax\":4}" },
       "description": "Tune animation feel without shipping a build."
     }
   }

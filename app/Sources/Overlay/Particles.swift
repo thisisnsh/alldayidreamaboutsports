@@ -43,7 +43,13 @@ struct ConfettiView: View {
             }
         }
         .allowsHitTesting(false)
-        .onAppear { particles = Self.makeBursts(in: size) }
+        .onAppear {
+            // Reset the clock HERE, not at init: if the view is created
+            // before it appears, particles would start mid-trajectory —
+            // that's the "confetti not starting from the bottom" bug.
+            start = Date()
+            particles = Self.makeBursts(in: size)
+        }
     }
 
     private static func makeBursts(in size: CGSize) -> [Particle] {
@@ -76,9 +82,10 @@ struct ConfettiView: View {
 
 /// Every click throws 4 mini flag-balls that arc out and settle on the bottom
 /// edge of the screen — the floor fills up as fans hammer the ball. They stay
-/// put (no bounce, no per-ball fade) until the whole scene fades out.
+/// put (no bounce, no per-ball fade) until the whole scene fades out. With
+/// several celebrated teams, each mini picks a random flag among them.
 struct MiniBallBursts: View {
-    let team: Team
+    let teams: [Team]
     let size: CGSize
     let bursts: Int
 
@@ -95,6 +102,7 @@ struct MiniBallBursts: View {
         let diameter: CGFloat
         let landTime: Double // when it touches the bottom edge…
         let landX: CGFloat // …and the x it stays at forever after
+        let flag: String
     }
 
     @State private var minis: [Mini] = []
@@ -117,7 +125,7 @@ struct MiniBallBursts: View {
                     }
                     var resolved = canvas.resolve(Text("⚽").font(.system(size: m.diameter)))
                     canvas.draw(resolved, at: pos)
-                    resolved = canvas.resolve(Text(team.flag).font(.system(size: m.diameter * 0.55)))
+                    resolved = canvas.resolve(Text(m.flag).font(.system(size: m.diameter * 0.55)))
                     canvas.draw(resolved, at: CGPoint(x: pos.x + m.diameter * 0.4, y: pos.y - m.diameter * 0.4))
                 }
             }
@@ -148,7 +156,8 @@ struct MiniBallBursts: View {
                     velocity: velocity,
                     diameter: diameter,
                     landTime: landTime,
-                    landX: landX
+                    landX: landX,
+                    flag: teams.randomElement()?.flag ?? "⚽"
                 ))
             }
             if minis.count > Self.maxBalls {
