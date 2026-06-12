@@ -31,11 +31,16 @@ final class AppSession: ObservableObject {
 
     func bootstrap() {
         #if DEV_BACKEND
-        // Sign-in bypass: already signed in before the first frame. No login
-        // window, no Keychain, no UserDefaults — the hardcoded data in
-        // Dev/DevConfig.swift is the source of truth on every launch.
+        // Sign-in bypass: already signed in before the first frame. Profile
+        // and fan teams come from Dev/DevConfig.swift (code is the source of
+        // truth), but settings still load from UserDefaults so your toggles
+        // survive a relaunch — same as production.
         profile = DevConfig.profile
         prefs = FakeStore.shared.prefs
+        if let data = defaults.data(forKey: "prefs"),
+           let stored = try? JSONDecoder().decode(UserPrefs.self, from: data) {
+            prefs.settings = stored.settings
+        }
         #else
         if let data = defaults.data(forKey: "profile"),
            let stored = try? JSONDecoder().decode(Profile.self, from: data),
@@ -64,18 +69,25 @@ final class AppSession: ObservableObject {
                 Keychain.set(response.token, for: "sessionToken")
                 profile = response.profile
                 persist(profile: response.profile)
-                // Server prefs win on a fresh machine; local wins if user already picked teams.
+                // Only fan teams roam via the backend; settings stay local.
+                // Server teams win on a fresh machine, local wins otherwise.
                 if prefs.footballTeams.isEmpty {
-                    prefs = response.prefs
+                    prefs.fanOf = response.prefs.fanOf
                     persistPrefs()
                 } else {
-                    try? await api.putPrefs(prefs)
+                    try? await api.putPrefs(roamingPrefs)
                 }
                 PushService.shared.syncTopics(to: fanTeamCodes)
             } catch {
                 signInError = error.localizedDescription
             }
         }
+    }
+
+    /// What gets synced to the backend: fan teams only. Settings (theme,
+    /// celebration style, event toggles…) live in UserDefaults on this Mac.
+    private var roamingPrefs: UserPrefs {
+        UserPrefs(fanOf: prefs.fanOf, settings: PrefSettings())
     }
 
     func signOut() {
@@ -100,13 +112,14 @@ final class AppSession: ObservableObject {
         prefs.footballTeams = codes
         persistPrefs()
         PushService.shared.syncTopics(to: Set(codes))
-        Task { try? await api.putPrefs(prefs) }
+        Task { try? await api.putPrefs(roamingPrefs) }
     }
 
+    /// Settings are device-local: persisted to UserDefaults, never sent to
+    /// the backend — only fan teams are worth a database row.
     func updateSettings(_ mutate: (inout PrefSettings) -> Void) {
         mutate(&prefs.settings)
         persistPrefs()
-        Task { try? await api.putPrefs(prefs) }
     }
 
     private func persistPrefs() {

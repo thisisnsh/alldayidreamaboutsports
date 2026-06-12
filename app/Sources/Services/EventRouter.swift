@@ -93,7 +93,7 @@ func pillText(for event: MatchEvent) -> String {
     // identify their match by the team flag.
     let homeFlag = TeamCatalog.team(for: event.homeTeam, in: teams).flag
     let awayFlag = TeamCatalog.team(for: event.awayTeam, in: teams).flag
-    let matchup = "\(homeFlag) \(event.homeName) – \(event.awayName) \(awayFlag)"
+    let matchup = "\(homeFlag) \(event.homeName) vs \(event.awayName) \(awayFlag)"
     switch event.type {
     case .kickoff: return "Kickoff — \(matchup)"
     case .goal: return "\(minute)Goal — \(event.player ?? event.teamCode ?? "") \(flag)"
