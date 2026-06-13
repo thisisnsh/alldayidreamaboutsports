@@ -17,7 +17,6 @@ const C = {
   bone: [1, 1, 1],
   plum: [0.502, 0.322, 1.0],
   plumSoft: [0.647, 0.522, 1.0],
-  dim: [0.62, 0.62, 0.72],
   seam: [0, 0, 0],
 };
 
@@ -25,7 +24,7 @@ const C = {
    1. SHAPE MATH  — every particle keeps a fixed identity (a fibonacci-sphere
    direction); a shape just decides its target position, colour & visibility.
    ═══════════════════════════════════════════════════════════════════════════ */
-const N = window.innerWidth < 760 ? 3000 : 5200;
+const N = window.innerWidth < 760 ? 3800 : 6800;
 
 const dirs = new Float32Array(N * 3);
 (function seed() {
@@ -73,42 +72,42 @@ function shapeSoccer(i, o) {
   else { o.c = C.bone; o.v = 1; }                         // hexagon → white
 }
 
+// Earth: triangles fall only on the continents (the ocean stays empty). The
+// land/ocean mask is sampled from an equirectangular image once it loads — see
+// loadEarthMask() below; until then we fall back to the airy body so there's
+// never an empty sphere. Colour is a stable purple/white speckle per particle.
 function shapeGlobe(i, o) {
   const x = dirs[i * 3], y = dirs[i * 3 + 1], z = dirs[i * 3 + 2];
-  o.x = x; o.y = y; o.z = z; o.v = 1;
-  const lat = Math.asin(y), lon = Math.atan2(z, x);
-  const par = Math.abs((lat / (Math.PI / 6)) % 1);
-  const mer = Math.abs((lon / (Math.PI / 6)) % 1);
-  const onGrid = par < 0.13 || par > 0.87 || mer < 0.1 || mer > 0.9;
-  if (Math.abs(lat) < 0.07) o.c = C.plum;                 // purple equator
-  else if (onGrid) o.c = C.bone;                          // bright graticule
-  else o.c = C.dim;                                       // soft planet body
+  o.x = x; o.y = y; o.z = z;
+  o.v = landReady ? landVis[i] : body(i);
+  o.c = por[i] < 0.46 ? C.plum : por[i] < 0.7 ? C.plumSoft : C.bone;
 }
 
 function shapeBasketball(i, o) {
   const x = dirs[i * 3], y = dirs[i * 3 + 1], z = dirs[i * 3 + 2];
   o.x = x; o.y = y; o.z = z; o.v = 1;
   const seam = Math.abs(x) < 0.05 || Math.abs(z) < 0.05 || Math.abs(Math.abs(y) - 0.62) < 0.045;
-  o.c = seam ? C.plum : C.bone;
+  o.c = seam ? C.plum : C.bone; o.v = seam ? 1 : body(i);
 }
 function shapeTennis(i, o) {
   const x = dirs[i * 3], y = dirs[i * 3 + 1], z = dirs[i * 3 + 2];
-  o.x = x; o.y = y; o.z = z; o.v = 1;
+  o.x = x; o.y = y; o.z = z;
   const lon = Math.atan2(z, x);
-  o.c = Math.abs(y - 0.55 * Math.sin(2 * lon)) < 0.07 ? C.plum : C.bone;
+  const seam = Math.abs(y - 0.55 * Math.sin(2 * lon)) < 0.07;
+  o.c = seam ? C.plum : C.bone; o.v = seam ? 1 : body(i);
 }
 function shapeBaseball(i, o) {
   const x = dirs[i * 3], y = dirs[i * 3 + 1], z = dirs[i * 3 + 2];
-  o.x = x; o.y = y; o.z = z; o.v = 1;
+  o.x = x; o.y = y; o.z = z;
   const lon = Math.atan2(z, x);
-  const s = Math.abs(y - 0.5 * Math.sin(2 * lon)) < 0.05 || Math.abs(y + 0.5 * Math.sin(2 * lon)) < 0.05;
-  o.c = s ? C.plum : C.bone;
+  const seam = Math.abs(y - 0.5 * Math.sin(2 * lon)) < 0.05 || Math.abs(y + 0.5 * Math.sin(2 * lon)) < 0.05;
+  o.c = seam ? C.plum : C.bone; o.v = seam ? 1 : body(i);
 }
 function shapeFootball(i, o) {
   const x = dirs[i * 3], y = dirs[i * 3 + 1], z = dirs[i * 3 + 2];
-  o.x = x * 1.42; o.y = y * 0.74; o.z = z * 0.74; o.v = 1;
+  o.x = x * 1.42; o.y = y * 0.74; o.z = z * 0.74;
   const lace = (Math.abs(x) < 0.55 && Math.abs(z) < 0.05 && y > 0.45) || Math.abs(x) > 1.15;
-  o.c = lace ? C.plum : C.bone;
+  o.c = lace ? C.plum : C.bone; o.v = lace ? 1 : body(i);
 }
 const SHAPES = { soccer: shapeSoccer, globe: shapeGlobe, basketball: shapeBasketball, tennis: shapeTennis, baseball: shapeBaseball, football: shapeFootball };
 
@@ -120,6 +119,42 @@ const tcr = new Float32Array(N), tcg = new Float32Array(N), tcb = new Float32Arr
 const vis = new Float32Array(N), tvis = new Float32Array(N);
 const seedOff = new Float32Array(N);
 for (let i = 0; i < N; i++) seedOff[i] = Math.random() * Math.PI * 2;
+
+// Stable per-particle porosity. The soccer ball shows only ~36% of its
+// particles (the rest fall on invisible seams) — that's what makes it airy.
+// Every other shape hides the same fraction of its "body" so they all read
+// with the same light density. Lines/seams stay solid on top of this.
+const por = new Float32Array(N);
+for (let i = 0; i < N; i++) por[i] = Math.random();
+const GAP = 0.64;
+const body = (i) => (por[i] > GAP ? 1 : 0);
+
+// Land/ocean visibility for the globe — filled once the Earth mask decodes.
+const landVis = new Float32Array(N);
+let landReady = false;
+(function loadEarthMask() {
+  const img = new Image();
+  img.onload = () => {
+    const W = 1000, H = 500;
+    const cv = document.createElement("canvas"); cv.width = W; cv.height = H;
+    const cx = cv.getContext("2d", { willReadFrequently: true });
+    cx.drawImage(img, 0, 0, W, H);
+    const px = cx.getImageData(0, 0, W, H).data;
+    for (let i = 0; i < N; i++) {
+      const lat = Math.asin(dirs[i * 3 + 1]);
+      const lon = Math.atan2(dirs[i * 3 + 2], dirs[i * 3]);
+      const u = 1 - (lon + Math.PI) / (2 * Math.PI);   // flip so continents read east-west
+      const v = 0.5 - lat / Math.PI;                   // north pole → top row
+      const sx = Math.min(W - 1, Math.max(0, (u * W) | 0));
+      const sy = Math.min(H - 1, Math.max(0, (v * H) | 0));
+      landVis[i] = px[(sy * W + sx) * 4] < 110 ? 1 : 0; // dark pixel = land
+    }
+    landReady = true;
+    if (currentShape === "globe") setTargets("globe");
+  };
+  img.onerror = () => { landReady = false; };           // fall back to airy body
+  img.src = "assets/earth-mask.jpg";
+})();
 
 const _o = { x: 0, y: 0, z: 0, c: C.bone, v: 1 };
 function setTargets(name) {
@@ -260,7 +295,7 @@ function frame(now) {
   }
   const breathe = reduceMotion ? 0 : Math.sin(now / 2600) * 0.012;
   const Reff = R * density * pulse * (1 + breathe);
-  const magR = Reff * 1.18, magR2 = magR * magR;
+  const magR = Reff * 0.6, magR2 = magR * magR;
 
   _e.set(pitch, yaw, 0); _qRot.setFromEuler(_e);
   if (magOn) updateMouseWorld();
@@ -277,9 +312,15 @@ function frame(now) {
       const d2 = dx * dx + dy * dy;
       if (d2 < magR2) {
         const dist = Math.sqrt(d2) || 1e-4, f = 1 - dist / magR;
-        let amt = f * f * Reff * 0.6;
-        if (scene_.hover === "attract") amt = -Math.min(amt, dist * 0.85);
-        _v.x += (dx / dist) * amt; _v.y += (dy / dist) * amt;
+        const press = f * f;
+        if (scene_.hover === "attract") {            // gentle pull toward the cursor
+          _v.x -= dx * press * 0.3; _v.y -= dy * press * 0.3;
+          _v.z -= press * Reff * 0.22;
+        } else {                                     // pressed-in dent: barely part, push back
+          _v.x += (dx / dist) * press * Reff * 0.12;
+          _v.y += (dy / dist) * press * Reff * 0.12;
+          _v.z -= press * Reff * 0.42;
+        }
       }
     }
 
@@ -349,7 +390,7 @@ function applyScene(el) {
   const shape = el.dataset.shape;
   scene_.hover = el.dataset.hover || "repel";
   scene_.pulse = el.hasAttribute("data-pulse");
-  densityTarget = el.hasAttribute("data-dense") ? 0.84 : 1;
+  densityTarget = el.hasAttribute("data-dense") ? 0.72 : 1;
   if (shape === "cycle") { if (!pillOverride) startCycle(); }
   else { morphTo(shape); if (el.hasAttribute("data-pings")) startGlobePings(); }
 }
