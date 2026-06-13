@@ -298,11 +298,17 @@ html, body {
   left: 0;
   right: 0;
   display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  font-size: clamp(12.5px, 1.5vmin, 14px);
+  z-index: 4;
+}
+.footer-links {
+  display: flex;
   align-items: center;
   justify-content: center;
   gap: 12px;
-  font-size: clamp(12.5px, 1.5vmin, 14px);
-  z-index: 4;
 }
 .footer a {
   color: rgba(255,255,255,0.9);
@@ -312,6 +318,12 @@ html, body {
 }
 .footer a:hover { color: #fff; text-decoration: underline; }
 .footer .sep { color: rgba(255,255,255,0.55); }
+.copyright {
+  color: rgba(255,255,255,0.6);
+  font-size: clamp(11px, 1.3vmin, 12.5px);
+  text-shadow: 0 1px 6px rgba(0,0,0,0.6);
+  margin-top: 5px;
+}
 
 /* ── Confetti canvas ────────────────────────────────────────────────────── */
 .confetti {
