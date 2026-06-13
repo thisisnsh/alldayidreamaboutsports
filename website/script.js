@@ -94,11 +94,12 @@ function shapeBasketball(i, o) {
   const s = Math.sin(Math.PI * 2 * u), wob = 0.13 * s * s;
   const top = 0.22 + wob, bot = 0.78 - wob;
   const onSeam =
-    Math.abs(v - 0.5) < 0.02 || Math.abs(v - top) < 0.02 || Math.abs(v - bot) < 0.02 ||
-    Math.min(Math.abs(u - 0.25), Math.abs(u - 0.75), Math.abs(u - 1.25), Math.abs(u + 0.25)) < 0.015;
-  if (onSeam || por[i] > 0.6) { o.c = C.seam; o.v = 0; return; }   // seam gap / airy thinning
+    Math.abs(v - 0.5) < 0.022 || Math.abs(v - top) < 0.022 || Math.abs(v - bot) < 0.022 ||
+    Math.min(Math.abs(u - 0.25), Math.abs(u - 0.75), Math.abs(u - 1.25), Math.abs(u + 0.25)) < 0.016;
+  if (onSeam) { o.c = C.seam; o.v = 0; return; }   // seam → empty gap (like the soccer ball)
+  o.v = 1;                                         // every panel particle shows → solid, crisp panels
   const purple = v < top || (v >= 0.5 && v < bot);
-  o.c = purple ? (por[i] < 0.5 ? C.plum : C.plumSoft) : C.bone;
+  o.c = purple ? C.plum : C.bone;
 }
 const SHAPES = { soccer: shapeSoccer, globe: shapeGlobe, basketball: shapeBasketball };
 
@@ -201,12 +202,19 @@ mesh.instanceColor.setUsage(THREE.DynamicDrawUsage);
 const colArr = mesh.instanceColor.array;
 scene.add(mesh);
 
-// fixed per-instance orientation so the tetra facets vary across the cloud
+// Per-instance orientation: align each tetra's +Y to its radial direction so the
+// facets lie on the sphere as a coherent shell (not scattered confetti), with a
+// random twist in the tangent plane for organic variety.
 const qBase = [];
-for (let i = 0; i < N; i++) {
-  const q = new THREE.Quaternion();
-  q.setFromEuler(new THREE.Euler(rand(0, 6.28), rand(0, 6.28), rand(0, 6.28)));
-  qBase.push(q);
+{
+  const _up = new THREE.Vector3(0, 1, 0), _dir = new THREE.Vector3(), _tw = new THREE.Quaternion();
+  for (let i = 0; i < N; i++) {
+    _dir.set(dirs[i * 3], dirs[i * 3 + 1], dirs[i * 3 + 2]).normalize();
+    const q = new THREE.Quaternion().setFromUnitVectors(_up, _dir);
+    _tw.setFromAxisAngle(_up, rand(0, 6.28));
+    q.multiply(_tw);
+    qBase.push(q);
+  }
 }
 
 /* celebration pings — bright little triangles that flow outward from the globe */
@@ -326,7 +334,11 @@ function frame(now) {
     mesh.setMatrixAt(i, _dummy.matrix);
 
     cr[i] += (tcr[i] - cr[i]) * EASE; cg[i] += (tcg[i] - cg[i]) * EASE; cb[i] += (tcb[i] - cb[i]) * EASE;
-    colArr[i * 3] = cr[i]; colArr[i * 3 + 1] = cg[i]; colArr[i * 3 + 2] = cb[i];
+    // depth dimming: far side (back of the sphere) is darker so it reads behind
+    // the front and the two don't visually merge.
+    const dz = _v.z / Reff;                              // ~ -1 (back) .. +1 (front)
+    const lum = 0.3 + 0.7 * Math.min(1, Math.max(0, dz * 0.5 + 0.5));
+    colArr[i * 3] = cr[i] * lum; colArr[i * 3 + 1] = cg[i] * lum; colArr[i * 3 + 2] = cb[i] * lum;
   }
   mesh.instanceMatrix.needsUpdate = true;
   mesh.instanceColor.needsUpdate = true;
