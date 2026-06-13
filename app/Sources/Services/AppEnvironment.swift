@@ -4,6 +4,7 @@ enum AppEnvironment {
     static let apiBase = URL(string: "https://api.alldayidreamaboutsports.com")!
     static let scoresBase = URL(string: "https://scores.alldayidreamaboutsports.com")!
     static let website = URL(string: "https://alldayidreamaboutsports.com")!
+    static let supportEmail = "support@alldayidreamaboutsports.com"
     static let leagueId = 1 // FIFA World Cup
 
     static var buildNumber: Int {

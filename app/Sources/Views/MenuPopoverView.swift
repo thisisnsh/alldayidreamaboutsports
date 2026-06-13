@@ -86,18 +86,27 @@ struct MenuPopoverView: View {
     private var actions: some View {
         VStack(alignment: .leading, spacing: 8) {
             Button {
+                dismissMenu()
                 openWindow(id: WindowID.teamPicker)
                 NSApp.activate(ignoringOtherApps: true)
             } label: {
                 Label("Become a Fan", systemImage: "heart.circle.fill")
             }
             Button {
+                dismissMenu()
                 openWindow(id: WindowID.settings)
                 NSApp.activate(ignoringOtherApps: true)
             } label: {
                 Label("Settings", systemImage: "gearshape")
             }
             Button {
+                dismissMenu()
+                NSWorkspace.shared.open(reportBugURL)
+            } label: {
+                Label("Report a bug", systemImage: "ladybug")
+            }
+            Button {
+                dismissMenu()
                 session.signOut()
             } label: {
                 Label("Sign out", systemImage: "rectangle.portrait.and.arrow.right")
@@ -112,11 +121,37 @@ struct MenuPopoverView: View {
         .font(.system(size: 13))
     }
 
+    /// Closes the open MenuBarExtra panel. The window-style menu has no SwiftUI
+    /// dismiss action, so we close the panel directly — it's the key window
+    /// while the menu is showing, and SwiftUI rebuilds it on the next open.
+    private func dismissMenu() {
+        NSApp.keyWindow?.close()
+    }
+
+    /// A pre-filled support email — the app repo is private, so there's no
+    /// public issue tracker to point at. Build + OS go in the body so reports
+    /// arrive with the version already attached.
+    private var reportBugURL: URL {
+        let subject = "Bug report — All Day I Dream About Sports"
+        let body = """
+
+
+        ———
+        Build \(AppEnvironment.buildNumber)
+        macOS \(ProcessInfo.processInfo.operatingSystemVersionString)
+        """
+        func encode(_ s: String) -> String {
+            s.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? s
+        }
+        return URL(string: "mailto:\(AppEnvironment.supportEmail)?subject=\(encode(subject))&body=\(encode(body))")!
+    }
+
     private var signedOut: some View {
         VStack(spacing: 10) {
             Text("⚽ Sign in to follow your teams")
                 .font(.system(size: 13, weight: .medium))
             Button("Sign in") {
+                dismissMenu()
                 openWindow(id: WindowID.login)
                 NSApp.activate(ignoringOtherApps: true)
             }
