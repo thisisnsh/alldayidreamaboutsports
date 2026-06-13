@@ -72,31 +72,35 @@ function shapeSoccer(i, o) {
   else { o.c = C.bone; o.v = 1; }                         // hexagon → white
 }
 
-// Earth: triangles fall only on the continents (the ocean stays empty). The
-// land/ocean mask is sampled from an equirectangular image once it loads — see
-// loadEarthMask() below; until then we fall back to the airy body so there's
-// never an empty sphere. Colour is a stable purple/white speckle per particle.
+// Globe: triangles fall only on the continents (sampled from the equirectangular
+// mask, see loadMask), each a purple/white speckle. Until the image decodes the
+// mask is all-zero, so we fall back to the airy body — the first scroll is never
+// an empty sphere.
+const speckle = (i) => (por[i] < 0.46 ? C.plum : por[i] < 0.7 ? C.plumSoft : C.bone);
 function shapeGlobe(i, o) {
-  const x = dirs[i * 3], y = dirs[i * 3 + 1], z = dirs[i * 3 + 2];
-  o.x = x; o.y = y; o.z = z;
-  o.v = landReady ? landVis[i] : body(i);
-  o.c = por[i] < 0.46 ? C.plum : por[i] < 0.7 ? C.plumSoft : C.bone;
+  o.x = dirs[i * 3]; o.y = dirs[i * 3 + 1]; o.z = dirs[i * 3 + 2];
+  o.v = maskReady.globe ? mask.globe[i] : body(i);
+  o.c = speckle(i);
 }
-
+// Basketball: the panels are painted purple/white and the seams are left empty
+// (like the soccer ball's gaps) so the ball reads without rendering any black
+// lines. Seam layout matches the reference texture: a centre ring, two vertical
+// great-circle seams (u = .25/.75), and wavy top/bottom seams from a sin² wobble.
 function shapeBasketball(i, o) {
-  const x = dirs[i * 3], y = dirs[i * 3 + 1], z = dirs[i * 3 + 2];
-  o.x = x; o.y = y; o.z = z; o.v = 1;
-  const seam = Math.abs(x) < 0.05 || Math.abs(z) < 0.05 || Math.abs(Math.abs(y) - 0.62) < 0.045;
-  o.c = seam ? C.plum : C.bone; o.v = seam ? 1 : body(i);
+  const y = dirs[i * 3 + 1];
+  o.x = dirs[i * 3]; o.y = y; o.z = dirs[i * 3 + 2];
+  const u = 1 - (Math.atan2(o.z, o.x) + Math.PI) / (2 * Math.PI);
+  const v = 0.5 - Math.asin(y) / Math.PI;          // 0 = north pole, 1 = south
+  const s = Math.sin(Math.PI * 2 * u), wob = 0.13 * s * s;
+  const top = 0.22 + wob, bot = 0.78 - wob;
+  const onSeam =
+    Math.abs(v - 0.5) < 0.02 || Math.abs(v - top) < 0.02 || Math.abs(v - bot) < 0.02 ||
+    Math.min(Math.abs(u - 0.25), Math.abs(u - 0.75), Math.abs(u - 1.25), Math.abs(u + 0.25)) < 0.015;
+  if (onSeam || por[i] > 0.6) { o.c = C.seam; o.v = 0; return; }   // seam gap / airy thinning
+  const purple = v < top || (v >= 0.5 && v < bot);
+  o.c = purple ? (por[i] < 0.5 ? C.plum : C.plumSoft) : C.bone;
 }
-function shapeTennis(i, o) {
-  const x = dirs[i * 3], y = dirs[i * 3 + 1], z = dirs[i * 3 + 2];
-  o.x = x; o.y = y; o.z = z;
-  const lon = Math.atan2(z, x);
-  const seam = Math.abs(y - 0.55 * Math.sin(2 * lon)) < 0.07;
-  o.c = seam ? C.plum : C.bone; o.v = seam ? 1 : body(i);
-}
-const SHAPES = { soccer: shapeSoccer, globe: shapeGlobe, basketball: shapeBasketball, tennis: shapeTennis };
+const SHAPES = { soccer: shapeSoccer, globe: shapeGlobe, basketball: shapeBasketball };
 
 /* Per-instance live state */
 const lx = new Float32Array(N), ly = new Float32Array(N), lz = new Float32Array(N);   // current unit pos
@@ -116,32 +120,33 @@ for (let i = 0; i < N; i++) por[i] = Math.random();
 const GAP = 0.64;
 const body = (i) => (por[i] > GAP ? 1 : 0);
 
-// Land/ocean visibility for the globe — filled once the Earth mask decodes.
-const landVis = new Float32Array(N);
-let landReady = false;
-(function loadEarthMask() {
+// Globe land/ocean mask: a particle is "on" where the equirectangular image is
+// dark (a continent). Fills once the image decodes; until then the globe falls
+// back to the airy body so the first scroll is never an empty sphere.
+const mask = { globe: new Float32Array(N) };
+const maskReady = { globe: false };
+function loadMask(src, key, W, H, thresh) {
   const img = new Image();
   img.onload = () => {
-    const W = 1000, H = 500;
     const cv = document.createElement("canvas"); cv.width = W; cv.height = H;
     const cx = cv.getContext("2d", { willReadFrequently: true });
     cx.drawImage(img, 0, 0, W, H);
-    const px = cx.getImageData(0, 0, W, H).data;
+    const px = cx.getImageData(0, 0, W, H).data, arr = mask[key];
     for (let i = 0; i < N; i++) {
       const lat = Math.asin(dirs[i * 3 + 1]);
       const lon = Math.atan2(dirs[i * 3 + 2], dirs[i * 3]);
-      const u = 1 - (lon + Math.PI) / (2 * Math.PI);   // flip so continents read east-west
-      const v = 0.5 - lat / Math.PI;                   // north pole → top row
+      const u = 1 - (lon + Math.PI) / (2 * Math.PI);    // flip so it reads east-west
+      const v = 0.5 - lat / Math.PI;                    // north pole → top row
       const sx = Math.min(W - 1, Math.max(0, (u * W) | 0));
       const sy = Math.min(H - 1, Math.max(0, (v * H) | 0));
-      landVis[i] = px[(sy * W + sx) * 4] < 110 ? 1 : 0; // dark pixel = land
+      arr[i] = px[(sy * W + sx) * 4] < thresh ? 1 : 0;  // dark pixel = land
     }
-    landReady = true;
-    if (currentShape === "globe") setTargets("globe");
+    maskReady[key] = true;
+    if (currentShape === key) setTargets(key);
   };
-  img.onerror = () => { landReady = false; };           // fall back to airy body
-  img.src = "assets/earth-mask.jpg";
-})();
+  img.src = src;
+}
+loadMask("assets/earth-mask.jpg", "globe", 1000, 500, 110);
 
 const _o = { x: 0, y: 0, z: 0, c: C.bone, v: 1 };
 function setTargets(name) {
