@@ -78,6 +78,7 @@ extension MatchEventType {
         case .halfTime: "half_time"
         case .fullTime: "full_time"
         case .penaltyShootout: "penalties"
+        case .celebration: "celebrations"
         }
     }
 }
@@ -103,6 +104,7 @@ func pillText(for event: MatchEvent) -> String {
     case .halfTime: return "Half-time"
     case .fullTime: return "Full-time"
     case .penaltyShootout: return "Penalty shootout!"
+    case .celebration: return "" // never a backend event; counts build their own text
     }
 }
 
@@ -110,7 +112,7 @@ func pillText(for event: MatchEvent) -> String {
 @MainActor
 func pillSubtext(for event: MatchEvent) -> String? {
     switch event.type {
-    case .goal, .halfTime, .fullTime, .penaltyShootout:
+    case .goal, .goalCancelled, .halfTime, .fullTime, .penaltyShootout:
         let teams = AppSession.shared.teams
         let homeFlag = TeamCatalog.team(for: event.homeTeam, in: teams).flag
         let awayFlag = TeamCatalog.team(for: event.awayTeam, in: teams).flag
@@ -133,6 +135,7 @@ func pillIcon(for type: MatchEventType) -> String {
     case .halfTime: "pause.circle.fill"
     case .fullTime: "flag.checkered"
     case .penaltyShootout: "target"
+    case .celebration: "party.popper"
     }
 }
 
@@ -145,6 +148,7 @@ func pillIconColor(for type: MatchEventType) -> Color {
     case .yellowCard: .yellow
     case .redCard, .goalCancelled: .red
     case .kickoff: .green
+    case .celebration: .blue
     default: .white
     }
 }

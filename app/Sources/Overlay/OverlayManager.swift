@@ -194,7 +194,8 @@ final class OverlayManager: ObservableObject {
         }
         let taps = tapBursts
         CelebrationService.shared.endWindow()
-        guard !targets.isEmpty else { return }
+        guard !targets.isEmpty,
+              AppSession.shared.prefs.settings.eventEnabled(.celebration) else { return }
         Task { @MainActor in
             for target in targets {
                 let totals = (try? await Services.scores.fetchCelebrations(fixtureId: target.fixtureId)) ?? [:]
@@ -206,8 +207,8 @@ final class OverlayManager: ObservableObject {
                 if let text {
                     enqueue(NotchItem(
                         id: "count:\(target.fixtureId):\(target.teamCode):\(Date().timeIntervalSince1970)",
-                        icon: "party.popper",
-                        iconColor: .blue,
+                        icon: pillIcon(for: .celebration),
+                        iconColor: pillIconColor(for: .celebration),
                         text: text,
                         subtext: nil,
                         fanGoal: nil
