@@ -67,10 +67,18 @@ private struct NotchPillRow: View {
             Image(systemName: item.icon)
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(item.iconColor)
-            Text(item.text)
-                .font(.system(size: 13, weight: .semibold, design: .rounded))
-                .foregroundStyle(.white)
-                .lineLimit(1)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(item.text)
+                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                if let subtext = item.subtext {
+                    Text(subtext)
+                        .font(.system(size: 11, weight: .medium, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.8))
+                        .lineLimit(1)
+                }
+            }
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 10)
