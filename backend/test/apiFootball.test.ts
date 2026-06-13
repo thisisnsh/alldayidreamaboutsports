@@ -44,6 +44,48 @@ describe("ApiFootballProvider", () => {
     });
   });
 
+  it("parses a penalty shootout into shootout counts + ordered kicks", async () => {
+    const penFixture = {
+      fixture: { id: 777, date: "2026-06-11T20:00:00+00:00", status: { short: "PEN", elapsed: 120 } },
+      league: { id: 1, season: 2026 },
+      teams: { home: { id: 10, name: "Brazil" }, away: { id: 20, name: "USA" } },
+      goals: { home: 3, away: 3 },
+      score: { penalty: { home: 2, away: 1 } },
+      events: [
+        // A missed in-play penalty must NOT become lastGoal.
+        { time: { elapsed: 60 }, team: { id: 10, name: "Brazil" }, player: { name: "Neymar" }, type: "Goal", detail: "Missed Penalty", comments: null },
+        { time: { elapsed: 70 }, team: { id: 10, name: "Brazil" }, player: { name: "Rodrygo" }, type: "Goal", detail: "Normal Goal", comments: null },
+        // Shootout kicks (comments mark them as such).
+        { time: { elapsed: 120 }, team: { id: 10, name: "Brazil" }, player: { name: "Casemiro" }, type: "Goal", detail: "Penalty", comments: "Penalty Shootout" },
+        { time: { elapsed: 120 }, team: { id: 20, name: "USA" }, player: { name: "Pulisic" }, type: "Goal", detail: "Missed Penalty", comments: "Penalty Shootout" },
+        { time: { elapsed: 120 }, team: { id: 10, name: "Brazil" }, player: { name: "Vinícius Jr" }, type: "Goal", detail: "Penalty", comments: "Penalty Shootout" },
+        { time: { elapsed: 120 }, team: { id: 20, name: "USA" }, player: { name: "McKennie" }, type: "Goal", detail: "Penalty", comments: "Penalty Shootout" },
+      ],
+    };
+    const { provider } = providerReturning({ response: [penFixture] });
+    const [match] = await provider.liveMatches();
+
+    expect(match!.status).toBe("FINISHED");
+    expect(match!.shootout).toEqual({
+      home: 2,
+      away: 1,
+      kicks: [
+        { teamCode: "BRA", player: "Casemiro", scored: true },
+        { teamCode: "USA", player: "Pulisic", scored: false },
+        { teamCode: "BRA", player: "Vinícius Jr", scored: true },
+        { teamCode: "USA", player: "McKennie", scored: true },
+      ],
+    });
+    // The in-play missed penalty was skipped; Rodrygo is the last real scorer.
+    expect(match!.lastGoal).toMatchObject({ teamCode: "BRA", player: "Rodrygo" });
+  });
+
+  it("leaves shootout undefined for a normal in-play fixture", async () => {
+    const { provider } = providerReturning({ response: [liveFixture] });
+    const [match] = await provider.liveMatches();
+    expect(match!.shootout).toBeUndefined();
+  });
+
   it("maps unknown teams to a derived code instead of crashing", async () => {
     const fixture = structuredClone(liveFixture);
     fixture.teams.home.name = "New Caledonia";

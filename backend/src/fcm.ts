@@ -41,6 +41,9 @@ export class Fcm {
       teamCode: ev.teamCode ?? "",
       player: ev.player ?? "",
       minute: ev.minute == null ? "" : String(ev.minute),
+      penHome: ev.penHome == null ? "" : String(ev.penHome),
+      penAway: ev.penAway == null ? "" : String(ev.penAway),
+      scored: ev.scored == null ? "" : String(ev.scored),
     };
     const topics = new Set([
       topicForTeam(ev.leagueId, ev.homeTeam),

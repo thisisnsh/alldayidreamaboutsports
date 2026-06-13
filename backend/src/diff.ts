@@ -39,11 +39,44 @@ export function diffMatch(prev: MatchState | null, next: MatchState): MatchEvent
   if (next.rawStatus === "HT" && wasRaw !== "HT") {
     events.push(make("HALF_TIME"));
   }
+  // Shootout tally, attached to the score-bearing end-of-match events below.
+  const pens = next.shootout
+    ? { penHome: next.shootout.home, penAway: next.shootout.away }
+    : {};
   if (next.status === "FINISHED" && was !== "FINISHED") {
-    events.push(make("FULL_TIME"));
+    events.push(make("FULL_TIME", pens));
+  }
+  // ET begins once; don't re-fire across the BT break between the two ET halves.
+  if (next.rawStatus === "ET" && wasRaw !== "ET" && wasRaw !== "BT") {
+    events.push(make("EXTRA_TIME"));
   }
   if (next.rawStatus === "P" && wasRaw !== "P") {
-    events.push(make("PENALTY_SHOOTOUT"));
+    events.push(make("PENALTY_SHOOTOUT", pens));
+  }
+
+  // Penalty shootout — one event per new kick, running tally computed from the
+  // ordered kick list so ids are deterministic and the pill shows live scores.
+  const prevKicks = prev?.shootout?.kicks.length ?? 0;
+  const kicks = next.shootout?.kicks ?? [];
+  let penHome = 0;
+  let penAway = 0;
+  for (let i = 0; i < kicks.length; i++) {
+    const kick = kicks[i]!;
+    if (kick.scored) {
+      if (kick.teamCode === next.home.code) penHome++;
+      else penAway++;
+    }
+    if (i < prevKicks) continue; // already published
+    events.push(
+      make("PENALTY_KICK", {
+        teamCode: kick.teamCode,
+        player: kick.player,
+        scored: kick.scored,
+        penHome,
+        penAway,
+        idSuffix: String(i + 1),
+      }),
+    );
   }
 
   // Goals — one event per increment; decrements are VAR cancellations.

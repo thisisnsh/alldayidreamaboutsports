@@ -83,7 +83,7 @@ enum DevConfig {
         DemoMoment(at: 37, .engUsa, minute: 45, .celebrationSurge(["ENG": 1_900_000, "USA": 540_000])),
 
         // Second half.
-        DemoMoment(at: 41, .fraGer, minute: 52, .goal(.home, player: "Dembélé")),
+        DemoMoment(at: 41, .fraGer, minute: 52, .goal(.home, player: "Dembélé")),   // FRA 3-1
         DemoMoment(at: 45, .engUsa, minute: 61, .redCard(.away, player: "Robinson")),
 
         // OVERLAP in one match: ARG go ahead and BRA reply in the same
@@ -91,14 +91,34 @@ enum DevConfig {
         DemoMoment(at: 49, .braArg, minute: 70, .goal(.away, player: "Álvarez")),
         DemoMoment(at: 49, .braArg, minute: 70, .goal(.home, player: "Raphinha")),
 
+        // Germany claw back to level — the France match is heading the distance.
+        DemoMoment(at: 50, .fraGer, minute: 74, .goal(.away, player: "Wirtz")),     // 3-2
         DemoMoment(at: 53, .engUsa, minute: 82, .goal(.home, player: "Bellingham")),
         DemoMoment(at: 56, .fraGer, minute: 88, .celebrationSurge(["FRA": 4_100_000, "GER": 770_000])),
+        DemoMoment(at: 58, .fraGer, minute: 90, .goal(.away, player: "Havertz")),   // 3-3
 
-        // Full-times, staggered; France go to penalties first.
+        // Two matches end in normal time.
         DemoMoment(at: 60, .braArg, minute: 90, .fullTime),
         DemoMoment(at: 61, .engUsa, minute: 90, .fullTime),
-        DemoMoment(at: 63, .fraGer, minute: 90, .penaltyShootout),
-        DemoMoment(at: 67, .fraGer, minute: 90, .fullTime),
+
+        // Extra time, a goal each way, then a shootout decides it.
+        DemoMoment(at: 63, .fraGer, minute: 91,  .extraTime),
+        DemoMoment(at: 66, .fraGer, minute: 105, .goal(.home, player: "Kolo Muani")), // 4-3
+        DemoMoment(at: 69, .fraGer, minute: 118, .goal(.away, player: "Füllkrug")),   // 4-4
+        DemoMoment(at: 72, .fraGer, minute: 120, .penaltyShootout),
+
+        // The shootout — every kick is its own pill (scored ✓ / missed ✗),
+        // and the running pen tally rides along in the subheading.
+        DemoMoment(at: 74, .fraGer, minute: 120, .penaltyKick(.home, player: "Mbappé",     scored: true)),  // 1-0
+        DemoMoment(at: 76, .fraGer, minute: 120, .penaltyKick(.away, player: "Tah",        scored: true)),  // 1-1
+        DemoMoment(at: 78, .fraGer, minute: 120, .penaltyKick(.home, player: "Coman",      scored: false)), // 1-1
+        DemoMoment(at: 80, .fraGer, minute: 120, .penaltyKick(.away, player: "Musiala",    scored: true)),  // 1-2
+        DemoMoment(at: 82, .fraGer, minute: 120, .penaltyKick(.home, player: "Tchouaméni", scored: true)),  // 2-2
+        DemoMoment(at: 84, .fraGer, minute: 120, .penaltyKick(.away, player: "Goretzka",   scored: false)), // 2-2
+        DemoMoment(at: 86, .fraGer, minute: 120, .penaltyKick(.home, player: "Hernández",  scored: true)),  // 3-2
+        DemoMoment(at: 88, .fraGer, minute: 120, .penaltyKick(.away, player: "Sané",       scored: false)), // 3-2
+
+        DemoMoment(at: 90, .fraGer, minute: 120, .fullTime),  // France win 3-2 on penalties
     ]
 }
 
@@ -155,7 +175,9 @@ enum DemoAction {
     case redCard(DemoSide, player: String)
     case halfTime
     case fullTime
+    case extraTime                         // "Extra time begins"
     case penaltyShootout
+    case penaltyKick(DemoSide, player: String, scored: Bool) // one shootout kick
     case celebrationSurge([String: Int])   // a celebration_count push (taps by team)
 }
 
