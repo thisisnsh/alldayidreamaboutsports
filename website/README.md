@@ -2,7 +2,7 @@
 
 Public website for **All Day I Dream About Sports** — the macOS menu bar app for
 FIFA World Cup 2026. Static, no build step: `index.html` (landing, with the live
-notch-pill demo), `privacy.html`, `style.css`, `CNAME`, `.nojekyll`.
+notch-pill demo), `privacy/index.html`, `style.css`, `CNAME`, `.nojekyll`.
 
 This repo is public **only** so GitHub Pages is free; the app source lives in a
 separate private repo. The download button points at

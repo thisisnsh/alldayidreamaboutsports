@@ -11,10 +11,17 @@
   <meta name="robots" content="index, follow, max-image-preview:large" />
   <meta name="theme-color" content="#000000" />
   <link rel="canonical" href="https://alldayidreamaboutsports.com/" />
+  <script>
+    if (location.pathname.endsWith("/index.html")) {
+      history.replaceState(null, "", location.pathname.slice(0, -"index.html".length) + location.search + location.hash);
+    }
+  </script>
 
-  <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png" />
-  <link rel="icon" type="image/png" sizes="16x16" href="assets/favicon-16.png" />
-  <link rel="apple-touch-icon" href="assets/favicon-256.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+  <link rel="icon" href="/favicon.ico" />
+  <link rel="manifest" href="/site.webmanifest" />
 
   <!-- Open Graph -->
   <meta property="og:type" content="website" />
@@ -79,7 +86,6 @@
   <!-- Nav -->
   <nav class="nav">
     <a class="brand" href="#top" aria-label="All Day I Dream About Sports — home">
-      <img class="brand-logo" src="assets/logo.png" alt="" aria-hidden="true" />
       <span class="brand-text">All&nbsp;Day&nbsp;I&nbsp;Dream&nbsp;About&nbsp;<b>Sports</b></span>
     </a>
     <div class="nav-links">
@@ -187,11 +193,10 @@
   <footer class="footer">
     <div class="footer-inner">
       <a class="brand" href="#top">
-        <img class="brand-logo" src="assets/logo.png" alt="" aria-hidden="true" />
         <span class="brand-text">All&nbsp;Day&nbsp;I&nbsp;Dream&nbsp;About&nbsp;<b>Sports</b></span>
       </a>
       <div class="footer-links">
-        <a href="privacy.html">Privacy</a>
+        <a href="/privacy/">Privacy</a>
         <a href="mailto:support@alldayidreamaboutsports.com">Contact</a>
       </div>
       <p class="copy">© 2026 alldayidreamaboutsports.com — built for the love of the game.</p>
