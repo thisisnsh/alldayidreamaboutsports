@@ -39,23 +39,46 @@ const dirs = new Float32Array(N * 3);
   }
 })();
 
-// truncated-icosahedron panels: pentagon centres (icosahedron verts) +
-// hexagon centres (dodecahedron verts) → a real soccer-ball tiling
+// truncated-icosahedron panels, taken straight from the reference soccer-ball
+// geometry: 60 vertices + 32 faces. Faces 0–11 are pentagons (small → white),
+// faces 12–31 are hexagons (big → purple). Each panel's centre is the
+// normalised centroid of its own vertices, so the tiling — and which face is a
+// hexagon vs a pentagon — matches the reference exactly.
 const norm3 = (a, b, c) => { const l = Math.hypot(a, b, c); return [a / l, b / l, c / l]; };
-const PHI = (1 + Math.sqrt(5)) / 2, IPHI = 1 / PHI;
-const pentC = [
-  [0, 1, PHI], [0, -1, PHI], [0, 1, -PHI], [0, -1, -PHI],
-  [1, PHI, 0], [-1, PHI, 0], [1, -PHI, 0], [-1, -PHI, 0],
-  [PHI, 0, 1], [-PHI, 0, 1], [PHI, 0, -1], [-PHI, 0, -1],
-].map(([a, b, c]) => norm3(a, b, c));
-const hexC = [
-  [1, 1, 1], [1, 1, -1], [1, -1, 1], [1, -1, -1],
-  [-1, 1, 1], [-1, 1, -1], [-1, -1, 1], [-1, -1, -1],
-  [0, IPHI, PHI], [0, IPHI, -PHI], [0, -IPHI, PHI], [0, -IPHI, -PHI],
-  [IPHI, PHI, 0], [IPHI, -PHI, 0], [-IPHI, PHI, 0], [-IPHI, -PHI, 0],
-  [PHI, 0, IPHI], [PHI, 0, -IPHI], [-PHI, 0, IPHI], [-PHI, 0, -IPHI],
-].map(([a, b, c]) => norm3(a, b, c));
-const panels = [...pentC.map((c) => ({ c, pent: 1 })), ...hexC.map((c) => ({ c, pent: 0 }))];
+const tD = (1 + Math.sqrt(5)) / 2;                 // golden ratio (reference's "d")
+const tB = 1, tC = 2, tE = 3 * tD, tF = 1 + 2 * tD, tG = 2 + tD, tH = 2 * tD;
+const TI_VERTS = [
+  [0, tB, tE], [0, tB, -tE], [0, -tB, tE], [0, -tB, -tE],
+  [tB, tE, 0], [tB, -tE, 0], [-tB, tE, 0], [-tB, -tE, 0],
+  [tE, 0, tB], [-tE, 0, tB], [tE, 0, -tB], [-tE, 0, -tB],
+  [tC, tF, tD], [tC, tF, -tD], [tC, -tF, tD], [-tC, tF, tD],
+  [tC, -tF, -tD], [-tC, tF, -tD], [-tC, -tF, tD], [-tC, -tF, -tD],
+  [tF, tD, tC], [tF, -tD, tC], [-tF, tD, tC], [tF, tD, -tC],
+  [-tF, -tD, tC], [tF, -tD, -tC], [-tF, tD, -tC], [-tF, -tD, -tC],
+  [tD, tC, tF], [-tD, tC, tF], [tD, tC, -tF], [tD, -tC, tF],
+  [-tD, tC, -tF], [-tD, -tC, tF], [tD, -tC, -tF], [-tD, -tC, -tF],
+  [tB, tG, tH], [tB, tG, -tH], [tB, -tG, tH], [-tB, tG, tH],
+  [tB, -tG, -tH], [-tB, tG, -tH], [-tB, -tG, tH], [-tB, -tG, -tH],
+  [tG, tH, tB], [tG, -tH, tB], [-tG, tH, tB], [tG, tH, -tB],
+  [-tG, -tH, tB], [tG, -tH, -tB], [-tG, tH, -tB], [-tG, -tH, -tB],
+  [tH, tB, tG], [-tH, tB, tG], [tH, tB, -tG], [tH, -tB, tG],
+  [-tH, tB, -tG], [-tH, -tB, tG], [tH, -tB, -tG], [-tH, -tB, -tG],
+];
+const TI_FACES = [
+  [0, 28, 36, 39, 29], [1, 32, 41, 37, 30], [2, 33, 42, 38, 31], [3, 34, 40, 43, 35],
+  [4, 12, 44, 47, 13], [5, 16, 49, 45, 14], [6, 17, 50, 46, 15], [7, 18, 48, 51, 19],
+  [8, 20, 52, 55, 21], [9, 24, 57, 53, 22], [10, 25, 58, 54, 23], [11, 26, 56, 59, 27],
+  [0, 2, 31, 55, 52, 28], [0, 29, 53, 57, 33, 2], [1, 3, 35, 59, 56, 32], [1, 30, 54, 58, 34, 3],
+  [4, 6, 15, 39, 36, 12], [4, 13, 37, 41, 17, 6], [5, 7, 19, 43, 40, 16], [5, 14, 38, 42, 18, 7],
+  [8, 10, 23, 47, 44, 20], [8, 21, 45, 49, 25, 10], [9, 11, 27, 51, 48, 24], [9, 22, 46, 50, 26, 11],
+  [12, 36, 28, 52, 20, 44], [13, 47, 23, 54, 30, 37], [14, 45, 21, 55, 31, 38], [15, 46, 22, 53, 29, 39],
+  [16, 40, 34, 58, 25, 49], [17, 41, 32, 56, 26, 50], [18, 42, 33, 57, 24, 48], [19, 51, 27, 59, 35, 43],
+];
+const panels = TI_FACES.map((face, idx) => {
+  let cx = 0, cy = 0, cz = 0;
+  for (const v of face) { cx += TI_VERTS[v][0]; cy += TI_VERTS[v][1]; cz += TI_VERTS[v][2]; }
+  return { c: norm3(cx, cy, cz), pent: idx < 12 ? 1 : 0 };   // first 12 faces are pentagons
+});
 
 function shapeSoccer(i, o) {
   const x = dirs[i * 3], y = dirs[i * 3 + 1], z = dirs[i * 3 + 2];
@@ -67,9 +90,9 @@ function shapeSoccer(i, o) {
     if (d > d1) { d2 = d1; d1 = d; pent = panels[k].pent; }
     else if (d > d2) { d2 = d; }
   }
-  if (d1 - d2 < 0.05) { o.c = C.seam; o.v = 0; }          // seam → invisible gap
-  else if (pent) { o.c = C.plum; o.v = 1; }               // pentagon → purple
-  else { o.c = C.bone; o.v = 1; }                         // hexagon → white
+  if (d1 - d2 < 0.024) { o.c = C.seam; o.v = 0; }         // thin invisible seam → crisp hex edges
+  else if (pent) { o.c = C.bone; o.v = 1; }               // pentagon (small) → white
+  else { o.c = C.plum; o.v = 1; }                         // hexagon (big) → purple
 }
 
 // Globe: triangles fall only on the continents (sampled from the equirectangular
