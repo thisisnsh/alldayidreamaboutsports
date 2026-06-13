@@ -246,7 +246,14 @@ function resize() {
   if (renderer) { renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2)); renderer.setSize(w, h, false); }
   camera.aspect = w / h; camera.updateProjectionMatrix();
   mobile = w < 880;
-  if (mobile) { R = 0.82; triSize = 0.02; mesh.position.set(0, 1.5, 0); }
+  // On mobile the ball spans the full viewport width and is anchored low, so a
+  // little of it is cropped off the bottom and the copy sits above it.
+  if (mobile) {
+    const halfH = Math.tan(((40 * Math.PI) / 180) / 2) * 6.6;  // visible half-height at z=0
+    R = halfH * (w / h);                                       // width = 100%
+    triSize = R * 0.023;
+    mesh.position.set(0, -halfH + 0.85 * R, 0);                // crop ~15% off the bottom
+  }
   else { R = 1.85; triSize = 0.032; mesh.position.set(1.55, 0, 0); }
   pingMesh.position.copy(mesh.position);
 }
@@ -401,9 +408,12 @@ function applyScene(el) {
   morphTo(el.dataset.shape);
   if (el.hasAttribute("data-pings")) startGlobePings();
 }
+// Fire when a section crosses the vertical centre of the viewport — i.e. once it
+// has come half way up the screen — rather than as soon as 50% of its area shows
+// (which triggers too early for the short, text-light sections on mobile).
 const sectionObserver = new IntersectionObserver((entries) => {
-  entries.forEach((e) => { if (e.isIntersecting && e.intersectionRatio >= 0.5) { activeSection = e.target; applyScene(e.target); } });
-}, { threshold: [0.5] });
+  entries.forEach((e) => { if (e.isIntersecting) { activeSection = e.target; applyScene(e.target); } });
+}, { rootMargin: "-50% 0px -50% 0px", threshold: 0 });
 document.querySelectorAll("[data-shape]").forEach((s) => sectionObserver.observe(s));
 
 /* ═══════════════════════════════════════════════════════════════════════════
