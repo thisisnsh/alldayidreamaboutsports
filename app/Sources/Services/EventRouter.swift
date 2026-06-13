@@ -95,14 +95,20 @@ func pillText(for event: MatchEvent) -> String {
     let homeFlag = TeamCatalog.team(for: event.homeTeam, in: teams).flag
     let awayFlag = TeamCatalog.team(for: event.awayTeam, in: teams).flag
     let matchup = "\(homeFlag) \(event.homeName) vs \(event.awayName) \(awayFlag)"
+    // Whoever leads, with their flag — nil when level.
+    let leader: String? = event.homeGoals != event.awayGoals
+        ? (event.homeGoals > event.awayGoals
+            ? "\(homeFlag) \(event.homeName)"
+            : "\(awayFlag) \(event.awayName)")
+        : nil
     switch event.type {
     case .kickoff: return "Kickoff — \(matchup)"
     case .goal: return "\(minute)Goal — \(event.player ?? event.teamCode ?? "") \(flag)"
-    case .goalCancelled: return "\(minute)VAR: goal disallowed \(flag)"
+    case .goalCancelled: return "\(minute)VAR: Goal Disallowed \(flag)"
     case .yellowCard: return "\(minute)Yellow card — \(event.player ?? "") \(flag)"
     case .redCard: return "\(minute)Red card — \(event.player ?? "") \(flag)"
-    case .halfTime: return "Half-time"
-    case .fullTime: return "Full-time"
+    case .halfTime: return "Half-time — \(leader.map { "\($0) Ahead" } ?? "Tight match")"
+    case .fullTime: return "Full-time — \(leader.map { "\($0) Won" } ?? "Match Draw")"
     case .penaltyShootout: return "Penalty shootout!"
     case .celebration: return "" // never a backend event; counts build their own text
     }
