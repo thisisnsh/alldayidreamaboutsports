@@ -73,14 +73,23 @@ private struct BallScene: View {
         }
     }
 
-    /// One line per fan goal in the set, stacked vertically under the ball.
+    /// One block per fan goal in the set, stacked vertically under the ball:
+    /// the scoreline (scoring side bold) over the scorer and minute.
     private var goalLines: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: events.count > 2 ? 10 : 14) {
             Spacer().frame(height: size.height / 2 + 95)
             ForEach(events, id: \.eventId) { event in
-                Text(goalLine(for: event))
-                    .font(.system(size: events.count > 2 ? 16 : 22, weight: .bold, design: .rounded))
-                    .lineLimit(1)
+                VStack(spacing: 2) {
+                    scoreLine(for: event)
+                        .font(.system(size: events.count > 2 ? 16 : 22, design: .rounded))
+                        .lineLimit(1)
+                    if let scorer = scorerLine(for: event) {
+                        Text(scorer)
+                            .font(.system(size: events.count > 2 ? 11 : 14, weight: .medium, design: .rounded))
+                            .opacity(0.85)
+                            .lineLimit(1)
+                    }
+                }
             }
             Spacer()
         }
@@ -90,10 +99,20 @@ private struct BallScene: View {
         .allowsHitTesting(false)
     }
 
-    private func goalLine(for event: MatchEvent) -> String {
-        let scorer = event.player ?? event.teamCode ?? ""
-        let minute = event.minute.map { " \($0)′" } ?? ""
-        return "\(flag(event.teamCode ?? "")) \(scorer)\(minute) · \(event.homeName) \(event.homeGoals) – \(event.awayGoals) \(event.awayName)"
+    /// 🏳️ Team 1 - 0 Team 🏳️ — the side that scored is bold.
+    private func scoreLine(for event: MatchEvent) -> Text {
+        let homeScored = event.teamCode == event.homeTeam
+        return Text("\(flag(event.homeTeam)) \(event.homeName) \(event.homeGoals)")
+            .fontWeight(homeScored ? .bold : .medium)
+            + Text(" - ").fontWeight(.medium)
+            + Text("\(event.awayGoals) \(event.awayName) \(flag(event.awayTeam))")
+            .fontWeight(homeScored ? .medium : .bold)
+    }
+
+    private func scorerLine(for event: MatchEvent) -> String? {
+        let minute = event.minute.map { "\($0)′" }
+        guard let player = event.player else { return minute }
+        return minute.map { "\(player) \($0)" } ?? player
     }
 
     private func flag(_ code: String) -> String {

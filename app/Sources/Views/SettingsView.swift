@@ -136,15 +136,15 @@ struct SettingsView: View {
 
     // MARK: Rows
 
-    /// A toggle next to a faithful miniature of the notch pill the user will
-    /// actually see for this event.
+    /// A toggle next to the event type's icon and name — these are event
+    /// categories, not example notifications.
     private func eventRow(_ type: MatchEventType) -> some View {
         HStack {
             HStack(spacing: 8) {
                 Image(systemName: pillIcon(for: type))
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(pillIconColor(for: type))
-                Text(type.sampleText)
+                Text(type.displayName)
                     .font(.system(size: 11, weight: .semibold, design: .rounded))
                     .foregroundStyle(.white)
                     .lineLimit(1)
@@ -243,18 +243,16 @@ private struct SettingsCard<Content: View>: View {
 }
 
 extension MatchEventType {
-    /// The literal pill layout a user would see — generic placeholders so it
-    /// reads as an example, never as a real match.
-    var sampleText: String {
+    var displayName: String {
         switch self {
-        case .kickoff: "Kickoff — 🏳️ Team vs Team 🏳️"
-        case .goal: "73′ Goal — Player 🏳️"
-        case .goalCancelled: "75′ VAR: goal disallowed 🏳️"
-        case .yellowCard: "38′ Yellow card — Player 🏳️"
-        case .redCard: "81′ Red card — Player 🏳️"
-        case .halfTime: "Half-time — 🏳️ Team vs Team 🏳️"
-        case .fullTime: "Full-time — 🏳️ Team vs Team 🏳️"
-        case .penaltyShootout: "Penalty shootout! — 🏳️ Team vs Team 🏳️"
+        case .kickoff: "Kickoff"
+        case .goal: "Goal"
+        case .goalCancelled: "VAR: Goal Disallowed"
+        case .yellowCard: "Yellow card"
+        case .redCard: "Red card"
+        case .halfTime: "Half-time"
+        case .fullTime: "Full-time"
+        case .penaltyShootout: "Penalty shootout"
         }
     }
 }

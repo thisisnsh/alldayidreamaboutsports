@@ -89,8 +89,8 @@ func pillText(for event: MatchEvent) -> String {
     let teams = AppSession.shared.teams
     let flag = event.teamCode.map { TeamCatalog.team(for: $0, in: teams).flag } ?? ""
     let minute = event.minute.map { "\($0)′ " } ?? ""
-    // Match-level events carry the matchup themselves — goals and cards
-    // identify their match by the team flag.
+    // Kickoff carries the matchup; score-bearing events (goal, half/full-time,
+    // penalties) carry it in their score subheading instead.
     let homeFlag = TeamCatalog.team(for: event.homeTeam, in: teams).flag
     let awayFlag = TeamCatalog.team(for: event.awayTeam, in: teams).flag
     let matchup = "\(homeFlag) \(event.homeName) vs \(event.awayName) \(awayFlag)"
@@ -100,9 +100,23 @@ func pillText(for event: MatchEvent) -> String {
     case .goalCancelled: return "\(minute)VAR: goal disallowed \(flag)"
     case .yellowCard: return "\(minute)Yellow card — \(event.player ?? "") \(flag)"
     case .redCard: return "\(minute)Red card — \(event.player ?? "") \(flag)"
-    case .halfTime: return "Half-time — \(matchup)"
-    case .fullTime: return "Full-time — \(matchup)"
-    case .penaltyShootout: return "Penalty shootout! — \(matchup)"
+    case .halfTime: return "Half-time"
+    case .fullTime: return "Full-time"
+    case .penaltyShootout: return "Penalty shootout!"
+    }
+}
+
+/// Score subheading: 🏳️ Team 1 - 0 Team 🏳️
+@MainActor
+func pillSubtext(for event: MatchEvent) -> String? {
+    switch event.type {
+    case .goal, .halfTime, .fullTime, .penaltyShootout:
+        let teams = AppSession.shared.teams
+        let homeFlag = TeamCatalog.team(for: event.homeTeam, in: teams).flag
+        let awayFlag = TeamCatalog.team(for: event.awayTeam, in: teams).flag
+        return "\(homeFlag) \(event.homeName) \(event.homeGoals) - \(event.awayGoals) \(event.awayName) \(awayFlag)"
+    default:
+        return nil
     }
 }
 

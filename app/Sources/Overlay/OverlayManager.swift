@@ -8,6 +8,7 @@ struct NotchItem: Identifiable, Equatable {
     let icon: String
     let iconColor: Color
     let text: String
+    var subtext: String?
     var fanGoal: MatchEvent?
 
     static func == (lhs: NotchItem, rhs: NotchItem) -> Bool { lhs.id == rhs.id }
@@ -57,6 +58,7 @@ final class OverlayManager: ObservableObject {
             icon: pillIcon(for: event),
             iconColor: pillIconColor(for: event),
             text: pillText(for: event),
+            subtext: pillSubtext(for: event),
             fanGoal: isFanGoal ? event : nil
         ))
     }
@@ -207,6 +209,7 @@ final class OverlayManager: ObservableObject {
                         icon: "party.popper",
                         iconColor: .blue,
                         text: text,
+                        subtext: nil,
                         fanGoal: nil
                     ))
                 }
