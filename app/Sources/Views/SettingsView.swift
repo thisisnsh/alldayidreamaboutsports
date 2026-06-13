@@ -253,6 +253,7 @@ extension MatchEventType {
         case .halfTime: "Half-time"
         case .fullTime: "Full-time"
         case .penaltyShootout: "Penalty shootout"
+        case .celebration: "Celebrations"
         }
     }
 }

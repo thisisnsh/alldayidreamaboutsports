@@ -67,7 +67,7 @@ private struct NotchPillRow: View {
             Image(systemName: item.icon)
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(item.iconColor)
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .center, spacing: 2) {
                 Text(item.text)
                     .font(.system(size: 13, weight: .semibold, design: .rounded))
                     .foregroundStyle(.white)

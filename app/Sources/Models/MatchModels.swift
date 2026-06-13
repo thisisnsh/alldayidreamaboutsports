@@ -9,6 +9,9 @@ enum MatchEventType: String, Codable, CaseIterable {
     case halfTime = "HALF_TIME"
     case fullTime = "FULL_TIME"
     case penaltyShootout = "PENALTY_SHOOTOUT"
+    // Local-only: the post-goal celebration count pill. Never arrives as a
+    // backend match_event; exists so Settings → Events can toggle it.
+    case celebration = "CELEBRATION"
 }
 
 struct MatchEvent: Identifiable {
