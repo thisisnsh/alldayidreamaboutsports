@@ -79,7 +79,9 @@ extension MatchEventType {
         case .redCard: "red_cards"
         case .halfTime: "half_time"
         case .fullTime: "full_time"
+        case .extraTime: "extra_time"
         case .penaltyShootout: "penalties"
+        case .penaltyKick: "penalty_kicks"
         case .celebration: "celebrations"
         }
     }
@@ -110,28 +112,54 @@ func pillText(for event: MatchEvent) -> String {
     case .yellowCard: return "\(minute)Yellow card — \(event.player ?? "") \(flag)"
     case .redCard: return "\(minute)Red card — \(event.player ?? "") \(flag)"
     case .halfTime: return "Half-time — \(leader.map { "\($0) Ahead" } ?? "Tight match")"
-    case .fullTime: return "Full-time — \(leader.map { "\($0) Won" } ?? "Match Draw")"
+    case .fullTime:
+        // After a shootout the winner is whoever has more pens, not goals.
+        if let winner = shootoutWinner(for: event) {
+            return "Full-time — \(winner) Won on pens"
+        }
+        return "Full-time — \(leader.map { "\($0) Won" } ?? "Match Draw")"
+    case .extraTime: return "Extra time — \(matchup)"
     case .penaltyShootout: return "Penalty shootout!"
+    case .penaltyKick:
+        let outcome = (event.scored ?? false) ? "scored ✓" : "missed ✗"
+        return "Penalties — \(event.player ?? event.teamCode ?? "") \(outcome) \(flag)"
     case .celebration: return "" // never a backend event; counts build their own text
     }
 }
 
-/// Score subheading: 🏳️ Team 1 - 0 Team 🏳️
+/// Score subheading: 🏳️ Team 1 - 0 Team 🏳️ — with "(pens 4-2)" appended
+/// whenever a shootout is in play.
 @MainActor
 func pillSubtext(for event: MatchEvent) -> String? {
     switch event.type {
-    case .goal, .goalCancelled, .halfTime, .fullTime, .penaltyShootout:
+    case .goal, .goalCancelled, .halfTime, .fullTime, .extraTime, .penaltyShootout, .penaltyKick:
         let teams = AppSession.shared.teams
         let homeFlag = TeamCatalog.team(for: event.homeTeam, in: teams).flag
         let awayFlag = TeamCatalog.team(for: event.awayTeam, in: teams).flag
-        return "\(homeFlag) \(event.homeName) \(event.homeGoals) - \(event.awayGoals) \(event.awayName) \(awayFlag)"
+        let pens = (event.penHome != nil || event.penAway != nil)
+            ? " (pens \(event.penHome ?? 0)-\(event.penAway ?? 0))" : ""
+        return "\(homeFlag) \(event.homeName) \(event.homeGoals) - \(event.awayGoals) \(event.awayName) \(awayFlag)\(pens)"
     default:
         return nil
     }
 }
 
+/// Winner of a decided shootout (flag + name), or nil if level / no shootout.
+@MainActor
+private func shootoutWinner(for event: MatchEvent) -> String? {
+    guard let home = event.penHome, let away = event.penAway, home != away else { return nil }
+    let teams = AppSession.shared.teams
+    let code = home > away ? event.homeTeam : event.awayTeam
+    let name = home > away ? event.homeName : event.awayName
+    return "\(TeamCatalog.team(for: code, in: teams).flag) \(name)"
+}
+
 func pillIcon(for event: MatchEvent) -> String {
-    pillIcon(for: event.type)
+    // A taken penalty reads as a converted goal or a miss.
+    if event.type == .penaltyKick {
+        return (event.scored ?? false) ? "checkmark.circle.fill" : "xmark.circle.fill"
+    }
+    return pillIcon(for: event.type)
 }
 
 func pillIcon(for type: MatchEventType) -> String {
@@ -142,13 +170,17 @@ func pillIcon(for type: MatchEventType) -> String {
     case .yellowCard, .redCard: "rectangle.portrait.fill"
     case .halfTime: "pause.circle.fill"
     case .fullTime: "flag.checkered"
-    case .penaltyShootout: "target"
+    case .extraTime: "clock.badge.plus"
+    case .penaltyShootout, .penaltyKick: "target"
     case .celebration: "party.popper"
     }
 }
 
 func pillIconColor(for event: MatchEvent) -> Color {
-    pillIconColor(for: event.type)
+    if event.type == .penaltyKick {
+        return (event.scored ?? false) ? .green : .red
+    }
+    return pillIconColor(for: event.type)
 }
 
 func pillIconColor(for type: MatchEventType) -> Color {

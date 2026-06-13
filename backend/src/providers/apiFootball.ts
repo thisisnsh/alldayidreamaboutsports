@@ -1,5 +1,5 @@
 import { teamCodeForName } from "../teams.js";
-import type { MatchState, MatchStatus } from "../types.js";
+import type { MatchState, MatchStatus, PenaltyKick } from "../types.js";
 import type { ScoreProvider } from "./types.js";
 
 const BASE = "https://v3.football.api-sports.io";
@@ -25,12 +25,14 @@ interface ApiFixture {
   league: { id: number; season: number };
   teams: { home: { id: number; name: string }; away: { id: number; name: string } };
   goals: { home: number | null; away: number | null };
+  score?: { penalty?: { home: number | null; away: number | null } };
   events?: Array<{
     time: { elapsed: number | null };
     team: { id: number; name: string };
     player: { name: string | null };
     type: string;
     detail: string;
+    comments?: string | null;
   }>;
 }
 
@@ -71,20 +73,37 @@ export class ApiFootballProvider implements ScoreProvider {
     const awayCode = teamCodeForName(f.teams.away.name);
     const cards = { home: { yellow: 0, red: 0 }, away: { yellow: 0, red: 0 } };
     let lastGoal: MatchState["lastGoal"];
+    const kicks: PenaltyKick[] = [];
 
     for (const ev of f.events ?? []) {
       const side = ev.team.id === f.teams.home.id ? "home" : "away";
+      const teamCode = side === "home" ? homeCode : awayCode;
+      const isShootoutKick =
+        ev.type === "Goal" && /penalt/i.test(ev.detail) && /shootout/i.test(ev.comments ?? "");
       if (ev.type === "Card") {
         if (ev.detail.startsWith("Yellow")) cards[side].yellow++;
         else if (ev.detail.startsWith("Red")) cards[side].red++;
-      } else if (ev.type === "Goal" && !/cancell/i.test(ev.detail)) {
+      } else if (isShootoutKick) {
+        // Shootout kicks live in score.penalty (counts) + here (player/result).
+        kicks.push({ teamCode, player: ev.player?.name ?? null, scored: !/missed/i.test(ev.detail) });
+      } else if (ev.type === "Goal" && !/cancell/i.test(ev.detail) && !/missed/i.test(ev.detail)) {
+        // Skip "Missed Penalty" — it never increments the score and must not
+        // steal scorer attribution from a later real goal.
         lastGoal = {
-          teamCode: side === "home" ? homeCode : awayCode,
+          teamCode,
           player: ev.player?.name ?? null,
           minute: ev.time.elapsed,
         };
       }
     }
+
+    const penHome = f.score?.penalty?.home;
+    const penAway = f.score?.penalty?.away;
+    const inShootout = f.fixture.status.short === "P" || f.fixture.status.short === "PEN";
+    const shootout =
+      inShootout || penHome != null || penAway != null || kicks.length > 0
+        ? { home: penHome ?? 0, away: penAway ?? 0, kicks }
+        : undefined;
 
     return {
       fixtureId: f.fixture.id,
@@ -109,6 +128,7 @@ export class ApiFootballProvider implements ScoreProvider {
         redCards: cards.away.red,
       },
       lastGoal,
+      shootout,
     };
   }
 }

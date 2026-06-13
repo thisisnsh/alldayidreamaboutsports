@@ -95,6 +95,48 @@ describe("diffMatch", () => {
     expect(types(state({ minute: 29 }), s)).toEqual([]);
   });
 
+  it("emits EXTRA_TIME once entering ET, but not again after the BT break", () => {
+    const secondHalf = state({ rawStatus: "2H", minute: 90 });
+    const et = state({ rawStatus: "ET", minute: 91 });
+    expect(types(secondHalf, et)).toEqual(["EXTRA_TIME"]);
+    // ET → BT (break between ET halves) → ET must not re-fire.
+    const bt = state({ rawStatus: "BT", minute: 105 });
+    expect(types(et, bt)).toEqual([]);
+    expect(types(bt, state({ rawStatus: "ET", minute: 106 }))).toEqual([]);
+  });
+
+  it("emits one PENALTY_KICK per new kick with scored flag and running tally", () => {
+    const kick = (teamCode: string, scored: boolean) => ({ teamCode, player: null, scored });
+    const prev = state({
+      rawStatus: "P",
+      shootout: { home: 1, away: 0, kicks: [kick("BRA", true), kick("USA", false)] },
+    });
+    const next = state({
+      rawStatus: "P",
+      shootout: {
+        home: 1,
+        away: 1,
+        kicks: [kick("BRA", true), kick("USA", false), kick("BRA", false), kick("USA", true)],
+      },
+    });
+    const events = diffMatch(prev, next).filter((e) => e.type === "PENALTY_KICK");
+    expect(events).toHaveLength(2); // only the two new kicks
+    expect(events[0]).toMatchObject({
+      teamCode: "BRA", scored: false, penHome: 1, penAway: 0, eventId: "100:PENALTY_KICK:3",
+    });
+    expect(events[1]).toMatchObject({
+      teamCode: "USA", scored: true, penHome: 1, penAway: 1, eventId: "100:PENALTY_KICK:4",
+    });
+  });
+
+  it("carries the pen tally onto FULL_TIME after a shootout", () => {
+    const shootout = { home: 4, away: 2, kicks: [] };
+    const pen = state({ status: "LIVE", rawStatus: "P", shootout });
+    const ft = state({ status: "FINISHED", rawStatus: "PEN", shootout });
+    const fullTime = diffMatch(pen, ft).find((e) => e.type === "FULL_TIME");
+    expect(fullTime).toMatchObject({ penHome: 4, penAway: 2 });
+  });
+
   it("handles goal + card + half-time arriving in one poll", () => {
     const prev = state({ minute: 44 });
     const next = state({

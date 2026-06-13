@@ -256,7 +256,9 @@ extension MatchEventType {
         case .redCard: "Red card"
         case .halfTime: "Half-time"
         case .fullTime: "Full-time"
+        case .extraTime: "Extra time"
         case .penaltyShootout: "Penalty shootout"
+        case .penaltyKick: "Penalty kicks"
         case .celebration: "Celebrations"
         }
     }

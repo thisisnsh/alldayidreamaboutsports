@@ -8,7 +8,9 @@ enum MatchEventType: String, Codable, CaseIterable {
     case redCard = "RED_CARD"
     case halfTime = "HALF_TIME"
     case fullTime = "FULL_TIME"
+    case extraTime = "EXTRA_TIME"
     case penaltyShootout = "PENALTY_SHOOTOUT"
+    case penaltyKick = "PENALTY_KICK"
     // Local-only: the post-goal celebration count pill. Never arrives as a
     // backend match_event; exists so Settings → Events can toggle it.
     case celebration = "CELEBRATION"
@@ -28,6 +30,11 @@ struct MatchEvent: Identifiable {
     let awayName: String
     let homeGoals: Int
     let awayGoals: Int
+    /// Penalty-shootout tally, present on shootout/full-time events.
+    let penHome: Int?
+    let penAway: Int?
+    /// Whether a penalty kick was converted (PENALTY_KICK only).
+    let scored: Bool?
 
     var id: String { eventId }
 
@@ -56,6 +63,11 @@ struct MatchEvent: Identifiable {
         self.awayTeam = awayTeam
         self.homeGoals = Int(fcmData["homeGoals"] as? String ?? "") ?? 0
         self.awayGoals = Int(fcmData["awayGoals"] as? String ?? "") ?? 0
+        self.penHome = Int(fcmData["penHome"] as? String ?? "")
+        self.penAway = Int(fcmData["penAway"] as? String ?? "")
+        self.scored = (fcmData["scored"] as? String).flatMap {
+            $0.isEmpty ? nil : ($0 == "true")
+        }
     }
 }
 
@@ -67,6 +79,13 @@ struct ScoreboardTeam: Codable, Hashable {
     let goals: Int
 }
 
+/// Penalty-shootout result on a fixture (backend MatchState.shootout). Only
+/// the running counts matter to the scoreboard; the kick list is unused here.
+struct Shootout: Codable, Hashable {
+    let home: Int
+    let away: Int
+}
+
 struct Fixture: Codable, Identifiable, Hashable {
     let fixtureId: Int
     let leagueId: Int
@@ -75,6 +94,7 @@ struct Fixture: Codable, Identifiable, Hashable {
     let minute: Int?
     let home: ScoreboardTeam
     let away: ScoreboardTeam
+    let shootout: Shootout?
 
     var id: Int { fixtureId }
     var isLive: Bool { status == "LIVE" || status == "HALF_TIME" }

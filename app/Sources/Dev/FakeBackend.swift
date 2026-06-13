@@ -15,6 +15,9 @@ struct LiveMatchState {
     var awayGoals = 0
     var minute: Int?
     var status = "SCHEDULED"
+    // Set once a shootout starts so the scoreboard can show the pen tally.
+    var penHome: Int?
+    var penAway: Int?
 }
 
 /// Shared mutable state behind all the fakes.
@@ -61,17 +64,32 @@ final class FakeStore {
         states[id] = state
     }
 
+    /// Record a shootout kick: a scored kick bumps that side's pen tally; the
+    /// pens always become non-nil so the scoreboard switches to showing them.
+    func addPenalty(_ side: DemoSide, scored: Bool, in id: Int) {
+        guard var state = states[id] else { return }
+        state.penHome = state.penHome ?? 0
+        state.penAway = state.penAway ?? 0
+        if scored {
+            if side == .home { state.penHome! += 1 } else { state.penAway! += 1 }
+        }
+        states[id] = state
+    }
+
     /// A fixture rebuilt from its current demo state — kickoff is back-dated
     /// to match the on-screen minute.
     func fixture(_ def: DemoFixture) -> Fixture {
         let s = states[def.id] ?? LiveMatchState()
         let kickoff = Date().addingTimeInterval(-Double(s.minute ?? 0) * 60)
+        let shootout = (s.penHome != nil || s.penAway != nil)
+            ? Shootout(home: s.penHome ?? 0, away: s.penAway ?? 0) : nil
         return Fixture(
             fixtureId: def.id, leagueId: def.leagueId,
             kickoffISO: ISO8601DateFormatter().string(from: kickoff),
             status: s.status, minute: s.minute,
             home: ScoreboardTeam(code: def.home.code, name: def.home.name, goals: s.homeGoals),
-            away: ScoreboardTeam(code: def.away.code, name: def.away.name, goals: s.awayGoals)
+            away: ScoreboardTeam(code: def.away.code, name: def.away.name, goals: s.awayGoals),
+            shootout: shootout
         )
     }
 
@@ -231,9 +249,16 @@ final class DemoEngine: ObservableObject {
             store.states[id]?.status = "FINISHED"
             store.states[id]?.minute = moment.minute
             push(.fullTime, def, minute: moment.minute)
+        case .extraTime:
+            store.states[id]?.minute = moment.minute
+            push(.extraTime, def, minute: moment.minute)
         case .penaltyShootout:
             store.states[id]?.minute = moment.minute
             push(.penaltyShootout, def, minute: moment.minute)
+        case let .penaltyKick(side, player, scored):
+            store.states[id]?.minute = moment.minute
+            store.addPenalty(side, scored: scored, in: id)
+            push(.penaltyKick, def, side: side, player: player, minute: moment.minute, scored: scored)
         case let .celebrationSurge(totals):
             store.celebrations[id] = totals
             EventRouter.shared.handlePush([
@@ -248,11 +273,12 @@ final class DemoEngine: ObservableObject {
     /// match event and hand it to the router. The scoreline comes from the
     /// store, which `fire` already updated.
     private func push(_ type: MatchEventType, _ def: DemoFixture,
-                      side: DemoSide? = nil, player: String? = nil, minute: Int) {
+                      side: DemoSide? = nil, player: String? = nil, minute: Int,
+                      scored: Bool? = nil) {
         let store = FakeStore.shared
         let s = store.states[def.id] ?? LiveMatchState()
         let teamCode = side.map { $0 == .home ? def.home.code : def.away.code }
-        let data: [String: Any] = [
+        var data: [String: Any] = [
             "kind": "match_event",
             "eventId": "demo:\(def.id):\(type.rawValue):\(store.eventSeq)",
             "type": type.rawValue,
@@ -265,6 +291,11 @@ final class DemoEngine: ObservableObject {
             "teamCode": teamCode ?? "",
             "player": player ?? "",
         ]
+        // Carry the pen tally on every event once a shootout exists, mirroring
+        // the backend (it rides on full-time and every shootout event).
+        if let penHome = s.penHome { data["penHome"] = String(penHome) }
+        if let penAway = s.penAway { data["penAway"] = String(penAway) }
+        if let scored { data["scored"] = String(scored) }
         store.eventSeq += 1
         EventRouter.shared.handlePush(data)
     }

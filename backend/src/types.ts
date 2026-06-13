@@ -16,6 +16,13 @@ export interface TeamScore {
   redCards: number;
 }
 
+/** One penalty-shootout kick, in the order it was taken. */
+export interface PenaltyKick {
+  teamCode: TeamCode;
+  player: string | null;
+  scored: boolean;
+}
+
 export interface MatchState {
   fixtureId: number;
   leagueId: number;
@@ -28,6 +35,8 @@ export interface MatchState {
   away: TeamScore;
   /** Last scorer per side, when the provider exposes it. */
   lastGoal?: { teamCode: TeamCode; player: string | null; minute: number | null };
+  /** Penalty shootout, present once the match reaches one (P/PEN). */
+  shootout?: { home: number; away: number; kicks: PenaltyKick[] };
 }
 
 export type MatchEventType =
@@ -38,7 +47,9 @@ export type MatchEventType =
   | "RED_CARD"
   | "HALF_TIME"
   | "FULL_TIME"
-  | "PENALTY_SHOOTOUT";
+  | "EXTRA_TIME"
+  | "PENALTY_SHOOTOUT"
+  | "PENALTY_KICK";
 
 export interface MatchEvent {
   /** Deterministic — identical recomputation yields the same id (idempotency). */
@@ -50,6 +61,11 @@ export interface MatchEvent {
   teamCode?: TeamCode;
   player?: string | null;
   minute?: number | null;
+  /** Penalty-shootout tally, carried on shootout/full-time events. */
+  penHome?: number;
+  penAway?: number;
+  /** Whether a PENALTY_KICK was converted. */
+  scored?: boolean;
   homeTeam: TeamCode;
   awayTeam: TeamCode;
   homeName: string;
