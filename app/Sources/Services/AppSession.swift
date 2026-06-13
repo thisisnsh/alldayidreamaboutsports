@@ -58,7 +58,9 @@ final class AppSession: ObservableObject {
         // read is local. Changes go up via setFanTeams as they happen.
         Task { await syncFanTeamsOnLaunch() }
         startFixturesTimer()
-        PushService.shared.syncTopics(to: fanTeamCodes)
+        // Topics mirror the signed-in state: signed out means subscribed to
+        // nothing, even if fan teams are still stored locally.
+        PushService.shared.syncTopics(to: isSignedIn ? fanTeamCodes : [])
     }
 
     /// One launch-time reconciliation: server teams win on a fresh machine,
@@ -87,14 +89,11 @@ final class AppSession: ObservableObject {
                 Keychain.set(response.token, for: "sessionToken")
                 profile = response.profile
                 persist(profile: response.profile)
-                // Only fan teams roam via the backend; settings stay local.
-                // Server teams win on a fresh machine, local wins otherwise.
-                if prefs.footballTeams.isEmpty {
-                    prefs.fanOf = response.prefs.fanOf
-                    persistPrefs()
-                } else {
-                    try? await api.putPrefs(roamingPrefs)
-                }
+                // Fan teams come from the account: sign-out cleared the local
+                // copy, so adopt whatever roams on the server (never push a
+                // previous user's leftovers up). Settings stay device-local.
+                prefs.fanOf = response.prefs.fanOf
+                persistPrefs()
                 PushService.shared.syncTopics(to: fanTeamCodes)
             } catch {
                 signInError = error.localizedDescription
@@ -113,15 +112,20 @@ final class AppSession: ObservableObject {
         Keychain.delete("sessionToken")
         defaults.removeObject(forKey: "profile")
         profile = nil
+        // Fan teams belong to the ACCOUNT (they roam via the backend), so
+        // they leave with it — whoever signs in next starts from their own
+        // server prefs. Settings belong to the DEVICE and stay.
+        prefs.fanOf = UserPrefs.empty.fanOf
+        persistPrefs()
+        // Signed out = silent: no topics, nothing left on screen.
+        PushService.shared.syncTopics(to: [])
+        OverlayManager.shared.dismissAll()
         openWindow(WindowID.login)
     }
 
     func deleteAccount() async {
         try? await api.deleteAccount()
-        PushService.shared.syncTopics(to: [])
-        prefs = .empty
-        persistPrefs()
-        signOut()
+        signOut() // clears fan teams + topics; device settings stay
     }
 
     // MARK: Prefs
@@ -183,7 +187,8 @@ final class AppSession: ObservableObject {
             Task { @MainActor in
                 // Poll only while a followed team is (or might be) playing —
                 // FCM is the real-time channel, this is the consistency backstop.
-                guard !AppSession.shared.fanTeamCodes.isEmpty else { return }
+                guard AppSession.shared.isSignedIn,
+                      !AppSession.shared.fanTeamCodes.isEmpty else { return }
                 let followedLive = AppSession.shared.liveMatches
                     .contains { $0.involves(AppSession.shared.fanTeamCodes) }
                 let kickoffSoon = AppSession.shared.fixtures.contains {

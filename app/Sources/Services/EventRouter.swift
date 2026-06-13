@@ -32,6 +32,8 @@ final class EventRouter {
     }
 
     func route(_ event: MatchEvent) {
+        // Signed out = silent, even if a stale topic delivery slips through.
+        guard AppSession.shared.isSignedIn else { return }
         // FCM topics can redeliver; drop anything we've animated already.
         guard !seenEventIds.contains(event.eventId) else { return }
         seenEventIds.append(event.eventId)
@@ -104,7 +106,7 @@ func pillText(for event: MatchEvent) -> String {
     switch event.type {
     case .kickoff: return "Kickoff — \(matchup)"
     case .goal: return "\(minute)Goal — \(event.player ?? event.teamCode ?? "") \(flag)"
-    case .goalCancelled: return "\(minute)VAR: Goal Disallowed \(flag)"
+    case .goalCancelled: return "\(minute)VAR — Goal Disallowed \(flag)"
     case .yellowCard: return "\(minute)Yellow card — \(event.player ?? "") \(flag)"
     case .redCard: return "\(minute)Red card — \(event.player ?? "") \(flag)"
     case .halfTime: return "Half-time — \(leader.map { "\($0) Ahead" } ?? "Tight match")"

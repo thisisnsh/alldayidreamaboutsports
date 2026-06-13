@@ -39,10 +39,13 @@ enum FirebaseConfigured {
     }
 }
 
-/// Read the followed teams without hopping to the main actor.
+/// Read the followed teams without hopping to the main actor. Signed out
+/// (no stored profile) reads as no teams, so a token rotation while signed
+/// out never resubscribes.
 enum AppSessionTopicsSnapshot {
     static func current() -> Set<String> {
-        guard let data = UserDefaults.standard.data(forKey: "prefs"),
+        guard UserDefaults.standard.data(forKey: "profile") != nil,
+              let data = UserDefaults.standard.data(forKey: "prefs"),
               let prefs = try? JSONDecoder().decode(UserPrefs.self, from: data)
         else { return [] }
         return Set(prefs.fanOf["football"]?[String(AppEnvironment.leagueId)] ?? [])
