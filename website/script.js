@@ -16,11 +16,8 @@ const C = {
   amber: [255, 184, 41],
   lichen: [31, 170, 138],
   red: [255, 59, 82],
-  dim: [120, 120, 132],
-  orange: [232, 118, 46],
-  tennis: [205, 220, 57],
-  pigskin: [173, 102, 60],
-  ink: [18, 14, 24],
+  dim: [150, 150, 165],
+  seam: [24, 24, 34],   // near-black panel seam → reads as a gap on the void
 };
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -29,7 +26,7 @@ const C = {
 const cosmos = document.getElementById("cosmos");
 const cx2 = cosmos.getContext("2d", { alpha: true });
 
-const N = window.innerWidth < 760 ? 1100 : 1700;
+const N = window.innerWidth < 760 ? 1400 : 2200;
 let DPR = Math.min(window.devicePixelRatio || 1, 2);
 let W = 0, H = 0, focusX = 0.62, focusY = 0.5, worldR = 0;
 
@@ -58,39 +55,57 @@ const ico = (() => {
   ];
   return v.map(([a, b, c]) => { const l = Math.hypot(a, b, c); return [a / l, b / l, c / l]; });
 })();
-function pentagonDist(x, y, z) {
-  let best = -1;
-  for (let k = 0; k < ico.length; k++) {
-    const d = x * ico[k][0] + y * ico[k][1] + z * ico[k][2];
-    if (d > best) best = d;
-  }
-  return best; // 1 at a pentagon centre
-}
+/* Dodecahedron vertices → the 20 hexagon-panel centres (dual of the
+   icosahedron's pentagon centres). Together they tile a real soccer ball. */
+const dodec = (() => {
+  const p = (1 + Math.sqrt(5)) / 2, ip = 1 / p;
+  const v = [
+    [1, 1, 1], [1, 1, -1], [1, -1, 1], [1, -1, -1],
+    [-1, 1, 1], [-1, 1, -1], [-1, -1, 1], [-1, -1, -1],
+    [0, ip, p], [0, ip, -p], [0, -ip, p], [0, -ip, -p],
+    [ip, p, 0], [ip, -p, 0], [-ip, p, 0], [-ip, -p, 0],
+    [p, 0, ip], [p, 0, -ip], [-p, 0, ip], [-p, 0, -ip],
+  ];
+  return v.map(([a, b, c]) => { const l = Math.hypot(a, b, c); return [a / l, b / l, c / l]; });
+})();
+// panel centres: pentagons (pent=1) + hexagons (pent=0)
+const panels = [
+  ...ico.map((c) => ({ c, pent: 1 })),
+  ...dodec.map((c) => ({ c, pent: 0 })),
+];
 
 /* ── Shape definitions ─────────────────────────────────────────────────────
    Each sets the particle's LOCAL position (pre-rotation), colour, and an
-   accent flag (a=1 → drawn brighter & larger so the pattern reads).           */
+   accent flag (a=1 → drawn brighter & larger so the pattern reads).
+   Every ball stays purple + white only.                                       */
 function shapeSoccer(i, out) {
   const x = dirs[i * 3], y = dirs[i * 3 + 1], z = dirs[i * 3 + 2];
   out.x = x; out.y = y; out.z = z;
-  const pd = pentagonDist(x, y, z);
-  if (pd > 0.905) { out.c = C.plumSoft; out.a = 1; }   // pentagon cap
-  else if (pd > 0.885) { out.c = C.plum; out.a = 1; }  // pentagon rim
-  else { out.c = C.bone; out.a = 0; }                  // hexagon field
+  // classify into the nearest panel; the gap to the 2nd-nearest is the seam
+  let d1 = -2, d2 = -2, pent = 0;
+  for (let k = 0; k < panels.length; k++) {
+    const p = panels[k].c;
+    const d = x * p[0] + y * p[1] + z * p[2];
+    if (d > d1) { d2 = d1; d1 = d; pent = panels[k].pent; }
+    else if (d > d2) { d2 = d; }
+  }
+  if (d1 - d2 < 0.045) { out.c = C.seam; out.a = 0; out.v = 0.1; } // seam → gap
+  else if (pent) { out.c = C.plum; out.a = 1; }           // pentagon → purple
+  else { out.c = C.bone; out.a = 0; }                     // hexagon → white
 }
 
 function shapeGlobe(i, out) {
   const x = dirs[i * 3], y = dirs[i * 3 + 1], z = dirs[i * 3 + 2];
   out.x = x; out.y = y; out.z = z;
-  // wireframe globe: bright on meridians / parallels, dim elsewhere
+  // a white planet: bright meridians / parallels, soft white body, purple equator
   const lat = Math.asin(y);                 // -PI/2..PI/2
   const lon = Math.atan2(z, x);             // -PI..PI
   const par = Math.abs((lat / (Math.PI / 6)) % 1);     // parallels every 30°
   const mer = Math.abs((lon / (Math.PI / 6)) % 1);     // meridians every 30°
   const onGrid = par < 0.12 || par > 0.88 || mer < 0.1 || mer > 0.9;
-  if (Math.abs(lat) < 0.08) { out.c = C.plumSoft; out.a = 1; }   // equator pulse
-  else if (onGrid) { out.c = C.bone; out.a = 1; }
-  else { out.c = C.dim; out.a = 0; }
+  if (Math.abs(lat) < 0.07) { out.c = C.plum; out.a = 1; }       // purple equator
+  else if (onGrid) { out.c = C.bone; out.a = 1; }                // bright graticule
+  else { out.c = C.dim; out.a = 0; }                             // soft white body
 }
 
 function shapeBasketball(i, out) {
@@ -98,7 +113,7 @@ function shapeBasketball(i, out) {
   out.x = x; out.y = y; out.z = z;
   const seam = Math.abs(x) < 0.05 || Math.abs(z) < 0.05 ||
     Math.abs(Math.abs(y) - 0.62) < 0.045;
-  out.c = seam ? C.ink : C.orange; out.a = 0;
+  out.c = seam ? C.plum : C.bone; out.a = seam ? 1 : 0;
 }
 
 function shapeTennis(i, out) {
@@ -106,7 +121,7 @@ function shapeTennis(i, out) {
   out.x = x; out.y = y; out.z = z;
   const lon = Math.atan2(z, x);
   const seam = Math.abs(y - 0.55 * Math.sin(2 * lon)) < 0.07;
-  out.c = seam ? C.bone : C.tennis; out.a = seam ? 1 : 0;
+  out.c = seam ? C.plum : C.bone; out.a = seam ? 1 : 0;
 }
 
 function shapeBaseball(i, out) {
@@ -115,15 +130,16 @@ function shapeBaseball(i, out) {
   const lon = Math.atan2(z, x);
   const seam = Math.abs(y - 0.5 * Math.sin(2 * lon)) < 0.05 ||
     Math.abs(y + 0.5 * Math.sin(2 * lon)) < 0.05;
-  out.c = seam ? C.red : C.bone; out.a = seam ? 1 : 0;
+  out.c = seam ? C.plum : C.bone; out.a = seam ? 1 : 0;
 }
 
 function shapeFootball(i, out) {
   // American football — prolate ellipsoid stretched on x
   const x = dirs[i * 3], y = dirs[i * 3 + 1], z = dirs[i * 3 + 2];
   out.x = x * 1.42; out.y = y * 0.74; out.z = z * 0.74;
-  const lace = Math.abs(x) < 0.55 && Math.abs(z) < 0.05 && y > 0.45;
-  out.c = lace ? C.bone : C.pigskin; out.a = lace ? 1 : 0;
+  const lace = (Math.abs(x) < 0.55 && Math.abs(z) < 0.05 && y > 0.45) ||
+    (Math.abs(x) > 1.15);                                 // laces + nose seams
+  out.c = lace ? C.plum : C.bone; out.a = lace ? 1 : 0;
 }
 
 const SHAPES = {
@@ -141,18 +157,19 @@ const cr = new Float32Array(N), cg = new Float32Array(N), cb = new Float32Array(
 const tx = new Float32Array(N), ty = new Float32Array(N), tz = new Float32Array(N);
 const tr = new Float32Array(N), tg = new Float32Array(N), tb = new Float32Array(N);
 const acc = new Float32Array(N);
+const vz = new Float32Array(N), tv = new Float32Array(N);   // visibility (seam = ~0)
 const seedOff = new Float32Array(N);
 for (let i = 0; i < N; i++) seedOff[i] = Math.random() * Math.PI * 2;
 
-const tmp = { x: 0, y: 0, z: 0, c: C.bone, a: 0 };
+const tmp = { x: 0, y: 0, z: 0, c: C.bone, a: 0, v: 1 };
 function setTargets(name) {
   const fn = SHAPES[name];
   for (let i = 0; i < N; i++) {
-    tmp.a = 0;
+    tmp.a = 0; tmp.v = 1;
     fn(i, tmp);
     tx[i] = tmp.x; ty[i] = tmp.y; tz[i] = tmp.z;
     tr[i] = tmp.c[0]; tg[i] = tmp.c[1]; tb[i] = tmp.c[2];
-    acc[i] = tmp.a;
+    acc[i] = tmp.a; tv[i] = tmp.v;
   }
 }
 
@@ -161,7 +178,7 @@ setTargets("soccer");
 for (let i = 0; i < N; i++) {
   const s = reduceMotion ? 1 : rand(1.6, 3.2);
   px[i] = tx[i] * s; py[i] = ty[i] * s; pz[i] = tz[i] * s;
-  cr[i] = tr[i]; cg[i] = tg[i]; cb[i] = tb[i];
+  cr[i] = tr[i]; cg[i] = tg[i]; cb[i] = tb[i]; vz[i] = tv[i];
 }
 
 let currentShape = "soccer";
@@ -171,12 +188,25 @@ function morphTo(name) {
   setTargets(name);
 }
 
-/* Celebration pings — plum sparks that erupt from the globe / on tap */
+/* Scene state — set per section (hover direction, pulse, density). */
+const scene = { hover: "repel", pulse: false };
+let densityTarget = 1, density = 1;      // radius scale (live section = denser/smaller)
+
+/* Pointer for the magnet effect (canvas is fixed & full-viewport). */
+let mx = -1e4, my = -1e4;
+if (!("ontouchstart" in window)) {
+  window.addEventListener("mousemove", (e) => { mx = e.clientX; my = e.clientY; }, { passive: true });
+  window.addEventListener("mouseout", (e) => { if (!e.relatedTarget) { mx = my = -1e4; } });
+}
+
+/* Celebration pings — triangles that flow outward from the globe / on tap. */
 const pings = [];
 function spawnPing(originScreen) {
   pings.push({
     a: rand(0, Math.PI * 2), el: rand(-1, 1),
-    r: 0, vr: rand(0.7, 1.4), life: 0, ttl: rand(0.9, 1.6),
+    r: 0, vr: rand(0.8, 1.7), life: 0, ttl: rand(1, 1.8),
+    rot: rand(0, Math.PI * 2), spin: rand(-6, 6), size: rand(2.4, 4.4),
+    white: Math.random() < 0.35,
     fixed: originScreen || null,
   });
 }
@@ -210,6 +240,17 @@ function frame(now) {
   const cp = Math.cos(pitch), sp = Math.sin(pitch);
   const breathe = reduceMotion ? 0 : Math.sin(now / 2600) * 0.015;
 
+  // density (live section is smaller/denser) + heartbeat pulse
+  density += (densityTarget - density) * 0.06;
+  let pulse = 1;
+  if (scene.pulse && !reduceMotion) {
+    const ph = (now % 1500) / 1500;                 // one beat every 1.5s
+    pulse = 1 + 0.07 * (Math.exp(-7 * ph) + 0.55 * Math.exp(-7 * Math.abs(ph - 0.22)));
+  }
+  const effR = worldR * density * pulse;
+  const magR = effR * 1.18;                         // magnet influence radius
+  const magOn = mx > -1e3;
+
   for (let i = 0; i < N; i++) {
     // ease local position + colour toward target
     px[i] += (tx[i] - px[i]) * EASE;
@@ -218,6 +259,7 @@ function frame(now) {
     cr[i] += (tr[i] - cr[i]) * EASE;
     cg[i] += (tg[i] - cg[i]) * EASE;
     cb[i] += (tb[i] - cb[i]) * EASE;
+    vz[i] += (tv[i] - vz[i]) * EASE;
 
     let x = px[i] * (1 + breathe), y = py[i] * (1 + breathe), z = pz[i] * (1 + breathe);
     // rotate Y (yaw) then X (pitch)
@@ -227,8 +269,25 @@ function frame(now) {
     let z2 = y * sp + z1 * cp;
 
     const persp = FOCAL / (FOCAL - z2);
-    const sx = cxp + x1 * worldR * persp;
-    const syp = cyp + y1 * worldR * persp;
+    let sx = cxp + x1 * effR * persp;
+    let syp = cyp + y1 * effR * persp;
+
+    // magnet: particles flee (repel) or gather toward (attract) the cursor
+    if (magOn) {
+      const dx = sx - mx, dy = syp - my;
+      const d2 = dx * dx + dy * dy;
+      if (d2 < magR * magR) {
+        const dist = Math.sqrt(d2) || 1;
+        const f = 1 - dist / magR;
+        if (scene.hover === "attract") {
+          const amt = Math.min(f * f * effR * 0.6, dist * 0.85);
+          sx -= (dx / dist) * amt; syp -= (dy / dist) * amt;
+        } else {
+          const amt = f * f * effR * 0.55;
+          sx += (dx / dist) * amt; syp += (dy / dist) * amt;
+        }
+      }
+    }
 
     // depth shading: front particles brighter & larger
     const depth = (z2 + 1) / 2;            // 0 back .. 1 front
@@ -236,6 +295,7 @@ function frame(now) {
     let alpha = 0.16 + depth * 0.84;
     let size = (0.7 + depth * 1.7) * persp;
     if (isAcc) { alpha = Math.min(1, alpha + 0.22); size *= 1.55; }
+    alpha *= vz[i];
 
     const tw = reduceMotion ? 1 : 0.82 + 0.18 * Math.sin(now / 600 + seedOff[i]);
 
@@ -250,30 +310,38 @@ function frame(now) {
     cx2.fill();
   }
 
-  // celebration pings ride the same sphere, bursting outward
-  cx2.globalAlpha = 1;
+  // celebration pings — little triangles flowing outward from the globe
   for (let k = pings.length - 1; k >= 0; k--) {
     const p = pings[k];
-    p.life += dt; p.r += p.vr * dt;
+    p.life += dt; p.r += p.vr * dt; p.rot += p.spin * dt;
     if (p.life > p.ttl) { pings.splice(k, 1); continue; }
     const fade = 1 - p.life / p.ttl;
     let sx, syp, sz = 1;
     if (p.fixed) { sx = p.fixed.x; syp = p.fixed.y - p.r * 70; }
     else {
-      const rr = 1 + p.r * 0.6;
+      const rr = 1 + p.r * 0.7;
       let x = Math.cos(p.a) * Math.cos(p.el) * rr;
       let y = Math.sin(p.el) * rr;
       let z = Math.sin(p.a) * Math.cos(p.el) * rr;
       let x1 = x * cy + z * sy, z1 = -x * sy + z * cy;
       let y1 = y * cp - z1 * sp; let z2 = y * sp + z1 * cp;
       const persp = FOCAL / (FOCAL - z2);
-      sx = cxp + x1 * worldR * persp; syp = cyp + y1 * worldR * persp; sz = persp;
+      sx = cxp + x1 * effR * persp; syp = cyp + y1 * effR * persp; sz = persp;
     }
-    cx2.globalAlpha = fade * 0.9;
-    cx2.fillStyle = `rgb(${C.plumSoft.join(",")})`;
+    const col = p.white ? C.bone : C.plumSoft;
+    const s = p.size * sz;
+    cx2.globalAlpha = fade * 0.95;
+    cx2.fillStyle = `rgb(${col[0]},${col[1]},${col[2]})`;
+    cx2.save();
+    cx2.translate(sx, syp);
+    cx2.rotate(p.rot);
     cx2.beginPath();
-    cx2.arc(sx, syp, 1.8 * sz, 0, Math.PI * 2);
+    cx2.moveTo(0, -s);
+    cx2.lineTo(-s, s);
+    cx2.lineTo(s, s);
+    cx2.closePath();
     cx2.fill();
+    cx2.restore();
   }
   cx2.globalAlpha = 1;
 
@@ -300,21 +368,44 @@ function stopCycle() { if (cycleTimer) { clearInterval(cycleTimer); cycleTimer =
 let globeTimer = null;
 function startGlobePings() {
   stopGlobePings();
-  globeTimer = setInterval(() => { if (!reduceMotion) for (let i = 0; i < 3; i++) spawnPing(); }, 700);
+  globeTimer = setInterval(() => { if (!reduceMotion) for (let i = 0; i < 5; i++) spawnPing(); }, 480);
 }
 function stopGlobePings() { if (globeTimer) { clearInterval(globeTimer); globeTimer = null; } }
 
+let pillOverride = false;   // a hovered "what's next" pill is steering the shape
+function applyScene(el) {
+  stopCycle(); stopGlobePings();
+  const shape = el.dataset.shape;
+  scene.hover = el.dataset.hover || "repel";
+  scene.pulse = el.hasAttribute("data-pulse");
+  densityTarget = el.hasAttribute("data-dense") ? 0.82 : 1;
+  if (shape === "cycle") { if (!pillOverride) startCycle(); }
+  else { morphTo(shape); if (el.hasAttribute("data-pings")) startGlobePings(); }
+}
+
+let activeSection = null;
 const sectionObserver = new IntersectionObserver((entries) => {
   entries.forEach((e) => {
     if (!e.isIntersecting || e.intersectionRatio < 0.5) return;
-    const shape = e.target.dataset.shape;
-    stopCycle(); stopGlobePings();
-    if (shape === "cycle") startCycle();
-    else { morphTo(shape); if (shape === "globe") startGlobePings(); }
+    activeSection = e.target;
+    applyScene(e.target);
   });
 }, { threshold: [0.5] });
 
 document.querySelectorAll("[data-shape]").forEach((s) => sectionObserver.observe(s));
+
+/* "What's next" — hovering a sport pill morphs the field into that ball. */
+document.querySelectorAll(".next-pill[data-ball]").forEach((pill) => {
+  pill.addEventListener("mouseenter", () => {
+    pillOverride = true; stopCycle();
+    scene.hover = "repel"; densityTarget = 1;
+    morphTo(pill.dataset.ball);
+  });
+  pill.addEventListener("mouseleave", () => {
+    pillOverride = false;
+    if (activeSection && activeSection.dataset.shape === "cycle") startCycle();
+  });
+});
 
 /* ═══════════════════════════════════════════════════════════════════════════
    3. REVEAL ON SCROLL
