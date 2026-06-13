@@ -96,20 +96,7 @@ function shapeTennis(i, o) {
   const seam = Math.abs(y - 0.55 * Math.sin(2 * lon)) < 0.07;
   o.c = seam ? C.plum : C.bone; o.v = seam ? 1 : body(i);
 }
-function shapeBaseball(i, o) {
-  const x = dirs[i * 3], y = dirs[i * 3 + 1], z = dirs[i * 3 + 2];
-  o.x = x; o.y = y; o.z = z;
-  const lon = Math.atan2(z, x);
-  const seam = Math.abs(y - 0.5 * Math.sin(2 * lon)) < 0.05 || Math.abs(y + 0.5 * Math.sin(2 * lon)) < 0.05;
-  o.c = seam ? C.plum : C.bone; o.v = seam ? 1 : body(i);
-}
-function shapeFootball(i, o) {
-  const x = dirs[i * 3], y = dirs[i * 3 + 1], z = dirs[i * 3 + 2];
-  o.x = x * 1.42; o.y = y * 0.74; o.z = z * 0.74;
-  const lace = (Math.abs(x) < 0.55 && Math.abs(z) < 0.05 && y > 0.45) || Math.abs(x) > 1.15;
-  o.c = lace ? C.plum : C.bone; o.v = lace ? 1 : body(i);
-}
-const SHAPES = { soccer: shapeSoccer, globe: shapeGlobe, basketball: shapeBasketball, tennis: shapeTennis, baseball: shapeBaseball, football: shapeFootball };
+const SHAPES = { soccer: shapeSoccer, globe: shapeGlobe, basketball: shapeBasketball, tennis: shapeTennis };
 
 /* Per-instance live state */
 const lx = new Float32Array(N), ly = new Float32Array(N), lz = new Float32Array(N);   // current unit pos
@@ -375,33 +362,28 @@ if (renderer) requestAnimationFrame(frame);
 /* ═══════════════════════════════════════════════════════════════════════════
    3. SCROLL → SCENE
    ═══════════════════════════════════════════════════════════════════════════ */
-const shapeCycle = ["basketball", "tennis", "baseball", "football"];
-let cycleTimer = null, cycleIdx = 0;
-function startCycle() { stopCycle(); morphTo(shapeCycle[cycleIdx % shapeCycle.length]); cycleTimer = setInterval(() => { cycleIdx++; morphTo(shapeCycle[cycleIdx % shapeCycle.length]); }, 2400); }
-function stopCycle() { if (cycleTimer) { clearInterval(cycleTimer); cycleTimer = null; } }
-
 let globeTimer = null;
 function startGlobePings() { stopGlobePings(); globeTimer = setInterval(() => { if (!reduceMotion) for (let i = 0; i < 4; i++) spawnPing(); }, 460); }
 function stopGlobePings() { if (globeTimer) { clearInterval(globeTimer); globeTimer = null; } }
 
-let pillOverride = false, activeSection = null;
+let activeSection = null;
 function applyScene(el) {
-  stopCycle(); stopGlobePings();
-  const shape = el.dataset.shape;
+  stopGlobePings();
   scene_.hover = el.dataset.hover || "repel";
   scene_.pulse = el.hasAttribute("data-pulse");
   densityTarget = el.hasAttribute("data-dense") ? 0.72 : 1;
-  if (shape === "cycle") { if (!pillOverride) startCycle(); }
-  else { morphTo(shape); if (el.hasAttribute("data-pings")) startGlobePings(); }
+  morphTo(el.dataset.shape);
+  if (el.hasAttribute("data-pings")) startGlobePings();
 }
 const sectionObserver = new IntersectionObserver((entries) => {
   entries.forEach((e) => { if (e.isIntersecting && e.intersectionRatio >= 0.5) { activeSection = e.target; applyScene(e.target); } });
 }, { threshold: [0.5] });
 document.querySelectorAll("[data-shape]").forEach((s) => sectionObserver.observe(s));
 
+// In "What's next" the ball rests as soccer and only morphs while a sport pill is hovered.
 document.querySelectorAll(".next-pill[data-ball]").forEach((pill) => {
-  pill.addEventListener("mouseenter", () => { pillOverride = true; stopCycle(); scene_.hover = "repel"; densityTarget = 1; morphTo(pill.dataset.ball); });
-  pill.addEventListener("mouseleave", () => { pillOverride = false; if (activeSection && activeSection.dataset.shape === "cycle") startCycle(); });
+  pill.addEventListener("mouseenter", () => { scene_.hover = "repel"; densityTarget = 1; morphTo(pill.dataset.ball); });
+  pill.addEventListener("mouseleave", () => { if (activeSection) morphTo(activeSection.dataset.shape); });
 });
 
 /* ═══════════════════════════════════════════════════════════════════════════
