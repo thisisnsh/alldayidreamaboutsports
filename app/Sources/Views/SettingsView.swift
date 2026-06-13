@@ -69,7 +69,7 @@ struct SettingsView: View {
                                 OverlayManager.shared.preview()
                             }
                             .buttonStyle(.cardButton)
-                            caption("When a team you're a fan of scores, you'll see a celebration. Configure it here: just the goal in center, just confetti, both — or neither, for a quiet notch drop like every other event. Preview plays exactly what you picked. Celebrations are hidden from screen sharing and recordings.")
+                            caption("Choose how your team’s goals are celebrated with animations. You’ll always see the notch drop on goal like every other event. Preview shows exactly what you picked.")
                         }
                     }
 
