@@ -167,7 +167,10 @@ for (let i = 0; i < N; i++) {
 }
 
 let currentShape = "soccer";
-function morphTo(name) { if (name !== currentShape) { currentShape = name; setTargets(name); } }
+// morphBurst spikes to 1 on every shape change and decays back to 0, so the
+// triangles expand outward and then collapse into the new figure.
+let morphBurst = 0;
+function morphTo(name) { if (name !== currentShape) { currentShape = name; setTargets(name); if (!reduceMotion) morphBurst = 1; } }
 
 /* ═══════════════════════════════════════════════════════════════════════════
    2. THREE.JS SCENE
@@ -294,7 +297,8 @@ function frame(now) {
     pulse = 1 + 0.085 * (Math.exp(-7 * ph) + 0.55 * Math.exp(-7 * Math.abs(ph - 0.22)));
   }
   const breathe = reduceMotion ? 0 : Math.sin(now / 2600) * 0.012;
-  const Reff = R * density * pulse * (1 + breathe);
+  morphBurst += (0 - morphBurst) * 0.055;               // decays after each morph
+  const Reff = R * density * pulse * (1 + breathe) * (1 + morphBurst * 0.6);
   const magR = Reff * 0.6, magR2 = magR * magR;
 
   _e.set(pitch, yaw, 0); _qRot.setFromEuler(_e);
@@ -397,12 +401,6 @@ const sectionObserver = new IntersectionObserver((entries) => {
 }, { threshold: [0.5] });
 document.querySelectorAll("[data-shape]").forEach((s) => sectionObserver.observe(s));
 
-// In "What's next" the ball rests as soccer and only morphs while a sport pill is hovered.
-document.querySelectorAll(".next-pill[data-ball]").forEach((pill) => {
-  pill.addEventListener("mouseenter", () => { scene_.hover = "repel"; densityTarget = 1; morphTo(pill.dataset.ball); });
-  pill.addEventListener("mouseleave", () => { if (activeSection) morphTo(activeSection.dataset.shape); });
-});
-
 /* ═══════════════════════════════════════════════════════════════════════════
    4. REVEAL ON SCROLL + NAV
    ═══════════════════════════════════════════════════════════════════════════ */
@@ -420,13 +418,37 @@ onScroll();
    5. NOTCH DROPS — live alert demo
    ═══════════════════════════════════════════════════════════════════════════ */
 const desktop = document.getElementById("desktop");
+// The full Argentina v France final, in order — primary line + secondary line,
+// with a colour dot keyed to the legend chips above.
 const ALERTS = [
-  { cls: "goal", ico: "⚽", title: "GOAL — Messi 108'", sub: "ARG 3 — 2 FRA", time: "now" },
-  { cls: "yellow", ico: "🟨", title: "Yellow card — Montiel", sub: "ARG 3 — 2 FRA · 116'", time: "1m" },
-  { cls: "red", ico: "🟥", title: "Red card — Coman", sub: "ARG 3 — 2 FRA · 119'", time: "2m" },
-  { cls: "goal", ico: "⚽", title: "GOAL — Mbappé 118'", sub: "ARG 3 — 3 FRA", time: "now" },
-  { cls: "full", ico: "🏁", title: "Full time — Argentina win", sub: "ARG 3 — 3 FRA · 4–2 pens", time: "now" },
-  { cls: "goal", ico: "🎉", title: "4.2M fans celebrating", sub: "Argentina · live now", time: "now" },
+  { cls: "fixture", title: "Argentina vs France", sub: "Kick-off · Final", time: "0'" },
+  { cls: "goal", title: "Goal · Lionel Messi", sub: "Argentina 1–0 · penalty", time: "23'" },
+  { cls: "goal", title: "Goal · Ángel Di María", sub: "Argentina 2–0", time: "36'" },
+  { cls: "yellow", title: "Yellow · Enzo Fernández", sub: "Argentina", time: "45+7" },
+  { cls: "full", title: "Half time", sub: "Argentina 2–0 France", time: "HT" },
+  { cls: "yellow", title: "Yellow · Adrien Rabiot", sub: "France", time: "55'" },
+  { cls: "goal", title: "Goal · Kylian Mbappé", sub: "Argentina 2–1 · penalty", time: "80'" },
+  { cls: "goal", title: "Goal · Kylian Mbappé", sub: "Argentina 2–2", time: "81'" },
+  { cls: "yellow", title: "Yellow · Marcus Thuram", sub: "France", time: "87'" },
+  { cls: "yellow", title: "Yellow · Olivier Giroud", sub: "France", time: "90+5" },
+  { cls: "yellow", title: "Yellow · Marcos Acuña", sub: "Argentina", time: "90+8" },
+  { cls: "full", title: "Full time", sub: "Argentina 2–2 France", time: "FT" },
+  { cls: "fixture", title: "Extra time begins", sub: "Argentina 2–2 France", time: "91'" },
+  { cls: "goal", title: "Goal · Lionel Messi", sub: "Argentina 3–2", time: "108'" },
+  { cls: "yellow", title: "Yellow · Leandro Paredes", sub: "Argentina", time: "114'" },
+  { cls: "yellow", title: "Yellow · Gonzalo Montiel", sub: "Argentina", time: "116'" },
+  { cls: "goal", title: "Goal · Kylian Mbappé", sub: "Argentina 3–3 · penalty", time: "118'" },
+  { cls: "full", title: "Extra time ends", sub: "Argentina 3–3 France", time: "120+3" },
+  { cls: "pen", title: "Penalty · Messi scores", sub: "Argentina · shootout", time: "PSO 1" },
+  { cls: "pen", title: "Penalty · Mbappé scores", sub: "France · shootout", time: "PSO 1" },
+  { cls: "pen", title: "Penalty · Dybala scores", sub: "Argentina · shootout", time: "PSO 2" },
+  { cls: "red", title: "Penalty · Coman saved", sub: "France · shootout", time: "PSO 2" },
+  { cls: "pen", title: "Penalty · Paredes scores", sub: "Argentina · shootout", time: "PSO 3" },
+  { cls: "red", title: "Penalty · Tchouaméni misses", sub: "France · shootout", time: "PSO 3" },
+  { cls: "pen", title: "Penalty · Montiel scores", sub: "Argentina · shootout", time: "PSO 4" },
+  { cls: "pen", title: "Penalty · Kolo Muani scores", sub: "France · shootout", time: "PSO 4" },
+  { cls: "yellow", title: "Yellow · Emiliano Martínez", sub: "Argentina", time: "120+6" },
+  { cls: "full", title: "Argentina win", sub: "4–2 on penalties", time: "FT" },
 ];
 let alertIdx = 0;
 function dropAlert() {
@@ -434,9 +456,8 @@ function dropAlert() {
   const a = ALERTS[alertIdx % ALERTS.length]; alertIdx++;
   const el = document.createElement("div");
   el.className = "pill drop";
-  el.innerHTML = `<span class="pill-ico ${a.cls}">${a.ico}</span><span class="pill-body"><span class="pill-title">${a.title}</span><span class="pill-sub">${a.sub}</span></span><span class="pill-time">${a.time}</span>`;
+  el.innerHTML = `<span class="pill-dot ${a.cls}"></span><span class="pill-body"><span class="pill-title">${a.title}</span><span class="pill-sub">${a.sub}</span></span><span class="pill-time">${a.time}</span>`;
   desktop.prepend(el);
-  if (a.cls === "goal" && a.ico === "⚽") burstConfetti(0.4);
   while (desktop.children.length > 3) desktop.lastChild.remove();
 }
 let notchTimer = null;
@@ -450,28 +471,7 @@ if (desktop) {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   6. CELEBRATIONS — counter + tap-to-celebrate
-   ═══════════════════════════════════════════════════════════════════════════ */
-const counterEl = document.getElementById("count");
-let count = 4210338, displayCount = count;
-const fmt = (n) => Math.floor(n).toLocaleString("en-US");
-if (counterEl) {
-  counterEl.textContent = fmt(displayCount);
-  setInterval(() => { if (!reduceMotion) count += Math.floor(rand(3, 22)); }, 900);
-  (function tickCount() { displayCount += (count - displayCount) * 0.12; counterEl.textContent = fmt(displayCount); requestAnimationFrame(tickCount); })();
-}
-const celebrateBtn = document.getElementById("celebrate");
-if (celebrateBtn) {
-  celebrateBtn.addEventListener("click", () => {
-    count += Math.floor(rand(80, 260));
-    const r = celebrateBtn.getBoundingClientRect();
-    burstConfetti(1, { x: r.left + r.width / 2, y: r.top });
-    for (let i = 0; i < 16; i++) spawnPing();
-  });
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   7. CONFETTI (2D overlay)
+   6. CONFETTI (2D overlay)
    ═══════════════════════════════════════════════════════════════════════════ */
 const conf = document.getElementById("confetti");
 const cc = conf.getContext("2d");
