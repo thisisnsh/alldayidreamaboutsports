@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>All Day I Dream About Sports — live World Cup goals on your Mac</title>
+  <meta name="description" content="A macOS menu bar app for FIFA World Cup 2026. Goal animations from your notch, tap-to-celebrate with fans worldwide, fixtures at a glance." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="stars"></div>
+  <div class="cloud c1"></div>
+  <div class="cloud c2"></div>
+  <div class="cloud c3"></div>
+  <div class="cloud c4"></div>
+
+  <!-- Live demo of the app's notch pill -->
+  <div class="notch-pill" id="pill" aria-hidden="true">⚽ 73′ GOOOOAL — Brazil 2 · 1 USA</div>
+
+  <main>
+    <section class="hero">
+      <span class="ball" id="ball" title="Tap to celebrate!">⚽</span>
+      <p class="kicker">FIFA World Cup 2026 · macOS menu bar app</p>
+      <h1 class="title">All day I dream<span class="dream">about sports.</span></h1>
+      <p class="sub">Your team scores — a ball drops from your notch, confetti flies, and you celebrate with millions of fans. Right on your desktop.</p>
+      <a class="cta" id="download" href="https://download.alldayidreamaboutsports.com/latest">
+        Download for Mac&nbsp;⚽
+      </a>
+      <p class="meta">Free · macOS 14+ · Apple silicon &amp; Intel · auto-updates</p>
+    </section>
+
+    <section class="features">
+      <div class="card">
+        <span class="emoji">🎉</span>
+        <h3>Celebrate together</h3>
+        <p>When your team scores, tap the ball to show support — and watch the worldwide celebration count climb for your team, all match long.</p>
+      </div>
+      <div class="card">
+        <span class="emoji">📺</span>
+        <h3>Notch-side updates</h3>
+        <p>Cards, kickoffs, half-time, VAR drama — a quiet black pill slips out of your notch and disappears five seconds later. No windows, no noise.</p>
+      </div>
+      <div class="card">
+        <span class="emoji">☁️</span>
+        <h3>Forget it's there</h3>
+        <p>Lives in the menu bar, never in your Dock. Fixtures and live scores one click away, goal animations only for the teams <i>you</i> follow.</p>
+      </div>
+    </section>
+
+    <section class="how">
+      <h2>Three clicks to kickoff</h2>
+      <div class="steps">
+        <span>1 · <b>Sign in</b> with Google</span>
+        <span>2 · <b>Pick your teams</b> 🇧🇷 🇺🇸 🇯🇵</span>
+        <span>3 · <b>Dream about sports</b> — we'll interrupt for goals</span>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <a href="privacy.html">Privacy</a> · <a href="mailto:help@alldayidreamaboutsports.com">Support</a> · <a href="https://github.com/thisisnsh/alldayidreamaboutsports.com">Source</a>
+    <br />© 2026 alldayidreamaboutsports.com
+    <p class="disclaimer">Not affiliated with, endorsed by, or connected to FIFA. Match data via API-Football.</p>
+  </footer>
+
+  <script>
+    // Notch pill demo loop
+    const pill = document.getElementById("pill");
+    const demos = [
+      "⚽ 73′ GOOOOAL — Brazil 2 · 1 USA",
+      "🟨 38′ Yellow card — Pulisic (USA)",
+      "🟢 Kickoff — Japan vs Spain",
+      "🎉 2.3M fans celebrated this goal",
+      "❌ 81′ VAR: goal disallowed",
+      "🏁 Full-time — Argentina 3 · 0 Mexico",
+    ];
+    let i = 0;
+    function dropPill() {
+      pill.textContent = demos[i++ % demos.length];
+      pill.classList.add("show");
+      setTimeout(() => pill.classList.remove("show"), 3800);
+    }
+    setTimeout(dropPill, 1800);
+    setInterval(dropPill, 7000);
+
+    // Confetti on ball tap / download click
+    const colors = ["#ffd166", "#06d6a0", "#118ab2", "#ef476f", "#fff", "#ffa400"];
+    function confetti(x, y, n = 60) {
+      for (let k = 0; k < n; k++) {
+        const c = document.createElement("div");
+        c.className = "confetto";
+        c.style.left = x + "px";
+        c.style.top = y + "px";
+        c.style.background = colors[(Math.random() * colors.length) | 0];
+        c.style.setProperty("--dx", (Math.random() * 360 - 180) + "px");
+        c.style.animationDelay = (Math.random() * 0.15) + "s";
+        document.body.appendChild(c);
+        setTimeout(() => c.remove(), 1900);
+      }
+    }
+    document.getElementById("ball").addEventListener("click", (e) => confetti(e.clientX, e.clientY));
+    document.getElementById("download").addEventListener("click", (e) => confetti(e.clientX, e.clientY, 90));
+  </script>
+</body>
+</html>
