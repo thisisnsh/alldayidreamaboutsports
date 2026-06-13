@@ -1,10 +1,9 @@
 /* ── All Day I Dream About Sports — MacBook screen ──────────────────────── */
 
 :root {
-  --bezel: clamp(12px, 1.6vmin, 22px);   /* MacBook bezel thickness */
-  --radius: clamp(20px, 3vmin, 40px);    /* screen corner radius */
-  --notch-w: clamp(112px, 17vw, 190px);
-  --notch-h: clamp(20px, 2.6vmin, 30px);
+  --bezel: clamp(18px, 2.6vmin, 34px);   /* MacBook bezel thickness */
+  --radius: calc(var(--bezel) + clamp(16px, 2.2vmin, 24px)); /* outer radius; inner = +16–24px */
+  --notch-h: clamp(34px, 4.4vmin, 48px);
 
   --sans: "Inter", system-ui, -apple-system, sans-serif;
   --serif: "Playfair Display", Georgia, serif;
@@ -38,8 +37,8 @@ html, body {
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;   /* center the hero vertically */
   padding: clamp(18px, 4vmin, 48px) clamp(16px, 4vw, 56px);
-  padding-top: calc(var(--notch-h) + clamp(14px, 2vmin, 24px));
 }
 
 /* Wide screens get the landscape photo */
@@ -47,50 +46,63 @@ html, body {
   .screen { background-image: url("assets/bg-desktop.jpg"); }
 }
 
-/* Dark scrim for legibility over the bright photo */
+/* Dark scrim + overall black tint for legibility over the bright photo */
 .scrim {
   position: absolute;
   inset: 0;
   z-index: 0;
   pointer-events: none;
   background:
-    radial-gradient(120% 75% at 50% 42%, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.20) 45%, rgba(0,0,0,0) 72%),
-    linear-gradient(to bottom, rgba(0,0,0,0.45) 0%, rgba(0,0,0,0) 28%, rgba(0,0,0,0) 70%, rgba(0,0,0,0.5) 100%);
+    radial-gradient(120% 75% at 50% 42%, rgba(0,0,0,0.45) 0%, rgba(0,0,0,0.18) 45%, rgba(0,0,0,0) 72%),
+    linear-gradient(to bottom, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0.12) 28%, rgba(0,0,0,0.12) 70%, rgba(0,0,0,0.55) 100%),
+    rgba(0,0,0,0.42);   /* flat black tint across the whole background */
 }
 
-.screen > *:not(.scrim) { position: relative; z-index: 1; }
+/* Hero sits above the scrim; notch/notify/footer/canvas are positioned
+   on their own (each with its own z-index above the scrim's 0). */
+.hero { position: relative; z-index: 1; }
 
-/* ── Notch ──────────────────────────────────────────────────────────────── */
+/* ── Notch (MacBook-style, sits on the top edge) ────────────────────────── */
 .notch {
   position: absolute;
   top: 0;
   left: 50%;
   transform: translateX(-50%);
-  width: var(--notch-w);
-  height: var(--notch-h);
+  width: clamp(220px, 35%, 260px);
+  max-width: 86%;
+  min-height: var(--notch-h);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 22px;
   background: #000;
-  border-radius: 0 0 14px 14px;
-  z-index: 5;
+  border-radius: 0 0 18px 18px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.45);
+  z-index: 6;
+}
+.notch span {
+  color: rgba(255,255,255,0.9);
+  font-size: clamp(12.5px, 1.5vmin, 14px);
+  font-weight: 500;
+  white-space: nowrap;
 }
 
 /* ── Notifications dropping from the notch ──────────────────────────────── */
 .notify {
-  width: 100%;
-  max-width: 460px;
+  position: absolute;
+  top: calc(var(--notch-h) + clamp(12px, 2vmin, 22px));
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(92%, 460px);
   display: flex;
   flex-direction: column;
   align-items: center;
   text-align: center;
   gap: clamp(10px, 1.6vmin, 16px);
+  z-index: 4;
 }
 
-.pill-stage {
-  min-height: clamp(54px, 8vmin, 66px);
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  perspective: 600px;
-}
+.notify [hidden] { display: none; }
 
 .pill {
   display: inline-flex;
@@ -102,24 +114,26 @@ html, body {
   border-radius: 18px;
   box-shadow: 0 8px 24px rgba(0,0,0,0.5), 0 0 0 0.5px rgba(255,255,255,0.06) inset;
   color: #fff;
-  text-align: left;
+  text-align: center;
   will-change: transform, opacity;
 }
 
-.pill.drop  { animation: pillDrop 0.5s cubic-bezier(.2,.9,.25,1.3) both; }
-.pill.lift  { animation: pillLift 0.32s ease-in both; }
+/* The pill and its caption drop in / float up together as one group. */
+.notify { opacity: 0; }
+.notify.drop { animation: notifyDrop 0.5s cubic-bezier(.2,.9,.25,1.3) both; }
+.notify.lift { animation: notifyLift 0.35s ease-in both; }
 
-@keyframes pillDrop {
-  from { transform: translateY(-26px); opacity: 0; }
-  to   { transform: translateY(0);     opacity: 1; }
+@keyframes notifyDrop {
+  from { transform: translate(-50%, -22px); opacity: 0; }
+  to   { transform: translate(-50%, 0);     opacity: 1; }
 }
-@keyframes pillLift {
-  from { transform: translateY(0);     opacity: 1; }
-  to   { transform: translateY(-22px); opacity: 0; }
+@keyframes notifyLift {
+  from { transform: translate(-50%, 0);     opacity: 1; }
+  to   { transform: translate(-50%, -22px); opacity: 0; }
 }
 
 .pill-icon { font-size: 16px; line-height: 1; }
-.pill-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.pill-text { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 0; }
 .pill-title {
   font-size: clamp(12.5px, 1.5vmin, 14px);
   font-weight: 600;
@@ -142,7 +156,6 @@ html, body {
   line-height: 1.45;
   max-width: 30ch;
   text-shadow: 0 1px 6px rgba(0,0,0,0.6);
-  transition: opacity 0.3s ease;
 }
 
 /* ── Hero ───────────────────────────────────────────────────────────────── */
@@ -151,8 +164,8 @@ html, body {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  align-items: flex-start;   /* left on mobile */
-  text-align: left;
+  align-items: stretch;   /* children fill width & wrap properly */
+  text-align: center;     /* centered on all sizes */
   width: 100%;
   max-width: 1000px;
   gap: clamp(14px, 2.4vmin, 26px);
@@ -160,26 +173,57 @@ html, body {
 }
 
 .kicker {
-  color: rgba(255,255,255,0.92);
-  font-size: clamp(13px, 1.8vmin, 17px);
+  color: rgba(255,255,255,0.95);
+  font-size: clamp(14px, 2vmin, 19px);
   font-weight: 600;
   letter-spacing: 0.01em;
   text-shadow: 0 1px 8px rgba(0,0,0,0.55);
 }
+.kicker-alt {
+  font-family: var(--serif);
+  font-style: italic;
+  font-weight: 500;
+}
+
+/* Pulsing red "live" dot (sits after the tagline) */
+.live-dot {
+  display: inline-block;
+  width: 0.42em;
+  height: 0.42em;
+  margin-left: 0.5em;
+  border-radius: 50%;
+  background: #ff2d40;
+  box-shadow: 0 0 0 0 rgba(255,45,64,0.6);
+  vertical-align: middle;
+  animation: livePulse 1.6s ease-out infinite;
+}
+@keyframes livePulse {
+  0%   { box-shadow: 0 0 0 0 rgba(255,45,64,0.6); }
+  70%  { box-shadow: 0 0 0 0.7em rgba(255,45,64,0); }
+  100% { box-shadow: 0 0 0 0 rgba(255,45,64,0); }
+}
 
 .title {
   color: #fff;
-  font-size: clamp(2.4rem, 8.5vw, 5.4rem);
-  line-height: 1.04;
+  font-size: clamp(2.4rem, 9vw, 5.4rem);
   font-weight: 800;
   letter-spacing: -0.01em;
   text-shadow: 0 3px 18px rgba(0,0,0,0.55);
 }
 
+/* Three lines, each a fixed height so the animating word never shifts layout */
+.title .line {
+  display: block;
+  height: 1.12em;
+  line-height: 1.12;
+  white-space: nowrap;
+}
+
+/* Only "Sports" restyles; it's alone on its line so width can change freely */
 .title .word {
   display: inline-block;
-  margin-right: 0.22em;
-  transition: opacity 0.18s ease;
+  line-height: 1;
+  vertical-align: baseline;
 }
 
 /* Random-style classes for each word */
@@ -193,13 +237,13 @@ html, body {
 .title .font-sans    { font-family: var(--sans); }
 .title .font-serif   { font-family: var(--serif); }
 .title .font-display { font-family: var(--display); }
-.title .font-cursive { font-family: var(--cursive); font-weight: 400; }
+.title .font-cursive { font-family: var(--cursive); font-weight: 400; font-size: 0.82em; }
 
 /* ── Call to action ─────────────────────────────────────────────────────── */
 .actions {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
+  align-items: center;
   gap: 10px;
 }
 
@@ -230,19 +274,27 @@ html, body {
 }
 
 .soon {
-  color: rgba(255,255,255,0.85);
-  font-size: clamp(12px, 1.5vmin, 14px);
-  font-weight: 500;
-  text-shadow: 0 1px 6px rgba(0,0,0,0.55);
+  display: inline-block;
+  color: rgba(255,255,255,0.9);
+  font-size: clamp(12.5px, 1.6vmin, 14.5px);
+  font-weight: 600;
+  text-decoration: none;
+  text-shadow: 0 1px 6px rgba(0,0,0,0.6);
 }
+.soon:hover { color: #fff; text-decoration: underline; }
 
-/* ── Footer ─────────────────────────────────────────────────────────────── */
+/* ── Footer (pinned to the bottom) ──────────────────────────────────────── */
 .footer {
+  position: absolute;
+  bottom: clamp(10px, 1.6vmin, 18px);
+  left: 0;
+  right: 0;
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 12px;
-  padding-top: clamp(10px, 2vmin, 18px);
   font-size: clamp(12.5px, 1.5vmin, 14px);
+  z-index: 4;
 }
 .footer a {
   color: rgba(255,255,255,0.9);
@@ -263,9 +315,8 @@ html, body {
 
 /* ── Laptop layout: center the hero & title ─────────────────────────────── */
 @media (min-width: 820px) {
-  .hero { align-items: center; text-align: center; }
+  .hero { text-align: center; }
   .actions { align-items: center; }
-  .title { max-width: 14ch; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -273,70 +324,60 @@ html, body {
   .cta { transition: none; }
 }
 
-/* ── Document pages (privacy) ────────────────────────────────────────────── */
+/* ── Document pages (privacy): plain black background, plain text ────────── */
 .screen.doc {
   position: relative;
   min-height: 100vh;
   display: block;
   overflow: visible;
-  background-image: url("assets/bg-desktop.jpg");
-  background-attachment: fixed;
+  background: #000;
+  font-family: var(--sans);
   padding: calc(var(--notch-h) + clamp(20px, 4vmin, 40px)) clamp(16px, 4vw, 40px) clamp(40px, 8vmin, 80px);
 }
-.screen.doc .scrim {
-  position: fixed;
-  background: rgba(0, 0, 0, 0.62);
-}
+.screen.doc .scrim { display: none; }
 
 .back {
   display: inline-block;
   margin-bottom: clamp(18px, 3vmin, 28px);
-  color: rgba(255, 255, 255, 0.9);
-  font-weight: 600;
+  color: rgba(255, 255, 255, 0.8);
+  font-weight: 500;
   font-size: 14px;
   text-decoration: none;
-  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.6);
 }
 .back:hover { color: #fff; text-decoration: underline; }
 
 .prose {
   max-width: 680px;
   margin: 0 auto;
-  background: rgba(12, 12, 14, 0.72);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  border: 0.5px solid rgba(255, 255, 255, 0.12);
-  border-radius: 18px;
-  padding: clamp(24px, 5vmin, 48px);
-  color: rgba(255, 255, 255, 0.88);
+  color: rgba(255, 255, 255, 0.82);
+  font-family: var(--sans);
   line-height: 1.65;
 }
 .prose h1 {
-  font-family: var(--display);
-  font-size: clamp(1.9rem, 5vw, 2.8rem);
+  font-size: clamp(1.9rem, 5vw, 2.6rem);
+  font-weight: 700;
   color: #fff;
   margin-bottom: 6px;
 }
 .prose h2 {
-  font-family: var(--display);
   font-size: clamp(1.15rem, 3vw, 1.4rem);
+  font-weight: 600;
   color: #fff;
   margin: 26px 0 8px;
 }
 .prose p, .prose ul { margin-bottom: 14px; }
 .prose ul { padding-left: 22px; }
 .prose li { margin-bottom: 8px; }
-.prose .updated { color: rgba(255, 255, 255, 0.55); font-size: 14px; margin-bottom: 18px; }
-.prose a { color: #6fb1ff; text-decoration: none; }
-.prose a:hover { text-decoration: underline; }
+.prose .updated { color: rgba(255, 255, 255, 0.5); font-size: 14px; margin-bottom: 18px; }
+.prose a { color: #6fb1ff; text-decoration: underline; }
+.prose a:hover { color: #9cc7ff; }
 .prose b { color: #fff; }
 
 .doc-footer {
   max-width: 680px;
   margin: clamp(24px, 4vmin, 40px) auto 0;
   text-align: center;
-  color: rgba(255, 255, 255, 0.7);
+  color: rgba(255, 255, 255, 0.6);
   font-size: 13px;
-  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.6);
 }
-.doc-footer .disclaimer { margin-top: 6px; color: rgba(255, 255, 255, 0.5); }
+.doc-footer .disclaimer { margin-top: 6px; color: rgba(255, 255, 255, 0.45); }

@@ -3,9 +3,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>All Day I Dream About Sports — World Cup 2026 live updates</title>
+  <title>All Day I Dream About Sports - World Cup Live Updates</title>
   <meta name="description" content="Live World Cup 2026 match alerts that drop right below your MacBook notch. Goals, cards, and celebrations for the teams you care about." />
   <meta name="theme-color" content="#000000" />
+  <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="assets/favicon-16.png" />
+  <link rel="apple-touch-icon" href="assets/favicon-256.png" />
 
   <meta property="og:title" content="All Day I Dream About Sports" />
   <meta property="og:description" content="Get World Cup 2026 live updates in a different way — right below your notch." />
@@ -23,41 +26,36 @@
     <div class="scrim" aria-hidden="true"></div>
 
     <!-- Notch on the top bezel -->
-    <div class="notch" aria-hidden="true"></div>
+    <div class="notch" aria-hidden="true"><span>Completely free</span></div>
 
-    <!-- Notifications dropping from the notch -->
+    <!-- Notch alerts: a notification, then its caption, alternating in place -->
     <section class="notify" aria-label="Live match alert preview">
-      <div class="pill-stage">
-        <div class="pill" id="pill">
-          <span class="pill-icon" id="pill-icon">⚽</span>
-          <span class="pill-text">
-            <span class="pill-title" id="pill-title">Goal — Messi 108'</span>
-            <span class="pill-sub" id="pill-sub">🇦🇷 Argentina 3–2 France 🇫🇷</span>
-          </span>
-        </div>
+      <div class="pill" id="pill">
+        <span class="pill-icon" id="pill-icon">⚽</span>
+        <span class="pill-text">
+          <span class="pill-title" id="pill-title">Goal — Messi 108'</span>
+          <span class="pill-sub" id="pill-sub">🇦🇷 Argentina 3–2 France 🇫🇷</span>
+        </span>
       </div>
-      <p class="caption" id="caption">Live match alerts, right below your notch — for the teams you care about.</p>
+      <p class="caption" id="caption" hidden>Live match alerts, right below your notch — for the teams you care about.</p>
     </section>
 
     <!-- Hero -->
     <section class="hero">
-      <p class="kicker">Get World Cup 2026 live updates in a different way</p>
-
       <h1 class="title" id="title" aria-label="All Day I Dream About Sports">
-        <span class="word">All</span>
-        <span class="word">Day</span>
-        <span class="word">I</span>
-        <span class="word">Dream</span>
-        <span class="word">About</span>
-        <span class="word">Sports</span>
+        <span class="line">All Day I</span>
+        <span class="line">Dream About</span>
+        <span class="line"><span class="word" id="flexword">Sports</span></span>
       </h1>
+
+      <p class="kicker">Get World Cup 2026 Live Updates —<br /><em class="kicker-alt">In A Different Way</em><span class="live-dot" aria-hidden="true"></span></p>
 
       <div class="actions">
         <a class="cta" id="download" href="https://download.alldayidreamaboutsports.com/latest">
           <span class="cta-mark"></span>
           Download Now for macOS
         </a>
-        <p class="soon">Coming Soon: Windows</p>
+        <a class="soon" href="mailto:support@alldayidreamaboutsports.com?subject=Waitlist%20for%20Windows">Coming Soon: Windows</a>
       </div>
     </section>
 
@@ -65,7 +63,7 @@
     <footer class="footer">
       <a href="privacy.html">Privacy Policy</a>
       <span class="sep" aria-hidden="true">/</span>
-      <a href="mailto:help@alldayidreamaboutsports.com">Contact Us</a>
+      <a href="mailto:support@alldayidreamaboutsports.com">Contact Us</a>
     </footer>
 
     <canvas class="confetti" id="confetti" aria-hidden="true"></canvas>

@@ -2,116 +2,11 @@
 
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-/* ── 1. Notifications dropping from the notch ───────────────────────────── */
-const pill = document.getElementById("pill");
-const pillIcon = document.getElementById("pill-icon");
-const pillTitle = document.getElementById("pill-title");
-const pillSub = document.getElementById("pill-sub");
-const caption = document.getElementById("caption");
-
-const alerts = [
-  {
-    icon: "⚽",
-    title: "Goal — Messi 108'",
-    sub: "🇦🇷 Argentina 3–2 France 🇫🇷",
-    caption: "Live match alerts, right below your notch — for the teams you care about.",
-    celebrate: false,
-  },
-  {
-    icon: "🎉",
-    title: "4.2M celebrations for Argentina this match",
-    sub: "",
-    caption: "Celebrate every goal live, together with other fans of your team.",
-    celebrate: true,
-  },
-  {
-    icon: "🟨",
-    title: "Yellow Card — Gonzalo Montiel 116'",
-    sub: "",
-    caption: "Get notified about every other moment in the match, too.",
-    celebrate: false,
-  },
-];
-
-let alertIndex = 0;
-
-function renderAlert(a) {
-  pillIcon.textContent = a.icon;
-  pillTitle.textContent = a.title;
-  pillSub.textContent = a.sub;
-  caption.textContent = a.caption;
-  if (a.celebrate) burstConfetti();
-}
-
-function showNextAlert() {
-  const a = alerts[alertIndex % alerts.length];
-  alertIndex++;
-
-  if (reduceMotion) {
-    renderAlert(a);
-    return;
-  }
-
-  // Float the current pill up, then drop the next one in.
-  pill.classList.remove("drop");
-  pill.classList.add("lift");
-  caption.style.opacity = "0";
-
-  setTimeout(() => {
-    renderAlert(a);
-    pill.classList.remove("lift");
-    pill.classList.add("drop");
-    caption.style.opacity = "1";
-  }, 320);
-}
-
-// First alert is already in the markup; animate it in, then cycle.
-if (!reduceMotion) pill.classList.add("drop");
-if (alerts[0].celebrate) burstConfetti();
-alertIndex = 1;
-setInterval(showNextAlert, 3600);
-
-/* ── 2. Title: every word gets a random style every 2s ──────────────────── */
-const words = Array.from(document.querySelectorAll("#title .word"));
-
-const caseClasses = ["case-upper", "case-lower", "case-title"];
-const fontClasses = ["font-sans", "font-serif", "font-display", "font-cursive"];
-const accentClasses = ["is-italic", "is-bold", "is-thin", "is-underline"];
-const ALL_CLASSES = [...caseClasses, ...fontClasses, ...accentClasses];
-
 function pick(arr) {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
-function randomStyleFor(word) {
-  word.classList.remove(...ALL_CLASSES);
-
-  const styles = [pick(caseClasses), pick(fontClasses)];
-
-  // A random subset of accents (0–2), cursive looks best left plain.
-  if (!word.classList.contains("font-cursive")) {
-    const accents = [...accentClasses].sort(() => Math.random() - 0.5);
-    const count = Math.floor(Math.random() * 3); // 0, 1, or 2
-    for (let i = 0; i < count; i++) styles.push(accents[i]);
-  }
-
-  word.classList.add(...styles);
-}
-
-function shuffleTitle() {
-  words.forEach((w) => {
-    w.style.opacity = "0.55";
-    setTimeout(() => {
-      randomStyleFor(w);
-      w.style.opacity = "1";
-    }, 90);
-  });
-}
-
-shuffleTitle();
-if (!reduceMotion) setInterval(shuffleTitle, 2000);
-
-/* ── 3. Confetti (mirrors the app's celebration burst) ──────────────────── */
+/* ── Confetti (defined first so anything can trigger it) ─────────────────── */
 const canvas = document.getElementById("confetti");
 const ctx = canvas.getContext("2d");
 let particles = [];
@@ -119,7 +14,7 @@ let rafId = null;
 let lastFrame = 0;
 
 const CONFETTI_COLORS = ["#ffd166", "#06d6a0", "#118ab2", "#ef476f", "#ffffff", "#ffa400", "#ff5d8f"];
-const GRAVITY = 900; // px/s², a bit stronger than native for a snappier web burst
+const GRAVITY = 900;
 
 function sizeCanvas() {
   const dpr = window.devicePixelRatio || 1;
@@ -129,6 +24,7 @@ function sizeCanvas() {
 }
 window.addEventListener("resize", sizeCanvas);
 
+// Burst from the bottom-left and bottom-right corners of the screen.
 function burstConfetti() {
   if (reduceMotion) return;
   sizeCanvas();
@@ -199,4 +95,139 @@ function tick(now) {
   }
 }
 
+/* ── 1. Notifications + caption drop / hold / float up as one group ──────── */
+const notify = document.querySelector(".notify");
+const pillIcon = document.getElementById("pill-icon");
+const pillTitle = document.getElementById("pill-title");
+const pillSub = document.getElementById("pill-sub");
+const caption = document.getElementById("caption");
+
+const alerts = [
+  {
+    icon: "⚽",
+    title: "Goal — Messi 108'",
+    sub: "🇦🇷 Argentina 3–2 France 🇫🇷",
+    caption: "Live match alerts, right below your notch — for the teams you care about.",
+    celebrate: true,
+  },
+  {
+    icon: "🟨",
+    title: "Yellow Card — Gonzalo Montiel 116'",
+    sub: "",
+    caption: "Get notified about every other moment in the match, too.",
+    celebrate: false,
+  },
+  {
+    icon: "🏁",
+    title: "Full-time — Argentina Won",
+    sub: "🇦🇷 Argentina 3–3 France 🇫🇷 · 4–2 pens",
+    caption: "From kickoff to the final whistle, never miss how it ends.",
+    celebrate: false,
+  },
+  {
+    icon: "🎉",
+    title: "4.2M celebrations for Argentina this match",
+    sub: "",
+    caption: "Celebrate every goal live, together with other fans of your team.",
+    celebrate: true,
+  },
+];
+
+// Timing (ms)
+const DROP_MS = 500;   // drop-in animation
+const HOLD_MS = 3000;  // stay on screen
+const LIFT_MS = 350;   // float-up animation
+const GAP_MS = 450;    // empty pause before the next one drops
+
+// Flatten alerts into an alternating sequence: pill, its caption, pill, ...
+const frames = [];
+alerts.forEach((a) => {
+  frames.push({ kind: "pill", icon: a.icon, title: a.title, sub: a.sub, celebrate: a.celebrate });
+  frames.push({ kind: "caption", text: a.caption });
+});
+
+let frameIndex = 0;
+
+function renderFrame(f) {
+  if (f.kind === "pill") {
+    caption.hidden = true;
+    pill.hidden = false;
+    pillIcon.textContent = f.icon;
+    pillTitle.textContent = f.title;
+    pillSub.textContent = f.sub;
+  } else {
+    pill.hidden = true;
+    caption.hidden = false;
+    caption.textContent = f.text;
+  }
+}
+
+function runCycle() {
+  const f = frames[frameIndex % frames.length];
+  frameIndex++;
+
+  // Swap content while the group is hidden (no crossfade overlap).
+  renderFrame(f);
+
+  notify.classList.remove("lift");
+  void notify.offsetWidth; // restart animation
+  notify.classList.add("drop");
+  if (f.celebrate) burstConfetti();
+
+  setTimeout(() => {
+    notify.classList.remove("drop");
+    void notify.offsetWidth;
+    notify.classList.add("lift");
+    setTimeout(runCycle, LIFT_MS + GAP_MS);
+  }, DROP_MS + HOLD_MS);
+}
+
+if (reduceMotion) {
+  notify.style.opacity = "1";
+  renderFrame(frames[0]);
+  if (frames[0].celebrate) burstConfetti();
+  setInterval(() => {
+    frameIndex++;
+    const f = frames[frameIndex % frames.length];
+    renderFrame(f);
+    if (f.celebrate) burstConfetti();
+  }, DROP_MS + HOLD_MS + LIFT_MS + GAP_MS);
+} else {
+  runCycle();
+}
+
+/* ── 2. Title: only "Sports" restyles, every second ─────────────────────── */
+const flexWord = document.getElementById("flexword");
+
+const caseClasses = ["case-upper", "case-lower", "case-title"];
+const fontClasses = ["font-sans", "font-serif", "font-display", "font-cursive"];
+const accentClasses = ["is-italic", "is-bold", "is-thin", "is-underline"];
+const ALL_CLASSES = [...caseClasses, ...fontClasses, ...accentClasses];
+
+function applyRandomStyle(w) {
+  w.classList.remove(...ALL_CLASSES);
+  const styles = [pick(caseClasses), pick(fontClasses)];
+  // Cursive reads best on its own; otherwise add 0–2 random accents.
+  if (!styles.includes("font-cursive")) {
+    const accents = [...accentClasses].sort(() => Math.random() - 0.5);
+    const count = Math.floor(Math.random() * 3); // 0, 1, or 2
+    for (let i = 0; i < count; i++) styles.push(accents[i]);
+  }
+  w.classList.add(...styles);
+}
+
+function startTitle() {
+  applyRandomStyle(flexWord);
+  if (!reduceMotion) {
+    setInterval(() => applyRandomStyle(flexWord), 1000);
+  }
+}
+
+if (document.fonts && document.fonts.ready) {
+  document.fonts.ready.then(startTitle);
+} else {
+  window.addEventListener("load", startTitle);
+}
+
+/* ── 3. Confetti on download click ──────────────────────────────────────── */
 document.getElementById("download").addEventListener("click", () => burstConfetti());
