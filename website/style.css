@@ -95,12 +95,11 @@ a { color: inherit; text-decoration: none; }
   justify-content: space-between;
   gap: 18px;
   padding: clamp(16px, 2.2vw, 26px) var(--gutter);
-  transition: background .4s var(--ease), border-color .4s var(--ease);
-  border-bottom: 1px solid transparent;
+  transition: background .4s var(--ease);
 }
 .nav.scrolled {
-  background: rgba(0,0,0,0.8);
-  border-bottom: 1px solid var(--hairline);
+  /* a soft tint that fades to nothing at the bottom — no hard separating line */
+  background: linear-gradient(to bottom, rgba(0,0,0,0.82) 0%, rgba(0,0,0,0.5) 55%, rgba(0,0,0,0) 100%);
 }
 
 .brand { display: inline-flex; align-items: center; gap: 11px; min-width: 0; }
@@ -324,6 +323,7 @@ section.panel {
 .pill-dot.red { background: var(--red); box-shadow: 0 0 0 4px rgba(255,59,82,0.12); }
 .pill-dot.full { background: var(--lichen); box-shadow: 0 0 0 4px rgba(31,170,138,0.12); }
 .pill-dot.fixture { background: var(--plum-soft); box-shadow: 0 0 0 4px rgba(165,133,255,0.12); }
+.pill-dot.sub { background: var(--plum-soft); box-shadow: 0 0 0 4px rgba(165,133,255,0.12); }
 .pill-dot.pen { background: var(--bone); box-shadow: 0 0 0 4px rgba(255,255,255,0.08); }
 .pill-body { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 3px; }
 .pill-title { font-size: 13.5px; font-weight: 600; letter-spacing: 0.01em; color: var(--bone); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -340,6 +340,7 @@ section.panel {
 .chip:hover { border-color: var(--bone); color: var(--bone); }
 .chip .d { display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 7px; vertical-align: middle; }
 .chip .d.plum { background: var(--plum); }
+.chip .d.violet { background: var(--plum-soft); }
 .chip .d.amber { background: var(--amber); }
 .chip .d.red { background: var(--red); }
 .chip .d.green { background: var(--lichen); }
@@ -368,9 +369,9 @@ section.panel {
 /* ════════════════════════ FOOTER ════════════════════════════════════════ */
 .footer {
   position: relative; z-index: 2;
-  border-top: 1px solid var(--hairline);
-  padding: clamp(34px, 5vw, 52px) var(--gutter);
-  background: rgba(0,0,0,0.8);
+  /* tint fades up from the page — merges with the sections, no separating line */
+  padding: clamp(64px, 9vw, 100px) var(--gutter) clamp(34px, 5vw, 52px);
+  background: linear-gradient(to bottom, rgba(0,0,0,0) 0%, rgba(0,0,0,0.55) 45%, rgba(0,0,0,0.82) 100%);
 }
 .footer-inner {
   max-width: var(--maxw); margin: 0 auto;

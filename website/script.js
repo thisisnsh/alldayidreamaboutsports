@@ -167,10 +167,10 @@ for (let i = 0; i < N; i++) {
 }
 
 let currentShape = "soccer";
-// morphBurst spikes to 1 on every shape change and decays back to 0, so the
-// triangles expand outward and then collapse into the new figure.
-let morphBurst = 0;
-function morphTo(name) { if (name !== currentShape) { currentShape = name; setTargets(name); if (!reduceMotion) morphBurst = 1; } }
+// Shapes change by simply re-pointing every particle at its new target; the
+// per-frame ease (staggered per particle, see frame()) glides each triangle
+// across so the figure rearranges in place — no expand-and-collapse burst.
+function morphTo(name) { if (name !== currentShape) { currentShape = name; setTargets(name); } }
 
 /* ═══════════════════════════════════════════════════════════════════════════
    2. THREE.JS SCENE
@@ -291,23 +291,28 @@ function frame(now) {
   if (!reduceMotion) yaw += dt * 0.16;
 
   density += (densityTarget - density) * 0.06;
+  // Only beat once the ball has fully settled into its smallest (dense) scale —
+  // never while it's still shrinking in.
+  const settled = Math.abs(density - densityTarget) < 0.004;
   let pulse = 1;
-  if (scene_.pulse && !reduceMotion) {
+  if (scene_.pulse && settled && !reduceMotion) {
     const ph = (now % 1500) / 1500;                       // heartbeat every 1.5s
     pulse = 1 + 0.085 * (Math.exp(-7 * ph) + 0.55 * Math.exp(-7 * Math.abs(ph - 0.22)));
   }
   const breathe = reduceMotion ? 0 : Math.sin(now / 2600) * 0.012;
-  morphBurst += (0 - morphBurst) * 0.055;               // decays after each morph
-  const Reff = R * density * pulse * (1 + breathe) * (1 + morphBurst * 0.6);
+  const Reff = R * density * pulse * (1 + breathe);
   const magR = Reff * 0.6, magR2 = magR * magR;
 
   _e.set(pitch, yaw, 0); _qRot.setFromEuler(_e);
   if (magOn) updateMouseWorld();
 
   for (let i = 0; i < N; i++) {
-    lx[i] += (txp[i] - lx[i]) * EASE;
-    ly[i] += (typ[i] - ly[i]) * EASE;
-    lz[i] += (tzp[i] - lz[i]) * EASE;
+    // Stagger the ease per particle so a morph reads as a flowing rearrangement
+    // (some triangles slide ahead, some lag) rather than a uniform snap.
+    const ei = EASE * (0.55 + 0.9 * por[i]);
+    lx[i] += (txp[i] - lx[i]) * ei;
+    ly[i] += (typ[i] - ly[i]) * ei;
+    lz[i] += (tzp[i] - lz[i]) * ei;
 
     _v.set(lx[i], ly[i], lz[i]).applyQuaternion(_qRot).multiplyScalar(Reff);
 
@@ -427,6 +432,7 @@ const ALERTS = [
   { cls: "yellow", title: "Yellow · Enzo Fernández", sub: "Argentina", time: "45+7" },
   { cls: "full", title: "Half time", sub: "Argentina 2–0 France", time: "HT" },
   { cls: "yellow", title: "Yellow · Adrien Rabiot", sub: "France", time: "55'" },
+  { cls: "sub", title: "Sub · Kolo Muani on", sub: "France · Giroud off", time: "41'" },
   { cls: "goal", title: "Goal · Kylian Mbappé", sub: "Argentina 2–1 · penalty", time: "80'" },
   { cls: "goal", title: "Goal · Kylian Mbappé", sub: "Argentina 2–2", time: "81'" },
   { cls: "yellow", title: "Yellow · Marcus Thuram", sub: "France", time: "87'" },
@@ -434,6 +440,7 @@ const ALERTS = [
   { cls: "yellow", title: "Yellow · Marcos Acuña", sub: "Argentina", time: "90+8" },
   { cls: "full", title: "Full time", sub: "Argentina 2–2 France", time: "FT" },
   { cls: "fixture", title: "Extra time begins", sub: "Argentina 2–2 France", time: "91'" },
+  { cls: "sub", title: "Sub · Dybala on", sub: "Argentina · Di María off", time: "102'" },
   { cls: "goal", title: "Goal · Lionel Messi", sub: "Argentina 3–2", time: "108'" },
   { cls: "yellow", title: "Yellow · Leandro Paredes", sub: "Argentina", time: "114'" },
   { cls: "yellow", title: "Yellow · Gonzalo Montiel", sub: "Argentina", time: "116'" },
