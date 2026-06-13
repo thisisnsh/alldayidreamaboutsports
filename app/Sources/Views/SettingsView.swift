@@ -45,11 +45,15 @@ struct SettingsView: View {
             ScrollView {
                 VStack(spacing: 14) {
                     #if DEV_BACKEND
-                    Text("🧪 dev session — fake backend, hardcoded data, auto events")
+                    Text("🧪 dev session — fake backend, hardcoded data, scripted demo")
                         .font(.caption2)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 4)
                         .background(Capsule().fill(.yellow.opacity(0.25)))
+
+                    SettingsCard("Developer") {
+                        DemoControls()
+                    }
                     #endif
 
                     SettingsCard("Events") {
@@ -257,6 +261,38 @@ extension MatchEventType {
         }
     }
 }
+
+#if DEV_BACKEND
+/// Hand controls for the scripted demo timeline (DevConfig.timeline).
+private struct DemoControls: View {
+    @ObservedObject private var engine = DemoEngine.shared
+
+    var body: some View {
+        HStack {
+            Text(engine.isPlaying
+                ? "Playing — beat \(engine.firedCount)/\(DevConfig.timeline.count)"
+                : "Idle")
+                .font(.system(size: 12))
+            Spacer()
+            Circle()
+                .fill(engine.isPlaying ? .green : .secondary)
+                .frame(width: 8, height: 8)
+        }
+        HStack(spacing: 8) {
+            Button("Restart") { DemoEngine.shared.restart() }
+                .buttonStyle(.cardButton)
+            Button(engine.isPlaying ? "Stop" : "Play") {
+                engine.isPlaying ? DemoEngine.shared.stop() : DemoEngine.shared.start()
+            }
+            .buttonStyle(.cardButton)
+        }
+        Text("Deterministic timeline from Dev/DevConfig.swift — the same events fire at the same seconds every run.")
+            .font(.caption)
+            .opacity(0.6)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+}
+#endif
 
 /// Same approach as aithing-mac's CheckForUpdatesButton: observe canCheckForUpdates.
 struct CheckForUpdatesButton: View {

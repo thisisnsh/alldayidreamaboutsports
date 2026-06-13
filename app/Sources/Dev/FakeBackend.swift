@@ -5,7 +5,17 @@ import Foundation
 // Fake service layer for development: compiled only when DEV_BACKEND is set
 // (Debug builds). GETs return seeded hardcoded data; POSTs mutate that data in
 // memory, so round-trips behave like the real system — without touching the
-// network, your API-Football quota, or Google sign-in.
+// network, your API-Football quota, or Google sign-in. Each parallel match's
+// score is walked through DevConfig.timeline by DemoEngine, so what the popover
+// shows always matches the events that have fired.
+
+/// Per-match live state the demo timeline mutates.
+struct LiveMatchState {
+    var homeGoals = 0
+    var awayGoals = 0
+    var minute: Int?
+    var status = "SCHEDULED"
+}
 
 /// Shared mutable state behind all the fakes.
 @MainActor
@@ -17,34 +27,57 @@ final class FakeStore {
         settings: PrefSettings(theme: .system, notifications: ["goals": true])
     )
 
-    /// Seeded so the popover/counts have something to show immediately.
-    var celebrations: [Int: [String: Int]] = [
-        1001: ["BRA": 2_340_000, "USA": 412_000],
-    ]
+    // Live state per match, keyed by fixture id. DemoEngine walks each one
+    // through the script so every scoreboard stays in step with its pills.
+    // `eventSeq` is monotonic (never reset) so replays keep producing fresh
+    // eventIds that EventRouter won't dedupe away.
+    var states: [Int: LiveMatchState] = FakeStore.freshStates()
+    var eventSeq = 0
 
-    let liveFixture = Fixture(
-        fixtureId: 1001, leagueId: 1,
-        kickoffISO: ISO8601DateFormatter().string(from: Date().addingTimeInterval(-73 * 60)),
-        status: "LIVE", minute: 73,
-        home: ScoreboardTeam(code: "BRA", name: "Brazil", goals: 2),
-        away: ScoreboardTeam(code: "USA", name: "United States", goals: 1)
-    )
+    /// Celebration tap totals per fixture; surges in the timeline overwrite
+    /// this and a user tapping in the app adds to it.
+    var celebrations: [Int: [String: Int]] = [:]
 
-    var todayFixtures: [Fixture] {
-        [
-            liveFixture,
-            Fixture(fixtureId: 1002, leagueId: 1,
-                    kickoffISO: ISO8601DateFormatter().string(from: Date().addingTimeInterval(2 * 3600)),
-                    status: "SCHEDULED", minute: nil,
-                    home: ScoreboardTeam(code: "GER", name: "Germany", goals: 0),
-                    away: ScoreboardTeam(code: "JPN", name: "Japan", goals: 0)),
-            Fixture(fixtureId: 1003, leagueId: 1,
-                    kickoffISO: ISO8601DateFormatter().string(from: Date().addingTimeInterval(-5 * 3600)),
-                    status: "FINISHED", minute: 90,
-                    home: ScoreboardTeam(code: "ARG", name: "Argentina", goals: 3),
-                    away: ScoreboardTeam(code: "MEX", name: "Mexico", goals: 0)),
-        ]
+    private static func freshStates() -> [Int: LiveMatchState] {
+        Dictionary(uniqueKeysWithValues: DemoFixture.demoMatches.map { ($0.id, LiveMatchState()) })
     }
+
+    /// Back to kickoff-minus-one: every match 0–0, not started, no
+    /// celebrations. Called at the top of each play-through. `eventSeq`
+    /// deliberately survives so replayed events still look new.
+    func resetMatches() {
+        states = FakeStore.freshStates()
+        celebrations = [:]
+    }
+
+    func addGoal(_ side: DemoSide, in id: Int) {
+        if side == .home { states[id]?.homeGoals += 1 } else { states[id]?.awayGoals += 1 }
+    }
+
+    func removeGoal(_ side: DemoSide, in id: Int) {
+        guard var state = states[id] else { return }
+        if side == .home { state.homeGoals = max(state.homeGoals - 1, 0) }
+        else { state.awayGoals = max(state.awayGoals - 1, 0) }
+        states[id] = state
+    }
+
+    /// A fixture rebuilt from its current demo state — kickoff is back-dated
+    /// to match the on-screen minute.
+    func fixture(_ def: DemoFixture) -> Fixture {
+        let s = states[def.id] ?? LiveMatchState()
+        let kickoff = Date().addingTimeInterval(-Double(s.minute ?? 0) * 60)
+        return Fixture(
+            fixtureId: def.id, leagueId: def.leagueId,
+            kickoffISO: ISO8601DateFormatter().string(from: kickoff),
+            status: s.status, minute: s.minute,
+            home: ScoreboardTeam(code: def.home.code, name: def.home.name, goals: s.homeGoals),
+            away: ScoreboardTeam(code: def.away.code, name: def.away.name, goals: s.awayGoals)
+        )
+    }
+
+    var allFixtures: [Fixture] { DemoFixture.demoMatches.map(fixture) }
+    var liveFixtures: [Fixture] { allFixtures.filter { $0.isLive } }
+    var todayFixtures: [Fixture] { allFixtures }
 }
 
 @MainActor
@@ -93,7 +126,7 @@ final class FakeBackendAPI: BackendAPI {
 @MainActor
 final class FakeScores: ScoresProviding {
     func fetchTeams() async throws -> [Team] { TeamCatalog.fallback }
-    func fetchLive() async throws -> [Fixture] { [FakeStore.shared.liveFixture] }
+    func fetchLive() async throws -> [Fixture] { FakeStore.shared.liveFixtures }
     func fetchTodayFixtures() async throws -> [Fixture] { FakeStore.shared.todayFixtures }
     func fetchCelebrations(fixtureId: Int) async throws -> [String: Int] {
         // Production fetches this from the CDN after the batched POST lands
@@ -106,118 +139,140 @@ final class FakeScores: ScoresProviding {
     }
 }
 
-/// Buttons in Settings → Developer. Simulates the FCM pushes the backend would
-/// send, exercising the full EventRouter → OverlayManager pipeline.
+/// Plays DevConfig.timeline: a fixed list of (seconds-after-start → event)
+/// beats, fired through the real EventRouter → OverlayManager pipeline exactly
+/// as an FCM push would be. Deterministic — same show, same timing, every run.
+/// Settings → Developer drives it by hand (Play / Stop / Restart).
 @MainActor
-enum DevSimulator {
-    private static var goalCount = 2
+final class DemoEngine: ObservableObject {
+    static let shared = DemoEngine()
 
-    private static func base(_ type: String, team: String?, player: String?, minute: Int) -> [String: Any] {
-        let fixture = FakeStore.shared.liveFixture
-        var data: [String: Any] = [
+    /// Whether the timeline is currently playing.
+    @Published private(set) var isPlaying = false
+    /// How many beats have fired in the current play-through (for the UI).
+    @Published private(set) var firedCount = 0
+
+    private var task: Task<Void, Never>?
+
+    /// Begin playing from the top. No-op if already playing.
+    func start() {
+        guard !isPlaying else { return }
+        isPlaying = true
+        task = Task { @MainActor in
+            repeat {
+                await playThrough()
+            } while DevConfig.loops && !Task.isCancelled
+            isPlaying = false
+            task = nil
+        }
+        NSLog("🧪 DemoEngine: playing %d-beat timeline (loops: %@)",
+              DevConfig.timeline.count, DevConfig.loops ? "yes" : "no")
+    }
+
+    /// Stop wherever we are and leave the scoreboard as-is.
+    func stop() {
+        task?.cancel()
+        task = nil
+        isPlaying = false
+        NSLog("🧪 DemoEngine: stopped")
+    }
+
+    /// Reset every match to 0–0 and play the whole timeline again.
+    func restart() {
+        stop()
+        FakeStore.shared.resetMatches()
+        firedCount = 0
+        Task { await AppSession.shared.refreshFixtures() }
+        start()
+    }
+
+    private func playThrough() async {
+        FakeStore.shared.resetMatches()
+        firedCount = 0
+        let start = Date()
+        for moment in DevConfig.timeline {
+            let wait = start.addingTimeInterval(moment.at).timeIntervalSinceNow
+            if wait > 0 { try? await Task.sleep(for: .seconds(wait)) }
+            if Task.isCancelled { return }
+            fire(moment)
+            firedCount += 1
+        }
+    }
+
+    private func fire(_ moment: DemoMoment) {
+        let store = FakeStore.shared
+        let def = moment.fixture
+        let id = def.id
+        switch moment.action {
+        case .kickoff:
+            store.states[id]?.status = "LIVE"
+            store.states[id]?.minute = moment.minute
+            push(.kickoff, def, minute: moment.minute)
+        case let .goal(side, player):
+            store.states[id]?.status = "LIVE"
+            store.states[id]?.minute = moment.minute
+            store.addGoal(side, in: id)
+            push(.goal, def, side: side, player: player, minute: moment.minute)
+        case let .goalDisallowed(side):
+            store.states[id]?.minute = moment.minute
+            store.removeGoal(side, in: id)
+            push(.goalCancelled, def, side: side, minute: moment.minute)
+        case let .yellowCard(side, player):
+            store.states[id]?.minute = moment.minute
+            push(.yellowCard, def, side: side, player: player, minute: moment.minute)
+        case let .redCard(side, player):
+            store.states[id]?.minute = moment.minute
+            push(.redCard, def, side: side, player: player, minute: moment.minute)
+        case .halfTime:
+            store.states[id]?.status = "HALF_TIME"
+            store.states[id]?.minute = moment.minute
+            push(.halfTime, def, minute: moment.minute)
+        case .fullTime:
+            store.states[id]?.status = "FINISHED"
+            store.states[id]?.minute = moment.minute
+            push(.fullTime, def, minute: moment.minute)
+        case .penaltyShootout:
+            store.states[id]?.minute = moment.minute
+            push(.penaltyShootout, def, minute: moment.minute)
+        case let .celebrationSurge(totals):
+            store.celebrations[id] = totals
+            EventRouter.shared.handlePush([
+                "kind": "celebration_count",
+                "fixtureId": String(id),
+                "totals": jsonString(totals),
+            ])
+        }
+    }
+
+    /// Build the all-strings FCM data payload the backend publishes for a
+    /// match event and hand it to the router. The scoreline comes from the
+    /// store, which `fire` already updated.
+    private func push(_ type: MatchEventType, _ def: DemoFixture,
+                      side: DemoSide? = nil, player: String? = nil, minute: Int) {
+        let store = FakeStore.shared
+        let s = store.states[def.id] ?? LiveMatchState()
+        let teamCode = side.map { $0 == .home ? def.home.code : def.away.code }
+        let data: [String: Any] = [
             "kind": "match_event",
-            "eventId": "dev:\(type):\(Date().timeIntervalSince1970)",
-            "type": type,
-            "fixtureId": String(fixture.fixtureId),
-            "leagueId": "1",
-            "homeTeam": fixture.home.code, "awayTeam": fixture.away.code,
-            "homeName": fixture.home.name, "awayName": fixture.away.name,
-            "homeGoals": String(goalCount), "awayGoals": "1",
+            "eventId": "demo:\(def.id):\(type.rawValue):\(store.eventSeq)",
+            "type": type.rawValue,
+            "fixtureId": String(def.id),
+            "leagueId": String(def.leagueId),
+            "homeTeam": def.home.code, "awayTeam": def.away.code,
+            "homeName": def.home.name, "awayName": def.away.name,
+            "homeGoals": String(s.homeGoals), "awayGoals": String(s.awayGoals),
             "minute": String(minute),
+            "teamCode": teamCode ?? "",
+            "player": player ?? "",
         ]
-        data["teamCode"] = team ?? ""
-        data["player"] = player ?? ""
-        return data
+        store.eventSeq += 1
+        EventRouter.shared.handlePush(data)
     }
 
-    /// Goal for the user's first followed team (so the full celebration runs).
-    static func fanGoal() {
-        goalCount += 1
-        let team = AppSession.shared.prefs.footballTeams.first ?? "BRA"
-        EventRouter.shared.handlePush(base("GOAL", team: team, player: "Vinícius Jr", minute: 73))
-    }
-
-    static func opponentGoal() {
-        EventRouter.shared.handlePush(base("GOAL", team: "USA", player: "Pulisic", minute: 74))
-    }
-
-    static func yellowCard() {
-        EventRouter.shared.handlePush(base("YELLOW_CARD", team: "USA", player: "Adams", minute: 38))
-    }
-
-    static func varCancelled() {
-        goalCount = max(goalCount - 1, 0)
-        let team = AppSession.shared.prefs.footballTeams.first ?? "BRA"
-        EventRouter.shared.handlePush(base("GOAL_CANCELLED", team: team, player: nil, minute: 75))
-    }
-
-    static func fullTime() {
-        EventRouter.shared.handlePush(base("FULL_TIME", team: nil, player: nil, minute: 90))
-    }
-
-    static func countPush() {
-        let fixture = FakeStore.shared.liveFixture
-        EventRouter.shared.handlePush([
-            "kind": "celebration_count",
-            "fixtureId": String(fixture.fixtureId),
-            "totals": "{\"BRA\": \(Int.random(in: 2_000_000...9_000_000)), \"USA\": 412000}",
-        ])
-    }
-
-    /// Several events in the same instant — exercises the notch stack
-    /// (real-time arrival, cap, oldest-leaves-early) and the celebration
-    /// queue in one shot.
-    static func burst() {
-        fanGoal()
-        yellowCard()
-        opponentGoal()
-        fullTime()
-    }
-
-    // MARK: Auto loop — random events on a timer (knobs in DevConfig)
-
-    private static var autoTimer: Timer?
-    static private(set) var autoLoopRunning = false
-
-    static func startAutoLoop() {
-        guard !autoLoopRunning else { return }
-        autoLoopRunning = true
-        scheduleNext(after: DevConfig.firstAutoEventAfterSeconds)
-        NSLog("🧪 DevSimulator: auto events ON (first in %.0fs, then every %.0f–%.0fs)",
-              DevConfig.firstAutoEventAfterSeconds,
-              DevConfig.autoEventIntervalSeconds.lowerBound,
-              DevConfig.autoEventIntervalSeconds.upperBound)
-    }
-
-    static func stopAutoLoop() {
-        autoTimer?.invalidate()
-        autoTimer = nil
-        autoLoopRunning = false
-        NSLog("🧪 DevSimulator: auto events OFF")
-    }
-
-    private static func scheduleNext(after seconds: Double? = nil) {
-        let delay = seconds ?? Double.random(in: DevConfig.autoEventIntervalSeconds)
-        autoTimer?.invalidate()
-        autoTimer = Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { _ in
-            Task { @MainActor in
-                guard autoLoopRunning else { return }
-                fireWeightedRandomEvent()
-                scheduleNext()
-            }
-        }
-    }
-
-    private static func fireWeightedRandomEvent() {
-        let total = DevConfig.autoEventWeights.reduce(0) { $0 + $1.weight }
-        var roll = Int.random(in: 0 ..< max(total, 1))
-        for entry in DevConfig.autoEventWeights {
-            roll -= entry.weight
-            if roll < 0 {
-                entry.fire()
-                return
-            }
-        }
+    private func jsonString(_ totals: [String: Int]) -> String {
+        guard let data = try? JSONEncoder().encode(totals),
+              let string = String(data: data, encoding: .utf8) else { return "{}" }
+        return string
     }
 }
 #endif

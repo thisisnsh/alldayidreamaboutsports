@@ -35,11 +35,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ControlPlane.shared.start()
 
         #if DEV_BACKEND
-        // Bypassed sign-in means we're already in; fire fake events on a
-        // timer so animations can be eyeballed hands-free. Don't register a
-        // Debug build as a login item.
-        if DevConfig.autoEventsEnabled {
-            DevSimulator.startAutoLoop()
+        // Bypassed sign-in means we're already in; play the deterministic
+        // demo timeline (DevConfig.timeline) so animations can be eyeballed
+        // hands-free. Don't register a Debug build as a login item.
+        if DevConfig.autostart {
+            DemoEngine.shared.start()
         }
         #else
         LaunchAtLogin.registerByDefault()

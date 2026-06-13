@@ -2,8 +2,12 @@
 import Foundation
 
 // ╔══════════════════════════════════════════════════════════════════════╗
-// ║  DEV KNOBS — edit, ⌘R, done. Compiled only into Debug builds.        ║
-// ║  Everything the dev build shows comes from here + FakeBackend.swift. ║
+// ║  DEMO SCRIPT — a deterministic show you can rehearse and present.     ║
+// ║  Edit the timeline below, ⌘R, and the SAME events fire at the SAME    ║
+// ║  seconds with the SAME scoreline every run — no randomness. Several   ║
+// ║  matches run in parallel; each moment names which one it belongs to.  ║
+// ║  Compiled only into Debug (DEV_BACKEND) builds; see DemoEngine in     ║
+// ║  FakeBackend.swift for the runtime that plays it.                     ║
 // ╚══════════════════════════════════════════════════════════════════════╝
 
 @MainActor
@@ -17,31 +21,156 @@ enum DevConfig {
         photoURL: nil
     )
 
-    /// Teams you're a fan of. First one is who DevSimulator scores goals for
-    /// (full celebration animation). FIFA trigram codes — see TeamCatalog.
-    static let fanTeams = ["BRA", "ARG", "ENG", "JPN", "FRA"]
+    /// Teams you follow. A goal by ANY of these runs the full celebration;
+    /// everyone else's goals are notch pills. Must cover both sides of the
+    /// `braArg` match below (you're a fan of both teams there) and the
+    /// followed side of every other match.
+    static let fanTeams = ["BRA", "ARG", "ENG", "FRA"]
 
-    /// Fire random match events on a timer so animations appear hands-free.
-    /// Flip off (or use the Settings 🧪 toggle) when you'd rather drive
-    /// events with the Settings buttons.
-    static let autoEventsEnabled = true
+    /// Start the timeline automatically at launch. Turn off to drive the
+    /// show by hand from Settings → Developer (Play / Restart / Stop).
+    static let autostart = true
 
-    /// Seconds after launch until the first auto event.
-    static let firstAutoEventAfterSeconds: Double = 2
+    /// Replay from the top once the timeline finishes — good for a looping
+    /// kiosk demo. Off = play through once and stop.
+    static let loops = true
 
-    /// Gap between auto events (a random value in this range each time).
-    static let autoEventIntervalSeconds: ClosedRange<Double> = 2 ... 4
+    // ── THE TIMELINE ────────────────────────────────────────────────────
+    // `at`      seconds after the demo starts (deterministic — not random).
+    // fixture   which parallel match the event belongs to (.braArg, …).
+    // `minute`  match clock shown in the pill.
+    // Scores per match are tracked automatically as goals fire, so you never
+    // hand-maintain a scoreline: a `.goal(.home)` makes it 1-0, a later
+    // `.goalDisallowed(.home)` puts it back. Two (or three) moments sharing
+    // the same `at` fire together — that's how you stage overlaps across
+    // matches to stress the notch stack (real-time arrival, cap,
+    // oldest-leaves-early) and the celebration queue.
+    static let timeline: [DemoMoment] = [
+        // Three matches kick off seconds apart.
+        DemoMoment(at: 0,  .braArg, minute: 1,  .kickoff),
+        DemoMoment(at: 1,  .engUsa, minute: 1,  .kickoff),
+        DemoMoment(at: 2,  .fraGer, minute: 1,  .kickoff),
 
-    /// Relative weights for which event the auto loop fires.
-    /// fanGoal = full ball-drop celebration; the rest are notch pills.
-    static let autoEventWeights: [(weight: Int, fire: @MainActor () -> Void)] = [
-        (5, DevSimulator.fanGoal),
-        (1, DevSimulator.opponentGoal),
-        (1, DevSimulator.yellowCard),
-        (1, DevSimulator.varCancelled),
-        (1, DevSimulator.countPush),
-        (1, DevSimulator.fullTime),
-        (1, DevSimulator.burst), // 4 events at once — stack stress test
+        // BRA open the scoring — full celebration (you follow BRA).
+        DemoMoment(at: 5,  .braArg, minute: 9,  .goal(.home, player: "Vinícius Jr")),
+
+        // OVERLAP: England and France score at the same instant — two pills
+        // stack in the notch together (only the followed side of each).
+        DemoMoment(at: 9,  .engUsa, minute: 14, .goal(.home, player: "Kane")),
+        DemoMoment(at: 9,  .fraGer, minute: 15, .goal(.home, player: "Mbappé")),
+
+        // ARG equalise — you're a fan of BOTH teams in this match, so an
+        // away goal here ALSO runs the full celebration.
+        DemoMoment(at: 13, .braArg, minute: 22, .goal(.away, player: "Messi")),
+
+        DemoMoment(at: 16, .engUsa, minute: 26, .yellowCard(.away, player: "Adams")),
+        DemoMoment(at: 18, .fraGer, minute: 30, .goal(.away, player: "Musiala")), // opponent → pill only
+
+        // TRIPLE OVERLAP: a goal in every match at the same second.
+        DemoMoment(at: 22, .braArg, minute: 35, .goal(.home, player: "Rodrygo")),
+        DemoMoment(at: 22, .engUsa, minute: 35, .goal(.away, player: "Pulisic")), // opponent → pill only
+        DemoMoment(at: 22, .fraGer, minute: 36, .goal(.home, player: "Griezmann")),
+
+        DemoMoment(at: 26, .braArg, minute: 37, .goalDisallowed(.home)),          // VAR pulls BRA's 3rd back
+
+        // Half-times roll in close together.
+        DemoMoment(at: 30, .braArg, minute: 45, .halfTime),
+        DemoMoment(at: 31, .engUsa, minute: 45, .halfTime),
+        DemoMoment(at: 32, .fraGer, minute: 45, .halfTime),
+
+        // Celebration surges (tap counts) for the followed matches.
+        DemoMoment(at: 36, .braArg, minute: 45, .celebrationSurge(["BRA": 3_200_000, "ARG": 2_800_000])),
+        DemoMoment(at: 37, .engUsa, minute: 45, .celebrationSurge(["ENG": 1_900_000, "USA": 540_000])),
+
+        // Second half.
+        DemoMoment(at: 41, .fraGer, minute: 52, .goal(.home, player: "Dembélé")),
+        DemoMoment(at: 45, .engUsa, minute: 61, .redCard(.away, player: "Robinson")),
+
+        // OVERLAP in one match: ARG go ahead and BRA reply in the same
+        // instant — two full celebrations queued back to back.
+        DemoMoment(at: 49, .braArg, minute: 70, .goal(.away, player: "Álvarez")),
+        DemoMoment(at: 49, .braArg, minute: 70, .goal(.home, player: "Raphinha")),
+
+        DemoMoment(at: 53, .engUsa, minute: 82, .goal(.home, player: "Bellingham")),
+        DemoMoment(at: 56, .fraGer, minute: 88, .celebrationSurge(["FRA": 4_100_000, "GER": 770_000])),
+
+        // Full-times, staggered; France go to penalties first.
+        DemoMoment(at: 60, .braArg, minute: 90, .fullTime),
+        DemoMoment(at: 61, .engUsa, minute: 90, .fullTime),
+        DemoMoment(at: 63, .fraGer, minute: 90, .penaltyShootout),
+        DemoMoment(at: 67, .fraGer, minute: 90, .fullTime),
     ]
+}
+
+// MARK: - Timeline vocabulary
+
+/// A team in a demo match, named once so events can refer to a side.
+struct DemoTeam {
+    let code: String
+    let name: String
+}
+
+/// One match the demo runs. Several play in parallel — see `demoMatches`.
+struct DemoFixture {
+    let id: Int
+    let leagueId: Int
+    let home: DemoTeam
+    let away: DemoTeam
+}
+
+extension DemoFixture {
+    /// Fan of BOTH sides — every goal here is a full celebration.
+    static let braArg = DemoFixture(
+        id: 1001, leagueId: 1,
+        home: DemoTeam(code: "BRA", name: "Brazil"),
+        away: DemoTeam(code: "ARG", name: "Argentina")
+    )
+    /// Fan of the home side only; USA is the opponent (pills).
+    static let engUsa = DemoFixture(
+        id: 1002, leagueId: 1,
+        home: DemoTeam(code: "ENG", name: "England"),
+        away: DemoTeam(code: "USA", name: "United States")
+    )
+    /// Fan of the home side only; Germany is the opponent (pills).
+    static let fraGer = DemoFixture(
+        id: 1003, leagueId: 1,
+        home: DemoTeam(code: "FRA", name: "France"),
+        away: DemoTeam(code: "GER", name: "Germany")
+    )
+
+    /// Every match the demo runs in parallel (drives the live scoreboard).
+    static let demoMatches = [braArg, engUsa, fraGer]
+}
+
+/// Which team an action belongs to, relative to its match's fixture.
+enum DemoSide { case home, away }
+
+/// What happens at a moment. The engine turns each into the same FCM-shaped
+/// push the backend would send, and keeps that match's scoreboard in step.
+enum DemoAction {
+    case kickoff
+    case goal(DemoSide, player: String)
+    case goalDisallowed(DemoSide)          // VAR — undoes that side's last goal
+    case yellowCard(DemoSide, player: String)
+    case redCard(DemoSide, player: String)
+    case halfTime
+    case fullTime
+    case penaltyShootout
+    case celebrationSurge([String: Int])   // a celebration_count push (taps by team)
+}
+
+/// One scripted beat: fire `action` in `fixture` at `at` seconds after start.
+struct DemoMoment {
+    let at: Double
+    let fixture: DemoFixture
+    let minute: Int
+    let action: DemoAction
+
+    init(at: Double, _ fixture: DemoFixture, minute: Int, _ action: DemoAction) {
+        self.at = at
+        self.fixture = fixture
+        self.minute = minute
+        self.action = action
+    }
 }
 #endif
