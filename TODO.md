@@ -27,22 +27,21 @@ linked READMEs. Tournament is LIVE; target: tag `v1.0.0` within 3 days.
 ## 3. Cloudflare R2 — `infra/setup-r2.sh`
 
 - [ ] Create buckets + custom domains `scores.` / `download.alldayidreamaboutsports.com`
-- [ ] R2 API token → GCP secrets `r2-*` + GitHub secrets `R2_*`
+- [ ] R2 API token → GCP secrets `r2-*` (backend). Releases upload to R2 locally via `app/scripts/publish.sh` using your own R2 env vars — no GitHub `R2_*` secrets needed
 - [ ] After first release: `download.../latest` redirect rule → newest DMG (the website button points there)
 
 ## 4. GitHub repo settings
 
-- [ ] Push this repo to GitHub (`thisisnsh/onlyfansforsports` — or rename; WIF condition in `setup-gcp.sh` and the badge URLs assume this slug)
-- [ ] Settings → Pages → **Source: GitHub Actions**; custom domain `alldayidreamaboutsports.com`; Enforce HTTPS
+- [ ] Push this (private) repo to GitHub (`thisisnsh/onlyfansforsports` — or rename; WIF condition in `setup-gcp.sh` and the badge URLs assume this slug)
+- [ ] Website: push `web/` contents to the **public** repo `thisisnsh/alldayidreamaboutsports.com`; Settings → Pages → **Source: Deploy from a branch** (`main`/root); custom domain `alldayidreamaboutsports.com`; Enforce HTTPS (remove the domain from this private repo's Pages first)
 - [ ] DNS: apex A records → GitHub Pages (`185.199.108–111.153`, grey-cloud/DNS-only)
 - [ ] Create `staging` + `prod` environments; add secrets/vars from the table in `infra/README.md`
-- [ ] Repo secrets for releases: `GOOGLE_SERVICE_INFO_PLIST_B64`, `MACOS_CERT_P12_B64`, `MACOS_CERT_PASSWORD`, `APPLE_ID`, `APPLE_TEAM_ID`, `APPLE_APP_PASSWORD`, `SPARKLE_ED_PRIVATE_KEY`
+- [ ] Repo secrets for releases: `GOOGLE_SERVICE_INFO_PLIST_B64`, `MACOS_CERT_P12_B64`, `MACOS_CERT_PASSWORD`, `APPLE_ID`, `APPLE_TEAM_ID`, `APPLE_APP_PASSWORD` (Sparkle key + R2 creds are local-only, not CI secrets)
 
 ## 5. Signing & Sparkle (this Mac — mostly DONE)
 
 - [x] Sparkle EdDSA keypair generated (2026-06-11); public key already in `app/project.yml`
-- [ ] **Back up the Sparkle private key** (Keychain → "Private key for signing Sparkle updates", or `generate_keys -x`) — losing it strands every install
-- [ ] Export it once more for CI → GitHub secret `SPARKLE_ED_PRIVATE_KEY`
+- [ ] **Back up the Sparkle private key** (Keychain → "Private key for signing Sparkle updates", or `generate_keys -x`) — losing it strands every install. It stays in your Keychain (used locally by `publish.sh`/`release.sh`), not a CI secret
 - [ ] `xcrun notarytool store-credentials notary-profile --apple-id <id> --team-id 983LBM5U6B --password <app-specific-pw>` (for `app/scripts/release.sh`)
 - [ ] Export Developer ID cert as .p12 → CI secrets
 
@@ -59,9 +58,9 @@ linked READMEs. Tournament is LIVE; target: tag `v1.0.0` within 3 days.
 ## 7. Ship
 
 - [ ] Prod pass of sections 2–3, deploy backend to prod
-- [ ] `./app/scripts/release.sh 1.0.0` (or tag `v1.0.0` for CI) → DMG on `download.`
+- [ ] Tag `v1.0.0` → CI builds the DMG artifact; download + test, then `./app/scripts/publish.sh <dmg>` → appcast + deltas on `download.` (or full-local `./app/scripts/release.sh 1.0.0`)
 - [ ] Gatekeeper check on a clean Mac: `spctl --assess` → "Notarized Developer ID"
-- [ ] Website live, download button works, privacy page reachable (OAuth consent links to it)
+- [ ] Website live (public repo), download button works, privacy page reachable (OAuth consent links to it)
 - [ ] Set Remote Config `latest_build` to the shipped build number
 - [ ] 📣 Announce — and keep the kill-switch runbook (`infra/README.md`) handy during matches
 

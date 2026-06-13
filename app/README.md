@@ -116,11 +116,12 @@ Key invariants:
 
 - `SUPublicEDKey` in `project.yml` is the public half of the key generated on
   this machine (2026-06-11); the private key lives in your login Keychain as
-  "Private key for signing Sparkle updates". **Back it up** — losing it strands
-  every installed copy:
+  "Private key for signing Sparkle updates". The appcast is signed **locally**
+  (`publish.sh` / `release.sh` read the key from the Keychain) — it is no longer
+  a CI secret. **Back it up** — losing it strands every installed copy:
   ```sh
-  # export for backup / GitHub secret SPARKLE_ED_PRIVATE_KEY (CI signing)
-  build/DerivedData/SourcePackages/artifacts/sparkle/Sparkle/bin/generate_keys -x sparkle_private_key
+  # export for backup (any Sparkle download's generate_keys works)
+  ./bin/generate_keys -x sparkle_private_key
   ```
 - Feed: `https://download.alldayidreamaboutsports.com/appcast.xml` (R2 bucket
   `alldayidreamaboutsports-downloads`), checked hourly, auto-installs.
@@ -129,19 +130,32 @@ Key invariants:
 
 ## Releasing
 
-**Local (mirrors the AI Thing flow, DMG-based):**
-```sh
-export R2_ENDPOINT=https://<ACCOUNT_ID>.r2.cloudflarestorage.com
-export AWS_ACCESS_KEY_ID=... AWS_SECRET_ACCESS_KEY=...
-./scripts/release.sh 1.0.0          # build → notarize app → DMG → notarize DMG
-                                    # → staple → appcast → upload to R2
-```
-Keeps every shipped DMG in `~/Releases/AllDayIDreamAboutSports` so
-`generate_appcast` can emit delta updates.
+CI builds the DMG; the Sparkle appcast + delta generation and the R2 upload are
+**local** (the EdDSA key and R2 creds stay on your machine, not in CI).
 
-**CI:** push a tag `v1.0.0` → `.github/workflows/app-release.yml` does the same
-on a macOS runner (needs the GitHub secrets listed in `infra/README.md`) and
-also attaches the DMG to a GitHub Release.
+**Normal flow:**
+1. Tag `v1.0.0` → `.github/workflows/app-release.yml` builds the code-signed,
+   notarized, stapled, styled DMG on a macOS runner and uploads it as a
+   **workflow artifact** (no appcast, no R2, no GitHub Release).
+2. Download the artifact, install the DMG, test it.
+3. Publish it:
+   ```sh
+   export R2_ENDPOINT=https://<ACCOUNT_ID>.r2.cloudflarestorage.com
+   export AWS_ACCESS_KEY_ID=... AWS_SECRET_ACCESS_KEY=...
+   ./scripts/publish.sh ~/Downloads/AllDayIDreamAboutSports-1.0.0.dmg
+   # → appcast + deltas (vs prior DMGs) → upload DMG/appcast/deltas to R2
+   ```
+   Then ensure `download.alldayidreamaboutsports.com/latest` redirects to the
+   new DMG.
+
+**Full local alternative** (build the DMG locally too, e.g. no runner):
+```sh
+./scripts/release.sh 1.0.0          # build → notarize app → styled DMG →
+                                    # notarize DMG → staple → appcast → R2
+```
+Both scripts keep every shipped DMG in `~/Releases/AllDayIDreamAboutSports` so
+`generate_appcast` can emit delta updates (the styled DMG needs
+`brew install create-dmg`).
 
 Build numbers: CI uses the workflow run number; local uses `yymmddHHMM`. Both
 are monotonic — `min_build` comparisons stay sane.
