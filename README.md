@@ -30,9 +30,12 @@ API-Football ──15s──▶ Cloud Run backend ──▶ FCM topics ──▶
 |---|---|---|
 | `app/` | macOS app (SwiftUI, macOS 14+, XcodeGen) | [app/README.md](app/README.md) — build, codesign, notarize, Sparkle, release |
 | `backend/` | Cloud Run service: poller + public API (TypeScript) | [backend/README.md](backend/README.md) — endpoints, env, deploy |
-| `web/` | Landing page + privacy policy (GitHub Pages) | [web/README.md](web/README.md) — Pages setup, DNS |
 | `infra/` | GCP/R2 setup scripts, Remote Config template, Firestore rules | [infra/README.md](infra/README.md) — one-time cloud setup, kill-switch runbook |
-| `.github/` | CI: backend test/deploy, app release, web deploy | [.github/README.md](.github/README.md) — workflow overview |
+| `.github/` | CI: backend test/deploy, app release (DMG artifact) | [.github/README.md](.github/README.md) — workflow overview |
+
+The landing page + privacy policy live in the separate **public** repo
+[`thisisnsh/alldayidreamaboutsports.com`](https://github.com/thisisnsh/alldayidreamaboutsports.com)
+(GitHub Pages isn't free on this private repo).
 
 **Shipping for the first time?** Work through [TODO.md](TODO.md) top to bottom.
 
@@ -45,7 +48,10 @@ API-Football ──15s──▶ Cloud Run backend ──▶ FCM topics ──▶
 
 ## Release
 
-Tag `v*` → GitHub Actions builds, signs (Developer ID), notarizes, staples,
-generates the Sparkle appcast, and uploads to `download.alldayidreamaboutsports.com`.
-Kill switch and forced updates are driven by Firebase Remote Config
-(`kill_switch`, `min_build`) with an R2 `config.json` backup.
+Tag `v*` → GitHub Actions builds, signs (Developer ID), notarizes, staples a
+styled DMG and uploads it as a **workflow artifact**. You download it, test, then
+run `app/scripts/publish.sh <dmg>` locally to generate the Sparkle appcast +
+deltas and upload to `download.alldayidreamaboutsports.com` (the EdDSA key and R2
+creds stay local). See [app/README.md](app/README.md#releasing). Kill switch and
+forced updates are driven by Firebase Remote Config (`kill_switch`, `min_build`)
+with an R2 `config.json` backup.

@@ -1,6 +1,8 @@
 name: app-release
 
-# Tag v1.2.3 → notarized build 1.2.3, Sparkle appcast, R2 upload, GitHub Release.
+# Tag v1.2.3 → code-signed, notarized, stapled, styled DMG uploaded as a workflow
+# artifact. Sparkle appcast/delta generation and the R2 upload happen locally
+# (see app/scripts/publish.sh) — not in CI.
 # Build number = GitHub run number (monotonic), used by the Remote Config
 # min_build force-update gate.
 
@@ -9,12 +11,11 @@ on:
     tags: ["v*"]
 
 permissions:
-  contents: write
+  contents: read
 
 env:
   APP_NAME: All Day I Dream About Sports
   SCHEME: AllDayIDreamAboutSports
-  DOWNLOAD_HOST: https://download.alldayidreamaboutsports.com
 
 jobs:
   release:
@@ -22,8 +23,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install XcodeGen
-        run: brew install xcodegen
+      - name: Install XcodeGen + create-dmg
+        run: brew install xcodegen create-dmg
 
       - name: Restore Firebase config
         run: |
@@ -86,7 +87,7 @@ jobs:
             --password "$APPLE_APP_PASSWORD" --wait
           xcrun stapler staple "$APP"
 
-      - name: Package as DMG (signed, notarized, stapled)
+      - name: Package as styled DMG (signed, notarized, stapled)
         working-directory: app
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
@@ -95,46 +96,24 @@ jobs:
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           DMG="AllDayIDreamAboutSports-${VERSION}.dmg"
-          mkdir -p build/dist build/dmg
-          cp -R "build/export/${APP_NAME}.app" build/dmg/
-          ln -s /Applications build/dmg/Applications
-          hdiutil create -volname "$APP_NAME" -srcfolder build/dmg \
-            -format UDZO -imagekey zlib-level=9 -fs HFS+ -ov "build/dist/$DMG"
+          mkdir -p build/dist build/dmgsrc
+          cp -R "build/export/${APP_NAME}.app" build/dmgsrc/
+          create-dmg \
+            --volname "$APP_NAME" \
+            --background "../assets/dmg-background.png" \
+            --window-size 660 400 --icon-size 128 \
+            --icon "${APP_NAME}.app" 180 170 \
+            --app-drop-link 480 170 \
+            "build/dist/$DMG" "build/dmgsrc"
           codesign --sign "Developer ID Application" --timestamp "build/dist/$DMG"
           xcrun notarytool submit "build/dist/$DMG" \
             --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" \
             --password "$APPLE_APP_PASSWORD" --wait
           xcrun stapler staple "build/dist/$DMG"
 
-      - name: Generate Sparkle appcast
-        working-directory: app
-        env:
-          SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
-        run: |
-          SPARKLE_VERSION=2.6.4
-          curl -fsSL -o sparkle.tar.xz \
-            "https://github.com/sparkle-project/Sparkle/releases/download/${SPARKLE_VERSION}/Sparkle-${SPARKLE_VERSION}.tar.xz"
-          mkdir sparkle && tar -xf sparkle.tar.xz -C sparkle
-          KEY_FILE=$(mktemp)
-          printf '%s' "$SPARKLE_ED_PRIVATE_KEY" > "$KEY_FILE"
-          ./sparkle/bin/generate_appcast \
-            --ed-key-file "$KEY_FILE" \
-            --download-url-prefix "${DOWNLOAD_HOST}/" \
-            build/dist
-          rm "$KEY_FILE"
-
-      - name: Upload to R2
-        working-directory: app
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
-        run: |
-          aws s3 sync build/dist "s3://alldayidreamaboutsports-downloads/" \
-            --endpoint-url "$R2_ENDPOINT" --checksum-algorithm CRC32
-
-      - name: GitHub Release
-        uses: softprops/action-gh-release@v2
+      - name: Upload DMG artifact
+        uses: actions/upload-artifact@v4
         with:
-          files: app/build/dist/*.dmg
-          generate_release_notes: true
+          name: AllDayIDreamAboutSports-dmg
+          path: app/build/dist/*.dmg
+          if-no-files-found: error

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# End-to-end local release: build → sign → DMG → notarize → staple → appcast → R2.
-# Adapted from the AI Thing release flow (DMG + keychain notary profile +
-# generate_appcast), with R2 upload instead of scp.
+# Full from-scratch local release: build → sign → styled DMG → notarize → staple
+# → appcast → R2. The normal flow is CI builds the DMG (app-release.yml) and you
+# publish it with publish.sh; use this only when building the DMG locally too.
 #
 #   ./scripts/release.sh 1.0.0 [build_number]
 #
@@ -10,6 +10,7 @@
 #   - xcrun notarytool store-credentials notary-profile --apple-id <id> \
 #       --team-id 983LBM5U6B --password <app-specific-password>
 #   - Sparkle EdDSA private key in your keychain (created by generate_keys)
+#   - create-dmg (brew install create-dmg) for the styled DMG layout
 #   - aws CLI + R2 env vars: R2_ENDPOINT, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -53,12 +54,17 @@ xcrun notarytool submit build/notarize-app.zip --keychain-profile notary-profile
 xcrun stapler staple "$APP"
 spctl --assess --type execute --verbose "$APP" # expect: Notarized Developer ID
 
-echo "── 5/7 Build, sign, notarize, staple the DMG"
-rm -rf build/dmg && mkdir -p build/dmg
-cp -R "$APP" build/dmg/
-ln -s /Applications build/dmg/Applications
-hdiutil create -volname "$APP_NAME" -srcfolder build/dmg \
-  -format UDZO -imagekey zlib-level=9 -fs HFS+ -ov "build/${DMG_NAME}"
+echo "── 5/7 Build styled DMG, sign, notarize, staple"
+rm -rf build/dmgsrc && mkdir -p build/dmgsrc
+cp -R "$APP" build/dmgsrc/
+rm -f "build/${DMG_NAME}"
+create-dmg \
+  --volname "$APP_NAME" \
+  --background "../assets/dmg-background.png" \
+  --window-size 660 400 --icon-size 128 \
+  --icon "${APP_NAME}.app" 180 170 \
+  --app-drop-link 480 170 \
+  "build/${DMG_NAME}" "build/dmgsrc"
 codesign --sign "$SIGN_ID" --timestamp "build/${DMG_NAME}"
 xcrun notarytool submit "build/${DMG_NAME}" --keychain-profile notary-profile --wait
 xcrun stapler staple "build/${DMG_NAME}"

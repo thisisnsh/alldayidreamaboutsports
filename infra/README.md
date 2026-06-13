@@ -41,9 +41,11 @@ Then in the [Firebase console](https://console.firebase.google.com):
 ```
 
 DNS for `alldayidreamaboutsports.com`: apex → **GitHub Pages** (A records
-185.199.108.153/.109/.110/.111, deployed by `web-deploy.yml`; repo Settings →
-Pages → Source = "GitHub Actions", custom domain + HTTPS enforced), `scores.`
-and `download.` → R2 custom domains (Cloudflare-proxied).
+185.199.108.153/.109/.110/.111). The website lives in the **public** repo
+`thisisnsh/alldayidreamaboutsports.com` (Settings → Pages → Source = "Deploy
+from a branch" `main`/root, custom domain + HTTPS enforced) — Pages isn't free on
+this private repo. `scores.` and `download.` → R2 custom domains
+(Cloudflare-proxied).
 
 ## 4. API-Football
 
@@ -56,11 +58,12 @@ Subscribe to **Ultra** ($29/mo, cancel after the final) at
 ```sh
 # from a Sparkle release download
 ./bin/generate_keys   # prints public key, stores private key in Keychain
-./bin/generate_keys -x sparkle_ed_private_key  # export for CI
+./bin/generate_keys -x sparkle_private_key  # export for backup
 ```
 
 - Public key → `SUPublicEDKey` in `app/project.yml`.
-- Private key file content → GitHub secret `SPARKLE_ED_PRIVATE_KEY`. Keep a
+- Private key stays in your **login Keychain** — the appcast is signed locally by
+  `app/scripts/publish.sh` / `release.sh`, not in CI. Keep a
   Keychain/password-manager backup — losing it strands all installed apps.
 
 ## 6. Apple signing (global, once)
@@ -86,8 +89,11 @@ openssl rand -hex 32 | gcloud secrets versions add session-jwt-secret --data-fil
 | env var | `GCP_PROJECT_ID`, `GCP_REGION` | setup-gcp.sh output |
 | repo secret | `GOOGLE_SERVICE_INFO_PLIST_B64` | Firebase console |
 | repo secret | `MACOS_CERT_P12_B64`, `MACOS_CERT_PASSWORD`, `APPLE_ID`, `APPLE_TEAM_ID`, `APPLE_APP_PASSWORD` | Apple |
-| repo secret | `SPARKLE_ED_PRIVATE_KEY` | generate_keys |
-| repo secret | `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_ENDPOINT` | Cloudflare R2 token |
+
+The Sparkle private key and R2 credentials are **not** GitHub secrets: the
+appcast is signed and uploaded to R2 locally (`app/scripts/publish.sh`), and the
+backend reads its R2 creds from GCP Secret Manager (`r2-*`, via
+`backend-deploy.yml`).
 
 ## Kill switch runbook
 
