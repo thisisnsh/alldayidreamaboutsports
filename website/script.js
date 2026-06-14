@@ -452,6 +452,19 @@ const onScroll = () => nav.classList.toggle("scrolled", window.scrollY > 30);
 window.addEventListener("scroll", onScroll, { passive: true });
 onScroll();
 
+// Mobile hamburger — toggle the dropdown menu, close on link tap
+const navToggle = document.querySelector(".nav-toggle");
+if (navToggle) {
+  const setMenu = (open) => {
+    nav.classList.toggle("menu-open", open);
+    navToggle.setAttribute("aria-expanded", open ? "true" : "false");
+  };
+  navToggle.addEventListener("click", () => setMenu(!nav.classList.contains("menu-open")));
+  nav.querySelectorAll(".nav-links a").forEach((a) =>
+    a.addEventListener("click", () => setMenu(false))
+  );
+}
+
 /* ═══════════════════════════════════════════════════════════════════════════
    5. NOTCH DROPS — live alert demo
    ═══════════════════════════════════════════════════════════════════════════ */
@@ -465,7 +478,6 @@ const ALERTS = [
   { cls: "yellow", title: "Yellow · Enzo Fernández", sub: "Argentina", time: "45+7" },
   { cls: "full", title: "Half time", sub: "Argentina 2–0 France", time: "HT" },
   { cls: "yellow", title: "Yellow · Adrien Rabiot", sub: "France", time: "55'" },
-  { cls: "sub", title: "Sub · Kolo Muani on", sub: "France · Giroud off", time: "41'" },
   { cls: "goal", title: "Goal · Kylian Mbappé", sub: "Argentina 2–1 · penalty", time: "80'" },
   { cls: "goal", title: "Goal · Kylian Mbappé", sub: "Argentina 2–2", time: "81'" },
   { cls: "yellow", title: "Yellow · Marcus Thuram", sub: "France", time: "87'" },
@@ -473,7 +485,6 @@ const ALERTS = [
   { cls: "yellow", title: "Yellow · Marcos Acuña", sub: "Argentina", time: "90+8" },
   { cls: "full", title: "Full time", sub: "Argentina 2–2 France", time: "FT" },
   { cls: "fixture", title: "Extra time begins", sub: "Argentina 2–2 France", time: "91'" },
-  { cls: "sub", title: "Sub · Dybala on", sub: "Argentina · Di María off", time: "102'" },
   { cls: "goal", title: "Goal · Lionel Messi", sub: "Argentina 3–2", time: "108'" },
   { cls: "yellow", title: "Yellow · Leandro Paredes", sub: "Argentina", time: "114'" },
   { cls: "yellow", title: "Yellow · Gonzalo Montiel", sub: "Argentina", time: "116'" },

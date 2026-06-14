@@ -118,13 +118,61 @@ a { color: inherit; text-decoration: none; }
 .nav-link:hover { color: var(--bone); }
 .nav-cta { margin-left: 4px; }
 
+/* Hamburger — hidden on desktop, revealed on mobile */
+.nav-toggle {
+  display: none;
+  flex-direction: column;
+  justify-content: center;
+  gap: 5px;
+  width: 38px; height: 38px;
+  padding: 0; margin: 0;
+  background: none; border: 0;
+  cursor: pointer;
+}
+.nav-toggle-bar {
+  display: block;
+  width: 20px; height: 2px;
+  margin: 0 auto;
+  background: var(--bone);
+  border-radius: 2px;
+  transition: transform .25s var(--ease), opacity .25s var(--ease);
+}
+.nav.menu-open .nav-toggle-bar:first-child { transform: translateY(3.5px) rotate(45deg); }
+.nav.menu-open .nav-toggle-bar:last-child  { transform: translateY(-3.5px) rotate(-45deg); }
+
 @media (max-width: 720px) {
-  .nav-links .nav-link { display: none; }
+  .nav-toggle { display: inline-flex; }
   .brand-text { font-size: 11.5px; }
-  .nav { padding-left: 18px; padding-right: 18px; }
+  .nav {
+    padding-top: max(26px, env(safe-area-inset-top, 0px));
+  }
+  /* nav-links becomes a dropdown panel under the hamburger */
+  .nav-links {
+    position: absolute;
+    top: 100%; right: var(--gutter);
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 20px;
+    padding: 22px 24px;
+    background: rgba(10,10,12,0.92);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 14px;
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(-8px);
+    transition: opacity .25s var(--ease), transform .25s var(--ease);
+  }
+  .nav.menu-open .nav-links {
+    opacity: 1;
+    pointer-events: auto;
+    transform: none;
+  }
+  .nav-cta { margin-left: 0; }
 }
 @media (max-width: 540px) {
-  .brand-text { display: none; }
   .btn { padding: 11px 16px; font-size: 11px; }
   .score-chip { flex-wrap: wrap; font-size: 11.5px; max-width: 100%; }
 }
@@ -175,14 +223,23 @@ section.panel {
   /* Copy sits at the top; the ball owns the bottom of the screen. Drop the
      100svh floor on the text-light sections so each block follows close behind. */
   #celebrate.panel,
-  #next.panel,
-  section.panel.final {
+  #next.panel {
     min-height: auto;
     padding-top: clamp(72px, 11vh, 110px);
     padding-bottom: clamp(40px, 7vh, 80px);
   }
+  /* Keep the meta-note on its own line below the button across every section. */
+  .actions .meta-note { flex-basis: 100%; }
   /* Left-align the final CTA on mobile to match every other section. */
   .final { text-align: left; }
+  /* Full-viewport like the hero so its heading rests at padding-top below the
+     header (instead of being pinned by the page-bottom scroll clamp). This makes
+     "Kickoff is now" sit as far from the header as the first section's eyebrow. */
+  section.panel.final {
+    min-height: 100svh;
+    padding-top: clamp(96px, 15vh, 150px);
+    padding-bottom: clamp(40px, 7vh, 80px);
+  }
   .final .lede { max-width: 640px; margin-left: 0; margin-right: 0; }
   .final .body { margin-left: 0 !important; margin-right: 0 !important; }
   .final .actions { justify-content: flex-start; }
@@ -253,7 +310,7 @@ section.panel {
 
 /* ════════════════════════ HERO EXTRAS ═══════════════════════════════════ */
 .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; margin-top: clamp(28px, 4vh, 40px); }
-.meta-note { font-size: 12.5px; color: var(--smoke); letter-spacing: 0.02em; }
+.meta-note { display: inline-flex; align-items: center; font-size: 12.5px; color: var(--smoke); letter-spacing: 0.02em; }
 
 /* live mini-scoreboard chip in the hero */
 .score-chip {
@@ -339,7 +396,7 @@ section.panel {
 .pill-time { font-family: var(--mono); font-size: 11px; color: var(--ash); flex: none; align-self: flex-start; padding-top: 2px; }
 
 /* event-type chips */
-.chips { display: flex; flex-wrap: wrap; gap: 9px; margin-top: clamp(24px, 3vh, 32px); }
+.chips { display: flex; flex-wrap: wrap; align-items: center; gap: 9px; margin-top: clamp(24px, 3vh, 32px); }
 .chip {
   font-size: 11.5px; font-weight: 500; letter-spacing: 0.04em; text-transform: uppercase;
   color: var(--ash); padding: 7px 13px; border: 1px solid var(--hairline); border-radius: 999px;
@@ -353,7 +410,6 @@ section.panel {
 .chip .d.red { background: var(--red); }
 .chip .d.green { background: var(--lichen); }
 .chip .d.bone { background: var(--bone); }
-
 /* ════════════════════════ WHAT'S NEXT ═══════════════════════════════════ */
 .next-list { display: flex; flex-wrap: wrap; gap: 10px; margin-top: clamp(26px, 3.4vh, 34px); max-width: 520px; }
 .next-pill {
