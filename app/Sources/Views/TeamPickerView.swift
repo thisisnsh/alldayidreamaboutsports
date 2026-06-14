@@ -105,12 +105,12 @@ private struct LeagueSection: View {
                 CachedTeamLogo(url: league.logo, size: 22, fallbackSymbol: "trophy.fill")
                 Text(league.name).font(.system(size: 14, weight: .bold, design: .rounded))
                 if !league.active {
+                    Spacer()
                     Text("Coming soon")
                         .font(.system(size: 10, weight: .semibold))
                         .padding(.horizontal, 7).padding(.vertical, 3)
                         .background(Capsule().fill(Color.primary.opacity(0.1)))
                 }
-                Spacer()
             }
 
             if !league.scheduled {

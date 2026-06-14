@@ -20,6 +20,7 @@ final class AppSession: ObservableObject {
     private var scores: ScoresProviding { Services.scores }
     private let defaults = UserDefaults.standard
     private var celebrationLoads: [Int: Task<[String: Int]?, Never>] = [:]
+    private var catalogTimer: Timer?
 
     var isSignedIn: Bool { profile != nil }
     /// Every catalog team, flattened — for id→team lookups across leagues.
@@ -59,6 +60,9 @@ final class AppSession: ObservableObject {
         }
         #endif
         Task { await refreshCatalog() }
+        catalogTimer = Timer.scheduledTimer(withTimeInterval: 12 * 3600, repeats: true) { _ in
+            Task { await AppSession.shared.refreshCatalog() }
+        }
         // Fan teams sync with the backend ONCE per app start; every other
         // read is local. Changes go up via setFanTeams as they happen.
         Task { await syncFanTeamsOnLaunch() }
