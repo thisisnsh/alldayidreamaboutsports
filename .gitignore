@@ -8,8 +8,8 @@ DerivedData/
 *.xcresult
 xcuserdata/
 
-# Secrets — never commit
-app/Resources/GoogleService-Info.plist
+# Environment-specific service configuration — never commit
+app/Resources/GoogleService-Info-*.plist
 *.p12
 *.p8
 .env

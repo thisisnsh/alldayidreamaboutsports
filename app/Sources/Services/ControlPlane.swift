@@ -24,8 +24,6 @@ final class ControlPlane: ObservableObject {
     @Published var celebrationEnabled = true
     @Published var animationParams = AnimationParams()
 
-    var pollingIntervalSeconds: Double = 30
-
     private var backupTimer: Timer?
 
     func start() {
@@ -58,9 +56,6 @@ final class ControlPlane: ObservableObject {
         let minBuild = rc["min_build"].numberValue.intValue
         if minBuild > 0 {
             updateRequired = AppEnvironment.buildNumber < minBuild
-        }
-        if rc["polling_interval_s"].numberValue.doubleValue > 0 {
-            pollingIntervalSeconds = rc["polling_interval_s"].numberValue.doubleValue
         }
         if let data = rc["animation_params"].stringValue.data(using: .utf8),
            let params = try? JSONDecoder().decode(AnimationParams.self, from: data) {

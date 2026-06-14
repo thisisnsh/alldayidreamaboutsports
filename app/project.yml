@@ -5,6 +5,11 @@ options:
     macOS: "14.0"
   createIntermediateGroups: true
 
+configs:
+  Debug: debug
+  Staging: release
+  Release: release
+
 packages:
   Firebase:
     url: https://github.com/firebase/firebase-ios-sdk
@@ -24,6 +29,8 @@ targets:
       - Sources
       - path: Resources
         optional: true
+        excludes:
+          - "GoogleService-Info*.plist"
     dependencies:
       - package: Firebase
         product: FirebaseMessaging
@@ -51,10 +58,28 @@ targets:
         DEAD_CODE_STRIPPING: true
       configs:
         # Debug = fake services (no sign-in, no network, no API quota).
-        # Release = real services. This is the "release flag":
-        #   xcodebuild -configuration Debug|Release
+        # Staging/Release = real services in their respective cloud projects.
         Debug:
           SWIFT_ACTIVE_COMPILATION_CONDITIONS: DEBUG DEV_BACKEND
+          GOOGLE_CLIENT_ID: UNUSED_IN_DEBUG
+          GOOGLE_REVERSED_CLIENT_ID: UNUSED_IN_DEBUG
+          APP_API_BASE_URL: https://unused.invalid
+          APP_SCORES_BASE_URL: https://unused.invalid
+        Staging:
+          GOOGLE_CLIENT_ID: 291291942072-cqsmesng18bagi6psv69n5ch4kcnvj2s.apps.googleusercontent.com
+          GOOGLE_REVERSED_CLIENT_ID: com.googleusercontent.apps.291291942072-cqsmesng18bagi6psv69n5ch4kcnvj2s
+          GOOGLE_SERVICE_INFO_PLIST: GoogleService-Info-Staging.plist
+          # Staging domains deliberately do not point at production.
+          APP_API_BASE_URL: https://api-staging.alldayidreamaboutsports.com
+          APP_SCORES_BASE_URL: https://scores-staging.alldayidreamaboutsports.com
+        Release:
+          # Set these to the production OAuth plist's CLIENT_ID and
+          # REVERSED_CLIENT_ID before shipping.
+          GOOGLE_CLIENT_ID: YOUR_PRODUCTION_CLIENT_ID.apps.googleusercontent.com
+          GOOGLE_REVERSED_CLIENT_ID: com.googleusercontent.apps.YOUR_PRODUCTION_CLIENT_ID
+          GOOGLE_SERVICE_INFO_PLIST: GoogleService-Info-Production.plist
+          APP_API_BASE_URL: https://api.alldayidreamaboutsports.com
+          APP_SCORES_BASE_URL: https://scores.alldayidreamaboutsports.com
     info:
       path: Info.plist
       properties:
@@ -63,11 +88,13 @@ targets:
         LSApplicationCategoryType: public.app-category.sports
         LSMinimumSystemVersion: "14.0"
         NSHumanReadableCopyright: © 2026 alldayidreamaboutsports.com
-        # Google Sign-In (replace with the real iOS-type OAuth client id)
-        GIDClientID: YOUR_CLIENT_ID.apps.googleusercontent.com
+        APIBaseURL: $(APP_API_BASE_URL)
+        ScoresBaseURL: $(APP_SCORES_BASE_URL)
+        # Google Sign-In. Values are selected by build configuration above.
+        GIDClientID: $(GOOGLE_CLIENT_ID)
         CFBundleURLTypes:
           - CFBundleURLSchemes:
-              - com.googleusercontent.apps.YOUR_CLIENT_ID
+              - $(GOOGLE_REVERSED_CLIENT_ID)
         # Sparkle (same key layout as aithing-mac)
         SUFeedURL: https://download.alldayidreamaboutsports.com/appcast.xml
         SUPublicEDKey: ghiXVL8NcRoV6i/FhLk/bHsoeC0afsLGzFMwHqhpQQ4=
@@ -80,6 +107,23 @@ targets:
       properties:
         com.apple.developer.aps-environment: production
         com.apple.security.app-sandbox: false
+    postBuildScripts:
+      - name: Select Firebase configuration
+        basedOnDependencyAnalysis: false
+        script: |
+          if [ -z "${GOOGLE_SERVICE_INFO_PLIST:-}" ]; then
+            exit 0
+          fi
+
+          SOURCE="${SRCROOT}/Resources/${GOOGLE_SERVICE_INFO_PLIST}"
+          DESTINATION="${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/GoogleService-Info.plist"
+          if [ ! -f "$SOURCE" ]; then
+            echo "error: Missing $SOURCE for ${CONFIGURATION}. See app/README.md."
+            exit 1
+          fi
+
+          mkdir -p "$(dirname "$DESTINATION")"
+          cp "$SOURCE" "$DESTINATION"
 
 schemes:
   AllDayIDreamAboutSports:
@@ -88,5 +132,7 @@ schemes:
         AllDayIDreamAboutSports: all
     run:
       config: Debug
+    profile:
+      config: Staging
     archive:
       config: Release

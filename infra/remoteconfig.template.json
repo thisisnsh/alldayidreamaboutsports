@@ -12,21 +12,9 @@
       "defaultValue": { "value": "1" },
       "description": "Builds below this are blocked behind a forced Sparkle update."
     },
-    "latest_build": {
-      "defaultValue": { "value": "1" },
-      "description": "Informational: newest available build."
-    },
-    "update_url": {
-      "defaultValue": { "value": "https://alldayidreamaboutsports.com" },
-      "description": "Fallback download link if Sparkle itself is broken."
-    },
     "celebration_enabled": {
       "defaultValue": { "value": "true" },
       "description": "false = hide tap-to-support and stop sending /celebrate (cost kill switch)."
-    },
-    "polling_interval_s": {
-      "defaultValue": { "value": "30" },
-      "description": "App live.json reconciliation poll interval while a followed match is live."
     },
     "animation_params": {
       "defaultValue": { "value": "{\"ballDropSeconds\":1.5,\"pillHoldSeconds\":5,\"notchStackMax\":4}" },

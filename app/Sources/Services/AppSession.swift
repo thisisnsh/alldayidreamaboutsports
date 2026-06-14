@@ -20,7 +20,6 @@ final class AppSession: ObservableObject {
     private var api: BackendAPI { Services.api }
     private var scores: ScoresProviding { Services.scores }
     private let defaults = UserDefaults.standard
-    private var fixturesTimer: Timer?
 
     var isSignedIn: Bool { profile != nil }
     /// Every catalog team, flattened — for id→team lookups across leagues.
@@ -60,11 +59,9 @@ final class AppSession: ObservableObject {
         }
         #endif
         Task { await refreshCatalog() }
-        Task { await refreshFixtures() }
         // Fan teams sync with the backend ONCE per app start; every other
         // read is local. Changes go up via setFanTeams as they happen.
         Task { await syncFanTeamsOnLaunch() }
-        startFixturesTimer()
         // Topics mirror the signed-in state: signed out means subscribed to
         // nothing, even if fan teams are still stored locally.
         PushService.shared.syncTopics(to: isSignedIn ? fanTeamIds : [])
@@ -189,25 +186,4 @@ final class AppSession: ObservableObject {
         }
     }
 
-    private func startFixturesTimer() {
-        fixturesTimer?.invalidate()
-        let interval = ControlPlane.shared.pollingIntervalSeconds
-        fixturesTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { _ in
-            Task { @MainActor in
-                // Poll only while a followed team is (or might be) playing —
-                // FCM is the real-time channel, this is the consistency backstop.
-                guard AppSession.shared.isSignedIn,
-                      !AppSession.shared.fanTeamIds.isEmpty else { return }
-                let followedLive = AppSession.shared.liveMatches
-                    .contains { $0.involves(AppSession.shared.fanTeamIds) }
-                let kickoffSoon = AppSession.shared.fixtures.contains {
-                    $0.involves(AppSession.shared.fanTeamIds) &&
-                    ($0.kickoff.map { abs($0.timeIntervalSinceNow) < 3 * 3600 } ?? false)
-                }
-                if followedLive || kickoffSoon || AppSession.shared.liveMatches.isEmpty {
-                    await AppSession.shared.refreshFixtures()
-                }
-            }
-        }
-    }
 }

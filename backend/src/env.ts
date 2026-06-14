@@ -22,7 +22,7 @@ export const env = {
       endpoint: required("R2_ENDPOINT"),
       accessKeyId: required("R2_ACCESS_KEY_ID"),
       secretAccessKey: required("R2_SECRET_ACCESS_KEY"),
-      scoresBucket: process.env.R2_BUCKET_SCORES ?? "alldayidreamaboutsports-scores",
+      scoresBucket: required("R2_BUCKET_SCORES"),
     };
   },
   get schedulerServiceAccount() {

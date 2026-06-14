@@ -12,21 +12,19 @@ open AllDayIDreamAboutSports.xcodeproj     # or:
 xcodebuild -scheme AllDayIDreamAboutSports -configuration Debug build
 ```
 
-## Testing — two flavors, one flag
+## Testing — three build configurations
 
 The app only touches the world through three protocols (`Sources/Services/Backend.swift`):
 `GoogleAuthProviding`, `BackendAPI`, `ScoresProviding`. The build configuration
 picks the implementation — that's the release flag:
 
-| | `-configuration Debug` | `-configuration Release` |
-|---|---|---|
-| Compilation condition | `DEV_BACKEND` | — |
-| Sign-in | **bypassed** — already signed in as "Dev Fan" at launch, no login window | real Google OAuth |
-| Fan teams | hardcoded list in `Sources/Dev/DevConfig.swift` | user-picked, roams via backend |
-| Match events | auto-fire randomly on a timer (+ manual Settings buttons) | FCM pushes |
-| GET (prefs/teams/fixtures/counts) | hardcoded seed data (`Sources/Dev/FakeBackend.swift`) | Cloud Run + scores CDN |
-| POST (prefs/celebrate) | appends to the in-memory fakes — next GET sees it | real writes |
-| Network / API-Football quota | **zero** (verified: no TCP connections at runtime) | via backend |
+| | `Debug` | `Staging` | `Release` |
+|---|---|---|---|
+| Services | fake/offline | `dreamaboutsports-staging` | `dreamaboutsports-prod` |
+| Sign-in | bypassed as "Dev Fan" | staging Google OAuth | production Google OAuth |
+| Firebase config | none | `GoogleService-Info-Staging.plist` | `GoogleService-Info-Production.plist` |
+| Backend/data | in-memory seed data | staging URLs from `project.yml` | production URLs from `project.yml` |
+| Intended use | normal Xcode development | end-to-end testing | shipped app |
 
 **Day-to-day dev loop:**
 
@@ -65,15 +63,57 @@ Debug builds also skip login-item registration (`LaunchAtLogin`), so your dev
 build never sneaks into Login Items. The only outbound thing left is clicking
 a fixture, which opens FIFA.com in your browser — deliberate.
 
-**Testing the real stack locally:** build with `-configuration Release`
-(plus `GoogleService-Info.plist` in `Resources/` and a real `GIDClientID` in
-`project.yml` — see below). Settings keeps a "Preview animation" button in all
-flavors.
+## Real-service configuration
 
-- `GoogleService-Info.plist` (Firebase console → macOS app) goes in
-  `Resources/`. It's gitignored. Missing = push/remote-config silently disabled.
-- Replace `YOUR_CLIENT_ID` in `project.yml` (both `GIDClientID` and the
-  reversed URL scheme) with the iOS-type OAuth client id, then rerun `xcodegen`.
+Each environment needs two files from its Firebase/Google Cloud project:
+
+1. Firebase console → macOS app → download `GoogleService-Info.plist`. Save it
+   as `Resources/GoogleService-Info-Staging.plist` or
+   `Resources/GoogleService-Info-Production.plist`.
+2. Google Auth Platform → Clients → create an **iOS-type** OAuth client for
+   bundle id `com.alldayidreamaboutsports.mac`, then download its plist. You do
+   not add that downloaded OAuth plist to the app. Copy its two values into the
+   matching configuration in `project.yml`:
+   - `CLIENT_ID` → `GOOGLE_CLIENT_ID`
+   - `REVERSED_CLIENT_ID` → `GOOGLE_REVERSED_CLIENT_ID`
+
+The reversed client ID is not another credential. It is the same client ID
+rearranged into a macOS URL scheme so Google can return control to the app after
+browser sign-in. For the current staging OAuth plist:
+
+```text
+CLIENT_ID          = 291291942072-cqsmesng18bagi6psv69n5ch4kcnvj2s.apps.googleusercontent.com
+REVERSED_CLIENT_ID = com.googleusercontent.apps.291291942072-cqsmesng18bagi6psv69n5ch4kcnvj2s
+```
+
+The staging values are already configured. Once production exists, replace the
+two `YOUR_PRODUCTION...` placeholders in `project.yml`. Then regenerate and
+build the environment you want:
+
+```sh
+xcodegen
+xcodebuild -scheme AllDayIDreamAboutSports -configuration Staging build
+xcodebuild -scheme AllDayIDreamAboutSports -configuration Release build
+```
+
+The build phase copies only the selected environment's Firebase plist into the
+app bundle as `GoogleService-Info.plist`; a Release build does not contain or
+use staging Firebase configuration. Both source plists are gitignored.
+
+The backend must accept the same client ID as the app. Add each environment's
+`CLIENT_ID` to its GCP Secret Manager secret:
+
+```sh
+printf '%s' '<CLIENT_ID>' | gcloud secrets versions add google-oauth-client-id \
+  --project=dreamaboutsports-staging --data-file=-
+```
+
+Use `dreamaboutsports-prod` and the production client ID for production.
+
+`Staging` also has separate `APP_API_BASE_URL` and `APP_SCORES_BASE_URL` build
+settings. They target the `api-staging` and `scores-staging` custom domains,
+respectively. Finish the staging Cloud Run domain mapping and DNS before using
+the build. Neither setting can silently call production.
 
 ## Source map
 
@@ -104,7 +144,7 @@ Key invariants:
    "Developer ID Application". Verify: `security find-identity -v -p codesigning`.
 2. **Notary profile** (used by `scripts/release.sh`):
    ```sh
-   xcrun notarytool store-credentials notary-profile \
+   xcrun notarytool store-credentials notary-alldayidreamaboutsports \
      --apple-id <your-apple-id> --team-id 983LBM5U6B \
      --password <app-specific-password>   # appleid.apple.com → App-Specific Passwords
    ```

@@ -58,7 +58,6 @@ final class EventRouter {
         if event.type == .goalCancelled {
             OverlayManager.shared.cancelGoal(fixtureId: event.fixtureId, teamId: event.teamId)
         }
-        Task { await AppSession.shared.refreshFixtures() }
     }
 }
 
