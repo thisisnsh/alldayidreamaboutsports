@@ -1,6 +1,5 @@
-import { teamCodeForName } from "../teams.js";
 import type { MatchState, MatchStatus, PenaltyKick } from "../types.js";
-import type { ScoreProvider } from "./types.js";
+import type { CatalogTeam, LeagueInfo, ScoreProvider } from "./types.js";
 
 const BASE = "https://v3.football.api-sports.io";
 
@@ -19,6 +18,15 @@ const STATUS_MAP: Record<string, MatchStatus> = {
   AET: "FINISHED",
   PEN: "FINISHED",
 };
+
+interface ApiLeague {
+  league: { id: number; name: string; type: string; logo: string };
+  seasons: Array<{ year: number; current: boolean; end: string }>;
+}
+
+interface ApiTeamRow {
+  team: { id: number; name: string; code: string | null; country: string | null; logo: string };
+}
 
 interface ApiFixture {
   fixture: { id: number; date: string; status: { short: string; elapsed: number | null } };
@@ -44,12 +52,12 @@ export class ApiFootballProvider implements ScoreProvider {
     private readonly fetchImpl: typeof fetch = fetch,
   ) {}
 
-  private async get(path: string): Promise<ApiFixture[]> {
+  private async get<T>(path: string): Promise<T[]> {
     const res = await this.fetchImpl(`${BASE}${path}`, {
       headers: { "x-apisports-key": this.apiKey },
     });
     if (!res.ok) throw new Error(`API-Football ${path} -> HTTP ${res.status}`);
-    const body = (await res.json()) as { response?: ApiFixture[]; errors?: unknown };
+    const body = (await res.json()) as { response?: T[]; errors?: unknown };
     if (!Array.isArray(body.response)) {
       throw new Error(`API-Football ${path} -> bad body: ${JSON.stringify(body.errors ?? body).slice(0, 300)}`);
     }
@@ -57,27 +65,60 @@ export class ApiFootballProvider implements ScoreProvider {
   }
 
   async liveMatches(): Promise<MatchState[]> {
-    const fixtures = await this.get(`/fixtures?live=all&league=${this.leagueId}&season=${this.season}`);
+    const fixtures = await this.get<ApiFixture>(
+      `/fixtures?live=all&league=${this.leagueId}&season=${this.season}`,
+    );
     return fixtures.map((f) => this.toState(f));
   }
 
   async fixturesForDate(dateISO: string): Promise<MatchState[]> {
-    const fixtures = await this.get(
+    const fixtures = await this.get<ApiFixture>(
       `/fixtures?league=${this.leagueId}&season=${this.season}&date=${dateISO}`,
     );
     return fixtures.map((f) => this.toState(f));
   }
 
+  async leagueInfo(leagueId: number): Promise<LeagueInfo> {
+    const [row] = await this.get<ApiLeague>(`/leagues?id=${leagueId}`);
+    if (!row) throw new Error(`API-Football: no league ${leagueId}`);
+    const current = row.seasons.find((s) => s.current);
+    // No current season → the latest one whose end date is still in the future
+    // counts as "to be scheduled" (e.g. a tournament drawn but not yet started).
+    const today = new Date().toISOString().slice(0, 10);
+    const upcoming = current ? undefined : [...row.seasons].reverse().find((s) => s.end >= today);
+    const season = current?.year ?? upcoming?.year ?? null;
+    return {
+      id: row.league.id,
+      name: row.league.name,
+      type: row.league.type,
+      logo: row.league.logo,
+      season,
+      scheduled: season != null,
+    };
+  }
+
+  async teamsForLeague(leagueId: number, season: number): Promise<CatalogTeam[]> {
+    const rows = await this.get<ApiTeamRow>(`/teams?league=${leagueId}&season=${season}`);
+    return rows.map((r) => ({
+      id: r.team.id,
+      code: r.team.code,
+      name: r.team.name,
+      country: r.team.country,
+      logo: r.team.logo,
+      leagueId,
+    }));
+  }
+
   private toState(f: ApiFixture): MatchState {
-    const homeCode = teamCodeForName(f.teams.home.name);
-    const awayCode = teamCodeForName(f.teams.away.name);
+    const homeId = f.teams.home.id;
+    const awayId = f.teams.away.id;
     const cards = { home: { yellow: 0, red: 0 }, away: { yellow: 0, red: 0 } };
     let lastGoal: MatchState["lastGoal"];
     const kicks: PenaltyKick[] = [];
 
     for (const ev of f.events ?? []) {
       const side = ev.team.id === f.teams.home.id ? "home" : "away";
-      const teamCode = side === "home" ? homeCode : awayCode;
+      const teamId = side === "home" ? homeId : awayId;
       const isShootoutKick =
         ev.type === "Goal" && /penalt/i.test(ev.detail) && /shootout/i.test(ev.comments ?? "");
       if (ev.type === "Card") {
@@ -85,12 +126,12 @@ export class ApiFootballProvider implements ScoreProvider {
         else if (ev.detail.startsWith("Red")) cards[side].red++;
       } else if (isShootoutKick) {
         // Shootout kicks live in score.penalty (counts) + here (player/result).
-        kicks.push({ teamCode, player: ev.player?.name ?? null, scored: !/missed/i.test(ev.detail) });
+        kicks.push({ teamId, player: ev.player?.name ?? null, scored: !/missed/i.test(ev.detail) });
       } else if (ev.type === "Goal" && !/cancell/i.test(ev.detail) && !/missed/i.test(ev.detail)) {
         // Skip "Missed Penalty" — it never increments the score and must not
         // steal scorer attribution from a later real goal.
         lastGoal = {
-          teamCode,
+          teamId,
           player: ev.player?.name ?? null,
           minute: ev.time.elapsed,
         };
@@ -115,14 +156,14 @@ export class ApiFootballProvider implements ScoreProvider {
       rawStatus: f.fixture.status.short,
       minute: f.fixture.status.elapsed,
       home: {
-        code: homeCode,
+        id: homeId,
         name: f.teams.home.name,
         goals: f.goals.home ?? 0,
         yellowCards: cards.home.yellow,
         redCards: cards.home.red,
       },
       away: {
-        code: awayCode,
+        id: awayId,
         name: f.teams.away.name,
         goals: f.goals.away ?? 0,
         yellowCards: cards.away.yellow,

@@ -7,8 +7,8 @@ struct NotchItem: Identifiable, Equatable {
     let id: String
     let icon: String
     let iconColor: Color
-    let text: String
-    var subtext: String?
+    let title: [PillSegment]
+    var subtitle: [PillSegment]?
     var fanGoal: MatchEvent?
 
     static func == (lhs: NotchItem, rhs: NotchItem) -> Bool { lhs.id == rhs.id }
@@ -57,8 +57,8 @@ final class OverlayManager: ObservableObject {
             id: event.eventId,
             icon: pillIcon(for: event),
             iconColor: pillIconColor(for: event),
-            text: pillText(for: event),
-            subtext: pillSubtext(for: event),
+            title: pillTitle(for: event),
+            subtitle: pillSubtitle(for: event),
             fanGoal: isFanGoal ? event : nil
         ))
     }
@@ -76,13 +76,13 @@ final class OverlayManager: ObservableObject {
     /// VAR cancelled a goal. The pill stays queued (it's information), but it
     /// no longer triggers ball/confetti; if the ball is currently celebrating
     /// that team, it stops celebrating it (and goes away if no teams remain).
-    func cancelGoal(fixtureId: Int, teamCode: String?) {
+    func cancelGoal(fixtureId: Int, teamId: Int?) {
         for index in queue.indices
-        where queue[index].fanGoal?.fixtureId == fixtureId && queue[index].fanGoal?.teamCode == teamCode {
+        where queue[index].fanGoal?.fixtureId == fixtureId && queue[index].fanGoal?.teamId == teamId {
             queue[index].fanGoal = nil
         }
         guard ballPhase != .hidden else { return }
-        ballEvents.removeAll { $0.fixtureId == fixtureId && $0.teamCode == teamCode }
+        ballEvents.removeAll { $0.fixtureId == fixtureId && $0.teamId == teamId }
         if ballEvents.isEmpty {
             dismissBall()
         }
@@ -158,7 +158,7 @@ final class OverlayManager: ObservableObject {
             ballPhase = .tapping
             CelebrationService.shared.beginWindow(
                 targets: ballEvents.compactMap { event in
-                    event.teamCode.map { (fixtureId: event.fixtureId, teamCode: $0) }
+                    event.teamId.map { (fixtureId: event.fixtureId, teamId: String($0)) }
                 }
             )
             showInteractPanel()
@@ -193,7 +193,7 @@ final class OverlayManager: ObservableObject {
     /// lands in a later set whenever it's ready).
     private func flushTapsAndQueueCounts() {
         let targets = ballEvents.compactMap { event in
-            event.teamCode.map { (fixtureId: event.fixtureId, teamCode: $0) }
+            event.teamId.map { (fixtureId: event.fixtureId, teamId: String($0)) }
         }
         let taps = tapBursts
         CelebrationService.shared.endWindow()
@@ -202,18 +202,18 @@ final class OverlayManager: ObservableObject {
         Task { @MainActor in
             for target in targets {
                 let totals = (try? await Services.scores.fetchCelebrations(fixtureId: target.fixtureId)) ?? [:]
-                let team = TeamCatalog.team(for: target.teamCode, in: AppSession.shared.teams)
-                let count = totals[target.teamCode] ?? 0
+                let team = TeamCatalog.team(for: Int(target.teamId) ?? -1, in: AppSession.shared.teams)
+                let count = totals[target.teamId] ?? 0
                 let text: String? = count > 0
                     ? "\(count.formattedCompact) celebrations for \(team.name) this match"
                     : (taps > 0 ? "You celebrated with \(team.name)!" : nil)
                 if let text {
                     enqueue(NotchItem(
-                        id: "count:\(target.fixtureId):\(target.teamCode):\(Date().timeIntervalSince1970)",
+                        id: "count:\(target.fixtureId):\(target.teamId):\(Date().timeIntervalSince1970)",
                         icon: pillIcon(for: .celebration),
                         iconColor: pillIconColor(for: .celebration),
-                        text: text,
-                        subtext: nil,
+                        title: [.text(text)],
+                        subtitle: nil,
                         fanGoal: nil
                     ))
                 }
@@ -250,10 +250,10 @@ final class OverlayManager: ObservableObject {
         let data: [String: Any] = [
             "eventId": "preview:\(Date().timeIntervalSince1970)", "type": "GOAL",
             "fixtureId": "0", "leagueId": "1",
-            "homeTeam": TeamCatalog.previewHome.code, "awayTeam": TeamCatalog.previewAway.code,
+            "homeTeamId": String(TeamCatalog.previewHome.id), "awayTeamId": String(TeamCatalog.previewAway.id),
             "homeName": TeamCatalog.previewHome.name, "awayName": TeamCatalog.previewAway.name,
             "homeGoals": "1", "awayGoals": "0",
-            "teamCode": TeamCatalog.previewHome.code, "player": "Player Name", "minute": "73",
+            "teamId": String(TeamCatalog.previewHome.id), "player": "Player Name", "minute": "73",
         ]
         guard let event = MatchEvent(fcmData: data) else { return }
         dismissAll()

@@ -14,9 +14,9 @@ export class CelebrationAggregator {
     private readonly flushMs = 1500,
   ) {}
 
-  add(fixtureId: number, teamCode: string, taps: number): void {
+  add(fixtureId: number, teamId: string, taps: number): void {
     const counts = this.buffer.get(fixtureId) ?? {};
-    counts[teamCode] = (counts[teamCode] ?? 0) + taps;
+    counts[teamId] = (counts[teamId] ?? 0) + taps;
     this.buffer.set(fixtureId, counts);
   }
 

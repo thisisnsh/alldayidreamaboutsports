@@ -10,8 +10,8 @@ export function diffMatch(prev: MatchState | null, next: MatchState): MatchEvent
   const base = {
     fixtureId: next.fixtureId,
     leagueId: next.leagueId,
-    homeTeam: next.home.code,
-    awayTeam: next.away.code,
+    homeTeamId: next.home.id,
+    awayTeamId: next.away.id,
     homeName: next.home.name,
     awayName: next.away.name,
     homeGoals: next.home.goals,
@@ -63,13 +63,13 @@ export function diffMatch(prev: MatchState | null, next: MatchState): MatchEvent
   for (let i = 0; i < kicks.length; i++) {
     const kick = kicks[i]!;
     if (kick.scored) {
-      if (kick.teamCode === next.home.code) penHome++;
+      if (kick.teamId === next.home.id) penHome++;
       else penAway++;
     }
     if (i < prevKicks) continue; // already published
     events.push(
       make("PENALTY_KICK", {
-        teamCode: kick.teamCode,
+        teamId: kick.teamId,
         player: kick.player,
         scored: kick.scored,
         penHome,
@@ -85,23 +85,23 @@ export function diffMatch(prev: MatchState | null, next: MatchState): MatchEvent
     const after = next[side].goals;
     const team = next[side];
     const scorer =
-      next.lastGoal?.teamCode === team.code ? next.lastGoal : undefined;
+      next.lastGoal?.teamId === team.id ? next.lastGoal : undefined;
     for (let g = before + 1; g <= after; g++) {
       events.push(
         make("GOAL", {
-          teamCode: team.code,
+          teamId: team.id,
           player: scorer?.player ?? null,
           minute: scorer?.minute ?? next.minute,
-          idSuffix: `${team.code}:${g}`,
+          idSuffix: `${team.id}:${g}`,
         }),
       );
     }
     for (let g = before; g > after; g--) {
       events.push(
         make("GOAL_CANCELLED", {
-          teamCode: team.code,
+          teamId: team.id,
           minute: next.minute,
-          idSuffix: `${team.code}:${g}`,
+          idSuffix: `${team.id}:${g}`,
         }),
       );
     }
@@ -118,9 +118,9 @@ export function diffMatch(prev: MatchState | null, next: MatchState): MatchEvent
       for (let c = before + 1; c <= team[kind]; c++) {
         events.push(
           make(type, {
-            teamCode: team.code,
+            teamId: team.id,
             minute: next.minute,
-            idSuffix: `${team.code}:${c}`,
+            idSuffix: `${team.id}:${c}`,
           }),
         );
       }

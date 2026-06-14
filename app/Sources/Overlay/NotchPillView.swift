@@ -68,15 +68,9 @@ private struct NotchPillRow: View {
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(item.iconColor)
             VStack(alignment: .center, spacing: 2) {
-                Text(item.text)
-                    .font(.system(size: 13, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
-                if let subtext = item.subtext {
-                    Text(subtext)
-                        .font(.system(size: 11, weight: .medium, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.8))
-                        .lineLimit(1)
+                SegmentLine(segments: item.title, size: 13, weight: .semibold, color: .white)
+                if let subtitle = item.subtitle {
+                    SegmentLine(segments: subtitle, size: 11, weight: .medium, color: .white.opacity(0.8))
                 }
             }
         }
@@ -87,5 +81,31 @@ private struct NotchPillRow: View {
                 .fill(.black)
                 .shadow(color: .black.opacity(0.4), radius: 10, y: 4)
         )
+    }
+}
+
+/// One pill line, built from `PillSegment`s: text runs interleaved with team
+/// logos (no emoji). Kept to a single line — long names truncate.
+private struct SegmentLine: View {
+    let segments: [PillSegment]
+    let size: CGFloat
+    let weight: Font.Weight
+    let color: Color
+
+    var body: some View {
+        HStack(spacing: 3) {
+            ForEach(Array(segments.enumerated()), id: \.offset) { _, segment in
+                switch segment {
+                case let .text(string, bold):
+                    Text(string)
+                        .font(.system(size: size, weight: bold ? .bold : weight, design: .rounded))
+                        .foregroundStyle(color)
+                case let .logo(url):
+                    CachedTeamLogo(url: url, size: size + 4)
+                }
+            }
+        }
+        .lineLimit(1)
+        .fixedSize(horizontal: true, vertical: false)
     }
 }

@@ -80,14 +80,16 @@ struct ConfettiView: View {
     }
 }
 
-/// Every click throws 4 mini flag-balls that arc out and settle on the bottom
+/// Every click throws 4 mini team-logos that arc out and settle on the bottom
 /// edge of the screen — the floor fills up as fans hammer the ball. They stay
 /// put (no bounce, no per-ball fade) until the whole scene fades out. With
-/// several celebrated teams, each mini picks a random flag among them.
+/// several celebrated teams, each mini picks a random team among them.
 struct MiniBallBursts: View {
     let teams: [Team]
     let size: CGSize
     let bursts: Int
+
+    @ObservedObject private var logos = TeamLogoStore.shared
 
     /// Matches CelebrationService.tapsPerClick — one click, 4 balls, 4 counts.
     static let ballsPerClick = 4
@@ -102,7 +104,7 @@ struct MiniBallBursts: View {
         let diameter: CGFloat
         let landTime: Double // when it touches the bottom edge…
         let landX: CGFloat // …and the x it stays at forever after
-        let flag: String
+        let logoURL: String
     }
 
     @State private var minis: [Mini] = []
@@ -110,6 +112,7 @@ struct MiniBallBursts: View {
     var body: some View {
         TimelineView(.animation) { context in
             Canvas { canvas, _ in
+                _ = logos.version // redraw once a logo finishes loading
                 let now = context.date
                 for m in minis {
                     let t = now.timeIntervalSince(m.born)
@@ -123,14 +126,18 @@ struct MiniBallBursts: View {
                             y: m.origin.y + m.velocity.dy * t + 0.5 * Self.gravity * t * t
                         )
                     }
-                    var resolved = canvas.resolve(Text("⚽").font(.system(size: m.diameter)))
-                    canvas.draw(resolved, at: pos)
-                    resolved = canvas.resolve(Text(m.flag).font(.system(size: m.diameter * 0.55)))
-                    canvas.draw(resolved, at: CGPoint(x: pos.x + m.diameter * 0.4, y: pos.y - m.diameter * 0.4))
+                    guard let image = logos.image(for: m.logoURL) else { continue }
+                    let resolved = canvas.resolve(Image(nsImage: image).resizable())
+                    canvas.draw(
+                        resolved,
+                        in: CGRect(x: pos.x - m.diameter / 2, y: pos.y - m.diameter / 2,
+                                   width: m.diameter, height: m.diameter)
+                    )
                 }
             }
         }
         .allowsHitTesting(false)
+        .onAppear { logos.preload(teams.map(\.logo)) }
         .onChange(of: bursts) { old, new in
             guard new > old else {
                 minis.removeAll() // new celebration started (counter reset)
@@ -157,7 +164,7 @@ struct MiniBallBursts: View {
                     diameter: diameter,
                     landTime: landTime,
                     landX: landX,
-                    flag: teams.randomElement()?.flag ?? "⚽"
+                    logoURL: teams.randomElement()?.logo ?? ""
                 ))
             }
             if minis.count > Self.maxBalls {

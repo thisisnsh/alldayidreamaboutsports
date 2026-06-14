@@ -41,7 +41,7 @@ private struct BallScene: View {
     @EnvironmentObject var overlay: OverlayManager
 
     private var teams: [Team] {
-        events.compactMap { $0.teamCode }.map { TeamCatalog.team(for: $0, in: AppSession.shared.teams) }
+        events.compactMap { $0.teamId }.map { TeamCatalog.team(for: $0, in: AppSession.shared.teams) }
     }
 
     var body: some View {
@@ -99,14 +99,17 @@ private struct BallScene: View {
         .allowsHitTesting(false)
     }
 
-    /// 🏳️ Team 1 - 0 Team 🏳️ — the side that scored is bold.
-    private func scoreLine(for event: MatchEvent) -> Text {
-        let homeScored = event.teamCode == event.homeTeam
-        return Text("\(flag(event.homeTeam)) \(event.homeName) \(event.homeGoals)")
-            .fontWeight(homeScored ? .bold : .medium)
-            + Text(" - ").fontWeight(.medium)
-            + Text("\(event.awayGoals) \(event.awayName) \(flag(event.awayTeam))")
-            .fontWeight(homeScored ? .medium : .bold)
+    /// [logo] Team 1 - 0 Team [logo] — the side that scored is bold.
+    private func scoreLine(for event: MatchEvent) -> some View {
+        let homeScored = event.teamId == event.homeTeamId
+        let logoSize: CGFloat = events.count > 2 ? 20 : 26
+        return HStack(spacing: 6) {
+            CachedTeamLogo(url: logo(event.homeTeamId), size: logoSize)
+            Text("\(event.homeName) \(event.homeGoals)").fontWeight(homeScored ? .bold : .medium)
+            Text("-").fontWeight(.medium)
+            Text("\(event.awayGoals) \(event.awayName)").fontWeight(homeScored ? .medium : .bold)
+            CachedTeamLogo(url: logo(event.awayTeamId), size: logoSize)
+        }
     }
 
     private func scorerLine(for event: MatchEvent) -> String? {
@@ -115,8 +118,8 @@ private struct BallScene: View {
         return minute.map { "\(player) \($0)" } ?? player
     }
 
-    private func flag(_ code: String) -> String {
-        TeamCatalog.team(for: code, in: AppSession.shared.teams).flag
+    private func logo(_ id: Int) -> String {
+        TeamCatalog.team(for: id, in: AppSession.shared.teams).logo
     }
 }
 
@@ -160,8 +163,8 @@ private struct FallingBall: View {
     }
 }
 
-/// The ball: SF soccerball.inverse in white, with a flag badge for EVERY team
-/// being celebrated. No images.
+/// The ball: SF soccerball.inverse in white, with a logo badge for EVERY team
+/// being celebrated.
 struct BallView: View {
     let teams: [Team]
     let diameter: CGFloat
@@ -173,13 +176,13 @@ struct BallView: View {
                 .foregroundStyle(.white)
                 .frame(width: diameter, height: diameter)
                 .shadow(color: .black.opacity(0.5), radius: 8, y: 4)
-            HStack(spacing: -diameter * 0.08) {
+            HStack(spacing: -diameter * 0.04) {
                 ForEach(teams) { team in
-                    Text(team.flag)
-                        .font(.system(size: diameter * (teams.count > 2 ? 0.24 : 0.34)))
+                    CachedTeamLogo(url: team.logo, size: diameter * (teams.count > 2 ? 0.30 : 0.42))
+                        .background(Circle().fill(.white).shadow(radius: 2))
                 }
             }
-            .offset(x: diameter * 0.1, y: -diameter * 0.1)
+            .offset(x: diameter * 0.12, y: -diameter * 0.12)
         }
     }
 }

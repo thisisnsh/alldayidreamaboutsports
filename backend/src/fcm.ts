@@ -2,8 +2,8 @@ import { getMessaging, Messaging } from "firebase-admin/messaging";
 import { firebaseApp } from "./store.js";
 import type { MatchEvent } from "./types.js";
 
-export function topicForTeam(leagueId: number, teamCode: string): string {
-  return `l${leagueId}_${teamCode}`;
+export function topicForTeam(leagueId: number, teamId: number): string {
+  return `l${leagueId}_${teamId}`;
 }
 
 /** Data-only pushes; the app renders animations/notifications itself. */
@@ -32,13 +32,13 @@ export class Fcm {
       type: ev.type,
       fixtureId: String(ev.fixtureId),
       leagueId: String(ev.leagueId),
-      homeTeam: ev.homeTeam,
-      awayTeam: ev.awayTeam,
+      homeTeamId: String(ev.homeTeamId),
+      awayTeamId: String(ev.awayTeamId),
       homeName: ev.homeName,
       awayName: ev.awayName,
       homeGoals: String(ev.homeGoals),
       awayGoals: String(ev.awayGoals),
-      teamCode: ev.teamCode ?? "",
+      teamId: ev.teamId == null ? "" : String(ev.teamId),
       player: ev.player ?? "",
       minute: ev.minute == null ? "" : String(ev.minute),
       penHome: ev.penHome == null ? "" : String(ev.penHome),
@@ -46,8 +46,8 @@ export class Fcm {
       scored: ev.scored == null ? "" : String(ev.scored),
     };
     const topics = new Set([
-      topicForTeam(ev.leagueId, ev.homeTeam),
-      topicForTeam(ev.leagueId, ev.awayTeam),
+      topicForTeam(ev.leagueId, ev.homeTeamId),
+      topicForTeam(ev.leagueId, ev.awayTeamId),
     ]);
     await Promise.all([...topics].map((t) => this.sendData(t, data)));
   }
@@ -55,8 +55,8 @@ export class Fcm {
   async publishCelebrationCount(
     leagueId: number,
     fixtureId: number,
-    homeTeam: string,
-    awayTeam: string,
+    homeTeamId: number,
+    awayTeamId: number,
     totals: Record<string, number>,
   ): Promise<void> {
     const data: Record<string, string> = {
@@ -64,7 +64,7 @@ export class Fcm {
       fixtureId: String(fixtureId),
       totals: JSON.stringify(totals),
     };
-    const topics = new Set([topicForTeam(leagueId, homeTeam), topicForTeam(leagueId, awayTeam)]);
+    const topics = new Set([topicForTeam(leagueId, homeTeamId), topicForTeam(leagueId, awayTeamId)]);
     await Promise.all([...topics].map((t) => this.sendData(t, data)));
   }
 }

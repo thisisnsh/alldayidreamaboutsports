@@ -87,8 +87,8 @@ final class FakeStore {
             fixtureId: def.id, leagueId: def.leagueId, round: def.round,
             kickoffISO: ISO8601DateFormatter().string(from: kickoff),
             status: s.status, minute: s.minute,
-            home: ScoreboardTeam(code: def.home.code, name: def.home.name, goals: s.homeGoals),
-            away: ScoreboardTeam(code: def.away.code, name: def.away.name, goals: s.awayGoals),
+            home: ScoreboardTeam(id: def.home.id, name: def.home.name, goals: s.homeGoals),
+            away: ScoreboardTeam(id: def.away.id, name: def.away.name, goals: s.awayGoals),
             shootout: shootout
         )
     }
@@ -126,13 +126,13 @@ final class FakeBackendAPI: BackendAPI {
         FakeStore.shared.prefs = prefs
     }
 
-    func celebrate(fixtureId: Int, teamCode: String, taps: Int) async throws {
+    func celebrate(fixtureId: Int, teamId: String, taps: Int) async throws {
         try? await Task.sleep(for: .milliseconds(250)) // feel like a network hop
         // POST appends to the fake data — visible on the next GET.
-        FakeStore.shared.celebrations[fixtureId, default: [:]][teamCode, default: 0] += taps
+        FakeStore.shared.celebrations[fixtureId, default: [:]][teamId, default: 0] += taps
         NSLog("🧪 FakeBackend: +%d celebrations for %@ in fixture %d (total %d)",
-              taps, teamCode, fixtureId,
-              FakeStore.shared.celebrations[fixtureId]?[teamCode] ?? 0)
+              taps, teamId, fixtureId,
+              FakeStore.shared.celebrations[fixtureId]?[teamId] ?? 0)
     }
 
     func deleteAccount() async throws {
@@ -143,7 +143,7 @@ final class FakeBackendAPI: BackendAPI {
 
 @MainActor
 final class FakeScores: ScoresProviding {
-    func fetchTeams() async throws -> [Team] { TeamCatalog.fallback }
+    func fetchCatalog() async throws -> Catalog { FakeScores.demoCatalog }
     func fetchLive() async throws -> [Fixture] { FakeStore.shared.liveFixtures }
     func fetchTodayFixtures() async throws -> [Fixture] { FakeStore.shared.todayFixtures }
     func fetchCelebrations(fixtureId: Int) async throws -> [String: Int] {
@@ -155,6 +155,35 @@ final class FakeScores: ScoresProviding {
     func fetchBackupConfig() async throws -> BackupConfig {
         BackupConfig(killSwitch: false, message: nil, minBuild: nil)
     }
+
+    /// Multi-league catalog for the picker: World Cup is active/selectable; a
+    /// coming-soon club league shows greyed; one league is "not scheduled".
+    static let demoCatalog: Catalog = {
+        func team(_ id: Int, _ name: String, _ code: String, _ league: Int) -> Team {
+            Team(id: id, name: name, code: code, logo: TeamCatalog.logoURL(id), leagueId: league)
+        }
+        func leagueLogo(_ id: Int) -> String { "https://media.api-sports.io/football/leagues/\(id).png" }
+        return Catalog(
+            leagues: [
+                League(id: 1, name: "World Cup", logo: leagueLogo(1), active: true, scheduled: true, season: 2026),
+                League(id: 39, name: "Premier League", logo: leagueLogo(39), active: false, scheduled: true, season: 2025),
+                League(id: 78, name: "Bundesliga", logo: leagueLogo(78), active: false, scheduled: false, season: nil),
+            ],
+            teams: [
+                "1": [
+                    team(6, "Brazil", "BRA", 1), team(26, "Argentina", "ARG", 1),
+                    team(10, "England", "ENG", 1), team(2384, "United States", "USA", 1),
+                    team(2, "France", "FRA", 1), team(25, "Germany", "GER", 1),
+                    team(9, "Spain", "ESP", 1), team(27, "Portugal", "POR", 1),
+                ],
+                "39": [
+                    team(33, "Manchester United", "MUN", 39), team(40, "Liverpool", "LIV", 39),
+                    team(42, "Arsenal", "ARS", 39), team(50, "Manchester City", "MCI", 39),
+                ],
+                "78": [],
+            ],
+        )
+    }()
 }
 
 /// Plays DevConfig.timeline: a fixed list of (seconds-after-start → event)
@@ -277,18 +306,18 @@ final class DemoEngine: ObservableObject {
                       scored: Bool? = nil) {
         let store = FakeStore.shared
         let s = store.states[def.id] ?? LiveMatchState()
-        let teamCode = side.map { $0 == .home ? def.home.code : def.away.code }
+        let teamId = side.map { $0 == .home ? def.home.id : def.away.id }
         var data: [String: Any] = [
             "kind": "match_event",
             "eventId": "demo:\(def.id):\(type.rawValue):\(store.eventSeq)",
             "type": type.rawValue,
             "fixtureId": String(def.id),
             "leagueId": String(def.leagueId),
-            "homeTeam": def.home.code, "awayTeam": def.away.code,
+            "homeTeamId": String(def.home.id), "awayTeamId": String(def.away.id),
             "homeName": def.home.name, "awayName": def.away.name,
             "homeGoals": String(s.homeGoals), "awayGoals": String(s.awayGoals),
             "minute": String(minute),
-            "teamCode": teamCode ?? "",
+            "teamId": teamId.map(String.init) ?? "",
             "player": player ?? "",
         ]
         // Carry the pen tally on every event once a shootout exists, mirroring

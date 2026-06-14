@@ -39,9 +39,9 @@ describe("ApiFootballProvider", () => {
       rawStatus: "2H",
       round: "Group A - 1",
       minute: 73,
-      home: { code: "BRA", goals: 2, yellowCards: 0, redCards: 1 },
-      away: { code: "USA", goals: 1, yellowCards: 1, redCards: 0 },
-      lastGoal: { teamCode: "BRA", player: "Vinícius Jr", minute: 73 },
+      home: { id: 10, name: "Brazil", goals: 2, yellowCards: 0, redCards: 1 },
+      away: { id: 20, name: "USA", goals: 1, yellowCards: 1, redCards: 0 },
+      lastGoal: { teamId: 10, player: "Vinícius Jr", minute: 73 },
     });
   });
 
@@ -72,14 +72,14 @@ describe("ApiFootballProvider", () => {
       home: 2,
       away: 1,
       kicks: [
-        { teamCode: "BRA", player: "Casemiro", scored: true },
-        { teamCode: "USA", player: "Pulisic", scored: false },
-        { teamCode: "BRA", player: "Vinícius Jr", scored: true },
-        { teamCode: "USA", player: "McKennie", scored: true },
+        { teamId: 10, player: "Casemiro", scored: true },
+        { teamId: 20, player: "Pulisic", scored: false },
+        { teamId: 10, player: "Vinícius Jr", scored: true },
+        { teamId: 20, player: "McKennie", scored: true },
       ],
     });
     // The in-play missed penalty was skipped; Rodrygo is the last real scorer.
-    expect(match!.lastGoal).toMatchObject({ teamCode: "BRA", player: "Rodrygo" });
+    expect(match!.lastGoal).toMatchObject({ teamId: 10, player: "Rodrygo" });
   });
 
   it("leaves shootout undefined for a normal in-play fixture", async () => {
@@ -88,13 +88,13 @@ describe("ApiFootballProvider", () => {
     expect(match!.shootout).toBeUndefined();
   });
 
-  it("maps unknown teams to a derived code instead of crashing", async () => {
+  it("takes team identity straight from the fixture id (no name mapping)", async () => {
     const fixture = structuredClone(liveFixture);
-    fixture.teams.home.name = "New Caledonia";
+    fixture.teams.home = { id: 99999, name: "New Caledonia" };
     fixture.events = [];
     const { provider } = providerReturning({ response: [fixture] });
     const [match] = await provider.liveMatches();
-    expect(match!.home.code).toBe("NEW");
+    expect(match!.home).toMatchObject({ id: 99999, name: "New Caledonia" });
   });
 
   it("throws a useful error on API failure", async () => {

@@ -14,9 +14,9 @@ final class CelebrationService {
 
     private var api: BackendAPI { Services.api }
     private var taps = 0
-    private var targets: [(fixtureId: Int, teamCode: String)] = []
+    private var targets: [(fixtureId: Int, teamId: String)] = []
 
-    func beginWindow(targets: [(fixtureId: Int, teamCode: String)]) {
+    func beginWindow(targets: [(fixtureId: Int, teamId: String)]) {
         // If a previous window never flushed (rapid back-to-back sets), flush it first.
         flush()
         self.targets = targets
@@ -44,7 +44,7 @@ final class CelebrationService {
         taps = 0
         Task {
             for target in batch {
-                try? await api.celebrate(fixtureId: target.fixtureId, teamCode: target.teamCode, taps: count)
+                try? await api.celebrate(fixtureId: target.fixtureId, teamId: target.teamId, taps: count)
             }
         }
     }

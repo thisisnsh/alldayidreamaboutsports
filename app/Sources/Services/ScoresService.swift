@@ -16,9 +16,8 @@ struct CDNScoresClient: ScoresProviding {
         return try JSONDecoder().decode(T.self, from: data)
     }
 
-    func fetchTeams() async throws -> [Team] {
-        struct Payload: Codable { let teams: [Team] }
-        return try await fetch("teams.json", as: Payload.self).teams
+    func fetchCatalog() async throws -> Catalog {
+        try await fetch("catalog.json", as: Catalog.self)
     }
 
     func fetchLive() async throws -> [Fixture] {

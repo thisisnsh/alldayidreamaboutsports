@@ -11,8 +11,8 @@ function state(overrides: Partial<MatchState> = {}): MatchState {
     status: "LIVE",
     rawStatus: "1H",
     minute: 10,
-    home: { code: "BRA", name: "Brazil", goals: 0, yellowCards: 0, redCards: 0 },
-    away: { code: "USA", name: "United States", goals: 0, yellowCards: 0, redCards: 0 },
+    home: { id: 6, name: "Brazil", goals: 0, yellowCards: 0, redCards: 0 },
+    away: { id: 16, name: "United States", goals: 0, yellowCards: 0, redCards: 0 },
     ...overrides,
   };
 }
@@ -34,17 +34,17 @@ describe("diffMatch", () => {
     const prev = state();
     const next = state({
       home: { ...prev.home, goals: 1 },
-      lastGoal: { teamCode: "BRA", player: "Vinícius Jr", minute: 23 },
+      lastGoal: { teamId: 6, player: "Vinícius Jr", minute: 23 },
       minute: 23,
     });
     const events = diffMatch(prev, next);
     expect(events).toHaveLength(1);
     expect(events[0]).toMatchObject({
       type: "GOAL",
-      teamCode: "BRA",
+      teamId: 6,
       player: "Vinícius Jr",
       minute: 23,
-      eventId: "100:GOAL:BRA:1",
+      eventId: "100:GOAL:6:1",
     });
   });
 
@@ -52,15 +52,15 @@ describe("diffMatch", () => {
     const prev = state();
     const next = state({ away: { ...prev.away, goals: 2 } });
     const events = diffMatch(prev, next);
-    expect(events.map((e) => e.eventId)).toEqual(["100:GOAL:USA:1", "100:GOAL:USA:2"]);
+    expect(events.map((e) => e.eventId)).toEqual(["100:GOAL:16:1", "100:GOAL:16:2"]);
   });
 
   it("emits GOAL_CANCELLED when VAR takes a goal away", () => {
-    const prev = state({ home: { code: "BRA", name: "Brazil", goals: 1, yellowCards: 0, redCards: 0 } });
+    const prev = state({ home: { id: 6, name: "Brazil", goals: 1, yellowCards: 0, redCards: 0 } });
     const next = state();
     const events = diffMatch(prev, next);
     expect(events).toHaveLength(1);
-    expect(events[0]).toMatchObject({ type: "GOAL_CANCELLED", teamCode: "BRA" });
+    expect(events[0]).toMatchObject({ type: "GOAL_CANCELLED", teamId: 6 });
   });
 
   it("emits cards per increment", () => {
@@ -106,26 +106,26 @@ describe("diffMatch", () => {
   });
 
   it("emits one PENALTY_KICK per new kick with scored flag and running tally", () => {
-    const kick = (teamCode: string, scored: boolean) => ({ teamCode, player: null, scored });
+    const kick = (teamId: number, scored: boolean) => ({ teamId, player: null, scored });
     const prev = state({
       rawStatus: "P",
-      shootout: { home: 1, away: 0, kicks: [kick("BRA", true), kick("USA", false)] },
+      shootout: { home: 1, away: 0, kicks: [kick(6, true), kick(16, false)] },
     });
     const next = state({
       rawStatus: "P",
       shootout: {
         home: 1,
         away: 1,
-        kicks: [kick("BRA", true), kick("USA", false), kick("BRA", false), kick("USA", true)],
+        kicks: [kick(6, true), kick(16, false), kick(6, false), kick(16, true)],
       },
     });
     const events = diffMatch(prev, next).filter((e) => e.type === "PENALTY_KICK");
     expect(events).toHaveLength(2); // only the two new kicks
     expect(events[0]).toMatchObject({
-      teamCode: "BRA", scored: false, penHome: 1, penAway: 0, eventId: "100:PENALTY_KICK:3",
+      teamId: 6, scored: false, penHome: 1, penAway: 0, eventId: "100:PENALTY_KICK:3",
     });
     expect(events[1]).toMatchObject({
-      teamCode: "USA", scored: true, penHome: 1, penAway: 1, eventId: "100:PENALTY_KICK:4",
+      teamId: 16, scored: true, penHome: 1, penAway: 1, eventId: "100:PENALTY_KICK:4",
     });
   });
 
@@ -143,7 +143,7 @@ describe("diffMatch", () => {
       status: "HALF_TIME",
       rawStatus: "HT",
       minute: 45,
-      home: { code: "BRA", name: "Brazil", goals: 1, yellowCards: 1, redCards: 0 },
+      home: { id: 6, name: "Brazil", goals: 1, yellowCards: 1, redCards: 0 },
     });
     expect(types(prev, next).sort()).toEqual(["GOAL", "HALF_TIME", "YELLOW_CARD"]);
   });

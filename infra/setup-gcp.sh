@@ -58,6 +58,19 @@ gcloud scheduler jobs create http poll-live-scores \
   --attempt-deadline 300s || \
   echo "   (job exists or service not deployed yet — rerun after first deploy)"
 
+echo "── Cloud Scheduler → /internal/sync-catalog daily (leagues + teams refresh)"
+# Independent of the poller (which only runs during the tournament window), so
+# the multi-league catalog stays fresh year-round.
+gcloud scheduler jobs create http sync-catalog \
+  --location "$REGION" \
+  --schedule '0 4 * * *' \
+  --uri "${SERVICE_URL}/internal/sync-catalog" \
+  --http-method POST \
+  --oidc-service-account-email "$SCHEDULER_SA" \
+  --oidc-token-audience "$SERVICE_URL" \
+  --attempt-deadline 300s || \
+  echo "   (job exists or service not deployed yet — rerun after first deploy)"
+
 echo "── Workload Identity Federation for GitHub Actions deploys"
 DEPLOY_SA="sports-deploy@${PROJECT_ID}.iam.gserviceaccount.com"
 gcloud iam service-accounts create sports-deploy --display-name "GitHub Actions deploy" || true

@@ -21,11 +21,11 @@ struct MatchEvent: Identifiable {
     let type: MatchEventType
     let fixtureId: Int
     let leagueId: Int
-    let teamCode: String?
+    let teamId: Int?
     let player: String?
     let minute: Int?
-    let homeTeam: String
-    let awayTeam: String
+    let homeTeamId: Int
+    let awayTeamId: Int
     let homeName: String
     let awayName: String
     let homeGoals: Int
@@ -45,22 +45,22 @@ struct MatchEvent: Identifiable {
             let typeRaw = fcmData["type"] as? String,
             let type = MatchEventType(rawValue: typeRaw),
             let fixtureId = Int(fcmData["fixtureId"] as? String ?? ""),
-            let homeTeam = fcmData["homeTeam"] as? String,
-            let awayTeam = fcmData["awayTeam"] as? String
+            let homeTeamId = Int(fcmData["homeTeamId"] as? String ?? ""),
+            let awayTeamId = Int(fcmData["awayTeamId"] as? String ?? "")
         else { return nil }
         self.eventId = eventId
         self.type = type
         self.fixtureId = fixtureId
         self.leagueId = Int(fcmData["leagueId"] as? String ?? "") ?? 1
-        let team = fcmData["teamCode"] as? String
-        self.teamCode = (team?.isEmpty ?? true) ? nil : team
+        let team = fcmData["teamId"] as? String
+        self.teamId = (team?.isEmpty ?? true) ? nil : Int(team ?? "")
         let player = fcmData["player"] as? String
         self.player = (player?.isEmpty ?? true) ? nil : player
         self.minute = Int(fcmData["minute"] as? String ?? "")
-        self.homeName = fcmData["homeName"] as? String ?? homeTeam
-        self.awayName = fcmData["awayName"] as? String ?? awayTeam
-        self.homeTeam = homeTeam
-        self.awayTeam = awayTeam
+        self.homeName = fcmData["homeName"] as? String ?? String(homeTeamId)
+        self.awayName = fcmData["awayName"] as? String ?? String(awayTeamId)
+        self.homeTeamId = homeTeamId
+        self.awayTeamId = awayTeamId
         self.homeGoals = Int(fcmData["homeGoals"] as? String ?? "") ?? 0
         self.awayGoals = Int(fcmData["awayGoals"] as? String ?? "") ?? 0
         self.penHome = Int(fcmData["penHome"] as? String ?? "")
@@ -74,7 +74,7 @@ struct MatchEvent: Identifiable {
 // live.json / fixtures-{date}.json payloads (backend MatchState shape).
 
 struct ScoreboardTeam: Codable, Hashable {
-    let code: String
+    let id: Int
     let name: String
     let goals: Int
 }
@@ -118,8 +118,8 @@ struct Fixture: Codable, Identifiable, Hashable {
         URL(string: "https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026/scores-fixtures")!
     }
 
-    func involves(_ codes: Set<String>) -> Bool {
-        codes.contains(home.code) || codes.contains(away.code)
+    func involves(_ ids: Set<Int>) -> Bool {
+        ids.contains(home.id) || ids.contains(away.id)
     }
 }
 

@@ -1,5 +1,9 @@
-/** FIFA trigram, e.g. "BRA", "ENG". Used in FCM topics as `l1_BRA`. */
-export type TeamCode = string;
+/**
+ * Stable global team identity = API-Football's numeric team id (never null,
+ * unique across leagues). Used in FCM topics as `l1_6`, as the celebration
+ * counter key, and as the `fanOf` value.
+ */
+export type TeamId = number;
 
 export type MatchStatus =
   | "SCHEDULED" // NS, TBD
@@ -9,8 +13,8 @@ export type MatchStatus =
   | "OTHER"; // postponed, cancelled, ...
 
 export interface TeamScore {
-  code: TeamCode;
-  name: string;
+  id: TeamId;
+  name: string; // display name from the fixture (logo is resolved app-side via the catalog)
   goals: number;
   yellowCards: number;
   redCards: number;
@@ -18,7 +22,7 @@ export interface TeamScore {
 
 /** One penalty-shootout kick, in the order it was taken. */
 export interface PenaltyKick {
-  teamCode: TeamCode;
+  teamId: TeamId;
   player: string | null;
   scored: boolean;
 }
@@ -36,7 +40,7 @@ export interface MatchState {
   home: TeamScore;
   away: TeamScore;
   /** Last scorer per side, when the provider exposes it. */
-  lastGoal?: { teamCode: TeamCode; player: string | null; minute: number | null };
+  lastGoal?: { teamId: TeamId; player: string | null; minute: number | null };
   /** Penalty shootout, present once the match reaches one (P/PEN). */
   shootout?: { home: number; away: number; kicks: PenaltyKick[] };
 }
@@ -60,7 +64,7 @@ export interface MatchEvent {
   fixtureId: number;
   leagueId: number;
   /** Team the event belongs to (scoring/carded team); undefined for whole-match events. */
-  teamCode?: TeamCode;
+  teamId?: TeamId;
   player?: string | null;
   minute?: number | null;
   /** Penalty-shootout tally, carried on shootout/full-time events. */
@@ -68,8 +72,8 @@ export interface MatchEvent {
   penAway?: number;
   /** Whether a PENALTY_KICK was converted. */
   scored?: boolean;
-  homeTeam: TeamCode;
-  awayTeam: TeamCode;
+  homeTeamId: TeamId;
+  awayTeamId: TeamId;
   homeName: string;
   awayName: string;
   homeGoals: number;
@@ -77,7 +81,7 @@ export interface MatchEvent {
 }
 
 export interface UserPrefs {
-  fanOf: Record<string, Record<string, TeamCode[]>>; // game -> leagueId -> teams
+  fanOf: Record<string, Record<string, string[]>>; // game -> leagueId -> team ids (as strings)
   settings: {
     launchAtLogin?: boolean;
     theme?: "system" | "light" | "dark";

@@ -12,9 +12,9 @@ final class PushService: NSObject, MessagingDelegate {
         set { UserDefaults.standard.set(Array(newValue), forKey: "subscribedTopics") }
     }
 
-    func syncTopics(to teamCodes: Set<String>) {
+    func syncTopics(to teamIds: Set<Int>) {
         guard FirebaseConfigured.isConfigured else { return }
-        let wanted = Set(teamCodes.map { "l\(AppEnvironment.leagueId)_\($0)" })
+        let wanted = Set(teamIds.map { "l\(AppEnvironment.leagueId)_\($0)" })
         let current = subscribed
         for topic in current.subtracting(wanted) {
             Messaging.messaging().unsubscribe(fromTopic: topic)
@@ -43,11 +43,11 @@ enum FirebaseConfigured {
 /// (no stored profile) reads as no teams, so a token rotation while signed
 /// out never resubscribes.
 enum AppSessionTopicsSnapshot {
-    static func current() -> Set<String> {
+    static func current() -> Set<Int> {
         guard UserDefaults.standard.data(forKey: "profile") != nil,
               let data = UserDefaults.standard.data(forKey: "prefs"),
               let prefs = try? JSONDecoder().decode(UserPrefs.self, from: data)
         else { return [] }
-        return Set(prefs.fanOf["football"]?[String(AppEnvironment.leagueId)] ?? [])
+        return Set((prefs.fanOf["football"]?[String(AppEnvironment.leagueId)] ?? []).compactMap(Int.init))
     }
 }

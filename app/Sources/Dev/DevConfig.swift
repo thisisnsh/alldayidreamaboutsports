@@ -21,11 +21,11 @@ enum DevConfig {
         photoURL: nil
     )
 
-    /// Teams you follow. A goal by ANY of these runs the full celebration;
-    /// everyone else's goals are notch pills. Must cover both sides of the
-    /// `braArg` match below (you're a fan of both teams there) and the
-    /// followed side of every other match.
-    static let fanTeams = ["BRA", "ARG", "ENG", "FRA"]
+    /// Teams you follow, as API team ids (BRA 6, ARG 26, ENG 10, FRA 2). A goal
+    /// by ANY of these runs the full celebration; everyone else's goals are
+    /// notch pills. Must cover both sides of the `braArg` match below (you're a
+    /// fan of both teams there) and the followed side of every other match.
+    static let fanTeams = ["6", "26", "10", "2"]
 
     /// Start the timeline automatically at launch. Turn off to drive the
     /// show by hand from Settings → Developer (Play / Restart / Stop).
@@ -79,8 +79,8 @@ enum DevConfig {
         DemoMoment(at: 32, .fraGer, minute: 45, .halfTime),
 
         // Celebration surges (tap counts) for the followed matches.
-        DemoMoment(at: 36, .braArg, minute: 45, .celebrationSurge(["BRA": 3_200_000, "ARG": 2_800_000])),
-        DemoMoment(at: 37, .engUsa, minute: 45, .celebrationSurge(["ENG": 1_900_000, "USA": 540_000])),
+        DemoMoment(at: 36, .braArg, minute: 45, .celebrationSurge(["6": 3_200_000, "26": 2_800_000])),
+        DemoMoment(at: 37, .engUsa, minute: 45, .celebrationSurge(["10": 1_900_000, "2384": 540_000])),
 
         // Second half.
         DemoMoment(at: 41, .fraGer, minute: 52, .goal(.home, player: "Dembélé")),   // FRA 3-1
@@ -94,7 +94,7 @@ enum DevConfig {
         // Germany claw back to level — the France match is heading the distance.
         DemoMoment(at: 50, .fraGer, minute: 74, .goal(.away, player: "Wirtz")),     // 3-2
         DemoMoment(at: 53, .engUsa, minute: 82, .goal(.home, player: "Bellingham")),
-        DemoMoment(at: 56, .fraGer, minute: 88, .celebrationSurge(["FRA": 4_100_000, "GER": 770_000])),
+        DemoMoment(at: 56, .fraGer, minute: 88, .celebrationSurge(["2": 4_100_000, "25": 770_000])),
         DemoMoment(at: 58, .fraGer, minute: 90, .goal(.away, player: "Havertz")),   // 3-3
 
         // Two matches end in normal time.
@@ -124,10 +124,13 @@ enum DevConfig {
 
 // MARK: - Timeline vocabulary
 
-/// A team in a demo match, named once so events can refer to a side.
+/// A team in a demo match, named once so events can refer to a side. `id` is
+/// the API team id (also the FCM topic / fan key); `logo` is its CDN image.
 struct DemoTeam {
+    let id: Int
     let code: String
     let name: String
+    var logo: String { TeamCatalog.logoURL(id) }
 }
 
 /// One match the demo runs. Several play in parallel — see `demoMatches`.
@@ -143,20 +146,20 @@ extension DemoFixture {
     /// Fan of BOTH sides — every goal here is a full celebration.
     static let braArg = DemoFixture(
         id: 1001, leagueId: 1, round: "Semi-finals",
-        home: DemoTeam(code: "BRA", name: "Brazil"),
-        away: DemoTeam(code: "ARG", name: "Argentina")
+        home: DemoTeam(id: 6, code: "BRA", name: "Brazil"),
+        away: DemoTeam(id: 26, code: "ARG", name: "Argentina")
     )
     /// Fan of the home side only; USA is the opponent (pills).
     static let engUsa = DemoFixture(
         id: 1002, leagueId: 1, round: "Group B - 2",
-        home: DemoTeam(code: "ENG", name: "England"),
-        away: DemoTeam(code: "USA", name: "United States")
+        home: DemoTeam(id: 10, code: "ENG", name: "England"),
+        away: DemoTeam(id: 2384, code: "USA", name: "United States")
     )
     /// Fan of the home side only; Germany is the opponent (pills).
     static let fraGer = DemoFixture(
         id: 1003, leagueId: 1, round: "Quarter-finals",
-        home: DemoTeam(code: "FRA", name: "France"),
-        away: DemoTeam(code: "GER", name: "Germany")
+        home: DemoTeam(id: 2, code: "FRA", name: "France"),
+        away: DemoTeam(id: 25, code: "GER", name: "Germany")
     )
 
     /// Every match the demo runs in parallel (drives the live scoreboard).
