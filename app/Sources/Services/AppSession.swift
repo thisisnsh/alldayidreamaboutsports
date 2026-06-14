@@ -10,7 +10,8 @@ final class AppSession: ObservableObject {
 
     @Published var profile: Profile?
     @Published var prefs: UserPrefs = .empty
-    @Published var teams: [Team] = TeamCatalog.fallback
+    @Published var leagues: [League] = []
+    @Published var teamsByLeague: [Int: [Team]] = [1: TeamCatalog.fallback]
     @Published var fixtures: [Fixture] = []
     @Published var liveMatches: [Fixture] = []
     @Published var celebrationTotals: [Int: [String: Int]] = [:]
@@ -22,9 +23,15 @@ final class AppSession: ObservableObject {
     private var fixturesTimer: Timer?
 
     var isSignedIn: Bool { profile != nil }
-    var fanTeamCodes: Set<String> { Set(prefs.footballTeams) }
+    /// Every catalog team, flattened — for id→team lookups across leagues.
+    var allTeams: [Team] { teamsByLeague.values.flatMap { $0 } }
+    /// Alias used by the overlay/menu lookups (`TeamCatalog.team(for:in:)`).
+    var teams: [Team] { allTeams }
+    /// The single league users can follow today (World Cup); others are "coming soon".
+    var activeLeagueId: Int { leagues.first(where: \.active)?.id ?? AppEnvironment.leagueId }
+    var fanTeamIds: Set<Int> { Set(prefs.footballTeams.compactMap(Int.init)) }
     var fanTeams: [Team] {
-        prefs.footballTeams.map { TeamCatalog.team(for: $0, in: teams) }
+        prefs.footballTeams.compactMap(Int.init).map { TeamCatalog.team(for: $0, in: allTeams) }
     }
 
     // MARK: Lifecycle
@@ -52,7 +59,7 @@ final class AppSession: ObservableObject {
             prefs = stored
         }
         #endif
-        Task { await refreshTeams() }
+        Task { await refreshCatalog() }
         Task { await refreshFixtures() }
         // Fan teams sync with the backend ONCE per app start; every other
         // read is local. Changes go up via setFanTeams as they happen.
@@ -60,7 +67,7 @@ final class AppSession: ObservableObject {
         startFixturesTimer()
         // Topics mirror the signed-in state: signed out means subscribed to
         // nothing, even if fan teams are still stored locally.
-        PushService.shared.syncTopics(to: isSignedIn ? fanTeamCodes : [])
+        PushService.shared.syncTopics(to: isSignedIn ? fanTeamIds : [])
     }
 
     /// One launch-time reconciliation: server teams win on a fresh machine,
@@ -75,7 +82,7 @@ final class AppSession: ObservableObject {
         } else if serverTeams != prefs.footballTeams {
             try? await api.putPrefs(roamingPrefs)
         }
-        PushService.shared.syncTopics(to: fanTeamCodes)
+        PushService.shared.syncTopics(to: fanTeamIds)
     }
 
     // MARK: Sign in / out
@@ -94,7 +101,7 @@ final class AppSession: ObservableObject {
                 // previous user's leftovers up). Settings stay device-local.
                 prefs.fanOf = response.prefs.fanOf
                 persistPrefs()
-                PushService.shared.syncTopics(to: fanTeamCodes)
+                PushService.shared.syncTopics(to: fanTeamIds)
             } catch {
                 signInError = error.localizedDescription
             }
@@ -130,10 +137,10 @@ final class AppSession: ObservableObject {
 
     // MARK: Prefs
 
-    func setFanTeams(_ codes: [String]) {
-        prefs.footballTeams = codes
+    func setFanTeams(_ ids: [String]) {
+        prefs.footballTeams = ids
         persistPrefs()
-        PushService.shared.syncTopics(to: Set(codes))
+        PushService.shared.syncTopics(to: Set(ids.compactMap(Int.init)))
         Task { try? await api.putPrefs(roamingPrefs) }
     }
 
@@ -158,10 +165,12 @@ final class AppSession: ObservableObject {
 
     // MARK: Data refresh
 
-    func refreshTeams() async {
-        if let fresh = try? await scores.fetchTeams(), !fresh.isEmpty {
-            teams = fresh.sorted { $0.name < $1.name }
-        }
+    func refreshCatalog() async {
+        guard let catalog = try? await scores.fetchCatalog(), !catalog.leagues.isEmpty else { return }
+        leagues = catalog.leagues
+        teamsByLeague = Dictionary(
+            uniqueKeysWithValues: catalog.leagues.map { ($0.id, catalog.teams(for: $0.id)) },
+        )
     }
 
     func refreshFixtures() async {
@@ -188,11 +197,11 @@ final class AppSession: ObservableObject {
                 // Poll only while a followed team is (or might be) playing —
                 // FCM is the real-time channel, this is the consistency backstop.
                 guard AppSession.shared.isSignedIn,
-                      !AppSession.shared.fanTeamCodes.isEmpty else { return }
+                      !AppSession.shared.fanTeamIds.isEmpty else { return }
                 let followedLive = AppSession.shared.liveMatches
-                    .contains { $0.involves(AppSession.shared.fanTeamCodes) }
+                    .contains { $0.involves(AppSession.shared.fanTeamIds) }
                 let kickoffSoon = AppSession.shared.fixtures.contains {
-                    $0.involves(AppSession.shared.fanTeamCodes) &&
+                    $0.involves(AppSession.shared.fanTeamIds) &&
                     ($0.kickoff.map { abs($0.timeIntervalSinceNow) < 3 * 3600 } ?? false)
                 }
                 if followedLive || kickoffSoon || AppSession.shared.liveMatches.isEmpty {

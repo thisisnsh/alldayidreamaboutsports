@@ -21,13 +21,13 @@ protocol BackendAPI {
     func signIn(googleIdToken: String) async throws -> SignInResponse
     func fetchPrefs() async throws -> UserPrefs
     func putPrefs(_ prefs: UserPrefs) async throws
-    func celebrate(fixtureId: Int, teamCode: String, taps: Int) async throws
+    func celebrate(fixtureId: Int, teamId: String, taps: Int) async throws
     func deleteAccount() async throws
 }
 
 @MainActor
 protocol ScoresProviding {
-    func fetchTeams() async throws -> [Team]
+    func fetchCatalog() async throws -> Catalog
     func fetchLive() async throws -> [Fixture]
     func fetchTodayFixtures() async throws -> [Fixture]
     func fetchCelebrations(fixtureId: Int) async throws -> [String: Int]

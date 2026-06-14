@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Content of the small interactive panel shown while the ball is tappable:
-/// one ball carrying every celebrated team's flag, plus a hover-revealed ✕
+/// one ball carrying every celebrated team's logo, plus a hover-revealed ✕
 /// at the cluster's top-right. The ✕ dismisses ONLY the ball — the
 /// notification set keeps its own ✕ and its own life.
 struct InteractiveBallView: View {
@@ -10,7 +10,7 @@ struct InteractiveBallView: View {
     @State private var pulse = false
 
     private var teams: [Team] {
-        overlay.ballEvents.compactMap { $0.teamCode }
+        overlay.ballEvents.compactMap { $0.teamId }
             .map { TeamCatalog.team(for: $0, in: AppSession.shared.teams) }
     }
 

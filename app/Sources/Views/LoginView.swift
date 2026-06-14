@@ -17,7 +17,7 @@ struct LoginView: View {
             guard profile != nil else { return }
             dismiss()
             // Straight into the team picker — an empty app is a dead app.
-            if session.fanTeamCodes.isEmpty {
+            if session.fanTeamIds.isEmpty {
                 openWindow(id: WindowID.teamPicker)
             }
         }

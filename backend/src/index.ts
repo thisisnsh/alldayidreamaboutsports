@@ -1,3 +1,4 @@
+import { CatalogService } from "./catalog.js";
 import { CelebrationAggregator } from "./celebrations.js";
 import { env } from "./env.js";
 import { Fcm } from "./fcm.js";
@@ -13,10 +14,11 @@ const r2 = new R2();
 const provider = new ApiFootballProvider(env.apiFootballKey, env.leagueId, env.season);
 const celebrations = new CelebrationAggregator(store);
 const poller = new Poller(provider, store, fcm, r2);
+const catalog = new CatalogService(provider, r2);
 
 celebrations.start();
 
-const app = buildApp({ store, fcm, poller, celebrations });
+const app = buildApp({ store, fcm, poller, catalog, celebrations });
 const server = app.listen(env.port, () => {
   console.log(`alldayidreamaboutsports-backend listening on :${env.port}`);
 });

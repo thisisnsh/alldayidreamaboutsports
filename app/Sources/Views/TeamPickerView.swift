@@ -1,27 +1,27 @@
 import SwiftUI
 
-/// "Become a Fan": search, alphabetical flag grid with a tick on selected
-/// tiles, and the current "Fan of" strip at the bottom. Saves on every toggle.
+/// "Become a Fan": search + per-league sections of team logos with a tick on
+/// selected tiles, and the current "Fan of" strip at the bottom. The active
+/// league (World Cup) is selectable; the rest show greyed as "Coming soon".
+/// Saves on every toggle.
 struct TeamPickerView: View {
     @EnvironmentObject var session: AppSession
     @State private var query = ""
-
-    private var filtered: [Team] {
-        let all = session.teams.sorted { $0.name < $1.name }
-        guard !query.isEmpty else { return all }
-        return all.filter { $0.name.localizedCaseInsensitiveContains(query) }
-    }
-
-    private let columns = Array(repeating: GridItem(.flexible(), spacing: 12), count: 4)
 
     var body: some View {
         ZStack {
             AppBackground()
             pickerContent
         }
-        .frame(width: 520, height: 560)
+        .frame(width: 560, height: 600)
         .installsWindowOpener()
         .appTheme(session.prefs.settings.theme ?? .system)
+    }
+
+    private func teams(for league: League) -> [Team] {
+        let all = (session.teamsByLeague[league.id] ?? []).sorted { $0.name < $1.name }
+        guard !query.isEmpty else { return all }
+        return all.filter { $0.name.localizedCaseInsensitiveContains(query) }
     }
 
     private var pickerContent: some View {
@@ -35,7 +35,7 @@ struct TeamPickerView: View {
 
             HStack {
                 Image(systemName: "magnifyingglass").opacity(0.5)
-                TextField("Search countries", text: $query)
+                TextField("Search teams", text: $query)
                     .textFieldStyle(.plain)
             }
             .padding(10)
@@ -44,13 +44,12 @@ struct TeamPickerView: View {
             .padding(.top, 12)
 
             ScrollView {
-                LazyVGrid(columns: columns, spacing: 12) {
-                    ForEach(filtered) { team in
-                        TeamTile(
-                            team: team,
-                            selected: session.fanTeamCodes.contains(team.code)
-                        ) {
-                            toggle(team)
+                LazyVStack(alignment: .leading, spacing: 22) {
+                    ForEach(session.leagues) { league in
+                        let leagueTeams = teams(for: league)
+                        // While searching, hide leagues with no matches.
+                        if query.isEmpty || !leagueTeams.isEmpty {
+                            LeagueSection(league: league, teams: leagueTeams)
                         }
                     }
                 }
@@ -66,35 +65,93 @@ struct TeamPickerView: View {
             )
 
             Divider()
-            HStack(spacing: 6) {
-                Text("Fan of").font(.system(size: 13, weight: .semibold))
-                if session.fanTeams.isEmpty {
-                    Text("— pick your teams above").font(.system(size: 13)).opacity(0.6)
-                } else {
-                    Text(session.fanTeams.map(\.flag).joined(separator: " "))
-                        .font(.system(size: 18))
-                }
-                Spacer()
-            }
-            .padding(14)
-            .background(.thinMaterial)
+            fanOfStrip
         }
     }
 
-    private func toggle(_ team: Team) {
-        var codes = session.prefs.footballTeams
-        if let index = codes.firstIndex(of: team.code) {
-            codes.remove(at: index)
-        } else {
-            codes.append(team.code)
+    private var fanOfStrip: some View {
+        HStack(spacing: 8) {
+            Text("Fan of").font(.system(size: 13, weight: .semibold))
+            if session.fanTeams.isEmpty {
+                Text("— pick your teams above").font(.system(size: 13)).opacity(0.6)
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(session.fanTeams) { team in
+                            CachedTeamLogo(url: team.logo, size: 22)
+                        }
+                    }
+                }
+            }
+            Spacer()
         }
-        session.setFanTeams(codes)
+        .padding(14)
+        .background(.thinMaterial)
+    }
+}
+
+/// One league: header (logo + name + status), then its team grid. Non-active
+/// leagues are dimmed and their tiles are not tappable.
+private struct LeagueSection: View {
+    @EnvironmentObject var session: AppSession
+    let league: League
+    let teams: [Team]
+
+    private let columns = Array(repeating: GridItem(.flexible(), spacing: 12), count: 4)
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                CachedTeamLogo(url: league.logo, size: 22, fallbackSymbol: "trophy.fill")
+                Text(league.name).font(.system(size: 14, weight: .bold, design: .rounded))
+                if !league.active {
+                    Text("Coming soon")
+                        .font(.system(size: 10, weight: .semibold))
+                        .padding(.horizontal, 7).padding(.vertical, 3)
+                        .background(Capsule().fill(Color.primary.opacity(0.1)))
+                }
+                Spacer()
+            }
+
+            if !league.scheduled {
+                Text("Not scheduled")
+                    .font(.system(size: 12)).opacity(0.6)
+            } else if teams.isEmpty {
+                Text("No teams yet").font(.system(size: 12)).opacity(0.6)
+            } else {
+                LazyVGrid(columns: columns, spacing: 12) {
+                    ForEach(teams) { team in
+                        TeamTile(
+                            team: team,
+                            selected: session.fanTeamIds.contains(team.id),
+                            enabled: league.active
+                        ) {
+                            toggle(team)
+                        }
+                    }
+                }
+            }
+        }
+        .opacity(league.active ? 1 : 0.55)
+    }
+
+    private func toggle(_ team: Team) {
+        guard league.active else { return }
+        var ids = session.prefs.footballTeams
+        let key = String(team.id)
+        if let index = ids.firstIndex(of: key) {
+            ids.remove(at: index)
+        } else {
+            ids.append(key)
+        }
+        session.setFanTeams(ids)
     }
 }
 
 private struct TeamTile: View {
     let team: Team
     let selected: Bool
+    let enabled: Bool
     let action: () -> Void
     @Environment(\.colorScheme) private var scheme
 
@@ -102,7 +159,7 @@ private struct TeamTile: View {
         Button(action: action) {
             ZStack(alignment: .topTrailing) {
                 VStack(spacing: 6) {
-                    Text(team.flag).font(.system(size: 34))
+                    CachedTeamLogo(url: team.logo, size: 38)
                     Text(team.name)
                         .font(.system(size: 11, weight: .medium))
                         .multilineTextAlignment(.center)
@@ -128,6 +185,7 @@ private struct TeamTile: View {
             }
         }
         .buttonStyle(.plain)
+        .disabled(!enabled)
         .hoverLift()
     }
 }

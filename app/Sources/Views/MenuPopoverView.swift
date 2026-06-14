@@ -31,7 +31,7 @@ struct MenuPopoverView: View {
         // teams are deliberately NOT fetched here; they're local state.
         .onAppear {
             Task {
-                await session.refreshTeams()
+                await session.refreshCatalog()
                 await session.refreshFixtures()
             }
         }
@@ -57,8 +57,9 @@ struct MenuPopoverView: View {
     private var fanOfRow: some View {
         HStack(spacing: 6) {
             Text("Fan of").font(.caption).opacity(0.7)
-            Text(session.fanTeams.map(\.flag).joined(separator: " "))
-                .font(.system(size: 16))
+            ForEach(session.fanTeams) { team in
+                CachedTeamLogo(url: team.logo, size: 18)
+            }
             Spacer()
         }
     }
@@ -69,7 +70,7 @@ struct MenuPopoverView: View {
                 .font(.caption)
                 .fontWeight(.semibold)
                 .opacity(0.7)
-            let shown = session.fixtures.filter { $0.involves(session.fanTeamCodes) }
+            let shown = session.fixtures.filter { $0.involves(session.fanTeamIds) }
             if shown.isEmpty {
                 Text(session.fixtures.isEmpty
                      ? "No matches today — rest day ☁️"
@@ -180,13 +181,13 @@ private struct FixtureRow: View {
                     // Hover: the row becomes the celebration tally — both
                     // teams, regardless of who you're a fan of.
                     HStack(spacing: 6) {
-                        Text(flag(fixture.home.code))
-                        Text((totals[fixture.home.code] ?? 0).formattedCompact)
+                        CachedTeamLogo(url: logo(fixture.home.id), size: 16)
+                        Text((totals[String(fixture.home.id)] ?? 0).formattedCompact)
                             .font(.system(size: 12, weight: .bold))
                         Text("–").font(.system(size: 12, weight: .bold))
-                        Text((totals[fixture.away.code] ?? 0).formattedCompact)
+                        Text((totals[String(fixture.away.id)] ?? 0).formattedCompact)
                             .font(.system(size: 12, weight: .bold))
-                        Text(flag(fixture.away.code))
+                        CachedTeamLogo(url: logo(fixture.away.id), size: 16)
                         Spacer()
                         trailing
                     }
@@ -195,14 +196,14 @@ private struct FixtureRow: View {
                         .opacity(0.7)
                 } else {
                     HStack(spacing: 6) {
-                        Text(flag(fixture.home.code))
-                        // Long names truncate with … — score, flags and the
+                        CachedTeamLogo(url: logo(fixture.home.id), size: 16)
+                        // Long names truncate with … — score, logos and the
                         // time on the right never get squeezed.
                         Text(fixture.home.name).font(.system(size: 12)).lineLimit(1)
                         Text(score).font(.system(size: 12, weight: .bold))
                             .fixedSize().layoutPriority(1)
                         Text(fixture.away.name).font(.system(size: 12)).lineLimit(1)
-                        Text(flag(fixture.away.code))
+                        CachedTeamLogo(url: logo(fixture.away.id), size: 16)
                         Spacer()
                         trailing
                     }
@@ -246,7 +247,7 @@ private struct FixtureRow: View {
         }
     }
 
-    private func flag(_ code: String) -> String {
-        TeamCatalog.team(for: code, in: session.teams).flag
+    private func logo(_ id: Int) -> String {
+        TeamCatalog.team(for: id, in: session.teams).logo
     }
 }

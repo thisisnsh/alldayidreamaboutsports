@@ -1,6 +1,7 @@
 import express, { type Express } from "express";
 import { z } from "zod";
 import { requireSchedulerOidc, requireSession, signSession, verifyGoogleIdToken } from "./auth.js";
+import type { CatalogService } from "./catalog.js";
 import type { CelebrationAggregator } from "./celebrations.js";
 import type { Fcm } from "./fcm.js";
 import type { Poller } from "./poller.js";
@@ -10,7 +11,8 @@ import type { MatchEvent, UserPrefs } from "./types.js";
 const prefsSchema = z.object({
   fanOf: z.record(
     z.string().max(32), // game, e.g. "football"
-    z.record(z.string().max(16), z.array(z.string().min(2).max(8)).max(64)),
+    // leagueId -> team ids (as strings); ids can be a single digit, e.g. "6".
+    z.record(z.string().max(16), z.array(z.string().min(1).max(12)).max(64)),
   ),
   settings: z
     .object({
@@ -23,7 +25,7 @@ const prefsSchema = z.object({
 
 const celebrateSchema = z.object({
   fixtureId: z.number().int().positive(),
-  teamCode: z.string().min(2).max(8),
+  teamId: z.string().min(1).max(12), // numeric team id, as a string
   // One batched request per goal; >200 taps in a 5s window is not a human.
   taps: z.number().int().min(1).max(200),
 });
@@ -41,13 +43,13 @@ const testEventSchema = z.object({
   ]),
   fixtureId: z.number().int().default(999999),
   leagueId: z.number().int().default(1),
-  homeTeam: z.string().default("BRA"),
-  awayTeam: z.string().default("USA"),
+  homeTeamId: z.number().int().default(6), // Brazil
+  awayTeamId: z.number().int().default(16), // Mexico
   homeName: z.string().default("Brazil"),
-  awayName: z.string().default("United States"),
+  awayName: z.string().default("Mexico"),
   homeGoals: z.number().int().default(1),
   awayGoals: z.number().int().default(0),
-  teamCode: z.string().optional(),
+  teamId: z.number().int().optional(),
   player: z.string().optional(),
   minute: z.number().int().optional(),
 });
@@ -56,10 +58,11 @@ export interface Deps {
   store: Store;
   fcm: Fcm;
   poller: Poller;
+  catalog: CatalogService;
   celebrations: CelebrationAggregator;
 }
 
-export function buildApp({ store, fcm, poller, celebrations }: Deps): Express {
+export function buildApp({ store, fcm, poller, catalog, celebrations }: Deps): Express {
   const app = express();
   app.use(express.json({ limit: "16kb" }));
 
@@ -96,8 +99,8 @@ export function buildApp({ store, fcm, poller, celebrations }: Deps): Express {
   app.post("/celebrate", requireSession, (req, res) => {
     const parsed = celebrateSchema.safeParse(req.body);
     if (!parsed.success) return void res.status(400).json({ error: parsed.error.message });
-    const { fixtureId, teamCode, taps } = parsed.data;
-    celebrations.add(fixtureId, teamCode, taps); // in-memory; flushed on interval
+    const { fixtureId, teamId, taps } = parsed.data;
+    celebrations.add(fixtureId, teamId, taps); // in-memory; flushed on interval
     res.json({ ok: true });
   });
 
@@ -114,6 +117,17 @@ export function buildApp({ store, fcm, poller, celebrations }: Deps): Express {
       res.json(result);
     } catch (err) {
       console.error("poll failed", err);
+      res.status(500).json({ error: (err as Error).message });
+    }
+  });
+
+  // Daily: refresh leagues + teams (with logos) from the API → catalog.json.
+  app.post("/internal/sync-catalog", requireSchedulerOidc, async (_req, res) => {
+    try {
+      const result = await catalog.sync();
+      res.json(result);
+    } catch (err) {
+      console.error("sync-catalog failed", err);
       res.status(500).json({ error: (err as Error).message });
     }
   });

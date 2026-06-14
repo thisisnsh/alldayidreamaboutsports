@@ -22,6 +22,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     )
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Disk-backed HTTP cache so team/league logos (API CDN) download once and
+        // are reused across the app — no third-party image service, no cost.
+        URLCache.shared = URLCache(memoryCapacity: 16 << 20, diskCapacity: 64 << 20)
+
         // Firebase config is optional in dev builds (plist is gitignored).
         if Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist") != nil {
             FirebaseApp.configure()

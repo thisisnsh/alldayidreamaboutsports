@@ -2,7 +2,6 @@ import { Fcm } from "./fcm.js";
 import type { ScoreProvider } from "./providers/types.js";
 import { R2 } from "./r2.js";
 import type { Store } from "./store.js";
-import { TEAMS } from "./teams.js";
 import type { MatchState } from "./types.js";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -64,20 +63,22 @@ export class Poller {
       await this.fcm.publishCelebrationCount(
         match.leagueId,
         match.fixtureId,
-        match.home.code,
-        match.away.code,
+        match.home.id,
+        match.away.id,
         totals,
       );
     }
   }
 
-  /** Once per process per UTC day: fixtures-{date}.json + teams.json. */
+  /**
+   * Once per process per UTC day: today's fixtures. The leagues+teams catalog
+   * is published separately by CatalogService on its own daily schedule.
+   */
   private async ensureDailyStatics(): Promise<void> {
     const today = new Date().toISOString().slice(0, 10);
     if (this.staticsUploadedFor === today) return;
     const fixtures = await this.provider.fixturesForDate(today);
     await this.r2.putJson(`fixtures-${today}.json`, liveJsonPayload(fixtures), 3600);
-    await this.r2.putJson("teams.json", { teams: TEAMS }, 3600);
     this.staticsUploadedFor = today;
   }
 }

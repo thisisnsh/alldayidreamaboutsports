@@ -8,7 +8,7 @@ struct Profile: Codable, Equatable {
 }
 
 struct UserPrefs: Codable, Equatable {
-    var fanOf: [String: [String: [String]]] // game -> leagueId -> team codes
+    var fanOf: [String: [String: [String]]] // game -> leagueId -> team ids (as strings)
     var settings: PrefSettings
 
     static var empty: UserPrefs {
@@ -89,10 +89,10 @@ struct APIClient: BackendAPI {
         _ = try await request("/me/prefs", method: "PUT", body: prefs)
     }
 
-    func celebrate(fixtureId: Int, teamCode: String, taps: Int) async throws {
-        struct Body: Encodable { let fixtureId: Int; let teamCode: String; let taps: Int }
+    func celebrate(fixtureId: Int, teamId: String, taps: Int) async throws {
+        struct Body: Encodable { let fixtureId: Int; let teamId: String; let taps: Int }
         _ = try await request("/celebrate", method: "POST",
-                              body: Body(fixtureId: fixtureId, teamCode: teamCode, taps: taps))
+                              body: Body(fixtureId: fixtureId, teamId: teamId, taps: taps))
     }
 
     func deleteAccount() async throws {
