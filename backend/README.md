@@ -25,7 +25,6 @@ npm run dev         # tsx watch (needs env below)
 | `GOOGLE_OAUTH_CLIENT_ID` | Secret Manager | iOS-type client id (token audience) |
 | `R2_ENDPOINT` / `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` | Secret Manager | R2 S3 API |
 | `R2_BUCKET_SCORES` | deploy var | required environment-specific scores bucket |
-| `R2_BUCKET_STATE` | deploy var | required private comparison-state bucket |
 | `SCHEDULER_SA_EMAIL` | optional | default `sports-scheduler@$PROJECT.iam.gserviceaccount.com` |
 | `LEAGUE_ID` / `SEASON` | optional | default `1` / `2026` (World Cup) |
 | `SERVICE_URL` | optional | enforces OIDC audience on `/internal/*` |

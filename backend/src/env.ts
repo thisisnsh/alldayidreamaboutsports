@@ -23,7 +23,6 @@ export const env = {
       accessKeyId: required("R2_ACCESS_KEY_ID"),
       secretAccessKey: required("R2_SECRET_ACCESS_KEY"),
       scoresBucket: required("R2_BUCKET_SCORES"),
-      stateBucket: required("R2_BUCKET_STATE"),
     };
   },
   get schedulerServiceAccount() {
