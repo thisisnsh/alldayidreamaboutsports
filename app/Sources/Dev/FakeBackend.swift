@@ -84,7 +84,7 @@ final class FakeStore {
         let shootout = (s.penHome != nil || s.penAway != nil)
             ? Shootout(home: s.penHome ?? 0, away: s.penAway ?? 0) : nil
         return Fixture(
-            fixtureId: def.id, leagueId: def.leagueId,
+            fixtureId: def.id, leagueId: def.leagueId, round: def.round,
             kickoffISO: ISO8601DateFormatter().string(from: kickoff),
             status: s.status, minute: s.minute,
             home: ScoreboardTeam(code: def.home.code, name: def.home.name, goals: s.homeGoals),

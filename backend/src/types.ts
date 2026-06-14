@@ -27,6 +27,8 @@ export interface MatchState {
   fixtureId: number;
   leagueId: number;
   season: number;
+  /** Competition stage from API-Football's `league.round` (e.g. "Group A - 1", "Round of 16"). */
+  round?: string;
   kickoffISO: string;
   status: MatchStatus;
   rawStatus: string; // API-Football short code (1H, HT, FT, ...)
