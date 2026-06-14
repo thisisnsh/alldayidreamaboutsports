@@ -17,6 +17,7 @@ gcloud services enable \
   run.googleapis.com \
   cloudbuild.googleapis.com \
   cloudscheduler.googleapis.com \
+  cloudtasks.googleapis.com \
   firestore.googleapis.com \
   secretmanager.googleapis.com \
   fcm.googleapis.com \
@@ -38,18 +39,27 @@ echo "── Runtime service account"
 RUNTIME_SA="sports-runtime@${PROJECT_ID}.iam.gserviceaccount.com"
 gcloud iam service-accounts describe "$RUNTIME_SA" >/dev/null 2>&1 || \
   gcloud iam service-accounts create sports-runtime --display-name "Backend runtime"
-for role in roles/datastore.user roles/secretmanager.secretAccessor roles/firebase.sdkAdminServiceAgent; do
+for role in roles/datastore.user roles/secretmanager.secretAccessor roles/firebase.sdkAdminServiceAgent roles/cloudtasks.enqueuer; do
   gcloud projects add-iam-policy-binding "$PROJECT_ID" \
     --member "serviceAccount:${RUNTIME_SA}" --role "$role" --condition=None -q >/dev/null
 done
 
-echo "── Cloud Scheduler → /internal/poll every minute (OIDC-authenticated)"
+echo "── Cloud Tasks queue (fan-out target for the live-score dispatcher)"
+gcloud tasks queues describe live-scores --location "$REGION" >/dev/null 2>&1 || \
+  gcloud tasks queues create live-scores --location "$REGION"
+
+echo "── Cloud Scheduler / Tasks identity (OIDC for /internal/*)"
 SCHEDULER_SA="sports-scheduler@${PROJECT_ID}.iam.gserviceaccount.com"
 gcloud iam service-accounts describe "$SCHEDULER_SA" >/dev/null 2>&1 || \
-  gcloud iam service-accounts create sports-scheduler --display-name "Poll scheduler"
-# The backend verifies this OIDC identity itself (service is public for the app
-# API), so no run.invoker binding is strictly required — but the audience and
-# email must match SCHEDULER_SA_EMAIL in the backend.
+  gcloud iam service-accounts create sports-scheduler --display-name "Internal OIDC identity"
+# Both the scheduler job and the Cloud Tasks it enqueues authenticate to
+# /internal/* as this SA. The backend verifies this OIDC identity itself (the
+# service is public for the app API), so no run.invoker binding is required —
+# but the audience and email must match the backend's SCHEDULER_SA_EMAIL.
+# The runtime SA enqueues tasks that mint tokens as this SA, so it needs to act
+# as it (serviceAccountUser).
+gcloud iam service-accounts add-iam-policy-binding "$SCHEDULER_SA" \
+  --member "serviceAccount:${RUNTIME_SA}" --role roles/iam.serviceAccountUser -q >/dev/null
 if SERVICE_URL=$(gcloud run services describe "$SERVICE" --region "$REGION" --format 'value(status.url)' 2>/dev/null); then
   upsert_scheduler_job() {
     local name="$1"
@@ -71,12 +81,22 @@ if SERVICE_URL=$(gcloud run services describe "$SERVICE" --region "$REGION" --fo
       --attempt-deadline 300s
   }
 
-  upsert_scheduler_job poll-live-scores '* * * * *' /internal/poll
+  # Cloud Scheduler is minute-granular, so once a minute it hits /internal/dispatch,
+  # which enqueues 12 Cloud Tasks spaced 5s apart (each → /internal/fetch, a single
+  # fast read). That gives ~every-5s polling with no request ever sleeping/pinning
+  # the CPU. Pause this one job to stop polling outside match windows:
+  #   gcloud scheduler jobs pause dispatch-live-scores --location "$REGION"
+  echo "── Cloud Scheduler → /internal/dispatch every minute (fans out to Cloud Tasks)"
+  upsert_scheduler_job dispatch-live-scores '* * * * *' /internal/dispatch
 
   echo "── Cloud Scheduler → /internal/sync-catalog daily (leagues + teams refresh)"
-  # Independent of the poller (which only runs during the tournament window), so
-  # the multi-league catalog stays fresh year-round.
+  # Independent of the live-score dispatcher (which only runs during the tournament
+  # window), so the multi-league catalog stays fresh year-round.
   upsert_scheduler_job sync-catalog '0 4 * * *' /internal/sync-catalog
+
+  echo "── Cloud Run env → SERVICE_URL (dispatcher task target + OIDC audience)"
+  gcloud run services update "$SERVICE" --region "$REGION" \
+    --update-env-vars "SERVICE_URL=${SERVICE_URL}" >/dev/null
 else
   echo "   Cloud Run service not deployed yet — skipping scheduler jobs"
   echo "   Rerun this script after the first deploy to create or update them"

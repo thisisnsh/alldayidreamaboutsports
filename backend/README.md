@@ -2,9 +2,13 @@
 
 TypeScript/Express. Two personalities in one deployable:
 - **Public API** for the app: sign-in, prefs, celebrate.
-- **Internal poller** (`/internal/*`): Cloud Scheduler hits it every minute
-  with an OIDC token; it polls a three-day UTC fixture range every 5s,
-  diffs state, publishes FCM events, and writes CDN JSON to R2.
+- **Internal fetch** (`/internal/*`): one Cloud Scheduler job hits
+  `/internal/dispatch` every minute (OIDC); it enqueues 12 Cloud Tasks spaced 5s
+  apart, each calling `/internal/fetch`. A fetch is a single read of a three-day
+  UTC fixture range that diffs state, publishes FCM events, and writes CDN JSON
+  to R2, then returns in ~1s. The cadence lives in Cloud Tasks `scheduleTime`
+  (sub-minute), so no request ever sleeps — CPU is billed only per short fetch,
+  not for waiting between polls.
 
 ## Develop
 
@@ -26,8 +30,9 @@ npm run dev         # tsx watch (needs env below)
 | `R2_ENDPOINT` / `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` | Secret Manager | R2 S3 API |
 | `R2_BUCKET_SCORES` | deploy var | required environment-specific scores bucket |
 | `SCHEDULER_SA_EMAIL` | optional | default `sports-scheduler@$PROJECT.iam.gserviceaccount.com` |
+| `TASKS_QUEUE` / `TASKS_LOCATION` | deploy var | default `live-scores` / `us-central1` — Cloud Tasks fan-out target |
 | `LEAGUE_ID` / `SEASON` | optional | default `1` / `2026` (World Cup) |
-| `SERVICE_URL` | optional | enforces OIDC audience on `/internal/*` |
+| `SERVICE_URL` | set by setup-gcp | dispatcher task target + enforces OIDC audience on `/internal/*` |
 
 Local dev against staging: `gcloud auth application-default login` gives the
 Admin SDK credentials.
@@ -41,7 +46,8 @@ Admin SDK credentials.
 | `GET/PUT /me/prefs` | session JWT | `fanOf: { football: { "1": ["6"] } }` + settings |
 | `POST /celebrate` | session JWT | `{fixtureId, teamId, taps}` — ONE batched call per goal per user |
 | `DELETE /me` | session JWT | account deletion |
-| `POST /internal/poll` | scheduler OIDC | one tick: 12 polls × 5s |
+| `POST /internal/dispatch` | scheduler OIDC | enqueue 12 Cloud Tasks at 5s offsets → `/internal/fetch` |
+| `POST /internal/fetch` | scheduler OIDC | one fetch: read range → diff → notify → R2 |
 | `POST /internal/test-event` | scheduler OIDC | inject fake events on staging |
 
 Trigger a test goal on staging:

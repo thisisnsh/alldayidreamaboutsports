@@ -116,9 +116,15 @@ the requested object has not been uploaded yet. After the first backend deploy:
 gcloud scheduler jobs run sync-catalog \
   --project=dreamaboutsports-staging --location=us-central1
 
-# Populate the three UTC fixture files immediately.
-gcloud scheduler jobs run poll-live-scores \
+# Populate the three UTC fixture files immediately. The dispatcher enqueues 12
+# Cloud Tasks (5s apart) that hit /internal/fetch, giving ~every-5s polling.
+gcloud scheduler jobs run dispatch-live-scores \
   --project=dreamaboutsports-staging --location=us-central1
+
+# Control polling by pausing/resuming the single dispatcher job (saves
+# API-Football quota outside match windows):
+gcloud scheduler jobs pause  dispatch-live-scores --location=us-central1
+gcloud scheduler jobs resume dispatch-live-scores --location=us-central1
 
 curl -fsS https://scores-staging.alldayidreamaboutsports.com/catalog.json >/dev/null
 curl -fsS https://scores-staging.alldayidreamaboutsports.com/fixtures-$(date -u +%F).json >/dev/null
