@@ -94,7 +94,7 @@ Everything else (bundle id, buckets, domain) still uses the full name.
       those after section 3). Secrets are how the backend gets credentials
       without hard-coding them.
 - [ ] **Verify the staging API domain** after deploying it:
-      `curl -fsS https://api-staging.alldayidreamaboutsports.com/healthz`.
+      `curl -fsS https://api-staging.alldayidreamaboutsports.com/healthz/`.
       `APP_API_BASE_URL` under `Staging` already points at that custom domain,
       so finish its Cloud Run domain mapping and DNS before the end-to-end test.
 
