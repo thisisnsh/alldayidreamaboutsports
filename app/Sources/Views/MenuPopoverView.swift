@@ -56,11 +56,14 @@ struct MenuPopoverView: View {
 
     private var fanOfRow: some View {
         HStack(spacing: 6) {
-            Text("Fan of").font(.caption).opacity(0.7)
-            ForEach(session.fanTeams) { team in
-                CachedTeamLogo(url: team.logo, size: 18)
+            Text("Fan of").font(.caption).opacity(0.7).fixedSize()
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    ForEach(session.fanTeams) { team in
+                        CachedTeamLogo(url: team.logo, size: 18)
+                    }
+                }
             }
-            Spacer()
         }
     }
 

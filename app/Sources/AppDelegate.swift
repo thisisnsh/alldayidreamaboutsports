@@ -96,6 +96,8 @@ final class MenuPopoverController: NSObject, NSPopoverDelegate {
     static let shared = MenuPopoverController()
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
     private let popover = NSPopover()
+    private var refreshTimer: Timer?
+    private var eventMonitor: Any?
 
     func install() {
         guard let button = statusItem.button else { return }
@@ -117,16 +119,40 @@ final class MenuPopoverController: NSObject, NSPopoverDelegate {
         } else {
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
             button.highlight(true)
+            startRefreshing()
         }
     }
 
     func close() {
         popover.performClose(nil)
         statusItem.button?.highlight(false)
+        stopRefreshing()
     }
 
     func popoverDidClose(_ notification: Notification) {
         statusItem.button?.highlight(false)
+        stopRefreshing()
+    }
+
+    private func startRefreshing() {
+        Task { await AppSession.shared.refreshFixtures() }
+        refreshTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { _ in
+            Task { await AppSession.shared.refreshFixtures() }
+        }
+        // .transient doesn't reliably close the popover on outside clicks for
+        // accessory-policy apps on macOS Sequoia+, so we add our own monitor.
+        eventMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
+            self?.close()
+        }
+    }
+
+    private func stopRefreshing() {
+        refreshTimer?.invalidate()
+        refreshTimer = nil
+        if let monitor = eventMonitor {
+            NSEvent.removeMonitor(monitor)
+            eventMonitor = nil
+        }
     }
 }
 
