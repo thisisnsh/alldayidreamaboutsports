@@ -8,13 +8,24 @@ export function firebaseApp(): App {
   return getApps()[0] ?? initializeApp({ credential: applicationDefault() });
 }
 
+let firestore: Firestore | undefined;
+
+function defaultFirestore(): Firestore {
+  if (firestore) return firestore;
+  // Provider match states intentionally omit optional fields such as lastGoal.
+  // Firestore rejects undefined values unless they are ignored explicitly.
+  firestore = getFirestore(firebaseApp());
+  firestore.settings({ ignoreUndefinedProperties: true });
+  return firestore;
+}
+
 const CELEBRATION_SHARDS = 16;
 
 export class Store {
   private readonly db: Firestore;
 
   constructor(db?: Firestore) {
-    this.db = db ?? getFirestore(firebaseApp());
+    this.db = db ?? defaultFirestore();
   }
 
   /**
