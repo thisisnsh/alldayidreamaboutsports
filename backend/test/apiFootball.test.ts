@@ -3,7 +3,7 @@ import { ApiFootballProvider } from "../src/providers/apiFootball.js";
 
 const liveFixture = {
   fixture: { id: 555, date: "2026-06-11T20:00:00+00:00", status: { short: "2H", elapsed: 73 } },
-  league: { id: 1, season: 2026 },
+  league: { id: 1, season: 2026, round: "Group A - 1" },
   teams: { home: { id: 10, name: "Brazil" }, away: { id: 20, name: "USA" } },
   goals: { home: 2, away: 1 },
   events: [
@@ -37,6 +37,7 @@ describe("ApiFootballProvider", () => {
       fixtureId: 555,
       status: "LIVE",
       rawStatus: "2H",
+      round: "Group A - 1",
       minute: 73,
       home: { code: "BRA", goals: 2, yellowCards: 0, redCards: 1 },
       away: { code: "USA", goals: 1, yellowCards: 1, redCards: 0 },
@@ -47,7 +48,7 @@ describe("ApiFootballProvider", () => {
   it("parses a penalty shootout into shootout counts + ordered kicks", async () => {
     const penFixture = {
       fixture: { id: 777, date: "2026-06-11T20:00:00+00:00", status: { short: "PEN", elapsed: 120 } },
-      league: { id: 1, season: 2026 },
+      league: { id: 1, season: 2026, round: "Round of 16" },
       teams: { home: { id: 10, name: "Brazil" }, away: { id: 20, name: "USA" } },
       goals: { home: 3, away: 3 },
       score: { penalty: { home: 2, away: 1 } },
@@ -66,6 +67,7 @@ describe("ApiFootballProvider", () => {
     const [match] = await provider.liveMatches();
 
     expect(match!.status).toBe("FINISHED");
+    expect(match!.round).toBe("Round of 16");
     expect(match!.shootout).toEqual({
       home: 2,
       away: 1,

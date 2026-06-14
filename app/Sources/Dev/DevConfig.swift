@@ -134,6 +134,7 @@ struct DemoTeam {
 struct DemoFixture {
     let id: Int
     let leagueId: Int
+    let round: String
     let home: DemoTeam
     let away: DemoTeam
 }
@@ -141,19 +142,19 @@ struct DemoFixture {
 extension DemoFixture {
     /// Fan of BOTH sides — every goal here is a full celebration.
     static let braArg = DemoFixture(
-        id: 1001, leagueId: 1,
+        id: 1001, leagueId: 1, round: "Semi-finals",
         home: DemoTeam(code: "BRA", name: "Brazil"),
         away: DemoTeam(code: "ARG", name: "Argentina")
     )
     /// Fan of the home side only; USA is the opponent (pills).
     static let engUsa = DemoFixture(
-        id: 1002, leagueId: 1,
+        id: 1002, leagueId: 1, round: "Group B - 2",
         home: DemoTeam(code: "ENG", name: "England"),
         away: DemoTeam(code: "USA", name: "United States")
     )
     /// Fan of the home side only; Germany is the opponent (pills).
     static let fraGer = DemoFixture(
-        id: 1003, leagueId: 1,
+        id: 1003, leagueId: 1, round: "Quarter-finals",
         home: DemoTeam(code: "FRA", name: "France"),
         away: DemoTeam(code: "GER", name: "Germany")
     )

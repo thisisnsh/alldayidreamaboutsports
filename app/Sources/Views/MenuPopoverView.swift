@@ -69,10 +69,11 @@ struct MenuPopoverView: View {
                 .font(.caption)
                 .fontWeight(.semibold)
                 .opacity(0.7)
-            let followed = session.fixtures.filter { $0.involves(session.fanTeamCodes) }
-            let shown = followed.isEmpty ? session.fixtures : followed
+            let shown = session.fixtures.filter { $0.involves(session.fanTeamCodes) }
             if shown.isEmpty {
-                Text("No matches today — rest day ☁️")
+                Text(session.fixtures.isEmpty
+                     ? "No matches today — rest day ☁️"
+                     : "None of your teams play today 💤")
                     .font(.system(size: 13))
                     .opacity(0.7)
             } else {
@@ -204,6 +205,9 @@ private struct FixtureRow: View {
                         Text(flag(fixture.away.code))
                         Spacer()
                         trailing
+                    }
+                    if let stage = fixture.stageLabel {
+                        Text(stage).font(.system(size: 10)).opacity(0.6)
                     }
                 }
             }

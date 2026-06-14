@@ -89,6 +89,7 @@ struct Shootout: Codable, Hashable {
 struct Fixture: Codable, Identifiable, Hashable {
     let fixtureId: Int
     let leagueId: Int
+    let round: String?
     let kickoffISO: String
     let status: String // SCHEDULED | LIVE | HALF_TIME | FINISHED | OTHER
     let minute: Int?
@@ -99,6 +100,18 @@ struct Fixture: Codable, Identifiable, Hashable {
     var id: Int { fixtureId }
     var isLive: Bool { status == "LIVE" || status == "HALF_TIME" }
     var kickoff: Date? { ISO8601DateFormatter().date(from: kickoffISO) }
+
+    /// Competition stage from API-Football's `league.round`.
+    /// "Group A - 1" → "Group A · MD1"; knockout rounds ("Round of 16",
+    /// "Final", …) pass through unchanged. nil when the round is absent.
+    var stageLabel: String? {
+        guard let round, !round.isEmpty else { return nil }
+        let parts = round.components(separatedBy: " - ")
+        if parts.count == 2, parts[0].hasPrefix("Group"), Int(parts[1]) != nil {
+            return "\(parts[0]) · MD\(parts[1])"
+        }
+        return round
+    }
 
     /// FIFA.com match page (the official destination for details).
     var fifaURL: URL {

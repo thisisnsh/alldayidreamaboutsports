@@ -22,7 +22,7 @@ const STATUS_MAP: Record<string, MatchStatus> = {
 
 interface ApiFixture {
   fixture: { id: number; date: string; status: { short: string; elapsed: number | null } };
-  league: { id: number; season: number };
+  league: { id: number; season: number; round: string };
   teams: { home: { id: number; name: string }; away: { id: number; name: string } };
   goals: { home: number | null; away: number | null };
   score?: { penalty?: { home: number | null; away: number | null } };
@@ -109,6 +109,7 @@ export class ApiFootballProvider implements ScoreProvider {
       fixtureId: f.fixture.id,
       leagueId: f.league.id,
       season: f.league.season,
+      round: f.league.round,
       kickoffISO: f.fixture.date,
       status: STATUS_MAP[f.fixture.status.short] ?? "OTHER",
       rawStatus: f.fixture.status.short,
