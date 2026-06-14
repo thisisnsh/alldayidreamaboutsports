@@ -170,7 +170,7 @@ struct BallView: View {
     let diameter: CGFloat
 
     var body: some View {
-        ZStack(alignment: .topTrailing) {
+        ZStack(alignment: .center) {
             Image(systemName: "soccerball.inverse")
                 .resizable()
                 .foregroundStyle(.white)
@@ -179,10 +179,8 @@ struct BallView: View {
             HStack(spacing: -diameter * 0.04) {
                 ForEach(teams) { team in
                     CachedTeamLogo(url: team.logo, size: diameter * (teams.count > 2 ? 0.30 : 0.42))
-                        .background(Circle().fill(.white).shadow(radius: 2))
                 }
             }
-            .offset(x: diameter * 0.12, y: -diameter * 0.12)
         }
     }
 }
