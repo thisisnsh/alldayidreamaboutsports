@@ -6,6 +6,7 @@ import Sparkle
 import SwiftUI
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    private let menuController = MenuPopoverController.shared
     // Dev builds never start Sparkle: the scheduled appcast fetch is a network
     // hit, and a Debug build registering for auto-updates is wrong anyway.
     #if DEV_BACKEND
@@ -30,6 +31,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist") != nil {
             FirebaseApp.configure()
             Messaging.messaging().delegate = PushService.shared
+            NSLog("Registering for APNs")
             NSApplication.shared.registerForRemoteNotifications()
         } else {
             NSLog("⚠️ GoogleService-Info.plist missing — push/remote-config disabled (dev mode)")
@@ -37,6 +39,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         AppSession.shared.bootstrap()
         ControlPlane.shared.start()
+        menuController.install()
 
         #if DEV_BACKEND
         // Bypassed sign-in means we're already in; play the deterministic
@@ -70,6 +73,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func application(_ application: NSApplication,
                      didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
         Messaging.messaging().apnsToken = deviceToken
+        NSLog("APNs registration succeeded: %d-byte token", deviceToken.count)
+        PushService.shared.retryPending()
     }
 
     func application(_ application: NSApplication,
@@ -80,7 +85,48 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // FCM data messages land here while the app runs.
     func application(_ application: NSApplication,
                      didReceiveRemoteNotification userInfo: [String: Any]) {
+        NSLog("Incoming push: %@", String(describing: userInfo))
         EventRouter.shared.handlePush(userInfo)
+    }
+}
+
+/// AppKit owns the status item so a transient popover closes on focus loss and
+/// always clears the status button's highlighted state.
+final class MenuPopoverController: NSObject, NSPopoverDelegate {
+    static let shared = MenuPopoverController()
+    private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+    private let popover = NSPopover()
+
+    func install() {
+        guard let button = statusItem.button else { return }
+        button.image = NSImage(systemSymbolName: "soccerball", accessibilityDescription: "All Day I Dream About Sports")
+        button.target = self
+        button.action = #selector(toggle)
+        popover.behavior = .transient
+        popover.delegate = self
+        popover.contentSize = NSSize(width: 320, height: 520)
+        popover.contentViewController = NSHostingController(
+            rootView: MenuPopoverView().environmentObject(AppSession.shared)
+        )
+    }
+
+    @objc private func toggle() {
+        guard let button = statusItem.button else { return }
+        if popover.isShown {
+            close()
+        } else {
+            popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+            button.highlight(true)
+        }
+    }
+
+    func close() {
+        popover.performClose(nil)
+        statusItem.button?.highlight(false)
+    }
+
+    func popoverDidClose(_ notification: Notification) {
+        statusItem.button?.highlight(false)
     }
 }
 

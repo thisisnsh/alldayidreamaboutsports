@@ -10,9 +10,9 @@ struct CDNScoresClient: ScoresProviding {
         var req = URLRequest(url: url)
         req.cachePolicy = .reloadIgnoringLocalCacheData // CDN handles caching
         let (data, response) = try await URLSession.shared.data(for: req)
-        guard (response as? HTTPURLResponse)?.statusCode == 200 else {
-            throw URLError(.badServerResponse)
-        }
+        let status = (response as? HTTPURLResponse)?.statusCode
+        if status == 404 { throw ScoresError.notFound }
+        guard status == 200 else { throw URLError(.badServerResponse) }
         return try JSONDecoder().decode(T.self, from: data)
     }
 
@@ -20,22 +20,26 @@ struct CDNScoresClient: ScoresProviding {
         try await fetch("catalog.json", as: Catalog.self)
     }
 
-    func fetchLive() async throws -> [Fixture] {
-        try await fetch("live.json", as: FixturesPayload.self).matches
-    }
-
-    func fetchTodayFixtures() async throws -> [Fixture] {
-        let day = ISO8601DateFormatter.dateOnly.string(from: Date())
+    func fetchFixtures(date: Date) async throws -> [Fixture] {
+        let day = ISO8601DateFormatter.dateOnly.string(from: date)
         return try await fetch("fixtures-\(day).json", as: FixturesPayload.self).matches
     }
 
     func fetchCelebrations(fixtureId: Int) async throws -> [String: Int] {
-        try await fetch("celebrate/\(fixtureId).json", as: CelebrationTotals.self).totals
+        do {
+            return try await fetch("celebrate/\(fixtureId).json", as: CelebrationTotals.self).totals
+        } catch ScoresError.notFound {
+            return [:]
+        }
     }
 
     func fetchBackupConfig() async throws -> BackupConfig {
         try await fetch("config.json", as: BackupConfig.self)
     }
+}
+
+private enum ScoresError: Error {
+    case notFound
 }
 
 struct BackupConfig: Codable {

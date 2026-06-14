@@ -27,10 +27,10 @@ function providerReturning(payload: unknown, status = 200) {
 describe("ApiFootballProvider", () => {
   it("maps a live fixture to MatchState with cards and last scorer", async () => {
     const { provider, fetchMock } = providerReturning({ response: [liveFixture] });
-    const [match] = await provider.liveMatches();
+    const [match] = await provider.fixturesForRange("2026-06-10", "2026-06-12");
 
     expect(fetchMock).toHaveBeenCalledWith(
-      "https://v3.football.api-sports.io/fixtures?live=all&league=1&season=2026",
+      "https://v3.football.api-sports.io/fixtures?league=1&season=2026&from=2026-06-10&to=2026-06-12&timezone=UTC",
       { headers: { "x-apisports-key": "key" } },
     );
     expect(match).toMatchObject({
@@ -64,7 +64,7 @@ describe("ApiFootballProvider", () => {
       ],
     };
     const { provider } = providerReturning({ response: [penFixture] });
-    const [match] = await provider.liveMatches();
+    const [match] = await provider.fixturesForRange("2026-06-10", "2026-06-12");
 
     expect(match!.status).toBe("FINISHED");
     expect(match!.round).toBe("Round of 16");
@@ -84,7 +84,7 @@ describe("ApiFootballProvider", () => {
 
   it("leaves shootout undefined for a normal in-play fixture", async () => {
     const { provider } = providerReturning({ response: [liveFixture] });
-    const [match] = await provider.liveMatches();
+    const [match] = await provider.fixturesForRange("2026-06-10", "2026-06-12");
     expect(match!.shootout).toBeUndefined();
   });
 
@@ -93,17 +93,17 @@ describe("ApiFootballProvider", () => {
     fixture.teams.home = { id: 99999, name: "New Caledonia" };
     fixture.events = [];
     const { provider } = providerReturning({ response: [fixture] });
-    const [match] = await provider.liveMatches();
+    const [match] = await provider.fixturesForRange("2026-06-10", "2026-06-12");
     expect(match!.home).toMatchObject({ id: 99999, name: "New Caledonia" });
   });
 
   it("throws a useful error on API failure", async () => {
     const { provider } = providerReturning({ errors: { token: "bad key" } });
-    await expect(provider.liveMatches()).rejects.toThrow(/bad key|bad body/);
+    await expect(provider.fixturesForRange("2026-06-10", "2026-06-12")).rejects.toThrow(/bad key|bad body/);
   });
 
   it("throws on HTTP errors", async () => {
     const { provider } = providerReturning({}, 429);
-    await expect(provider.liveMatches()).rejects.toThrow("HTTP 429");
+    await expect(provider.fixturesForRange("2026-06-10", "2026-06-12")).rejects.toThrow("HTTP 429");
   });
 });

@@ -12,10 +12,16 @@ import SwiftUI
 final class EventRouter {
     static let shared = EventRouter()
 
-    private var seenEventIds: [String] = []
+    private var seenEventIds: [String] {
+        get { UserDefaults.standard.stringArray(forKey: "handledEventIds") ?? [] }
+        set { UserDefaults.standard.set(newValue, forKey: "handledEventIds") }
+    }
 
     func handlePush(_ userInfo: [String: Any]) {
-        guard ControlPlane.shared.isOperational else { return }
+        guard ControlPlane.shared.isOperational else {
+            NSLog("Push rejected: control plane disabled")
+            return
+        }
         switch userInfo["kind"] as? String {
         case "match_event":
             guard let event = MatchEvent(fcmData: userInfo) else { return }
@@ -26,26 +32,39 @@ final class EventRouter {
                   let totals = try? JSONDecoder().decode([String: Int].self, from: json)
             else { return }
             AppSession.shared.celebrationTotals[fixtureId] = totals
-        default:
-            break
+        default: NSLog("Push rejected: unknown kind")
         }
     }
 
     func route(_ event: MatchEvent) {
         // Signed out = silent, even if a stale topic delivery slips through.
-        guard AppSession.shared.isSignedIn else { return }
+        guard AppSession.shared.isSignedIn else {
+            NSLog("Push rejected: signed out")
+            return
+        }
         // FCM topics can redeliver; drop anything we've animated already.
-        guard !seenEventIds.contains(event.eventId) else { return }
-        seenEventIds.append(event.eventId)
-        if seenEventIds.count > 200 { seenEventIds.removeFirst(100) }
+        guard !seenEventIds.contains(event.eventId) else {
+            NSLog("Push rejected: duplicate \(event.eventId)")
+            return
+        }
+        var handled = seenEventIds
+        handled.append(event.eventId)
+        if handled.count > 500 { handled.removeFirst(250) }
+        seenEventIds = handled
 
         let settings = AppSession.shared.prefs.settings
-        guard settings.eventEnabled(event.type) else { return }
+        guard settings.eventEnabled(event.type) else {
+            NSLog("Push rejected: event disabled \(event.type.rawValue)")
+            return
+        }
 
         // Only matches involving a team the user is a fan of — FCM topics
         // scope this server-side, but dev simulations and redeliveries don't.
         let fans = AppSession.shared.fanTeamIds
-        guard fans.contains(event.homeTeamId) || fans.contains(event.awayTeamId) else { return }
+        guard fans.contains(event.homeTeamId) || fans.contains(event.awayTeamId) else {
+            NSLog("Push rejected: no followed team")
+            return
+        }
 
         let isFanGoal = event.type == .goal && event.teamId.map(fans.contains) == true
 
@@ -201,8 +220,8 @@ func pillIcon(for type: MatchEventType) -> String {
     case .goalCancelled: "xmark.circle.fill"
     case .yellowCard, .redCard: "rectangle.portrait.fill"
     case .halfTime: "pause.circle.fill"
-    case .fullTime: "flag.checkered"
-    case .extraTime: "clock.badge.plus"
+    case .fullTime: "flag.fill"
+    case .extraTime: "clock.fill"
     case .penaltyShootout, .penaltyKick: "target"
     case .celebration: "party.popper"
     }
@@ -220,6 +239,8 @@ func pillIconColor(for type: MatchEventType) -> Color {
     case .yellowCard: .yellow
     case .redCard, .goalCancelled: .red
     case .kickoff: .green
+    case .fullTime: .green
+    case .penaltyShootout: .purple
     case .celebration: .blue
     default: .white
     }

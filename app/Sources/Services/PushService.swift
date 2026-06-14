@@ -1,34 +1,75 @@
 import FirebaseMessaging
 import Foundation
 
-/// FCM registration + topic management. Topics are `l{league}_{TEAM}`; the
-/// backend fans match events out to them — free at any scale. Pushes are
-/// data-only (the notch pill is the notification), so no UN permission needed.
+/// Confirmed FCM topic state. Failures remain pending and retry whenever the
+/// app, APNs token, FCM token, sign-in, or followed teams change.
 final class PushService: NSObject, MessagingDelegate {
     static let shared = PushService()
+    private let queue = DispatchQueue(label: "PushService.topics")
+    private var inFlight: Set<String> = []
 
     private var subscribed: Set<String> {
         get { Set(UserDefaults.standard.stringArray(forKey: "subscribedTopics") ?? []) }
         set { UserDefaults.standard.set(Array(newValue), forKey: "subscribedTopics") }
     }
 
-    func syncTopics(to teamIds: Set<Int>) {
-        guard FirebaseConfigured.isConfigured else { return }
-        let wanted = Set(teamIds.map { "l\(AppEnvironment.leagueId)_\($0)" })
-        let current = subscribed
-        for topic in current.subtracting(wanted) {
-            Messaging.messaging().unsubscribe(fromTopic: topic)
-        }
-        for topic in wanted.subtracting(current) {
-            Messaging.messaging().subscribe(toTopic: topic)
-        }
-        subscribed = wanted
+    private var desired: Set<String> {
+        get { Set(UserDefaults.standard.stringArray(forKey: "desiredTopics") ?? []) }
+        set { UserDefaults.standard.set(Array(newValue), forKey: "desiredTopics") }
     }
 
-    // MARK: MessagingDelegate
+    func syncTopics(to teamIds: Set<Int>) {
+        guard FirebaseConfigured.isConfigured else { return }
+        queue.async {
+            self.desired = Set(teamIds.map { "l\(AppEnvironment.leagueId)_\($0)" })
+            self.retryPending()
+        }
+    }
+
+    func retryPending() {
+        guard FirebaseConfigured.isConfigured else { return }
+        queue.async {
+            let wanted = self.desired
+            let current = self.subscribed
+            for topic in current.subtracting(wanted).subtracting(self.inFlight) {
+                self.inFlight.insert(topic)
+                Messaging.messaging().unsubscribe(fromTopic: topic) { error in
+                    self.queue.async {
+                        self.inFlight.remove(topic)
+                        if let error {
+                            NSLog("FCM unsubscribe failed %@: %@", topic, error.localizedDescription)
+                        } else {
+                            var confirmed = self.subscribed
+                            confirmed.remove(topic)
+                            self.subscribed = confirmed
+                            NSLog("FCM unsubscribed %@", topic)
+                            self.retryPending()
+                        }
+                    }
+                }
+            }
+            for topic in wanted.subtracting(current).subtracting(self.inFlight) {
+                self.inFlight.insert(topic)
+                Messaging.messaging().subscribe(toTopic: topic) { error in
+                    self.queue.async {
+                        self.inFlight.remove(topic)
+                        if let error {
+                            NSLog("FCM subscribe failed %@: %@", topic, error.localizedDescription)
+                        } else {
+                            var confirmed = self.subscribed
+                            confirmed.insert(topic)
+                            self.subscribed = confirmed
+                            NSLog("FCM subscribed %@", topic)
+                            self.retryPending()
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     func messaging(_ messaging: Messaging, didReceiveRegistrationToken fcmToken: String?) {
-        // Re-assert topic subscriptions whenever the registration token rotates.
+        NSLog("FCM registration token received: %@", fcmToken ?? "<nil>")
         syncTopics(to: AppSessionTopicsSnapshot.current())
     }
 }
@@ -39,9 +80,6 @@ enum FirebaseConfigured {
     }
 }
 
-/// Read the followed teams without hopping to the main actor. Signed out
-/// (no stored profile) reads as no teams, so a token rotation while signed
-/// out never resubscribes.
 enum AppSessionTopicsSnapshot {
     static func current() -> Set<Int> {
         guard UserDefaults.standard.data(forKey: "profile") != nil,

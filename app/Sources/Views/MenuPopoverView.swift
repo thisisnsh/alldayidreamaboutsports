@@ -127,7 +127,7 @@ struct MenuPopoverView: View {
     /// dismiss action, so we close the panel directly — it's the key window
     /// while the menu is showing, and SwiftUI rebuilds it on the next open.
     private func dismissMenu() {
-        NSApp.keyWindow?.close()
+        MenuPopoverController.shared.close()
     }
 
     /// A pre-filled support email — the app repo is private, so there's no
@@ -217,6 +217,9 @@ private struct FixtureRow: View {
         .buttonStyle(.hoverHighlight)
         .onHover { over in
             withAnimation(.easeOut(duration: 0.15)) { hovering = over }
+            if over, session.celebrationTotals[fixture.fixtureId] == nil {
+                Task { await session.loadCelebrations(fixtureId: fixture.fixtureId, retry: true) }
+            }
         }
     }
 

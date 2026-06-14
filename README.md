@@ -8,15 +8,15 @@ Website: [alldayidreamaboutsports.com](https://alldayidreamaboutsports.com)
 
 ## How it works (the 10-cent version)
 
-One backend poller asks [API-Football](https://www.api-football.com) for live
-scores every 15 seconds. Goal and match events fan out to every Mac via free
-FCM topic push (`l1_6`, `l1_16`, …). Fixtures, live scores, celebration counts,
+One backend poller asks [API-Football](https://www.api-football.com) for a
+three-day UTC fixture range every 5 seconds. Goal and match events fan out to
+every Mac via free FCM topic push (`l1_6`, `l1_16`, …). Fixtures, refreshed scores, celebration counts,
 and the backup kill switch are fetched on demand from cached JSON on Cloudflare R2.
 Sign-in is Google OAuth verified by our own API — no per-user billing anywhere.
 That is how 10M users/day costs hundreds, not thousands, per month.
 
 ```
-API-Football ──15s──▶ Cloud Run backend ──▶ FCM topics ──▶ menu bar apps
+API-Football ───5s──▶ Cloud Run backend ──▶ FCM topics ──▶ menu bar apps
                           │    ▲                              ▲
                           ▼    │ /auth /me /celebrate         │
                      Firestore │                              │

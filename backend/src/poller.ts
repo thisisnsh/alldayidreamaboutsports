@@ -1,84 +1,83 @@
+import { diffMatch } from "./diff.js";
 import { Fcm } from "./fcm.js";
 import type { ScoreProvider } from "./providers/types.js";
-import { R2 } from "./r2.js";
-import type { Store } from "./store.js";
+import { R2, R2ConflictError, R2MatchStateStore } from "./r2.js";
 import type { MatchState } from "./types.js";
 
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-function liveJsonPayload(matches: MatchState[]) {
-  return { generatedAt: new Date().toISOString(), matches };
+export function utcPollRange(now = new Date()): { from: string; to: string } {
+  const date = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  const day = (offset: number) => new Date(date.getTime() + offset * 86_400_000).toISOString().slice(0, 10);
+  return { from: day(-1), to: day(1) };
 }
 
-/**
- * One scheduler tick = up to 4 polls 15s apart, finishing inside the 60s
- * schedule so ticks never overlap. Publish-once safety lives in
- * Store.applyMatchState, so even overlapping ticks cannot double-fire events.
- */
-export class Poller {
-  private lastPublishedCounts = new Map<number, string>();
-  private staticsUploadedFor: string | null = null;
+export function partitionFixtures(matches: MatchState[]): Map<string, MatchState[]> {
+  const partitions = new Map<string, MatchState[]>();
+  for (const match of matches) {
+    const date = match.kickoffISO.slice(0, 10);
+    partitions.set(date, [...(partitions.get(date) ?? []), match]);
+  }
+  return partitions;
+}
 
+export function isLive(match: MatchState): boolean {
+  return match.status === "LIVE" || match.status === "HALF_TIME";
+}
+
+export class Poller {
   constructor(
     private readonly provider: ScoreProvider,
-    private readonly store: Store,
+    private readonly state: R2MatchStateStore,
     private readonly fcm: Fcm,
     private readonly r2: R2,
     private readonly sleeper: (ms: number) => Promise<unknown> = sleep,
   ) {}
 
-  async tick(iterations = 4, intervalMs = 15_000): Promise<{ events: number; live: number }> {
+  async tick(iterations = 12, intervalMs = 5_000): Promise<{ events: number; live: number }> {
     let totalEvents = 0;
     let liveCount = 0;
-    await this.ensureDailyStatics();
 
     for (let i = 0; i < iterations; i++) {
       if (i > 0) await this.sleeper(intervalMs);
-      const live = await this.provider.liveMatches();
-      liveCount = live.length;
+      const range = utcPollRange();
+      const fixtures = await this.provider.fixturesForRange(range.from, range.to);
+      liveCount = fixtures.filter(isLive).length;
 
-      for (const match of live) {
-        const events = await this.store.applyMatchState(match);
-        totalEvents += events.length;
-        for (const ev of events) {
-          await this.fcm.publishEvent(ev);
+      const partitions = partitionFixtures(fixtures);
+      for (const date of [range.from, new Date().toISOString().slice(0, 10), range.to]) {
+        if (!partitions.has(date)) partitions.set(date, []);
+      }
+      await Promise.all([...partitions].map(([date, matches]) =>
+        this.r2.putJson(`fixtures-${date}.json`, {
+          generatedAt: new Date().toISOString(),
+          matches,
+        }, 10),
+      ));
+
+      for (const match of fixtures) {
+        const previous = await this.state.load(match.fixtureId);
+        const events = diffMatch(previous.state, match);
+        for (const event of events) {
+          console.log(JSON.stringify({ severity: "INFO", message: "match_event_detected", event }));
+          await this.fcm.publishEvent(event);
+          totalEvents++;
+        }
+        try {
+          await this.state.save(match, previous.etag);
+        } catch (error) {
+          if (error instanceof R2ConflictError) {
+            console.warn(JSON.stringify({
+              severity: "WARNING",
+              message: "match_state_conflict",
+              fixtureId: match.fixtureId,
+            }));
+          } else {
+            throw error;
+          }
         }
       }
-
-      await this.r2.putJson("live.json", liveJsonPayload(live), 20);
-      await this.publishCelebrationCounts(live);
-
-      if (live.length === 0) break; // nothing in play — don't burn 3 more calls
     }
     return { events: totalEvents, live: liveCount };
-  }
-
-  private async publishCelebrationCounts(live: MatchState[]): Promise<void> {
-    for (const match of live) {
-      const totals = await this.store.celebrationTotals(match.fixtureId);
-      const fingerprint = JSON.stringify(totals);
-      if (fingerprint === this.lastPublishedCounts.get(match.fixtureId)) continue;
-      this.lastPublishedCounts.set(match.fixtureId, fingerprint);
-      await this.r2.putJson(`celebrate/${match.fixtureId}.json`, { totals }, 2);
-      await this.fcm.publishCelebrationCount(
-        match.leagueId,
-        match.fixtureId,
-        match.home.id,
-        match.away.id,
-        totals,
-      );
-    }
-  }
-
-  /**
-   * Once per process per UTC day: today's fixtures. The leagues+teams catalog
-   * is published separately by CatalogService on its own daily schedule.
-   */
-  private async ensureDailyStatics(): Promise<void> {
-    const today = new Date().toISOString().slice(0, 10);
-    if (this.staticsUploadedFor === today) return;
-    const fixtures = await this.provider.fixturesForDate(today);
-    await this.r2.putJson(`fixtures-${today}.json`, liveJsonPayload(fixtures), 3600);
-    this.staticsUploadedFor = today;
   }
 }

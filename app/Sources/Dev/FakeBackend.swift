@@ -144,8 +144,9 @@ final class FakeBackendAPI: BackendAPI {
 @MainActor
 final class FakeScores: ScoresProviding {
     func fetchCatalog() async throws -> Catalog { FakeScores.demoCatalog }
-    func fetchLive() async throws -> [Fixture] { FakeStore.shared.liveFixtures }
-    func fetchTodayFixtures() async throws -> [Fixture] { FakeStore.shared.todayFixtures }
+    func fetchFixtures(date: Date) async throws -> [Fixture] {
+        FakeStore.shared.todayFixtures + FakeStore.shared.liveFixtures
+    }
     func fetchCelebrations(fixtureId: Int) async throws -> [String: Int] {
         // Production fetches this from the CDN after the batched POST lands
         // in the DB — simulate that beat so dev timing matches reality.
