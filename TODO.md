@@ -107,8 +107,8 @@ The app fetches fixtures, live scores, and celebration counts from here whenever
 the menu opens, and downloads ship from here too. Custom domains (`scores.` /
 `download.`) are the reason the domain's DNS lives on Cloudflare.
 
-- [ ] **Run `./infra/setup-r2.sh`** to create separate staging/prod scores and
-      private state buckets plus the production downloads bucket, then follow the script's
+- [ ] **Run `./infra/setup-r2.sh`** to create separate staging/prod scores
+      buckets plus the production downloads bucket, then follow the script's
       printed dashboard steps.
 - [ ] **Move DNS to Cloudflare:** add `alldayidreamaboutsports.com` as a site in
       Cloudflare, then change the **nameservers at Hostinger** to the two
@@ -118,10 +118,9 @@ the menu opens, and downloads ship from here too. Custom domains (`scores.` /
       `scores-staging.alldayidreamaboutsports.com`,
       `scores.alldayidreamaboutsports.com`, and
       `download.alldayidreamaboutsports.com`. Set each GitHub environment's
-      `R2_BUCKET_SCORES` var to its scores bucket and `R2_BUCKET_STATE` to its
-      private state bucket. These only work because DNS
+      `R2_BUCKET_SCORES` var to its scores bucket. These only work because DNS
       is now on Cloudflare.
-- [ ] **Create an R2 API token** (read+write all five buckets) → save as GCP secrets
+- [ ] **Create an R2 API token** (read+write all three buckets) → save as GCP secrets
       `r2-access-key-id` / `r2-secret-access-key` / `r2-endpoint` so the backend
       can write score files. Releases upload to R2 from your Mac via
       `app/scripts/publish.sh` using your own local R2 env vars — no GitHub

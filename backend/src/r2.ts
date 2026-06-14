@@ -51,13 +51,13 @@ export class R2 {
   }
 }
 
-/** Private R2 state used only to compare consecutive fixture snapshots. */
+/** R2 comparison state stored under matches/ in the scores bucket. */
 export class R2MatchStateStore {
   private readonly client: S3Client;
   private readonly bucket: string;
 
   constructor(client?: S3Client, bucket?: string) {
-    this.bucket = bucket ?? env.r2.stateBucket;
+    this.bucket = bucket ?? env.r2.scoresBucket;
     this.client = client ?? new S3Client({
       region: "auto",
       endpoint: env.r2.endpoint,

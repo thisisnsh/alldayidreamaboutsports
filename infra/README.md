@@ -84,16 +84,12 @@ Maximum instances does not cap the total bill or downstream-service usage.
 ./setup-r2.sh   # then follow its printed dashboard steps
 ```
 
-The public scores data and private comparison state are environment-specific:
+The scores data and comparison state are environment-specific:
 
 | Environment | Bucket | Custom domain | GitHub environment var |
 |---|---|---|---|
 | staging | `alldayidreamaboutsports-staging-scores` | `scores-staging.alldayidreamaboutsports.com` | `R2_BUCKET_SCORES=alldayidreamaboutsports-staging-scores` |
 | prod | `alldayidreamaboutsports-scores` | `scores.alldayidreamaboutsports.com` | `R2_BUCKET_SCORES=alldayidreamaboutsports-scores` |
-
-Set `R2_BUCKET_STATE=alldayidreamaboutsports-staging-state` in staging and
-`R2_BUCKET_STATE=alldayidreamaboutsports-state` in production. Never attach a
-custom domain or public `r2.dev` URL to either state bucket.
 
 The downloads bucket/domain is global and production-only.
 `R2_BUCKET_SCORES` is required by deployment and the backend has no fallback,
@@ -238,7 +234,7 @@ openssl rand -hex 32 | gcloud secrets versions add session-jwt-secret --data-fil
 | Where | Name | Source |
 |---|---|---|
 | env secret | `GCP_WORKLOAD_IDENTITY_PROVIDER`, `GCP_DEPLOY_SERVICE_ACCOUNT` | setup-gcp.sh output |
-| env var | `GCP_PROJECT_ID`, `GCP_REGION`, `R2_BUCKET_SCORES`, `R2_BUCKET_STATE` | setup-gcp.sh output + R2 bucket table |
+| env var | `GCP_PROJECT_ID`, `GCP_REGION`, `R2_BUCKET_SCORES` | setup-gcp.sh output + scores bucket table |
 | repo secret | `GOOGLE_SERVICE_INFO_PRODUCTION_PLIST_B64` | Production Firebase plist; app release workflow |
 | repo secret | `GOOGLE_OAUTH_PRODUCTION_CLIENT_ID`, `GOOGLE_OAUTH_PRODUCTION_REVERSED_CLIENT_ID` | Production OAuth plist; app release workflow |
 | repo secret | `MACOS_CERT_P12_B64`, `MACOS_CERT_PASSWORD`, `APPLE_ID`, `APPLE_TEAM_ID`, `APPLE_APP_PASSWORD` | Apple |
