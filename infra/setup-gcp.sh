@@ -70,11 +70,11 @@ gcloud iam workload-identity-pools providers create-oidc github-provider \
   --location global --workload-identity-pool github \
   --issuer-uri "https://token.actions.githubusercontent.com" \
   --attribute-mapping "google.subject=assertion.sub,attribute.repository=assertion.repository" \
-  --attribute-condition "assertion.repository == 'thisisnsh/onlyfansforsports'" || true
+  --attribute-condition "assertion.repository == 'thisisnsh/alldayidreamaboutsports'" || true
 PROJECT_NUMBER=$(gcloud projects describe "$PROJECT_ID" --format 'value(projectNumber)')
 gcloud iam service-accounts add-iam-policy-binding "$DEPLOY_SA" \
   --role roles/iam.workloadIdentityUser \
-  --member "principalSet://iam.googleapis.com/projects/${PROJECT_NUMBER}/locations/global/workloadIdentityPools/github/attribute.repository/thisisnsh/onlyfansforsports" -q >/dev/null
+  --member "principalSet://iam.googleapis.com/projects/${PROJECT_NUMBER}/locations/global/workloadIdentityPools/github/attribute.repository/thisisnsh/alldayidreamaboutsports" -q >/dev/null
 
 cat <<EOF
 
