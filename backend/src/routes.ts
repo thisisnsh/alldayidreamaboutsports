@@ -7,6 +7,7 @@ import type { Fcm } from "./fcm.js";
 import type { Poller } from "./poller.js";
 import { FixedWindowRateLimiter } from "./rateLimit.js";
 import type { Store } from "./store.js";
+import type { Dispatcher } from "./tasks.js";
 import type { MatchEvent, UserPrefs } from "./types.js";
 
 const prefsSchema = z.object({
@@ -61,6 +62,7 @@ export interface Deps {
   store: Store;
   fcm: Fcm;
   poller: Poller;
+  dispatcher: Dispatcher;
   catalog: CatalogService;
   celebrations: CelebrationAggregator;
 }
@@ -83,7 +85,7 @@ function enforceRateLimit(limiter: FixedWindowRateLimiter, key: (req: Request) =
   };
 }
 
-export function buildApp({ store, fcm, poller, catalog, celebrations }: Deps): Express {
+export function buildApp({ store, fcm, poller, dispatcher, catalog, celebrations }: Deps): Express {
   const app = express();
   const signInRateLimiter = new FixedWindowRateLimiter(10, 60_000);
   const sessionRateLimiter = new FixedWindowRateLimiter(120, 60_000);
@@ -145,12 +147,26 @@ export function buildApp({ store, fcm, poller, catalog, celebrations }: Deps): E
 
   // ── Internal (Cloud Scheduler / operators with the scheduler SA) ─────────
 
-  app.post("/internal/poll", requireSchedulerOidc, async (_req, res) => {
+  // Once a minute (Cloud Scheduler): fan the minute out into staggered Cloud
+  // Tasks so the cadence is sub-minute without any request sleeping.
+  app.post("/internal/dispatch", requireSchedulerOidc, async (_req, res) => {
     try {
-      const result = await poller.tick();
+      const result = await dispatcher.dispatch();
       res.json(result);
     } catch (err) {
-      console.error("poll failed", err);
+      console.error("dispatch failed", err);
+      res.status(500).json({ error: (err as Error).message });
+    }
+  });
+
+  // Single fetch per request (Cloud Tasks worker). Returns immediately so the
+  // CPU is billed only for the actual read, not for sleeping between polls.
+  app.post("/internal/fetch", requireSchedulerOidc, async (_req, res) => {
+    try {
+      const result = await poller.fetchOnce();
+      res.json(result);
+    } catch (err) {
+      console.error("fetch failed", err);
       res.status(500).json({ error: (err as Error).message });
     }
   });

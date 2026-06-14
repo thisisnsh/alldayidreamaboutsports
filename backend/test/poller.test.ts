@@ -41,7 +41,7 @@ describe("Poller", () => {
     const r2 = { putJson: vi.fn().mockResolvedValue(undefined) };
     const poller = new Poller(provider as never, stateStore as never, fcm as never, r2 as never);
 
-    const result = await poller.tick(1, 0);
+    const result = await poller.fetchOnce();
 
     expect(result).toEqual({ events: 1, live: 1 });
     expect(r2.putJson).toHaveBeenCalledWith("fixtures-2026-06-14.json", expect.anything(), 10);

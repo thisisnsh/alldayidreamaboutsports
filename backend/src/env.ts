@@ -31,6 +31,11 @@ export const env = {
       `sports-scheduler@${required("GCP_PROJECT_ID")}.iam.gserviceaccount.com`
     );
   },
+  get serviceUrl() {
+    return required("SERVICE_URL"); // public Cloud Run URL; Cloud Tasks targets it
+  },
+  tasksQueue: process.env.TASKS_QUEUE ?? "live-scores",
+  tasksLocation: process.env.TASKS_LOCATION ?? "us-central1",
   leagueId: Number(process.env.LEAGUE_ID ?? 1), // World Cup
   season: Number(process.env.SEASON ?? 2026),
   port: Number(process.env.PORT ?? 8080),
