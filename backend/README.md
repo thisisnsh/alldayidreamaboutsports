@@ -36,7 +36,7 @@ Admin SDK credentials.
 
 | Route | Auth | What |
 |---|---|---|
-| `GET /healthz` | none | liveness |
+| `GET /healthz/` | none | liveness |
 | `POST /auth/signin` | Google ID token | verify → upsert user → session JWT (30d) |
 | `GET/PUT /me/prefs` | session JWT | `fanOf: { football: { "1": ["6"] } }` + settings |
 | `POST /celebrate` | session JWT | `{fixtureId, teamId, taps}` — ONE batched call per goal per user |
@@ -68,6 +68,12 @@ curl -X POST "<SERVICE_URL>/internal/test-event" \
 Cloud Run instance. This is basic abuse protection, not a globally coordinated
 quota. At high traffic, enforce an additional edge rate limit with Cloud Armor
 or another gateway in front of Cloud Run.
+
+Sign-in is limited to 10 attempts per minute per client IP, and authenticated
+API routes are limited to 120 calls per minute per user on each Cloud Run
+instance. Deployment caps the service at 50 instances as a scaling-cost
+safeguard. These limits reduce abuse but do not cap the total bill or replace a
+global Cloud Armor rate limit in front of production.
 
 ## Deploy
 

@@ -1,4 +1,4 @@
-import express, { type Express } from "express";
+import express, { type Express, type NextFunction, type Request, type Response } from "express";
 import { z } from "zod";
 import { requireSchedulerOidc, requireSession, signSession, verifyGoogleIdToken } from "./auth.js";
 import type { CatalogService } from "./catalog.js";
@@ -63,14 +63,35 @@ export interface Deps {
   celebrations: CelebrationAggregator;
 }
 
+function clientIp(req: Request): string {
+  const forwarded = req.headers["x-forwarded-for"];
+  const values = (Array.isArray(forwarded) ? forwarded : forwarded?.split(",")) ?? [];
+  // Google frontends append client IP followed by load balancer IP.
+  const value = values.length >= 2 ? values.at(-2) : values.at(-1);
+  return value?.trim() || req.socket.remoteAddress || "unknown";
+}
+
+function enforceRateLimit(limiter: FixedWindowRateLimiter, key: (req: Request) => string) {
+  return (req: Request, res: Response, next: NextFunction): void => {
+    if (limiter.allow(key(req))) {
+      next();
+      return;
+    }
+    res.status(429).json({ error: "rate limit exceeded" });
+  };
+}
+
 export function buildApp({ store, fcm, poller, catalog, celebrations }: Deps): Express {
   const app = express();
+  const signInRateLimiter = new FixedWindowRateLimiter(10, 60_000);
+  const sessionRateLimiter = new FixedWindowRateLimiter(120, 60_000);
   const celebrationRateLimiter = new FixedWindowRateLimiter(60, 60_000);
   app.use(express.json({ limit: "16kb" }));
 
-  app.get("/healthz", (_req, res) => res.json({ ok: true }));
+  // Cloud Run reserves the exact /healthz path; the trailing slash reaches the app.
+  app.get("/healthz/", (_req, res) => res.json({ ok: true }));
 
-  app.post("/auth/signin", async (req, res) => {
+  app.post("/auth/signin", enforceRateLimit(signInRateLimiter, clientIp), async (req, res) => {
     try {
       const idToken = z.object({ idToken: z.string().min(10) }).parse(req.body).idToken;
       const user = await verifyGoogleIdToken(idToken);
@@ -85,20 +106,25 @@ export function buildApp({ store, fcm, poller, catalog, celebrations }: Deps): E
     }
   });
 
-  app.get("/me/prefs", requireSession, async (req, res) => {
+  const requireRateLimitedSession = [
+    requireSession,
+    enforceRateLimit(sessionRateLimiter, (req) => req.user!.sub),
+  ];
+
+  app.get("/me/prefs", requireRateLimitedSession, async (req: Request, res: Response) => {
     const prefs = await store.getPrefs(req.user!.sub);
     if (!prefs) return void res.status(404).json({ error: "no such user" });
     res.json({ prefs });
   });
 
-  app.put("/me/prefs", requireSession, async (req, res) => {
+  app.put("/me/prefs", requireRateLimitedSession, async (req: Request, res: Response) => {
     const parsed = prefsSchema.safeParse(req.body);
     if (!parsed.success) return void res.status(400).json({ error: parsed.error.message });
     await store.putPrefs(req.user!.sub, parsed.data as UserPrefs);
     res.json({ ok: true });
   });
 
-  app.post("/celebrate", requireSession, (req, res) => {
+  app.post("/celebrate", requireRateLimitedSession, (req: Request, res: Response) => {
     if (!celebrationRateLimiter.allow(req.user!.sub)) {
       res.status(429).json({ error: "celebration rate limit exceeded" });
       return;
@@ -110,7 +136,7 @@ export function buildApp({ store, fcm, poller, catalog, celebrations }: Deps): E
     res.json({ ok: true });
   });
 
-  app.delete("/me", requireSession, async (req, res) => {
+  app.delete("/me", requireRateLimitedSession, async (req: Request, res: Response) => {
     await store.deleteUser(req.user!.sub);
     res.json({ ok: true });
   });

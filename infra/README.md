@@ -45,15 +45,18 @@ After the first backend deploy, create a Cloud Run domain mapping:
 6. Verify:
 
    ```sh
-   curl -fsS https://api-staging.alldayidreamaboutsports.com/healthz
+   curl -fsS https://api-staging.alldayidreamaboutsports.com/healthz/
    # or production:
-   curl -fsS https://api.alldayidreamaboutsports.com/healthz
+   curl -fsS https://api.alldayidreamaboutsports.com/healthz/
    ```
 
 Cloud Run domain mappings are a convenient initial setup but remain a preview
 feature. Before high-volume production traffic, put a global external
 Application Load Balancer and Cloud Armor in front of Cloud Run, then restrict
 Cloud Run ingress so the public `run.app` URL cannot bypass those controls.
+Until then, deployment caps Cloud Run at 50 instances to bound scaling cost;
+raising that cap trades stronger availability for higher billing exposure.
+Maximum instances does not cap the total bill or downstream-service usage.
 
 ## 2. Google OAuth (sign-in) — ⚠️ ship blocker
 

@@ -49,6 +49,7 @@ jobs:
             --service-account "sports-runtime@${{ vars.GCP_PROJECT_ID }}.iam.gserviceaccount.com" \
             --allow-unauthenticated \
             --min-instances 0 \
+            --max 50 \
             --max-instances 50 \
             --memory 512Mi \
             --cpu 1 \
@@ -61,4 +62,5 @@ jobs:
             --project "${{ vars.GCP_PROJECT_ID }}" \
             --region "${{ vars.GCP_REGION }}" \
             --format 'value(status.url)')
-          curl -fsS "$URL/healthz"
+          echo "Smoke testing $URL/healthz/"
+          curl -fsS "$URL/healthz/"
