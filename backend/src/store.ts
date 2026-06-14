@@ -1,7 +1,6 @@
 import { App, applicationDefault, getApps, initializeApp } from "firebase-admin/app";
 import { FieldValue, Firestore, getFirestore } from "firebase-admin/firestore";
-import { diffMatch } from "./diff.js";
-import type { MatchEvent, MatchState, UserPrefs } from "./types.js";
+import type { UserPrefs } from "./types.js";
 import { DEFAULT_PREFS } from "./types.js";
 
 export function firebaseApp(): App {
@@ -26,27 +25,6 @@ export class Store {
 
   constructor(db?: Firestore) {
     this.db = db ?? defaultFirestore();
-  }
-
-  /**
-   * Transactionally apply a fresh MatchState and return ONLY the events that
-   * were not published before — the publish-once guarantee. Retries and
-   * concurrent pollers recompute identical deterministic event ids and get [].
-   */
-  async applyMatchState(next: MatchState): Promise<MatchEvent[]> {
-    const ref = this.db.collection("matches").doc(String(next.fixtureId));
-    return this.db.runTransaction(async (tx) => {
-      const snap = await tx.get(ref);
-      const prev = (snap.data()?.state as MatchState | undefined) ?? null;
-      const published: string[] = snap.data()?.publishedEventIds ?? [];
-      const events = diffMatch(prev, next).filter((e) => !published.includes(e.eventId));
-      tx.set(ref, {
-        state: next,
-        publishedEventIds: FieldValue.arrayUnion(...[...events.map((e) => e.eventId), "_init"]),
-        updatedAt: FieldValue.serverTimestamp(),
-      }, { merge: true });
-      return events;
-    });
   }
 
   // ── Users ──────────────────────────────────────────────────────────────

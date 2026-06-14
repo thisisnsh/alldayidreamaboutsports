@@ -57,7 +57,7 @@ struct SettingsView: View {
                     #endif
 
                     SettingsCard("Events") {
-                        ForEach(MatchEventType.allCases, id: \.self) { type in
+                        ForEach(MatchEventType.settingsOrder, id: \.self) { type in
                             eventRow(type)
                         }
                         caption("Each event shows as a drop from the notch.")
@@ -247,6 +247,11 @@ private struct SettingsCard<Content: View>: View {
 }
 
 extension MatchEventType {
+    static let settingsOrder: [MatchEventType] = [
+        .kickoff, .goal, .goalCancelled, .yellowCard, .redCard, .halfTime,
+        .extraTime, .penaltyShootout, .penaltyKick, .fullTime, .celebration,
+    ]
+
     var displayName: String {
         switch self {
         case .kickoff: "Kickoff"

@@ -7,7 +7,7 @@ struct AnimationParams: Codable {
     /// How long each notification set (and the ball with it) stays on screen.
     var pillHoldSeconds: Double = 5
     /// Notification set size — how many pills display at once.
-    var notchStackMax: Int = 4
+    var notchStackMax: Int = 10
 }
 
 /// Kill switch + forced updates + remote tunables.

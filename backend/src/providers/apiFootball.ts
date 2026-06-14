@@ -64,16 +64,9 @@ export class ApiFootballProvider implements ScoreProvider {
     return body.response;
   }
 
-  async liveMatches(): Promise<MatchState[]> {
+  async fixturesForRange(fromISO: string, toISO: string): Promise<MatchState[]> {
     const fixtures = await this.get<ApiFixture>(
-      `/fixtures?live=all&league=${this.leagueId}&season=${this.season}`,
-    );
-    return fixtures.map((f) => this.toState(f));
-  }
-
-  async fixturesForDate(dateISO: string): Promise<MatchState[]> {
-    const fixtures = await this.get<ApiFixture>(
-      `/fixtures?league=${this.leagueId}&season=${this.season}&date=${dateISO}`,
+      `/fixtures?league=${this.leagueId}&season=${this.season}&from=${fromISO}&to=${toISO}&timezone=UTC`,
     );
     return fixtures.map((f) => this.toState(f));
   }

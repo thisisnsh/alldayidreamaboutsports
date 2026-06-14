@@ -111,6 +111,8 @@ cat <<EOF
   secret GCP_DEPLOY_SERVICE_ACCOUNT     = ${DEPLOY_SA}
   var    GCP_PROJECT_ID                 = ${PROJECT_ID}
   var    GCP_REGION                     = ${REGION}
+  var    R2_BUCKET_SCORES               = environment's public scores bucket
+  var    R2_BUCKET_STATE                = environment's private state bucket
 
 Manual steps remaining (see infra/README.md):
   1. Firebase: add project in console, upload APNs key, publish remoteconfig.template.json

@@ -15,14 +15,22 @@ export class Fcm {
   }
 
   private async sendData(topic: string, data: Record<string, string>): Promise<void> {
-    await this.messaging.send({
-      topic,
-      data,
-      apns: {
-        headers: { "apns-priority": "5", "apns-push-type": "background" },
-        payload: { aps: { contentAvailable: true } },
-      },
-    });
+    try {
+      const messageId = await this.messaging.send({
+        topic,
+        data,
+        apns: {
+          headers: { "apns-priority": "5", "apns-push-type": "background" },
+          payload: { aps: { contentAvailable: true } },
+        },
+      });
+      console.log(JSON.stringify({ severity: "INFO", message: "fcm_topic_result", topic, messageId }));
+    } catch (error) {
+      console.error(JSON.stringify({
+        severity: "ERROR", message: "fcm_topic_result", topic, error: (error as Error).message,
+      }));
+      throw error;
+    }
   }
 
   async publishEvent(ev: MatchEvent): Promise<void> {
@@ -52,19 +60,4 @@ export class Fcm {
     await Promise.all([...topics].map((t) => this.sendData(t, data)));
   }
 
-  async publishCelebrationCount(
-    leagueId: number,
-    fixtureId: number,
-    homeTeamId: number,
-    awayTeamId: number,
-    totals: Record<string, number>,
-  ): Promise<void> {
-    const data: Record<string, string> = {
-      kind: "celebration_count",
-      fixtureId: String(fixtureId),
-      totals: JSON.stringify(totals),
-    };
-    const topics = new Set([topicForTeam(leagueId, homeTeamId), topicForTeam(leagueId, awayTeamId)]);
-    await Promise.all([...topics].map((t) => this.sendData(t, data)));
-  }
 }

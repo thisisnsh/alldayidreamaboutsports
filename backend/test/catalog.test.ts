@@ -67,8 +67,7 @@ describe("ApiFootballProvider.teamsForLeague", () => {
 describe("CatalogService", () => {
   function fakeProvider(): ScoreProvider {
     return {
-      liveMatches: vi.fn(),
-      fixturesForDate: vi.fn(),
+      fixturesForRange: vi.fn(),
       leagueInfo: vi.fn(async (id: number): Promise<LeagueInfo> => ({
         id,
         name: `League ${id}`,

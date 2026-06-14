@@ -66,6 +66,7 @@ targets:
           APP_API_BASE_URL: https://unused.invalid
           APP_SCORES_BASE_URL: https://unused.invalid
         Staging:
+          CODE_SIGN_ENTITLEMENTS: App-Staging.entitlements
           GOOGLE_CLIENT_ID: 291291942072-cqsmesng18bagi6psv69n5ch4kcnvj2s.apps.googleusercontent.com
           GOOGLE_REVERSED_CLIENT_ID: com.googleusercontent.apps.291291942072-cqsmesng18bagi6psv69n5ch4kcnvj2s
           GOOGLE_SERVICE_INFO_PLIST: GoogleService-Info-Staging.plist
@@ -73,6 +74,7 @@ targets:
           APP_API_BASE_URL: https://api-staging.alldayidreamaboutsports.com
           APP_SCORES_BASE_URL: https://scores-staging.alldayidreamaboutsports.com
         Release:
+          CODE_SIGN_ENTITLEMENTS: App.entitlements
           # Set these to the production OAuth plist's CLIENT_ID and
           # REVERSED_CLIENT_ID before shipping.
           GOOGLE_CLIENT_ID: YOUR_PRODUCTION_CLIENT_ID.apps.googleusercontent.com
@@ -102,11 +104,6 @@ targets:
         SUScheduledCheckInterval: 3600
         SUAllowsAutomaticUpdates: true
         SUAutomaticallyUpdate: true # auto download + install by default; Settings can switch off
-    entitlements:
-      path: App.entitlements
-      properties:
-        com.apple.developer.aps-environment: production
-        com.apple.security.app-sandbox: false
     postBuildScripts:
       - name: Select Firebase configuration
         basedOnDependencyAnalysis: false

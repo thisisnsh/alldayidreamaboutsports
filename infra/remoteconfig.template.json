@@ -17,7 +17,7 @@
       "description": "false = hide tap-to-support and stop sending /celebrate (cost kill switch)."
     },
     "animation_params": {
-      "defaultValue": { "value": "{\"ballDropSeconds\":1.5,\"pillHoldSeconds\":5,\"notchStackMax\":4}" },
+      "defaultValue": { "value": "{\"ballDropSeconds\":1.5,\"pillHoldSeconds\":5,\"notchStackMax\":10}" },
       "description": "Tune animation feel without shipping a build."
     }
   }

@@ -71,7 +71,7 @@ struct MatchEvent: Identifiable {
     }
 }
 
-// live.json / fixtures-{date}.json payloads (backend MatchState shape).
+// fixtures-{date}.json payloads (backend MatchState shape).
 
 struct ScoreboardTeam: Codable, Hashable {
     let id: Int

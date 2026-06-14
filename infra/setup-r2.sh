@@ -3,9 +3,12 @@
 # (`npx wrangler login`) against the alldayidreamaboutsports.com account.
 set -euo pipefail
 
-# scores buckets: live.json, fixtures-*.json, celebrate/*.json, catalog.json, config.json
+# public scores buckets: fixtures-*.json, celebrate/*.json, catalog.json, config.json
 npx wrangler r2 bucket create alldayidreamaboutsports-staging-scores || true
 npx wrangler r2 bucket create alldayidreamaboutsports-scores || true
+# private comparison-state buckets: never attach a public domain
+npx wrangler r2 bucket create alldayidreamaboutsports-staging-state || true
+npx wrangler r2 bucket create alldayidreamaboutsports-state || true
 # downloads bucket: app DMGs + appcast.xml (Sparkle feed)
 npx wrangler r2 bucket create alldayidreamaboutsports-downloads || true
 
@@ -24,10 +27,10 @@ cat <<'EOF'
    - Browser TTL: Respect origin
    JSON is not cached by default, so this rule is required. Clients use only
    these custom domains; disable the buckets' public r2.dev URLs.
-   Backend objects carry their own cache-control TTLs: live.json=20s,
-   celebrate/*=2s, fixtures-*=1h, catalog.json=1d. Manually uploaded config.json
+   Backend objects carry their own cache-control TTLs: fixtures-*=10s,
+   celebrate/*=2s, catalog.json=1d. Manually uploaded config.json
    is only cached when uploaded with cache-control metadata.
-4. R2 API token (Object Read & Write, all three buckets) →
+4. R2 API token (Object Read & Write, all five buckets) →
    - each environment's backend secrets: r2-access-key-id / r2-secret-access-key / r2-endpoint
      (endpoint: https://<ACCOUNT_ID>.r2.cloudflarestorage.com)
    - local release env vars: R2_ENDPOINT / AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY

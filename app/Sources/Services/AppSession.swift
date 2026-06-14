@@ -13,13 +13,13 @@ final class AppSession: ObservableObject {
     @Published var leagues: [League] = []
     @Published var teamsByLeague: [Int: [Team]] = [1: TeamCatalog.fallback]
     @Published var fixtures: [Fixture] = []
-    @Published var liveMatches: [Fixture] = []
     @Published var celebrationTotals: [Int: [String: Int]] = [:]
     @Published var signInError: String?
 
     private var api: BackendAPI { Services.api }
     private var scores: ScoresProviding { Services.scores }
     private let defaults = UserDefaults.standard
+    private var celebrationLoads: [Int: Task<[String: Int]?, Never>] = [:]
 
     var isSignedIn: Bool { profile != nil }
     /// Every catalog team, flattened — for id→team lookups across leagues.
@@ -171,19 +171,37 @@ final class AppSession: ObservableObject {
     }
 
     func refreshFixtures() async {
-        if let today = try? await scores.fetchTodayFixtures() {
-            fixtures = today
-        }
-        if let live = try? await scores.fetchLive() {
-            liveMatches = live
-            // All live matches, not just followed ones — the popover shows
-            // celebration counts for every fixture on hover.
-            for match in live {
-                if let totals = try? await scores.fetchCelebrations(fixtureId: match.fixtureId) {
-                    celebrationTotals[match.fixtureId] = totals
-                }
+        let calendar = Calendar.current
+        let now = Date()
+        let dates = [-1, 0, 1].compactMap { calendar.date(byAdding: .day, value: $0, to: now) }
+        var byId: [Int: Fixture] = [:]
+        for date in dates {
+            for fixture in (try? await scores.fetchFixtures(date: date)) ?? [] {
+                byId[fixture.fixtureId] = fixture
             }
+        }
+        fixtures = byId.values
+            .filter { fixture in
+                fixture.kickoff.map { calendar.isDate($0, inSameDayAs: now) } == true
+                    || (fixture.isLive && fixture.involves(fanTeamIds))
+            }
+            .sorted { ($0.kickoff ?? .distantFuture) < ($1.kickoff ?? .distantFuture) }
+
+        for fixture in fixtures where fixture.involves(fanTeamIds) {
+            await loadCelebrations(fixtureId: fixture.fixtureId)
         }
     }
 
+    func loadCelebrations(fixtureId: Int, retry: Bool = false) async {
+        if !retry, celebrationTotals[fixtureId] != nil { return }
+        if let existing = celebrationLoads[fixtureId] {
+            if let totals = await existing.value { celebrationTotals[fixtureId] = totals }
+            return
+        }
+        let task = Task { try? await scores.fetchCelebrations(fixtureId: fixtureId) }
+        celebrationLoads[fixtureId] = task
+        let totals = await task.value
+        celebrationLoads[fixtureId] = nil
+        if let totals { celebrationTotals[fixtureId] = totals }
+    }
 }

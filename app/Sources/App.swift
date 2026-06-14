@@ -4,19 +4,16 @@ import SwiftUI
 struct AllDayIDreamAboutSportsApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @StateObject private var session = AppSession.shared
+    @State private var insertsSwiftUIMenu = false
 
     var body: some Scene {
-        MenuBarExtra {
-            MenuPopoverView()
-                .environmentObject(session)
+        // Keep a non-window scene first so SwiftUI does not open one of the
+        // utility windows at launch. AppKit owns the real transient menu.
+        MenuBarExtra(isInserted: $insertsSwiftUIMenu) {
+            EmptyView()
         } label: {
-            // The label is the only view guaranteed to render at launch, so it
-            // installs the AppKit→SwiftUI window-opener bridge (queued opens
-            // from AppDelegate replay once this appears).
-            Image(systemName: "soccerball")
-                .installsWindowOpener()
+            EmptyView()
         }
-        .menuBarExtraStyle(.window)
 
         // Separate windows, all without title bars — just the traffic
         // lights over content; headings live in the views themselves.

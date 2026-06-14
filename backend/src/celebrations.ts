@@ -1,4 +1,5 @@
 import type { Store } from "./store.js";
+import type { R2 } from "./r2.js";
 
 /**
  * In-memory tap aggregator. Each instance buffers incoming batched celebrate
@@ -11,6 +12,7 @@ export class CelebrationAggregator {
 
   constructor(
     private readonly store: Store,
+    private readonly r2: R2,
     private readonly flushMs = 1500,
   ) {}
 
@@ -29,9 +31,11 @@ export class CelebrationAggregator {
     if (this.buffer.size === 0) return;
     const batch = this.buffer;
     this.buffer = new Map();
-    await Promise.allSettled(
-      [...batch].map(([fixtureId, counts]) => this.store.addCelebrations(fixtureId, counts)),
-    );
+    await Promise.allSettled([...batch].map(async ([fixtureId, counts]) => {
+      await this.store.addCelebrations(fixtureId, counts);
+      const totals = await this.store.celebrationTotals(fixtureId);
+      await this.r2.putJson(`celebrate/${fixtureId}.json`, { totals }, 2);
+    }));
   }
 
   start(): void {

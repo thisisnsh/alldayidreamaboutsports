@@ -24,8 +24,7 @@ export interface CatalogTeam {
 
 /** Swappable data source (API-Football primary; football-data.org fallback later). */
 export interface ScoreProvider {
-  liveMatches(): Promise<MatchState[]>;
-  fixturesForDate(dateISO: string): Promise<MatchState[]>;
+  fixturesForRange(fromISO: string, toISO: string): Promise<MatchState[]>;
   /** League info + current/upcoming season, for the daily catalog. */
   leagueInfo(leagueId: number): Promise<LeagueInfo>;
   /** All teams in a league's season, with logos. */

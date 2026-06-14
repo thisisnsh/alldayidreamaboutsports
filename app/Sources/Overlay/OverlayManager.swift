@@ -158,7 +158,8 @@ final class OverlayManager: ObservableObject {
             ballPhase = .tapping
             CelebrationService.shared.beginWindow(
                 targets: ballEvents.compactMap { event in
-                    event.teamId.map { (fixtureId: event.fixtureId, teamId: String($0)) }
+                    guard event.fixtureId > 0 else { return nil }
+                    return event.teamId.map { (fixtureId: event.fixtureId, teamId: String($0)) }
                 }
             )
             showInteractPanel()
@@ -192,8 +193,9 @@ final class OverlayManager: ObservableObject {
     /// back as a normal queued notification (real DB→CDN round trip, so it
     /// lands in a later set whenever it's ready).
     private func flushTapsAndQueueCounts() {
-        let targets = ballEvents.compactMap { event in
-            event.teamId.map { (fixtureId: event.fixtureId, teamId: String($0)) }
+        let targets: [(fixtureId: Int, teamId: String)] = ballEvents.compactMap { event in
+            guard event.fixtureId > 0 else { return nil }
+            return event.teamId.map { (fixtureId: event.fixtureId, teamId: String($0)) }
         }
         let taps = tapBursts
         CelebrationService.shared.endWindow()
