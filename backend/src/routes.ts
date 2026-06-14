@@ -5,6 +5,7 @@ import type { CatalogService } from "./catalog.js";
 import type { CelebrationAggregator } from "./celebrations.js";
 import type { Fcm } from "./fcm.js";
 import type { Poller } from "./poller.js";
+import { FixedWindowRateLimiter } from "./rateLimit.js";
 import type { Store } from "./store.js";
 import type { MatchEvent, UserPrefs } from "./types.js";
 
@@ -64,6 +65,7 @@ export interface Deps {
 
 export function buildApp({ store, fcm, poller, catalog, celebrations }: Deps): Express {
   const app = express();
+  const celebrationRateLimiter = new FixedWindowRateLimiter(60, 60_000);
   app.use(express.json({ limit: "16kb" }));
 
   app.get("/healthz", (_req, res) => res.json({ ok: true }));
@@ -97,6 +99,10 @@ export function buildApp({ store, fcm, poller, catalog, celebrations }: Deps): E
   });
 
   app.post("/celebrate", requireSession, (req, res) => {
+    if (!celebrationRateLimiter.allow(req.user!.sub)) {
+      res.status(429).json({ error: "celebration rate limit exceeded" });
+      return;
+    }
     const parsed = celebrateSchema.safeParse(req.body);
     if (!parsed.success) return void res.status(400).json({ error: parsed.error.message });
     const { fixtureId, teamId, taps } = parsed.data;

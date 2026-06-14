@@ -7,7 +7,7 @@
 #
 # One-time prereqs (see app/README.md):
 #   - Developer ID Application cert in your login keychain (team 983LBM5U6B)
-#   - xcrun notarytool store-credentials notary-profile --apple-id <id> \
+#   - xcrun notarytool store-credentials notary-alldayidreamaboutsports --apple-id <id> \
 #       --team-id 983LBM5U6B --password <app-specific-password>
 #   - Sparkle EdDSA private key in your keychain (created by generate_keys)
 #   - create-dmg (brew install create-dmg) for the styled DMG layout
@@ -50,7 +50,7 @@ codesign -dv --verbose=4 "$APP" 2>&1 | grep -E 'Authority|TeamIdentifier|Identif
 
 echo "── 4/7 Notarize the app, staple"
 ditto -c -k --keepParent "$APP" build/notarize-app.zip
-xcrun notarytool submit build/notarize-app.zip --keychain-profile notary-profile --wait
+xcrun notarytool submit build/notarize-app.zip --keychain-profile notary-alldayidreamaboutsports --wait
 xcrun stapler staple "$APP"
 spctl --assess --type execute --verbose "$APP" # expect: Notarized Developer ID
 
@@ -66,7 +66,7 @@ create-dmg \
   --app-drop-link 480 170 \
   "build/${DMG_NAME}" "build/dmgsrc"
 codesign --sign "$SIGN_ID" --timestamp "build/${DMG_NAME}"
-xcrun notarytool submit "build/${DMG_NAME}" --keychain-profile notary-profile --wait
+xcrun notarytool submit "build/${DMG_NAME}" --keychain-profile notary-alldayidreamaboutsports --wait
 xcrun stapler staple "build/${DMG_NAME}"
 codesign -dv --verbose=4 "build/${DMG_NAME}" 2>&1 | grep -E 'Authority|TeamIdentifier' | head -3
 

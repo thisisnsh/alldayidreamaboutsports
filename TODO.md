@@ -25,8 +25,9 @@ You build the app in three flavors:
 
 Because of that, most cloud things get created **twice** — once in staging, once
 in prod (you'll see "per env" below). The app carries **two**
-`GoogleService-Info.plist` files (a staging one and a prod one) and the build
-copies in the right one. The **one** thing you make once and reuse for both is
+`GoogleService-Info.plist` files (a staging one and a prod one) and the
+`Staging`/`Release` build configuration copies in the right one. The **one**
+thing you make once and reuse for both is
 the APNs push key (`.p8`) — it's tied to your Apple account, not to a project.
 
 ---
@@ -64,10 +65,10 @@ Everything else (bundle id, buckets, domain) still uses the full name.
       `./infra/setup-gcp.sh dreamaboutsports-staging us-central1`.
       The script turns on the APIs and creates service accounts so you don't have
       to click through the console.
-- [ ] **Add Firebase** to that project, register the macOS app, and download its
-      `GoogleService-Info.plist` → `app/Resources/`. This file is how the app
-      knows which cloud project to talk to (save the staging one as the staging
-      plist; you'll get the prod one when you repeat this section).
+- [x] **Add Firebase staging** and save its downloaded config as
+      `app/Resources/GoogleService-Info-Staging.plist`. This file points at
+      `dreamaboutsports-staging`; the build now includes it only in `Staging`.
+      Repeat for prod later as `GoogleService-Info-Production.plist`.
 - [ ] **Upload the APNs `.p8`** in Firebase → Cloud Messaging. Skip this and push
       silently fails — no error, just no goal alerts ever arrive.
 - [ ] **Import + publish** `infra/remoteconfig.template.json` in Remote Config.
@@ -78,37 +79,48 @@ Everything else (bundle id, buckets, domain) still uses the full name.
 - [ ] **Push the OAuth consent screen to "In production"** (in Google Auth
       Platform). While it's in "Testing" mode, only 100 people total can ever
       sign in — that's a hard ship-blocker.
-- [ ] **Create an iOS-type OAuth client id** for the bundle id (this is what
-      "Sign in with Google" uses), then put it in two places:
-      - [ ] the secret `google-oauth-client-id`
-      - [ ] `app/project.yml` → `GIDClientID` + the reversed-id URL scheme, then
-            run `xcodegen` to regenerate the Xcode project
+- [ ] **Finish Google OAuth per environment.** You already created the staging
+      iOS-type OAuth client for `com.alldayidreamaboutsports.mac`; its values are
+      now configured in `app/project.yml`. Add its `CLIENT_ID` as the staging
+      Secret Manager secret `google-oauth-client-id` so the backend accepts the
+      same sign-ins. For prod, create another OAuth client in the prod project,
+      put its `CLIENT_ID` in the prod backend secret, and replace the two
+      production placeholders in `app/project.yml`. `REVERSED_CLIENT_ID` is not
+      a secret: it is the callback URL scheme that lets Google reopen the app.
+      See [app/README.md](app/README.md#real-service-configuration) for the exact
+      values and build commands.
 - [ ] **Set the real secret values:** `api-football-key`, `session-jwt-secret`
       (generate with `openssl rand -hex 32`), and the three R2 keys (you'll have
       those after section 3). Secrets are how the backend gets credentials
       without hard-coding them.
+- [ ] **Verify the staging API domain** after deploying it:
+      `curl -fsS https://api-staging.alldayidreamaboutsports.com/healthz`.
+      `APP_API_BASE_URL` under `Staging` already points at that custom domain,
+      so finish its Cloud Run domain mapping and DNS before the end-to-end test.
 
 ## 3. Cloudflare R2 (storage + custom domains) — `infra/setup-r2.sh`
 
 R2 is object storage like an S3 bucket, but Cloudflare serves it through their
 CDN with **zero egress fees** — that's what keeps the bill near $0 even if the
 app blows up (on plain GCP the same traffic could cost hundreds to thousands).
-The app polls a small `live.json` from here every ~20s, and downloads ship from
-here too. Custom domains (`scores.` / `download.`) are the reason the domain's
-DNS lives on Cloudflare.
+The app fetches fixtures, live scores, and celebration counts from here whenever
+the menu opens, and downloads ship from here too. Custom domains (`scores.` /
+`download.`) are the reason the domain's DNS lives on Cloudflare.
 
-- [ ] **Run `./infra/setup-r2.sh`** to create the two buckets (`...-scores` for
-      live data, `...-downloads` for the app + Sparkle appcast), then follow the
-      script's printed dashboard steps.
+- [ ] **Run `./infra/setup-r2.sh`** to create separate staging/prod scores
+      buckets plus the production downloads bucket, then follow the script's
+      printed dashboard steps.
 - [ ] **Move DNS to Cloudflare:** add `alldayidreamaboutsports.com` as a site in
       Cloudflare, then change the **nameservers at Hostinger** to the two
       Cloudflare gives you. (You're not moving the domain — just who answers DNS.
       You keep renewing at Hostinger.)
 - [ ] **Add the custom domains** in R2 → each bucket → Settings → Custom Domains:
-      `scores.alldayidreamaboutsports.com` and
-      `download.alldayidreamaboutsports.com`. These only work because DNS is now
-      on Cloudflare — that's the whole reason for the nameserver move.
-- [ ] **Create an R2 API token** (read+write both buckets) → save as GCP secrets
+      `scores-staging.alldayidreamaboutsports.com`,
+      `scores.alldayidreamaboutsports.com`, and
+      `download.alldayidreamaboutsports.com`. Set each GitHub environment's
+      `R2_BUCKET_SCORES` var to its scores bucket. These only work because DNS
+      is now on Cloudflare.
+- [ ] **Create an R2 API token** (read+write all three buckets) → save as GCP secrets
       `r2-access-key-id` / `r2-secret-access-key` / `r2-endpoint` so the backend
       can write score files. Releases upload to R2 from your Mac via
       `app/scripts/publish.sh` using your own local R2 env vars — no GitHub
@@ -125,22 +137,22 @@ hosts the marketing website on free GitHub Pages.
 - [ ] **Push this private repo** to GitHub as `thisisnsh/alldayidreamaboutsports`.
       Heads up: the WIF condition in `setup-gcp.sh` and the README badge URLs
       assume that exact `owner/repo` slug — if you rename it, update those too.
-- [ ] **Publish the website:** push `web/` to the **public** repo
-      `thisisnsh/alldayidreamaboutsports.com` → Settings → Pages → **Source:
-      Deploy from a branch** (`main`/root) → set the custom domain
-      `alldayidreamaboutsports.com` and enforce HTTPS. (Remove the domain from
-      this private repo's Pages first, or GitHub won't let the public repo claim
-      it.)
+- [ ] **Publish the website:** follow the README in the separate public repo
+      [`thisisnsh/alldayidreamaboutsports.com`](https://github.com/thisisnsh/alldayidreamaboutsports.com),
+      then set its Pages custom domain to `alldayidreamaboutsports.com` and
+      enforce HTTPS.
 - [ ] **DNS for the website:** in **Cloudflare** (DNS now lives there), point the
       apex at GitHub Pages — A records to `185.199.108–111.153`, set to
       **DNS-only / grey cloud** (not proxied), so Pages can verify the domain.
 - [ ] **Create `staging` + `prod` environments** in repo settings and add the
       secrets/vars listed in the table in `infra/README.md`. This is how CI
       deploys to the right cloud project.
-- [ ] **Add the release secrets** (for building & notarizing the app in CI):
-      `GOOGLE_SERVICE_INFO_PLIST_B64`, `MACOS_CERT_P12_B64`, `MACOS_CERT_PASSWORD`,
-      `APPLE_ID`, `APPLE_TEAM_ID`, `APPLE_APP_PASSWORD`. (The Sparkle signing key
-      and R2 creds stay on your Mac — they're never CI secrets.)
+- [ ] **Add the release secrets** (for building & notarizing the prod app in CI):
+      `GOOGLE_SERVICE_INFO_PRODUCTION_PLIST_B64`,
+      `GOOGLE_OAUTH_PRODUCTION_CLIENT_ID`,
+      `GOOGLE_OAUTH_PRODUCTION_REVERSED_CLIENT_ID`, `MACOS_CERT_P12_B64`,
+      `MACOS_CERT_PASSWORD`, `APPLE_ID`, `APPLE_TEAM_ID`, `APPLE_APP_PASSWORD`.
+      (The Sparkle signing key and R2 creds stay on your Mac.)
 
 ## 5. Signing & Sparkle (on this Mac — mostly DONE)
 
@@ -155,7 +167,7 @@ update itself.
       get everyone to reinstall by hand. It lives in your Keychain (used locally
       by `publish.sh`/`release.sh`), not in CI.
 - [ ] **Store notarization credentials:**
-      `xcrun notarytool store-credentials notary-profile --apple-id <id>
+      `xcrun notarytool store-credentials notary-alldayidreamaboutsports --apple-id <id>
       --team-id 983LBM5U6B --password <app-specific-pw>`. This lets
       `app/scripts/release.sh` send builds to Apple to be notarized (Apple's
       malware scan that makes the app open without scary warnings).
@@ -195,8 +207,9 @@ Don't ship without watching the whole pipeline work on a real goal. Use a
       "Notarized Developer ID" — that's macOS confirming the app is trusted.
 - [ ] **Check the website is live** (public repo): download button works and the
       privacy page is reachable (the OAuth consent screen links to it).
-- [ ] **Set Remote Config `latest_build`** to the shipped build number so older
-      installs know an update exists.
+- [ ] **Verify the Sparkle appcast** contains the shipped build, and keep Remote
+      Config `min_build` unchanged unless you need to force older installs to
+      update.
 - [ ] **📣 Announce** — and keep the kill-switch runbook (`infra/README.md`)
       handy during matches.
 

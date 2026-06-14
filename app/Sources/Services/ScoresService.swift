@@ -1,8 +1,8 @@
 import Foundation
 
-/// Real ScoresProviding: reads CDN-cached JSON from
-/// scores.alldayidreamaboutsports.com (R2 behind Cloudflare). Cheap at any
-/// scale — requests hit edge cache, not our origin.
+/// Real ScoresProviding: reads CDN-cached JSON from the configured environment's
+/// R2 custom domain behind Cloudflare. Cheap at any scale — requests hit edge
+/// cache, not our origin.
 @MainActor
 struct CDNScoresClient: ScoresProviding {
     private func fetch<T: Decodable>(_ path: String, as type: T.Type) async throws -> T {

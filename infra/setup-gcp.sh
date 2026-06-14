@@ -46,35 +46,43 @@ SCHEDULER_SA="sports-scheduler@${PROJECT_ID}.iam.gserviceaccount.com"
 gcloud iam service-accounts create sports-scheduler --display-name "Poll scheduler" || true
 # The backend verifies this OIDC identity itself (service is public for the app
 # API), so no run.invoker binding is strictly required — but the audience and
-# email must match POLLER_SERVICE_ACCOUNT below.
-SERVICE_URL=$(gcloud run services describe "$SERVICE" --region "$REGION" --format 'value(status.url)' 2>/dev/null || echo "https://SET-AFTER-FIRST-DEPLOY")
-gcloud scheduler jobs create http poll-live-scores \
-  --location "$REGION" \
-  --schedule '* * * * *' \
-  --uri "${SERVICE_URL}/internal/poll" \
-  --http-method POST \
-  --oidc-service-account-email "$SCHEDULER_SA" \
-  --oidc-token-audience "$SERVICE_URL" \
-  --attempt-deadline 300s || \
-  echo "   (job exists or service not deployed yet — rerun after first deploy)"
+# email must match SCHEDULER_SA_EMAIL in the backend.
+if SERVICE_URL=$(gcloud run services describe "$SERVICE" --region "$REGION" --format 'value(status.url)' 2>/dev/null); then
+  upsert_scheduler_job() {
+    local name="$1"
+    local schedule="$2"
+    local path="$3"
+    local action="create"
 
-echo "── Cloud Scheduler → /internal/sync-catalog daily (leagues + teams refresh)"
-# Independent of the poller (which only runs during the tournament window), so
-# the multi-league catalog stays fresh year-round.
-gcloud scheduler jobs create http sync-catalog \
-  --location "$REGION" \
-  --schedule '0 4 * * *' \
-  --uri "${SERVICE_URL}/internal/sync-catalog" \
-  --http-method POST \
-  --oidc-service-account-email "$SCHEDULER_SA" \
-  --oidc-token-audience "$SERVICE_URL" \
-  --attempt-deadline 300s || \
-  echo "   (job exists or service not deployed yet — rerun after first deploy)"
+    if gcloud scheduler jobs describe "$name" --location "$REGION" >/dev/null 2>&1; then
+      action="update"
+    fi
+
+    gcloud scheduler jobs "$action" http "$name" \
+      --location "$REGION" \
+      --schedule "$schedule" \
+      --uri "${SERVICE_URL}${path}" \
+      --http-method POST \
+      --oidc-service-account-email "$SCHEDULER_SA" \
+      --oidc-token-audience "$SERVICE_URL" \
+      --attempt-deadline 300s
+  }
+
+  upsert_scheduler_job poll-live-scores '* * * * *' /internal/poll
+
+  echo "── Cloud Scheduler → /internal/sync-catalog daily (leagues + teams refresh)"
+  # Independent of the poller (which only runs during the tournament window), so
+  # the multi-league catalog stays fresh year-round.
+  upsert_scheduler_job sync-catalog '0 4 * * *' /internal/sync-catalog
+else
+  echo "   Cloud Run service not deployed yet — skipping scheduler jobs"
+  echo "   Rerun this script after the first deploy to create or update them"
+fi
 
 echo "── Workload Identity Federation for GitHub Actions deploys"
 DEPLOY_SA="sports-deploy@${PROJECT_ID}.iam.gserviceaccount.com"
 gcloud iam service-accounts create sports-deploy --display-name "GitHub Actions deploy" || true
-for role in roles/run.admin roles/cloudbuild.builds.editor roles/iam.serviceAccountUser roles/storage.admin; do
+for role in roles/run.admin roles/run.sourceDeveloper roles/cloudbuild.builds.editor roles/iam.serviceAccountUser roles/serviceusage.serviceUsageConsumer roles/storage.admin; do
   gcloud projects add-iam-policy-binding "$PROJECT_ID" \
     --member "serviceAccount:${DEPLOY_SA}" --role "$role" --condition=None -q >/dev/null
 done

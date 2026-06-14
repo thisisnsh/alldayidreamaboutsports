@@ -10,8 +10,8 @@ Website: [alldayidreamaboutsports.com](https://alldayidreamaboutsports.com)
 
 One backend poller asks [API-Football](https://www.api-football.com) for live
 scores every 15 seconds. Goal and match events fan out to every Mac via free
-FCM topic push (`l1_BR`, `l1_US`, …). Everything clients poll (fixtures, live
-scores, celebration counts, backup kill switch) is cached JSON on Cloudflare R2.
+FCM topic push (`l1_6`, `l1_16`, …). Fixtures, live scores, celebration counts,
+and the backup kill switch are fetched on demand from cached JSON on Cloudflare R2.
 Sign-in is Google OAuth verified by our own API — no per-user billing anywhere.
 That is how 10M users/day costs hundreds, not thousands, per month.
 
@@ -43,7 +43,7 @@ The landing page + privacy policy live in the separate **public** repo
 
 - Backend: `cd backend && npm install && npm test && npm run dev`
 - App: `brew install xcodegen && cd app && xcodegen && open AllDayIDreamAboutSports.xcodeproj`
-  (drop your `GoogleService-Info.plist` into `app/Resources/` — gitignored)
+  (real-service setup and staging/prod builds: [app/README.md](app/README.md#real-service-configuration))
 - One-time cloud setup: see [`infra/README.md`](infra/README.md)
 
 ## Release

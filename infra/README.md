@@ -13,13 +13,47 @@ gcloud projects create dreamaboutsports-staging && gcloud billing projects link 
 Then in the [Firebase console](https://console.firebase.google.com):
 
 1. **Add Firebase to the GCP project**, register the macOS app (bundle id
-   `com.alldayidreamaboutsports.mac`), download `GoogleService-Info.plist` →
-   `app/Resources/` locally, base64 → GitHub secret `GOOGLE_SERVICE_INFO_PLIST_B64`.
+   `com.alldayidreamaboutsports.mac`), and download `GoogleService-Info.plist`.
+   Save it locally as `app/Resources/GoogleService-Info-Staging.plist` or
+   `app/Resources/GoogleService-Info-Production.plist`. See
+   [`app/README.md`](../app/README.md#real-service-configuration).
 2. **Cloud Messaging** → upload the APNs auth key (.p8 from Apple Developer →
    Keys → Apple Push Notifications service). Without this, zero push delivery.
 3. **Remote Config** → import `remoteconfig.template.json`, publish.
 4. **Firestore rules** → deploy `firestore.rules` (deny-all; backend uses Admin SDK):
    `firebase deploy --only firestore:rules`
+
+### Backend API domain
+
+Cloud Run assigns the backend a stable `*.run.app` service URL after its first
+deployment. The app uses environment-specific custom domains instead:
+
+| Environment | App API base URL |
+|---|---|
+| staging | `https://api-staging.alldayidreamaboutsports.com` |
+| prod | `https://api.alldayidreamaboutsports.com` |
+
+After the first backend deploy, create a Cloud Run domain mapping:
+
+1. Open **Google Cloud Console → Cloud Run → Domain mappings → Add mapping**.
+2. Select `alldayidreamaboutsports-backend` and the appropriate GCP project.
+3. Map `api-staging.alldayidreamaboutsports.com` for staging or
+   `api.alldayidreamaboutsports.com` for production.
+4. Verify ownership of `alldayidreamaboutsports.com` when prompted.
+5. Add the DNS records Google displays to Cloudflare DNS as **DNS only**
+   records. Do not proxy these records through Cloudflare.
+6. Verify:
+
+   ```sh
+   curl -fsS https://api-staging.alldayidreamaboutsports.com/healthz
+   # or production:
+   curl -fsS https://api.alldayidreamaboutsports.com/healthz
+   ```
+
+Cloud Run domain mappings are a convenient initial setup but remain a preview
+feature. Before high-volume production traffic, put a global external
+Application Load Balancer and Cloud Armor in front of Cloud Run, then restrict
+Cloud Run ingress so the public `run.app` URL cannot bypass those controls.
 
 ## 2. Google OAuth (sign-in) — ⚠️ ship blocker
 
@@ -29,10 +63,17 @@ Then in the [Firebase console](https://console.firebase.google.com):
   `alldayidreamaboutsports.com`, privacy policy `https://alldayidreamaboutsports.com/privacy`.
 - Scopes: only `openid`, `email`, `profile` (non-sensitive → no review wait).
 - **Publishing status: In production** — in Testing mode sign-in caps at 100 users.
-- Credentials → OAuth client ID → **iOS type** (used for macOS apps), bundle id
-  `com.alldayidreamaboutsports.mac`. The client id goes to:
-  - secret `google-oauth-client-id` (backend verifies the ID token audience)
-  - `GIDClientID` in `app/project.yml`, and its reversed form in the URL scheme.
+- Clients → create client → **iOS type** (used by Google Sign-In for this macOS
+  app), bundle id `com.alldayidreamaboutsports.mac`, then download its plist.
+  Put its `CLIENT_ID` in the environment's `google-oauth-client-id` Secret
+  Manager secret. Put its `CLIENT_ID` and `REVERSED_CLIENT_ID` in the matching
+  `Staging`/`Release` settings in `app/project.yml`; the reversed value is only
+  the callback URL scheme. Full example: [`app/README.md`](../app/README.md#real-service-configuration).
+
+  ```sh
+  printf '%s' '<CLIENT_ID>' | gcloud secrets versions add google-oauth-client-id \
+    --project=dreamaboutsports-staging --data-file=-
+  ```
 
 ## 3. Cloudflare
 
@@ -40,11 +81,55 @@ Then in the [Firebase console](https://console.firebase.google.com):
 ./setup-r2.sh   # then follow its printed dashboard steps
 ```
 
+The scores data is environment-specific:
+
+| Environment | Bucket | Custom domain | GitHub environment var |
+|---|---|---|---|
+| staging | `alldayidreamaboutsports-staging-scores` | `scores-staging.alldayidreamaboutsports.com` | `R2_BUCKET_SCORES=alldayidreamaboutsports-staging-scores` |
+| prod | `alldayidreamaboutsports-scores` | `scores.alldayidreamaboutsports.com` | `R2_BUCKET_SCORES=alldayidreamaboutsports-scores` |
+
+The downloads bucket/domain is global and production-only.
+`R2_BUCKET_SCORES` is required by deployment and the backend has no fallback,
+so staging cannot accidentally write into the production scores bucket.
+
+The app must access R2 objects only through the custom domains above, never an
+`r2.dev` URL or the S3 API endpoint. The custom domain puts Cloudflare's CDN in
+front of R2. Cache hits are served by Cloudflare; cache misses still read R2 as
+the origin. Disable each bucket's public `r2.dev` URL after its custom domain is
+active.
+
+JSON is not cached by Cloudflare by default. Create the cache rule printed by
+`setup-r2.sh`; without it, every app request reaches R2 and incurs a Class B
+operation.
+
+An R2 custom domain returning `404` usually means the domain is connected but
+the requested object has not been uploaded yet. After the first backend deploy:
+
+```sh
+# Reconcile scheduler targets with the real Cloud Run URL.
+./setup-gcp.sh dreamaboutsports-staging us-central1
+
+# Populate catalog.json immediately.
+gcloud scheduler jobs run sync-catalog \
+  --project=dreamaboutsports-staging --location=us-central1
+
+# Populate live.json and today's fixtures immediately.
+gcloud scheduler jobs run poll-live-scores \
+  --project=dreamaboutsports-staging --location=us-central1
+
+curl -fsS https://scores-staging.alldayidreamaboutsports.com/catalog.json >/dev/null
+curl -fsS https://scores-staging.alldayidreamaboutsports.com/live.json >/dev/null
+```
+
+Production `scores.alldayidreamaboutsports.com` remains empty until the
+production backend is deployed and its jobs run. The downloads domain remains
+empty until the first signed release is published with `app/scripts/publish.sh`.
+
 DNS for `alldayidreamaboutsports.com`: apex → **GitHub Pages** (A records
 185.199.108.153/.109/.110/.111). The website lives in the **public** repo
 `thisisnsh/alldayidreamaboutsports.com` (Settings → Pages → Source = "Deploy
 from a branch" `main`/root, custom domain + HTTPS enforced) — Pages isn't free on
-this private repo. `scores.` and `download.` → R2 custom domains
+this private repo. `scores-staging.`, `scores.`, and `download.` → R2 custom domains
 (Cloudflare-proxied).
 
 ## 4. API-Football
@@ -68,12 +153,72 @@ Subscribe to **Ultra** ($29/mo, cancel after the final) at
 
 ## 6. Apple signing (global, once)
 
-- Developer ID Application certificate → export .p12 → base64 → GitHub secrets
-  `MACOS_CERT_P12_B64`, `MACOS_CERT_PASSWORD`.
-- App-specific password for notarytool → `APPLE_ID`, `APPLE_TEAM_ID`,
-  `APPLE_APP_PASSWORD`.
-- Identifiers → register `com.alldayidreamaboutsports.mac` with the
-  **Push Notifications** capability.
+GitHub Actions uses a **Developer ID Application** certificate to sign the app
+and DMG, then submits both to Apple's notary service. These are repository-level
+credentials shared by both environments.
+
+### Signing certificate
+
+1. In Xcode, open **Settings → Accounts**, select the Apple ID and team
+   `983LBM5U6B`, then open **Manage Certificates**. Create or download a
+   **Developer ID Application** certificate. Do not use an **Apple Development**
+   certificate.
+2. Confirm macOS can use the certificate and its private key:
+
+   ```sh
+   security find-identity -v -p codesigning
+   ```
+
+   The output must include:
+
+   ```text
+   Developer ID Application: Nishant Hada (983LBM5U6B)
+   ```
+
+3. In Keychain Access, select the **login** keychain and **My Certificates**.
+   Expand the Developer ID Application certificate and confirm that it contains
+   a private key. Right-click the parent certificate, choose **Export**, save it
+   as a `.p12`, and protect it with a strong export password. If `.p12` is
+   disabled, the certificate/private-key pair is not selected; export from
+   **My Certificates**, not **Certificates** or **All Items**.
+4. Convert the `.p12` to Base64 and copy it to the clipboard:
+
+   ```sh
+   base64 -i /path/to/developer-id-application.p12 | pbcopy
+   ```
+
+5. In **GitHub → repository Settings → Secrets and variables → Actions**, add:
+
+   | Secret | Value |
+   |---|---|
+   | `MACOS_CERT_P12_B64` | Base64 value copied above |
+   | `MACOS_CERT_PASSWORD` | Password used when exporting the `.p12` |
+
+Keep a secure backup of the `.p12` and its password, then delete the unprotected
+local export when it is no longer needed.
+
+### Notarization credentials
+
+Create an app-specific password for the Apple ID associated with the developer
+team at [account.apple.com](https://account.apple.com). Add these GitHub
+repository secrets:
+
+| Secret | Value |
+|---|---|
+| `APPLE_ID` | Apple ID email address |
+| `APPLE_TEAM_ID` | `983LBM5U6B` |
+| `APPLE_APP_PASSWORD` | Generated app-specific password, not the Apple ID password |
+
+The `app-release.yml` workflow imports the `.p12` into a temporary keychain,
+signs the app and DMG, submits both with `notarytool`, and staples Apple's
+notarization tickets.
+
+### App identifier and push notifications
+
+At [developer.apple.com](https://developer.apple.com/account/resources/identifiers/list),
+register `com.alldayidreamaboutsports.mac` and enable the **Push Notifications**
+capability. Create an APNs auth key (`.p8`) and upload it in Firebase under
+**Cloud Messaging** as described in step 1.
 
 ## 7. Other backend secrets
 
@@ -86,8 +231,9 @@ openssl rand -hex 32 | gcloud secrets versions add session-jwt-secret --data-fil
 | Where | Name | Source |
 |---|---|---|
 | env secret | `GCP_WORKLOAD_IDENTITY_PROVIDER`, `GCP_DEPLOY_SERVICE_ACCOUNT` | setup-gcp.sh output |
-| env var | `GCP_PROJECT_ID`, `GCP_REGION` | setup-gcp.sh output |
-| repo secret | `GOOGLE_SERVICE_INFO_PLIST_B64` | Firebase console |
+| env var | `GCP_PROJECT_ID`, `GCP_REGION`, `R2_BUCKET_SCORES` | setup-gcp.sh output + scores bucket table |
+| repo secret | `GOOGLE_SERVICE_INFO_PRODUCTION_PLIST_B64` | Production Firebase plist; app release workflow |
+| repo secret | `GOOGLE_OAUTH_PRODUCTION_CLIENT_ID`, `GOOGLE_OAUTH_PRODUCTION_REVERSED_CLIENT_ID` | Production OAuth plist; app release workflow |
 | repo secret | `MACOS_CERT_P12_B64`, `MACOS_CERT_PASSWORD`, `APPLE_ID`, `APPLE_TEAM_ID`, `APPLE_APP_PASSWORD` | Apple |
 
 The Sparkle private key and R2 credentials are **not** GitHub secrets: the
