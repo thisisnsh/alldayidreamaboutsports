@@ -32,8 +32,8 @@ enum TeamCatalog {
     /// Placeholder teams for the Settings preview — generic on purpose so the
     /// preview reads as an example, never as a real match. No logo (the logo
     /// view falls back to an SF Symbol).
-    static let previewHome = Team(id: -1, name: "Team A", code: nil, logo: "", leagueId: 0)
-    static let previewAway = Team(id: -2, name: "Team B", code: nil, logo: "", leagueId: 0)
+    static let previewHome = Team(id: 2, name: "France", code: "FRA", logo: logoURL(2), leagueId: 1)
+    static let previewAway = Team(id: 26, name: "Argentina", code: "ARG", logo: logoURL(26), leagueId: 1)
 
     static func team(for id: Int, in teams: [Team]) -> Team {
         if id == previewHome.id { return previewHome }

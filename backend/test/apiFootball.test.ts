@@ -106,4 +106,25 @@ describe("ApiFootballProvider", () => {
     const { provider } = providerReturning({}, 429);
     await expect(provider.fixturesForRange("2026-06-10", "2026-06-12")).rejects.toThrow("HTTP 429");
   });
+
+  it("fetches events via ids endpoint for live fixtures (range endpoint omits them)", async () => {
+    // Range call returns the fixture WITHOUT events (as the real API does).
+    const rangeFixture = { ...liveFixture, events: undefined };
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({ ok: true, status: 200, json: () => Promise.resolve({ response: [rangeFixture] }) })
+      .mockResolvedValueOnce({ ok: true, status: 200, json: () => Promise.resolve({ response: [liveFixture] }) });
+    const provider = new ApiFootballProvider("key", 1, 2026, fetchMock as never);
+
+    const [match] = await provider.fixturesForRange("2026-06-10", "2026-06-12");
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenNthCalledWith(2,
+      "https://v3.football.api-sports.io/fixtures?ids=555",
+      { headers: { "x-apisports-key": "key" } },
+    );
+    expect(match).toMatchObject({
+      away: { yellowCards: 1 },
+      home: { redCards: 1 },
+    });
+  });
 });
