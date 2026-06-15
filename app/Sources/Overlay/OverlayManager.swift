@@ -43,6 +43,7 @@ final class OverlayManager: ObservableObject {
 
     private var queue: [NotchItem] = []
     private var scheduled: [DispatchWorkItem] = []
+    private var queueBusy = false  // set synchronously so rapid-fire pushes can't race startNextSetIfIdle
     private var displayPanel: NSPanel?
     private var interactPanel: NSPanel?
     private var dismissPanel: NSPanel?
@@ -100,7 +101,8 @@ final class OverlayManager: ObservableObject {
     private static let pillDropStagger = 0.18
 
     private func startNextSetIfIdle() {
-        guard activeSet.isEmpty, !queue.isEmpty else { return }
+        guard !queueBusy, !queue.isEmpty else { return }
+        queueBusy = true
         let set = Array(queue.prefix(setSize))
         queue.removeFirst(set.count)
         showDisplayPanel()
@@ -134,7 +136,7 @@ final class OverlayManager: ObservableObject {
     /// Natural expiry or the ✕ under the stack: the whole set leaves (ball
     /// included), then the next set follows.
     func endSet() {
-        guard !activeSet.isEmpty else { return }
+        guard !activeSet.isEmpty || queueBusy else { return }
         cancelScheduled()
         finishBall()
         hideDismissPanel()
@@ -142,6 +144,7 @@ final class OverlayManager: ObservableObject {
             activeSet = []
         }
         schedule(after: 0.45) { [self] in
+            queueBusy = false
             startNextSetIfIdle()
             hidePanelsIfDone()
         }
