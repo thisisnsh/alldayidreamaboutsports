@@ -30,11 +30,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Firebase config is optional in dev builds (plist is gitignored).
         if Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist") != nil {
             FirebaseApp.configure()
+            AppLog.configureFirebaseCollection()
             Messaging.messaging().delegate = PushService.shared
-            NSLog("Registering for APNs")
+            AppLog.info(.fcm, "apns_registration_start")
             NSApplication.shared.registerForRemoteNotifications()
         } else {
-            NSLog("⚠️ GoogleService-Info.plist missing — push/remote-config disabled (dev mode)")
+            AppLog.info(.app, "firebase_unconfigured push_and_remote_config_disabled")
         }
 
         ControlPlane.shared.start()
@@ -79,19 +80,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func application(_ application: NSApplication,
                      didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
         Messaging.messaging().apnsToken = deviceToken
-        NSLog("APNs registration succeeded: %d-byte token", deviceToken.count)
+        AppLog.info(.fcm, "apns_registration_complete token_bytes=\(deviceToken.count)")
         PushService.shared.retryPending()
     }
 
     func application(_ application: NSApplication,
                      didFailToRegisterForRemoteNotificationsWithError error: Error) {
-        NSLog("APNs registration failed: \(error.localizedDescription)")
+        AppLog.error(.fcm, "apns_registration_failed", error: error)
     }
 
     // FCM data messages land here while the app runs.
     func application(_ application: NSApplication,
                      didReceiveRemoteNotification userInfo: [String: Any]) {
-        NSLog("Incoming push: %@", String(describing: userInfo))
+        AppLog.info(.fcm, "push_received kind=\(userInfo["kind"] as? String ?? "unknown") event_id=\(userInfo["eventId"] as? String ?? "none") fixture_id=\(userInfo["fixtureId"] as? String ?? "none")")
         EventRouter.shared.handlePush(userInfo)
     }
 }
@@ -182,10 +183,17 @@ final class MenuPopoverController: NSObject, NSPopoverDelegate {
     }
 
     private func startFixtureRefreshing() {
-        guard AppSession.shared.isSignedIn, ControlPlane.shared.isOperational else { return }
+        guard AppSession.shared.isSignedIn, ControlPlane.shared.isOperational else {
+            AppLog.debug(.fixtures, "refresh_timer_not_started signed_in=\(AppSession.shared.isSignedIn) operational=\(ControlPlane.shared.isOperational)")
+            return
+        }
         Task { await AppSession.shared.refreshFixtures() }
-        guard ControlPlane.shared.autoRefreshEnabled else { return }
+        guard ControlPlane.shared.autoRefreshEnabled else {
+            AppLog.info(.fixtures, "refresh_timer_disabled")
+            return
+        }
         let interval = max(1, ControlPlane.shared.autoRefreshSeconds)
+        AppLog.info(.fixtures, "refresh_timer_started interval_seconds=\(interval)")
         refreshTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { _ in
             Task { await AppSession.shared.refreshFixtures() }
         }

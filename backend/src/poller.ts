@@ -3,6 +3,7 @@ import { Fcm } from "./fcm.js";
 import type { ScoreProvider } from "./providers/types.js";
 import { R2, R2ConflictError, R2MatchStateStore } from "./r2.js";
 import type { MatchState } from "./types.js";
+import { log } from "./log.js";
 
 export function utcPollRange(now = new Date()): { from: string; to: string } {
   const date = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
@@ -27,6 +28,15 @@ export function isStartingSoon(match: MatchState, now = Date.now()): boolean {
   if (match.status !== "SCHEDULED") return false;
   const untilKickoff = Date.parse(match.kickoffISO) - now;
   return untilKickoff <= 60_000 && untilKickoff > -15 * 60_000;
+}
+
+export function isRegressiveSnapshot(previous: MatchState, next: MatchState): boolean {
+  if (previous.status === "FINISHED" && next.status !== "FINISHED") return true;
+  if (
+    (previous.status === "LIVE" || previous.status === "HALF_TIME")
+    && next.status === "SCHEDULED"
+  ) return true;
+  return false;
 }
 
 const FINISHED_AFTER_2H_MS = 2.5 * 60 * 60 * 1000; // > ET(30) + breaks + pens(~15) after 2nd-half KO
@@ -55,11 +65,14 @@ export class Poller {
   // Cadence (e.g. every 5s) is driven externally by staggered Cloud Tasks (see
   // tasks.ts) so the request returns immediately instead of sleeping/hogging CPU.
   async fetchOnce(): Promise<{ events: number; live: number }> {
+    const started = Date.now();
     let totalEvents = 0;
 
     const range = utcPollRange();
+    log.info("poll_start", range);
     const fixtures = await this.provider.fixturesForRange(range.from, range.to);
     const liveCount = fixtures.filter(isLive).length;
+    log.info("poll_provider_complete", { fixtures: fixtures.length, live: liveCount });
 
     const partitions = partitionFixtures(fixtures);
     for (const date of [range.from, new Date().toISOString().slice(0, 10), range.to]) {
@@ -69,11 +82,34 @@ export class Poller {
       this.r2.putJsonIfChanged(`fixtures-${date}.json`, { matches }, 10),
     ));
 
-    for (const match of fixtures.filter((m) => isStartingSoon(m) || isLive(m) || isRecentlyFinished(m))) {
+    const eligible = fixtures.filter((m) => isStartingSoon(m) || isLive(m) || isRecentlyFinished(m));
+    log.info("poll_eligible_fixtures", {
+      count: eligible.length,
+      fixtures: eligible.map((m) => ({
+        fixtureId: m.fixtureId, status: m.status, rawStatus: m.rawStatus, minute: m.minute,
+      })),
+    });
+    for (const match of eligible) {
       const previous = await this.state.load(match.fixtureId);
+      if (previous.state && isRegressiveSnapshot(previous.state, match)) {
+        log.warning("match_snapshot_regression_ignored", {
+          fixtureId: match.fixtureId,
+          previousStatus: previous.state.status,
+          previousRawStatus: previous.state.rawStatus,
+          nextStatus: match.status,
+          nextRawStatus: match.rawStatus,
+        });
+        continue;
+      }
       const events = diffMatch(previous.state, match);
+      log.debug("match_diff_complete", {
+        fixtureId: match.fixtureId,
+        previousStatus: previous.state?.status ?? null,
+        nextStatus: match.status,
+        events: events.map((event) => ({ eventId: event.eventId, type: event.type })),
+      });
       for (const event of events) {
-        console.log(JSON.stringify({ severity: "INFO", message: "match_event_detected", event }));
+        log.info("match_event_detected", { event });
         await this.fcm.publishEvent(event);
         totalEvents++;
       }
@@ -83,16 +119,17 @@ export class Poller {
         await this.state.save(match, previous.etag);
       } catch (error) {
         if (error instanceof R2ConflictError) {
-          console.warn(JSON.stringify({
-            severity: "WARNING",
-            message: "match_state_conflict",
+          log.warning("match_state_conflict", {
             fixtureId: match.fixtureId,
-          }));
+          });
         } else {
           throw error;
         }
       }
     }
+    log.info("poll_complete", {
+      events: totalEvents, live: liveCount, durationMs: Date.now() - started,
+    });
     return { events: totalEvents, live: liveCount };
   }
 }

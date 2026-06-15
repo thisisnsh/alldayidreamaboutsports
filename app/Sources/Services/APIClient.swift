@@ -64,12 +64,24 @@ struct APIClient: BackendAPI {
         if let body {
             req.httpBody = try JSONEncoder().encode(body)
         }
-        let (data, response) = try await URLSession.shared.data(for: req)
-        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
-        guard (200..<300).contains(status) else {
-            throw APIError.http(status, String(data: data, encoding: .utf8) ?? "")
+        let started = ContinuousClock.now
+        AppLog.debug(.api, "request_start method=\(method) host=\(req.url?.host ?? "unknown") path=\(path) authorized=\(authorized)")
+        do {
+            let (data, response) = try await URLSession.shared.data(for: req)
+            let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+            let duration = started.duration(to: .now).milliseconds
+            guard (200..<300).contains(status) else {
+                let error = APIError.http(status, String(data: data, encoding: .utf8) ?? "")
+                AppLog.error(.api, "request_failed method=\(method) path=\(path) status=\(status) duration_ms=\(duration) bytes=\(data.count)", error: error)
+                throw error
+            }
+            AppLog.info(.api, "request_complete method=\(method) path=\(path) status=\(status) duration_ms=\(duration) bytes=\(data.count)")
+            return data
+        } catch {
+            if error is APIError { throw error }
+            AppLog.error(.api, "request_failed method=\(method) path=\(path) duration_ms=\(started.duration(to: .now).milliseconds)", error: error)
+            throw error
         }
-        return data
     }
 
     func signIn(googleIdToken: String) async throws -> SignInResponse {

@@ -9,6 +9,7 @@ import { FixedWindowRateLimiter } from "./rateLimit.js";
 import type { Store } from "./store.js";
 import type { Dispatcher } from "./tasks.js";
 import type { MatchEvent, UserPrefs } from "./types.js";
+import { log } from "./log.js";
 
 const prefsSchema = z.object({
   fanOf: z.record(
@@ -154,7 +155,7 @@ export function buildApp({ store, fcm, poller, dispatcher, catalog, celebrations
       const result = await dispatcher.dispatch();
       res.json(result);
     } catch (err) {
-      console.error("dispatch failed", err);
+      log.error("dispatch_failed", err);
       res.status(500).json({ error: (err as Error).message });
     }
   });
@@ -166,7 +167,7 @@ export function buildApp({ store, fcm, poller, dispatcher, catalog, celebrations
       const result = await poller.fetchOnce();
       res.json(result);
     } catch (err) {
-      console.error("fetch failed", err);
+      log.error("fetch_failed", err);
       res.status(500).json({ error: (err as Error).message });
     }
   });
@@ -177,7 +178,7 @@ export function buildApp({ store, fcm, poller, dispatcher, catalog, celebrations
       const result = await catalog.sync();
       res.json(result);
     } catch (err) {
-      console.error("sync-catalog failed", err);
+      log.error("sync_catalog_failed", err);
       res.status(500).json({ error: (err as Error).message });
     }
   });
@@ -193,6 +194,7 @@ export function buildApp({ store, fcm, poller, dispatcher, catalog, celebrations
       minute: d.minute ?? null,
     };
     await fcm.publishEvent(event);
+    log.info("test_event_complete", { eventId: event.eventId, type: event.type, fixtureId: event.fixtureId });
     res.json({ ok: true, eventId: event.eventId });
   });
 

@@ -50,6 +50,20 @@ Admin SDK credentials.
 | `POST /internal/fetch` | scheduler OIDC | one fetch: read range → diff → notify → R2 |
 | `POST /internal/test-event` | scheduler OIDC | inject fake events on staging |
 
+## Diagnostics
+
+Backend logs are structured JSON in Google Cloud Logging. Useful staging
+queries:
+
+```sh
+gcloud logging read \
+  'resource.type="cloud_run_revision" AND resource.labels.service_name="alldayidreamaboutsports-backend" AND jsonPayload.message=~"fcm_|match_event|poll_"' \
+  --project=dreamaboutsports-staging --order=desc --limit=200
+```
+
+Each FCM send log includes the event id/type, fixture id, team topic, Firebase
+message id, duration, and any send error.
+
 Trigger a test goal on staging:
 
 ```sh

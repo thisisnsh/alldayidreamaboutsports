@@ -12,8 +12,13 @@ enum LaunchAtLogin {
 
     static func registerByDefault() {
         guard !UserDefaults.standard.bool(forKey: appliedKey) else { return }
-        try? SMAppService.mainApp.register()
-        UserDefaults.standard.set(true, forKey: appliedKey)
+        do {
+            try SMAppService.mainApp.register()
+            UserDefaults.standard.set(true, forKey: appliedKey)
+            AppLog.info(.app, "launch_at_login_default_registered")
+        } catch {
+            AppLog.error(.app, "launch_at_login_default_registration_failed", error: error)
+        }
     }
 
     static func set(enabled: Bool) {
@@ -23,8 +28,9 @@ enum LaunchAtLogin {
             } else {
                 try SMAppService.mainApp.unregister()
             }
+            AppLog.info(.app, "launch_at_login_changed enabled=\(enabled)")
         } catch {
-            NSLog("Launch at login toggle failed: \(error.localizedDescription)")
+            AppLog.error(.app, "launch_at_login_change_failed enabled=\(enabled)", error: error)
         }
     }
 }

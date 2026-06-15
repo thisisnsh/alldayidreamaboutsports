@@ -42,6 +42,7 @@ final class AppSession: ObservableObject {
     // MARK: Lifecycle
 
     func bootstrap() {
+        AppLog.info(.app, "session_bootstrap_start")
         #if DEV_BACKEND
         // Sign-in bypass: already signed in before the first frame. Profile
         // and fan teams come from Dev/DevConfig.swift (code is the source of
@@ -79,25 +80,43 @@ final class AppSession: ObservableObject {
         // Topics mirror the signed-in state: signed out means subscribed to
         // nothing, even if fan teams are still stored locally.
         PushService.shared.syncTopics(to: isSignedIn ? fanTeamIds : [])
+        AppLog.info(.app, "session_bootstrap_complete signed_in=\(isSignedIn) fan_teams=\(fanTeamIds.sorted()) cached_fixtures=\(fixtures.count)")
     }
 
     /// One launch-time reconciliation: server teams win on a fresh machine,
     /// local teams backfill an empty server. Never called again until the
     /// next launch — the menu always reads from local state.
     private func syncFanTeamsOnLaunch() async {
-        guard isSignedIn, ControlPlane.shared.isOperational,
-              let server = try? await api.fetchPrefs(),
-              isSignedIn, ControlPlane.shared.isOperational else { return }
+        guard isSignedIn, ControlPlane.shared.isOperational else {
+            AppLog.debug(.prefs, "fan_sync_skipped signed_in=\(isSignedIn) operational=\(ControlPlane.shared.isOperational)")
+            return
+        }
+        AppLog.info(.prefs, "fan_sync_start local=\(prefs.footballTeams.sorted())")
+        let server: UserPrefs
+        do {
+            server = try await api.fetchPrefs()
+        } catch {
+            AppLog.error(.prefs, "fan_sync_fetch_failed", error: error)
+            return
+        }
+        guard isSignedIn, ControlPlane.shared.isOperational else { return }
         let serverTeams = server.fanOf["football"]?[String(AppEnvironment.leagueId)] ?? []
         if !serverTeams.isEmpty && prefs.footballTeams.isEmpty {
             prefs.fanOf = server.fanOf
             persistPrefs()
+            AppLog.info(.prefs, "fan_sync_adopted_server teams=\(serverTeams.sorted())")
         } else if serverTeams != prefs.footballTeams {
             guard ControlPlane.shared.isOperational else { return }
-            try? await api.putPrefs(roamingPrefs)
+            do {
+                try await api.putPrefs(roamingPrefs)
+                AppLog.info(.prefs, "fan_sync_uploaded_local teams=\(prefs.footballTeams.sorted())")
+            } catch {
+                AppLog.error(.prefs, "fan_sync_upload_failed", error: error)
+            }
         }
         guard isSignedIn, ControlPlane.shared.isOperational else { return }
         PushService.shared.syncTopics(to: fanTeamIds)
+        AppLog.info(.prefs, "fan_sync_complete teams=\(fanTeamIds.sorted())")
     }
 
     // MARK: Sign in / out
@@ -130,8 +149,10 @@ final class AppSession: ObservableObject {
                 persistPrefs()
                 PushService.shared.syncTopics(to: fanTeamIds)
                 await refreshCatalog()
+                AppLog.info(.app, "sign_in_complete fan_teams=\(fanTeamIds.sorted())")
             } catch {
                 signInError = error.localizedDescription
+                AppLog.error(.app, "sign_in_failed", error: error)
             }
         }
     }
@@ -149,6 +170,7 @@ final class AppSession: ObservableObject {
     /// `showLogin` is false for control-plane gates, which are shown the next
     /// time the menu opens.
     func clearSession(showLogin: Bool) {
+        AppLog.info(.app, "session_clear show_login=\(showLogin)")
         stopAllActivity()
         Services.google.signOut()
         Keychain.delete("sessionToken")
@@ -172,19 +194,30 @@ final class AppSession: ObservableObject {
     }
 
     func deleteAccount() async {
-        try? await api.deleteAccount()
+        do {
+            try await api.deleteAccount()
+            AppLog.info(.app, "account_delete_complete")
+        } catch {
+            AppLog.error(.app, "account_delete_failed", error: error)
+        }
         signOut() // clears fan teams + topics; device settings stay
     }
 
     // MARK: Prefs
 
     func setFanTeams(_ ids: [String]) {
+        AppLog.info(.prefs, "fan_teams_changed old=\(prefs.footballTeams.sorted()) new=\(ids.sorted())")
         prefs.footballTeams = ids
         persistPrefs()
         PushService.shared.syncTopics(to: Set(ids.compactMap(Int.init)))
         Task {
             guard ControlPlane.shared.isOperational else { return }
-            try? await api.putPrefs(roamingPrefs)
+            do {
+                try await api.putPrefs(roamingPrefs)
+                AppLog.info(.prefs, "fan_teams_upload_complete teams=\(ids.sorted())")
+            } catch {
+                AppLog.error(.prefs, "fan_teams_upload_failed", error: error)
+            }
         }
     }
 
@@ -210,24 +243,41 @@ final class AppSession: ObservableObject {
     // MARK: Data refresh
 
     func refreshCatalog() async {
-        guard isSignedIn, ControlPlane.shared.isOperational else { return }
-        guard let catalog = try? await scores.fetchCatalog(),
-              isSignedIn, ControlPlane.shared.isOperational,
-              !catalog.leagues.isEmpty else { return }
+        guard isSignedIn, ControlPlane.shared.isOperational else {
+            AppLog.debug(.catalog, "refresh_skipped signed_in=\(isSignedIn) operational=\(ControlPlane.shared.isOperational)")
+            return
+        }
+        AppLog.info(.catalog, "refresh_start")
+        let catalog: Catalog
+        do {
+            catalog = try await scores.fetchCatalog()
+        } catch {
+            AppLog.error(.catalog, "refresh_failed", error: error)
+            return
+        }
+        guard isSignedIn, ControlPlane.shared.isOperational, !catalog.leagues.isEmpty else {
+            AppLog.info(.catalog, "refresh_discarded signed_in=\(isSignedIn) operational=\(ControlPlane.shared.isOperational) leagues=\(catalog.leagues.count)")
+            return
+        }
         leagues = catalog.leagues
         teamsByLeague = Dictionary(
             uniqueKeysWithValues: catalog.leagues.map { ($0.id, catalog.teams(for: $0.id)) },
         )
+        AppLog.info(.catalog, "refresh_complete leagues=\(leagues.count) teams=\(allTeams.count)")
     }
 
     func refreshFixtures() async {
-        guard isSignedIn, ControlPlane.shared.isOperational, !isRefreshingFixtures else { return }
+        guard isSignedIn, ControlPlane.shared.isOperational, !isRefreshingFixtures else {
+            AppLog.debug(.fixtures, "refresh_skipped signed_in=\(isSignedIn) operational=\(ControlPlane.shared.isOperational) in_flight=\(isRefreshingFixtures)")
+            return
+        }
         isRefreshingFixtures = true
         defer { isRefreshingFixtures = false }
 
         let calendar = Calendar.current
         let now = Date()
         var byId = Dictionary(uniqueKeysWithValues: fixtures.map { ($0.fixtureId, $0) })
+        AppLog.info(.fixtures, "refresh_start cached=\(fixtures.count) fan_teams=\(fanTeamIds.sorted())")
 
         // Date files are the schedule bootstrap only. The frequent loop below
         // polls individual match objects, not three full days of fixtures.
@@ -237,7 +287,14 @@ final class AppSession: ObservableObject {
             var loadedAny = false
             for date in dates {
                 guard isSignedIn, ControlPlane.shared.isOperational else { return }
-                guard let fetched = try? await scores.fetchFixtures(date: date) else { continue }
+                let fetched: [Fixture]
+                do {
+                    fetched = try await scores.fetchFixtures(date: date)
+                    AppLog.info(.fixtures, "date_refresh_complete date=\(ISO8601DateFormatter.dateOnly.string(from: date)) fixtures=\(fetched.count)")
+                } catch {
+                    AppLog.error(.fixtures, "date_refresh_failed date=\(ISO8601DateFormatter.dateOnly.string(from: date))", error: error)
+                    continue
+                }
                 guard isSignedIn, ControlPlane.shared.isOperational else { return }
                 loadedAny = true
                 for fixture in fetched {
@@ -259,18 +316,31 @@ final class AppSession: ObservableObject {
         let refreshTargets = byId.values.filter {
             $0.involves(fanTeamIds) && $0.needsFrequentRefresh(at: now)
         }
+        AppLog.info(.fixtures, "live_refresh_targets count=\(refreshTargets.count) ids=\(refreshTargets.map(\.fixtureId).sorted())")
         for previous in refreshTargets {
             guard isSignedIn, ControlPlane.shared.isOperational else { return }
-            guard let current = try? await scores.fetchFixture(fixtureId: previous.fixtureId) else { continue }
+            let current: Fixture
+            do {
+                current = try await scores.fetchFixture(fixtureId: previous.fixtureId)
+                AppLog.info(.fixtures, "fixture_refresh_complete fixture_id=\(current.fixtureId) old_status=\(previous.status) new_status=\(current.status) old_score=\(previous.home.goals)-\(previous.away.goals) new_score=\(current.home.goals)-\(current.away.goals)")
+            } catch {
+                AppLog.error(.fixtures, "fixture_refresh_failed fixture_id=\(previous.fixtureId)", error: error)
+                continue
+            }
             guard isSignedIn, ControlPlane.shared.isOperational else { return }
             byId[current.fixtureId] = current
 
             // Celebration totals only need a CDN read when a goal/VAR
             // correction changes the score.
-            if previous.score != current.score,
-               let totals = try? await scores.fetchCelebrations(fixtureId: current.fixtureId) {
-                guard isSignedIn, ControlPlane.shared.isOperational else { return }
-                mergeCelebrationTotals(totals, fixtureId: current.fixtureId)
+            if previous.score != current.score {
+                do {
+                    let totals = try await scores.fetchCelebrations(fixtureId: current.fixtureId)
+                    guard isSignedIn, ControlPlane.shared.isOperational else { return }
+                    AppLog.info(.celebrations, "score_change_totals_refresh fixture_id=\(current.fixtureId) teams=\(totals.count)")
+                    mergeCelebrationTotals(totals, fixtureId: current.fixtureId)
+                } catch {
+                    AppLog.error(.celebrations, "score_change_totals_refresh_failed fixture_id=\(current.fixtureId)", error: error)
+                }
             }
         }
 
@@ -282,6 +352,7 @@ final class AppSession: ObservableObject {
             }
             .sorted { ($0.kickoff ?? .distantFuture) < ($1.kickoff ?? .distantFuture) }
         persistFixtureCache()
+        AppLog.info(.fixtures, "refresh_complete visible=\(fixtures.count)")
     }
 
     func mergeCelebrationTotals(_ totals: [String: Int], fixtureId: Int) {
@@ -291,6 +362,7 @@ final class AppSession: ObservableObject {
         }
         celebrationTotals[fixtureId] = cached
         persistCelebrationCache()
+        AppLog.info(.celebrations, "totals_merged fixture_id=\(fixtureId) totals=\(cached)")
     }
 
     private func persistFixtureCache() {

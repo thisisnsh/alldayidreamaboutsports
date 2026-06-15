@@ -66,6 +66,7 @@ targets:
           APP_API_BASE_URL: https://unused.invalid
           APP_SCORES_BASE_URL: https://unused.invalid
         Staging:
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: STAGING
           CODE_SIGN_ENTITLEMENTS: App-Staging.entitlements
           GOOGLE_CLIENT_ID: 291291942072-cqsmesng18bagi6psv69n5ch4kcnvj2s.apps.googleusercontent.com
           GOOGLE_REVERSED_CLIENT_ID: com.googleusercontent.apps.291291942072-cqsmesng18bagi6psv69n5ch4kcnvj2s

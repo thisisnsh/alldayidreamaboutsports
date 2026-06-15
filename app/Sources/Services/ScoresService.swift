@@ -9,11 +9,27 @@ struct CDNScoresClient: ScoresProviding {
         let url = AppEnvironment.scoresBase.appending(path: path)
         var req = URLRequest(url: url)
         req.cachePolicy = .reloadIgnoringLocalCacheData // CDN handles caching
-        let (data, response) = try await URLSession.shared.data(for: req)
-        let status = (response as? HTTPURLResponse)?.statusCode
-        if status == 404 { throw ScoresError.notFound }
-        guard status == 200 else { throw URLError(.badServerResponse) }
-        return try JSONDecoder().decode(T.self, from: data)
+        let started = ContinuousClock.now
+        AppLog.debug(.cdn, "request_start host=\(url.host ?? "unknown") path=\(path)")
+        do {
+            let (data, response) = try await URLSession.shared.data(for: req)
+            let status = (response as? HTTPURLResponse)?.statusCode
+            let duration = started.duration(to: .now).milliseconds
+            if status == 404 {
+                AppLog.info(.cdn, "request_complete path=\(path) status=404 duration_ms=\(duration) bytes=\(data.count)")
+                throw ScoresError.notFound
+            }
+            guard status == 200 else {
+                throw URLError(.badServerResponse)
+            }
+            let decoded = try JSONDecoder().decode(T.self, from: data)
+            AppLog.info(.cdn, "request_complete path=\(path) status=200 duration_ms=\(duration) bytes=\(data.count)")
+            return decoded
+        } catch {
+            if case ScoresError.notFound = error { throw error }
+            AppLog.error(.cdn, "request_failed path=\(path) duration_ms=\(started.duration(to: .now).milliseconds)", error: error)
+            throw error
+        }
     }
 
     func fetchCatalog() async throws -> Catalog {

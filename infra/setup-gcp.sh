@@ -47,6 +47,10 @@ done
 echo "── Cloud Tasks queue (fan-out target for the live-score dispatcher)"
 gcloud tasks queues describe live-scores --location "$REGION" >/dev/null 2>&1 || \
   gcloud tasks queues create live-scores --location "$REGION"
+# A fetch normally completes in under a second. Keeping a single task in flight
+# prevents overlapping polls from diffing and publishing the same transition.
+gcloud tasks queues update live-scores --location "$REGION" \
+  --max-concurrent-dispatches 1 >/dev/null
 
 echo "── Cloud Scheduler / Tasks identity (OIDC for /internal/*)"
 SCHEDULER_SA="sports-scheduler@${PROJECT_ID}.iam.gserviceaccount.com"
