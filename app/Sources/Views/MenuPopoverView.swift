@@ -11,6 +11,8 @@ struct MenuPopoverView: View {
         VStack(alignment: .leading, spacing: 14) {
             if control.killSwitch {
                 maintenance
+            } else if control.updateRequired {
+                forcedUpdate
             } else if let profile = session.profile {
                 header(profile)
                 if !session.fanTeams.isEmpty {
@@ -195,6 +197,35 @@ struct MenuPopoverView: View {
                 NSWorkspace.shared.open(reportBugURL)
             } label: {
                 Label("Report a bug", systemImage: "ladybug")
+            }
+            .buttonStyle(.primaryPill)
+            Button("Quit") { NSApp.terminate(nil) }
+                .buttonStyle(.hoverHighlight)
+                .font(.caption)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 12)
+    }
+
+    private var forcedUpdate: some View {
+        VStack(spacing: 14) {
+            Image(systemName: "arrow.down.circle.fill")
+                .font(.system(size: 32))
+            Text("Update required")
+                .font(.system(size: 18, weight: .bold, design: .rounded))
+            Text("This version is too old to keep up with the matches. Update to keep celebrating.")
+                .font(.system(size: 13))
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: 260)
+                .opacity(0.8)
+            Button {
+                dismissMenu()
+                if let appDelegate = NSApp.delegate as? AppDelegate {
+                    appDelegate.updaterController.checkForUpdates(nil)
+                }
+            } label: {
+                Label("Update now", systemImage: "arrow.down.circle")
             }
             .buttonStyle(.primaryPill)
             Button("Quit") { NSApp.terminate(nil) }

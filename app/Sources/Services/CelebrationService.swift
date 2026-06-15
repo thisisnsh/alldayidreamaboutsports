@@ -47,6 +47,7 @@ final class CelebrationService {
         taps = 0
         Task {
             for target in batch {
+                guard ControlPlane.shared.isOperational, AppSession.shared.isSignedIn else { return }
                 try? await api.celebrate(fixtureId: target.fixtureId, teamId: target.teamId, taps: count)
             }
         }

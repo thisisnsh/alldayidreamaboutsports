@@ -85,14 +85,18 @@ final class AppSession: ObservableObject {
     /// local teams backfill an empty server. Never called again until the
     /// next launch — the menu always reads from local state.
     private func syncFanTeamsOnLaunch() async {
-        guard isSignedIn, let server = try? await api.fetchPrefs() else { return }
+        guard isSignedIn, ControlPlane.shared.isOperational,
+              let server = try? await api.fetchPrefs(),
+              isSignedIn, ControlPlane.shared.isOperational else { return }
         let serverTeams = server.fanOf["football"]?[String(AppEnvironment.leagueId)] ?? []
         if !serverTeams.isEmpty && prefs.footballTeams.isEmpty {
             prefs.fanOf = server.fanOf
             persistPrefs()
         } else if serverTeams != prefs.footballTeams {
+            guard ControlPlane.shared.isOperational else { return }
             try? await api.putPrefs(roamingPrefs)
         }
+        guard isSignedIn, ControlPlane.shared.isOperational else { return }
         PushService.shared.syncTopics(to: fanTeamIds)
     }
 
@@ -142,8 +146,8 @@ final class AppSession: ObservableObject {
         clearSession(showLogin: true)
     }
 
-    /// `showLogin` is false for the kill-switch path, where the gate window
-    /// is shown the next time the menu opens.
+    /// `showLogin` is false for control-plane gates, which are shown the next
+    /// time the menu opens.
     func clearSession(showLogin: Bool) {
         stopAllActivity()
         Services.google.signOut()
@@ -162,7 +166,7 @@ final class AppSession: ObservableObject {
     }
 
     /// Closes the menu (killing its refresh timer). Leaves ControlPlane polling
-    /// so the app can recover from a kill switch.
+    /// so the app can recover from a remote gate.
     func stopAllActivity() {
         MenuPopoverController.shared.close()
     }
@@ -178,7 +182,10 @@ final class AppSession: ObservableObject {
         prefs.footballTeams = ids
         persistPrefs()
         PushService.shared.syncTopics(to: Set(ids.compactMap(Int.init)))
-        Task { try? await api.putPrefs(roamingPrefs) }
+        Task {
+            guard ControlPlane.shared.isOperational else { return }
+            try? await api.putPrefs(roamingPrefs)
+        }
     }
 
     /// Settings are device-local: persisted to UserDefaults, never sent to
@@ -204,7 +211,9 @@ final class AppSession: ObservableObject {
 
     func refreshCatalog() async {
         guard isSignedIn, ControlPlane.shared.isOperational else { return }
-        guard let catalog = try? await scores.fetchCatalog(), !catalog.leagues.isEmpty else { return }
+        guard let catalog = try? await scores.fetchCatalog(),
+              isSignedIn, ControlPlane.shared.isOperational,
+              !catalog.leagues.isEmpty else { return }
         leagues = catalog.leagues
         teamsByLeague = Dictionary(
             uniqueKeysWithValues: catalog.leagues.map { ($0.id, catalog.teams(for: $0.id)) },
@@ -227,7 +236,9 @@ final class AppSession: ObservableObject {
             let dates = [-1, 0, 1].compactMap { calendar.date(byAdding: .day, value: $0, to: now) }
             var loadedAny = false
             for date in dates {
+                guard isSignedIn, ControlPlane.shared.isOperational else { return }
                 guard let fetched = try? await scores.fetchFixtures(date: date) else { continue }
+                guard isSignedIn, ControlPlane.shared.isOperational else { return }
                 loadedAny = true
                 for fixture in fetched {
                     // Preserve an active cached score until its individual
@@ -244,21 +255,26 @@ final class AppSession: ObservableObject {
             }
         }
 
+        guard isSignedIn, ControlPlane.shared.isOperational else { return }
         let refreshTargets = byId.values.filter {
             $0.involves(fanTeamIds) && $0.needsFrequentRefresh(at: now)
         }
         for previous in refreshTargets {
+            guard isSignedIn, ControlPlane.shared.isOperational else { return }
             guard let current = try? await scores.fetchFixture(fixtureId: previous.fixtureId) else { continue }
+            guard isSignedIn, ControlPlane.shared.isOperational else { return }
             byId[current.fixtureId] = current
 
             // Celebration totals only need a CDN read when a goal/VAR
             // correction changes the score.
             if previous.score != current.score,
                let totals = try? await scores.fetchCelebrations(fixtureId: current.fixtureId) {
+                guard isSignedIn, ControlPlane.shared.isOperational else { return }
                 mergeCelebrationTotals(totals, fixtureId: current.fixtureId)
             }
         }
 
+        guard isSignedIn, ControlPlane.shared.isOperational else { return }
         fixtures = byId.values
             .filter { fixture in
                 fixture.kickoff.map { calendar.isDate($0, inSameDayAs: now) } == true
