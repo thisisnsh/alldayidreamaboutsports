@@ -10,6 +10,10 @@ struct AnimationParams: Codable {
     var notchStackMax: Int = 10
 }
 
+private let defaultAnimationParams = AnimationParams()
+private let defaultAutoRefreshEnabled = false
+private let defaultAutoRefreshSeconds: Double = 5
+
 /// Kill switch + forced updates + remote tunables.
 /// Primary: Firebase Remote Config with real-time listeners (seconds to
 /// propagate). Backup: config.json on the scores CDN every 15 min, so the app
@@ -27,18 +31,48 @@ final class ControlPlane: ObservableObject {
     @Published var autoRefreshSeconds: Double = 5
 
     private var backupTimer: Timer?
+    private var remoteConfig: RemoteConfig?
+    private var firebaseKillSwitch = false
+    private var backupKillSwitch = false
+    private var firebaseUpdateRequired = false
+    private var backupUpdateRequired = false
+    private var firebaseKillMessage = ""
+    private var backupKillMessage = ""
+    private var firebaseAutoRefreshEnabled = defaultAutoRefreshEnabled
+    private var firebaseAutoRefreshSeconds = defaultAutoRefreshSeconds
+    private var backupAutoRefreshEnabled: Bool?
+    private var backupAutoRefreshSeconds: Double?
 
     func start() {
         if FirebaseConfigured.isConfigured {
             let rc = RemoteConfig.remoteConfig()
+            remoteConfig = rc
             let settings = RemoteConfigSettings()
-            settings.minimumFetchInterval = 1800
+            // This is an operational control plane, not ordinary product config.
+            // Keep launch-time fetches fresh even if the real-time connection
+            // missed an update while the app was asleep or offline.
+            settings.minimumFetchInterval = 60
             rc.configSettings = settings
+            rc.setDefaults([
+                "kill_switch": false as NSNumber,
+                "kill_message": "" as NSString,
+                "min_build": 1 as NSNumber,
+                "celebration_enabled": true as NSNumber,
+                "animation_params": #"{"ballDropSeconds":1.5,"pillHoldSeconds":7,"notchStackMax":10}"# as NSString,
+                "auto_refresh_enabled": false as NSNumber,
+                "auto_refresh_seconds": 5 as NSNumber,
+            ])
+            // Apply the last activated values before session bootstrap can let
+            // a previously-killed install make authenticated requests.
+            apply(rc)
             rc.fetchAndActivate { [weak self] _, _ in
                 Task { @MainActor in self?.apply(rc) }
             }
             rc.addOnConfigUpdateListener { [weak self] _, error in
-                guard error == nil else { return }
+                if let error {
+                    NSLog("Remote Config listener failed: %@", error.localizedDescription)
+                    return
+                }
                 rc.activate { _, _ in
                     Task { @MainActor in self?.apply(rc) }
                 }
@@ -52,52 +86,88 @@ final class ControlPlane: ObservableObject {
     }
 
     private func apply(_ rc: RemoteConfig) {
-        killSwitch = rc["kill_switch"].boolValue
-        killMessage = rc["kill_message"].stringValue
+        firebaseKillSwitch = rc["kill_switch"].boolValue
+        firebaseKillMessage = rc["kill_message"].stringValue
         celebrationEnabled = rc["celebration_enabled"].boolValue
-        autoRefreshEnabled = rc["auto_refresh_enabled"].boolValue
+        firebaseAutoRefreshEnabled = rc["auto_refresh_enabled"].boolValue
         let secs = rc["auto_refresh_seconds"].numberValue.doubleValue
-        autoRefreshSeconds = secs >= 1 ? secs : 5
+        firebaseAutoRefreshSeconds = secs >= 1 ? secs : defaultAutoRefreshSeconds
         let minBuild = rc["min_build"].numberValue.intValue
-        if minBuild > 0 {
-            updateRequired = AppEnvironment.buildNumber < minBuild
-        }
+        firebaseUpdateRequired = minBuild > 0 && AppEnvironment.buildNumber < minBuild
         if let data = rc["animation_params"].stringValue.data(using: .utf8),
            let params = try? JSONDecoder().decode(AnimationParams.self, from: data) {
             animationParams = params
+        } else {
+            animationParams = defaultAnimationParams
         }
-        reactToState()
+        applyEffectiveState()
     }
 
     private func checkBackupConfig() async {
         guard let config = try? await Services.scores.fetchBackupConfig() else { return }
-        if let kill = config.killSwitch, kill {
-            killSwitch = true
-            killMessage = config.message ?? killMessage
-        }
-        if let minBuild = config.minBuild, AppEnvironment.buildNumber < minBuild {
-            updateRequired = true
-        }
-        if let enabled = config.autoRefreshEnabled { autoRefreshEnabled = enabled }
-        if let secs = config.autoRefreshSeconds, secs >= 1 { autoRefreshSeconds = secs }
-        reactToState()
+        backupKillSwitch = config.killSwitch ?? false
+        backupKillMessage = config.message ?? ""
+        let minBuild = config.minBuild ?? 0
+        backupUpdateRequired = minBuild > 0 && AppEnvironment.buildNumber < minBuild
+        backupAutoRefreshEnabled = config.autoRefreshEnabled
+        backupAutoRefreshSeconds = config.autoRefreshSeconds.flatMap { $0 >= 1 ? $0 : nil }
+        applyEffectiveState()
     }
 
-    private func reactToState() {
-        guard killSwitch || updateRequired else { return }
-        // Stop the app, don't just show the gate. ControlPlane keeps polling so
-        // it can recover when the switch clears.
-        OverlayManager.shared.dismissAll()
-        AppSession.shared.stopAllActivity()
-        if killSwitch { AppSession.shared.clearSession(showLogin: false) }
-        openWindow(WindowID.gate)
+    private func applyEffectiveState() {
+        let wasKilled = killSwitch
+        let wasUpdateRequired = updateRequired
+        killSwitch = firebaseKillSwitch || backupKillSwitch
+        updateRequired = firebaseUpdateRequired || backupUpdateRequired
+        killMessage = backupKillSwitch && !backupKillMessage.isEmpty
+            ? backupKillMessage
+            : firebaseKillMessage
+        autoRefreshEnabled = backupAutoRefreshEnabled ?? firebaseAutoRefreshEnabled
+        autoRefreshSeconds = backupAutoRefreshSeconds ?? firebaseAutoRefreshSeconds
+
+        if killSwitch {
+            OverlayManager.shared.dismissAll()
+            if !wasKilled || AppSession.shared.isSignedIn {
+                AppSession.shared.clearSession(showLogin: false)
+            }
+            closeUtilityWindows()
+            return
+        }
+        if updateRequired {
+            OverlayManager.shared.dismissAll()
+            AppSession.shared.stopAllActivity()
+            closeUtilityWindows(titles: ["Sign In", "Become a Fan", "Settings"])
+            if !wasUpdateRequired || wasKilled {
+                openWindow(WindowID.gate)
+            }
+        } else {
+            closeUtilityWindows(titles: ["Update Required"])
+            if wasKilled || wasUpdateRequired {
+                AppSession.shared.signInError = nil
+            }
+        }
+        MenuPopoverController.shared.reconfigureFixtureRefreshing()
     }
 
     var isOperational: Bool { !killSwitch && !updateRequired }
+
+    /// Real-time Remote Config is primary; this also gives a menu open an
+    /// immediate recovery path after connectivity or sleep interruptions.
+    func refreshRemoteConfig() {
+        guard let rc = remoteConfig else { return }
+        rc.fetchAndActivate { [weak self] _, error in
+            if let error {
+                NSLog("Remote Config refresh failed: %@", error.localizedDescription)
+                return
+            }
+            Task { @MainActor in self?.apply(rc) }
+        }
+    }
 
     /// For app termination only — the kill switch must keep polling to recover.
     func stop() {
         backupTimer?.invalidate()
         backupTimer = nil
+        remoteConfig = nil
     }
 }

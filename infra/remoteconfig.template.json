@@ -19,6 +19,14 @@
     "animation_params": {
       "defaultValue": { "value": "{\"ballDropSeconds\":1.5,\"pillHoldSeconds\":5,\"notchStackMax\":10}" },
       "description": "Tune animation feel without shipping a build."
+    },
+    "auto_refresh_enabled": {
+      "defaultValue": { "value": "false" },
+      "description": "true = refresh scores automatically while the menu is open."
+    },
+    "auto_refresh_seconds": {
+      "defaultValue": { "value": "5" },
+      "description": "Score refresh interval while auto_refresh_enabled is true."
     }
   }
 }

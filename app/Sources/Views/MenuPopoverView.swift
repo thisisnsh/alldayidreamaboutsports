@@ -9,7 +9,9 @@ struct MenuPopoverView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            if let profile = session.profile {
+            if control.killSwitch {
+                maintenance
+            } else if let profile = session.profile {
                 header(profile)
                 if !session.fanTeams.isEmpty {
                     fanOfRow
@@ -171,6 +173,33 @@ struct MenuPopoverView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 8)
+    }
+
+    private var maintenance: some View {
+        VStack(spacing: 14) {
+            Image(systemName: "wrench.and.screwdriver.fill")
+                .font(.system(size: 32))
+            Text("Hold on…")
+                .font(.system(size: 18, weight: .bold, design: .rounded))
+            Text(control.killMessage.isEmpty
+                 ? "We're fixing something — back soon."
+                 : control.killMessage)
+                .font(.system(size: 13))
+                .multilineTextAlignment(.center)
+                .opacity(0.8)
+            Button {
+                dismissMenu()
+                NSWorkspace.shared.open(reportBugURL)
+            } label: {
+                Label("Report a bug", systemImage: "ladybug")
+            }
+            .buttonStyle(.primaryPill)
+            Button("Quit") { NSApp.terminate(nil) }
+                .buttonStyle(.hoverHighlight)
+                .font(.caption)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 12)
     }
 }
 

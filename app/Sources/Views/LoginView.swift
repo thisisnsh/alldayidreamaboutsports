@@ -2,6 +2,7 @@ import SwiftUI
 
 struct LoginView: View {
     @EnvironmentObject var session: AppSession
+    @ObservedObject private var control = ControlPlane.shared
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openWindow) private var openWindow
 
@@ -46,6 +47,16 @@ struct LoginView: View {
                 }
             }
             .buttonStyle(.primaryPill)
+            .disabled(!control.isOperational)
+
+            if control.killSwitch {
+                Text(control.killMessage.isEmpty
+                     ? "Sign-in is unavailable while maintenance is in progress."
+                     : control.killMessage)
+                    .font(.caption)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 280)
+            }
 
             if let error = session.signInError {
                 Text(error)
