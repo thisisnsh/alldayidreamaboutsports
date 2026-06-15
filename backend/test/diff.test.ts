@@ -2,6 +2,10 @@ import { describe, expect, it } from "vitest";
 import { diffMatch } from "../src/diff.js";
 import type { MatchState } from "../src/types.js";
 
+function team(id: number, name: string, overrides: Partial<MatchState["home"]> = {}): MatchState["home"] {
+  return { id, name, goals: 0, yellowCards: 0, redCards: 0, yellowCardEvents: [], redCardEvents: [], ...overrides };
+}
+
 function state(overrides: Partial<MatchState> = {}): MatchState {
   return {
     fixtureId: 100,
@@ -11,8 +15,8 @@ function state(overrides: Partial<MatchState> = {}): MatchState {
     status: "LIVE",
     rawStatus: "1H",
     minute: 10,
-    home: { id: 6, name: "Brazil", goals: 0, yellowCards: 0, redCards: 0 },
-    away: { id: 16, name: "United States", goals: 0, yellowCards: 0, redCards: 0 },
+    home: team(6, "Brazil"),
+    away: team(16, "United States"),
     ...overrides,
   };
 }
@@ -56,19 +60,35 @@ describe("diffMatch", () => {
   });
 
   it("emits GOAL_CANCELLED when VAR takes a goal away", () => {
-    const prev = state({ home: { id: 6, name: "Brazil", goals: 1, yellowCards: 0, redCards: 0 } });
+    const prev = state({ home: team(6, "Brazil", { goals: 1 }) });
     const next = state();
     const events = diffMatch(prev, next);
     expect(events).toHaveLength(1);
     expect(events[0]).toMatchObject({ type: "GOAL_CANCELLED", teamId: 6 });
   });
 
-  it("emits cards per increment", () => {
+  it("emits cards per increment with player and minute attribution", () => {
     const prev = state();
     const next = state({
-      home: { ...prev.home, yellowCards: 2, redCards: 1 },
+      home: team(6, "Brazil", {
+        yellowCards: 2,
+        redCards: 1,
+        yellowCardEvents: [
+          { player: "Rodrygo", minute: 32 },
+          { player: "Casemiro", minute: 55 },
+        ],
+        redCardEvents: [{ player: "Militão", minute: 78 }],
+      }),
+      minute: 80,
     });
-    expect(types(prev, next).sort()).toEqual(["RED_CARD", "YELLOW_CARD", "YELLOW_CARD"]);
+    const events = diffMatch(prev, next);
+    expect(events.map((e) => e.type).sort()).toEqual(["RED_CARD", "YELLOW_CARD", "YELLOW_CARD"]);
+    expect(events.find((e) => e.type === "RED_CARD")).toMatchObject({
+      teamId: 6, player: "Militão", minute: 78, eventId: "100:RED_CARD:6:1",
+    });
+    const yellows = events.filter((e) => e.type === "YELLOW_CARD");
+    expect(yellows[0]).toMatchObject({ teamId: 6, player: "Rodrygo", minute: 32 });
+    expect(yellows[1]).toMatchObject({ teamId: 6, player: "Casemiro", minute: 55 });
   });
 
   it("emits HALF_TIME and FULL_TIME transitions exactly once", () => {
@@ -143,7 +163,7 @@ describe("diffMatch", () => {
       status: "HALF_TIME",
       rawStatus: "HT",
       minute: 45,
-      home: { id: 6, name: "Brazil", goals: 1, yellowCards: 1, redCards: 0 },
+      home: team(6, "Brazil", { goals: 1, yellowCards: 1, yellowCardEvents: [{ player: "Rodrygo", minute: 45 }] }),
     });
     expect(types(prev, next).sort()).toEqual(["GOAL", "HALF_TIME", "YELLOW_CARD"]);
   });
