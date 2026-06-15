@@ -110,16 +110,18 @@ export function diffMatch(prev: MatchState | null, next: MatchState): MatchEvent
   // Cards — count-based; one event per new card.
   for (const side of ["home", "away"] as const) {
     const team = next[side];
-    for (const [kind, type] of [
-      ["yellowCards", "YELLOW_CARD"],
-      ["redCards", "RED_CARD"],
+    for (const [kind, evKey, type] of [
+      ["yellowCards", "yellowCardEvents", "YELLOW_CARD"],
+      ["redCards", "redCardEvents", "RED_CARD"],
     ] as const) {
       const before = prev?.[side][kind] ?? 0;
       for (let c = before + 1; c <= team[kind]; c++) {
+        const cardEv = team[evKey][c - 1];
         events.push(
           make(type, {
             teamId: team.id,
-            minute: next.minute,
+            player: cardEv?.player ?? null,
+            minute: cardEv?.minute ?? next.minute,
             idSuffix: `${team.id}:${c}`,
           }),
         );

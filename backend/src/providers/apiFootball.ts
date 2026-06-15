@@ -126,7 +126,10 @@ export class ApiFootballProvider implements ScoreProvider {
   private toState(f: ApiFixture): MatchState {
     const homeId = f.teams.home.id;
     const awayId = f.teams.away.id;
-    const cards = { home: { yellow: 0, red: 0 }, away: { yellow: 0, red: 0 } };
+    const cards = {
+      home: { yellow: 0, red: 0, yellowEvents: [] as { player: string | null; minute: number | null }[], redEvents: [] as { player: string | null; minute: number | null }[] },
+      away: { yellow: 0, red: 0, yellowEvents: [] as { player: string | null; minute: number | null }[], redEvents: [] as { player: string | null; minute: number | null }[] },
+    };
     let lastGoal: MatchState["lastGoal"];
     const kicks: PenaltyKick[] = [];
 
@@ -136,8 +139,9 @@ export class ApiFootballProvider implements ScoreProvider {
       const isShootoutKick =
         ev.type === "Goal" && /penalt/i.test(ev.detail) && /shootout/i.test(ev.comments ?? "");
       if (ev.type === "Card") {
-        if (ev.detail.startsWith("Yellow")) cards[side].yellow++;
-        else if (ev.detail.startsWith("Red")) cards[side].red++;
+        const cardEv = { player: ev.player?.name ?? null, minute: ev.time.elapsed };
+        if (ev.detail.startsWith("Yellow")) { cards[side].yellow++; cards[side].yellowEvents.push(cardEv); }
+        else if (ev.detail.startsWith("Red")) { cards[side].red++; cards[side].redEvents.push(cardEv); }
       } else if (isShootoutKick) {
         // Shootout kicks live in score.penalty (counts) + here (player/result).
         kicks.push({ teamId, player: ev.player?.name ?? null, scored: !/missed/i.test(ev.detail) });
@@ -175,6 +179,8 @@ export class ApiFootballProvider implements ScoreProvider {
         goals: f.goals.home ?? 0,
         yellowCards: cards.home.yellow,
         redCards: cards.home.red,
+        yellowCardEvents: cards.home.yellowEvents,
+        redCardEvents: cards.home.redEvents,
       },
       away: {
         id: awayId,
@@ -182,6 +188,8 @@ export class ApiFootballProvider implements ScoreProvider {
         goals: f.goals.away ?? 0,
         yellowCards: cards.away.yellow,
         redCards: cards.away.red,
+        yellowCardEvents: cards.away.yellowEvents,
+        redCardEvents: cards.away.redEvents,
       },
       lastGoal,
       shootout,

@@ -12,12 +12,20 @@ export type MatchStatus =
   | "FINISHED" // FT, AET, PEN
   | "OTHER"; // postponed, cancelled, ...
 
+export interface CardEvent {
+  player: string | null;
+  minute: number | null;
+}
+
 export interface TeamScore {
   id: TeamId;
   name: string; // display name from the fixture (logo is resolved app-side via the catalog)
   goals: number;
   yellowCards: number;
   redCards: number;
+  /** Ordered list of cards issued; index 0 = first card. Used by the diff to attach player + minute. */
+  yellowCardEvents: CardEvent[];
+  redCardEvents: CardEvent[];
 }
 
 /** One penalty-shootout kick, in the order it was taken. */
