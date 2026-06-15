@@ -37,8 +37,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             NSLog("⚠️ GoogleService-Info.plist missing — push/remote-config disabled (dev mode)")
         }
 
-        AppSession.shared.bootstrap()
         ControlPlane.shared.start()
+        AppSession.shared.bootstrap()
         menuController.install()
 
         #if DEV_BACKEND
@@ -50,7 +50,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         #else
         LaunchAtLogin.registerByDefault()
-        if !AppSession.shared.isSignedIn {
+        if !AppSession.shared.isSignedIn, ControlPlane.shared.isOperational {
             openWindow(WindowID.login)
         }
         #endif
@@ -70,6 +70,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // App is invisible except the menu bar — reopening from Finder/Spotlight
     // should surface something useful.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
+        guard ControlPlane.shared.isOperational else {
+            if ControlPlane.shared.updateRequired {
+                openWindow(WindowID.gate)
+            }
+            return false
+        }
         openWindow(AppSession.shared.isSignedIn ? WindowID.settings : WindowID.login)
         return false
     }
@@ -123,6 +129,7 @@ final class MenuPopoverController: NSObject, NSPopoverDelegate {
         if popover.isShown {
             close()
         } else {
+            ControlPlane.shared.refreshRemoteConfig()
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
             button.highlight(true)
             startRefreshing()
@@ -143,15 +150,7 @@ final class MenuPopoverController: NSObject, NSPopoverDelegate {
     private func startRefreshing() {
         // Guard the fetch/timer, not the monitor below — the signed-out popover
         // still needs the outside-click monitor to close.
-        if AppSession.shared.isSignedIn, ControlPlane.shared.isOperational {
-            Task { await AppSession.shared.refreshFixtures() }
-            if ControlPlane.shared.autoRefreshEnabled {
-                let interval = max(1, ControlPlane.shared.autoRefreshSeconds)
-                refreshTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { _ in
-                    Task { await AppSession.shared.refreshFixtures() }
-                }
-            }
-        }
+        startFixtureRefreshing()
         // .transient doesn't reliably close the popover on outside clicks for
         // accessory-policy apps on macOS Sequoia+, so we add our own monitor.
         eventMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
@@ -167,11 +166,47 @@ final class MenuPopoverController: NSObject, NSPopoverDelegate {
             eventMonitor = nil
         }
     }
+
+    func reconfigureFixtureRefreshing() {
+        guard popover.isShown else { return }
+        refreshTimer?.invalidate()
+        refreshTimer = nil
+        startFixtureRefreshing()
+    }
+
+    private func startFixtureRefreshing() {
+        guard AppSession.shared.isSignedIn, ControlPlane.shared.isOperational else { return }
+        Task { await AppSession.shared.refreshFixtures() }
+        guard ControlPlane.shared.autoRefreshEnabled else { return }
+        let interval = max(1, ControlPlane.shared.autoRefreshSeconds)
+        refreshTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { _ in
+            Task { await AppSession.shared.refreshFixtures() }
+        }
+    }
+}
+
+/// SwiftUI utility windows are separate scenes, but maintenance should live
+/// only in the menu bar popover.
+func closeUtilityWindows(titles: Set<String> = ["Sign In", "Become a Fan", "Settings", "Update Required"]) {
+    for window in NSApp.windows where titles.contains(window.title) {
+        window.close()
+    }
 }
 
 /// Opens a SwiftUI `Window` scene by id from AppKit contexts.
 func openWindow(_ id: String) {
     DispatchQueue.main.async {
+        if ControlPlane.shared.killSwitch,
+           [WindowID.login, WindowID.teamPicker, WindowID.settings, WindowID.gate].contains(id) {
+            return
+        }
+        if ControlPlane.shared.updateRequired,
+           [WindowID.login, WindowID.teamPicker, WindowID.settings].contains(id) {
+            return
+        }
+        if id == WindowID.gate, !ControlPlane.shared.updateRequired {
+            return
+        }
         NSApp.activate(ignoringOtherApps: true)
         if let url = URL(string: "alldayidreamaboutsports://\(id)") {
             _ = url // reserved for deep links

@@ -255,5 +255,8 @@ backend reads its R2 creds from GCP Secret Manager (`r2-*`, via
 - **Kill**: Firebase console → Remote Config → `kill_switch=true` → Publish.
   Running apps lock within seconds (real-time RC). Backup if Firebase is down:
   upload `{"killSwitch":true,"message":"..."}` as `config.json` to `alldayidreamaboutsports-scores`.
+- **Recover**: publish `kill_switch=false` in Firebase and clear `killSwitch`
+  from the R2 `config.json` (or set it to `false`) if the backup was used.
+  The app stays killed until every source that enabled the switch clears it.
 - **Force update**: set `min_build` to the new build number after a bad release.
 - **Celebration cost spike**: `celebration_enabled=false`.

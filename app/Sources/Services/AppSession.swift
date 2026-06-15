@@ -84,11 +84,23 @@ final class AppSession: ObservableObject {
     // MARK: Sign in / out
 
     func signInWithGoogle(presenting window: NSWindow?) {
+        guard ControlPlane.shared.isOperational else {
+            signInError = "Sign-in is unavailable while the app is temporarily disabled."
+            return
+        }
         signInError = nil
         Task {
             do {
                 let idToken = try await Services.google.signIn(presenting: window)
+                guard ControlPlane.shared.isOperational else {
+                    Services.google.signOut()
+                    return
+                }
                 let response = try await api.signIn(googleIdToken: idToken)
+                guard ControlPlane.shared.isOperational else {
+                    Services.google.signOut()
+                    return
+                }
                 Keychain.set(response.token, for: "sessionToken")
                 profile = response.profile
                 persist(profile: response.profile)
