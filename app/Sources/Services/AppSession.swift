@@ -143,11 +143,9 @@ final class AppSession: ObservableObject {
     }
 
     /// `showLogin` is false for the kill-switch path, where the gate window
-    /// is replaced by maintenance content in the menu.
+    /// is shown the next time the menu opens.
     func clearSession(showLogin: Bool) {
-        if showLogin {
-            stopAllActivity()
-        }
+        stopAllActivity()
         Services.google.signOut()
         Keychain.delete("sessionToken")
         defaults.removeObject(forKey: "profile")

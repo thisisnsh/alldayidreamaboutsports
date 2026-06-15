@@ -131,7 +131,6 @@ final class ControlPlane: ObservableObject {
                 AppSession.shared.clearSession(showLogin: false)
             }
             closeUtilityWindows()
-            MenuPopoverController.shared.controlPlaneDidChange()
             return
         }
         if updateRequired {

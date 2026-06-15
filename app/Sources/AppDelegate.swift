@@ -131,6 +131,10 @@ final class MenuPopoverController: NSObject, NSPopoverDelegate {
             close()
         } else {
             ControlPlane.shared.refreshRemoteConfig(ignoreCache: true)
+            popover.contentSize = NSSize(
+                width: 320,
+                height: AppSession.shared.isSignedIn ? 520 : (ControlPlane.shared.killSwitch ? 300 : 200)
+            )
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
             button.highlight(true)
             startRefreshing()
@@ -178,9 +182,6 @@ final class MenuPopoverController: NSObject, NSPopoverDelegate {
         refreshTimer?.invalidate()
         refreshTimer = nil
         startFixtureRefreshing()
-        DispatchQueue.main.async { [weak self] in
-            self?.resizePopoverToContent()
-        }
     }
 
     private func startFixtureRefreshing() {
@@ -193,15 +194,6 @@ final class MenuPopoverController: NSObject, NSPopoverDelegate {
         }
     }
 
-    private func resizePopoverToContent() {
-        guard let view = popover.contentViewController?.view else { return }
-        view.layoutSubtreeIfNeeded()
-        let fitting = view.fittingSize
-        popover.contentSize = NSSize(
-            width: 320,
-            height: min(max(fitting.height, 180), 520)
-        )
-    }
 }
 
 /// SwiftUI utility windows are separate scenes, but maintenance should live
