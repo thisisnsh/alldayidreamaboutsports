@@ -25,7 +25,12 @@ describe("R2MatchStateStore", () => {
 
     expect(loaded).toEqual({ state: match, etag: "\"v1\"" });
     const put = send.mock.calls[1]![0] as PutObjectCommand;
-    expect(put.input).toMatchObject({ Bucket: "private-state", Key: "matches/7.json", IfMatch: "\"v1\"" });
+    expect(put.input).toMatchObject({
+      Bucket: "private-state",
+      Key: "matches/7.json",
+      CacheControl: "public, max-age=2",
+      IfMatch: "\"v1\"",
+    });
   });
 
   it("surfaces conditional write conflicts", async () => {

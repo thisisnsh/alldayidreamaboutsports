@@ -23,6 +23,12 @@ export function isLive(match: MatchState): boolean {
   return match.status === "LIVE" || match.status === "HALF_TIME";
 }
 
+export function isStartingSoon(match: MatchState, now = Date.now()): boolean {
+  if (match.status !== "SCHEDULED") return false;
+  const untilKickoff = Date.parse(match.kickoffISO) - now;
+  return untilKickoff <= 60_000 && untilKickoff > -15 * 60_000;
+}
+
 const FINISHED_AFTER_2H_MS = 2.5 * 60 * 60 * 1000; // > ET(30) + breaks + pens(~15) after 2nd-half KO
 const FINISHED_AFTER_KO_MS = 4 * 60 * 60 * 1000; // fallback when periods.second is absent
 
@@ -63,7 +69,7 @@ export class Poller {
       this.r2.putJsonIfChanged(`fixtures-${date}.json`, { matches }, 10),
     ));
 
-    for (const match of fixtures.filter((m) => isLive(m) || isRecentlyFinished(m))) {
+    for (const match of fixtures.filter((m) => isStartingSoon(m) || isLive(m) || isRecentlyFinished(m))) {
       const previous = await this.state.load(match.fixtureId);
       const events = diffMatch(previous.state, match);
       for (const event of events) {

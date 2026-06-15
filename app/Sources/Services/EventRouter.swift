@@ -31,7 +31,7 @@ final class EventRouter {
                   let json = (userInfo["totals"] as? String)?.data(using: .utf8),
                   let totals = try? JSONDecoder().decode([String: Int].self, from: json)
             else { return }
-            AppSession.shared.celebrationTotals[fixtureId] = totals
+            AppSession.shared.mergeCelebrationTotals(totals, fixtureId: fixtureId)
         default: NSLog("Push rejected: unknown kind")
         }
     }

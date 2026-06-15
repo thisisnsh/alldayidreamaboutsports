@@ -147,6 +147,12 @@ final class FakeScores: ScoresProviding {
     func fetchFixtures(date: Date) async throws -> [Fixture] {
         FakeStore.shared.todayFixtures + FakeStore.shared.liveFixtures
     }
+    func fetchFixture(fixtureId: Int) async throws -> Fixture {
+        guard let fixture = FakeStore.shared.allFixtures.first(where: { $0.fixtureId == fixtureId }) else {
+            throw URLError(.fileDoesNotExist)
+        }
+        return fixture
+    }
     func fetchCelebrations(fixtureId: Int) async throws -> [String: Int] {
         // Production fetches this from the CDN after the batched POST lands
         // in the DB — simulate that beat so dev timing matches reality.

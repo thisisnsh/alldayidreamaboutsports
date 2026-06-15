@@ -207,6 +207,7 @@ final class OverlayManager: ObservableObject {
         Task { @MainActor in
             for target in targets {
                 let totals = (try? await Services.scores.fetchCelebrations(fixtureId: target.fixtureId)) ?? [:]
+                AppSession.shared.mergeCelebrationTotals(totals, fixtureId: target.fixtureId)
                 let team = TeamCatalog.team(for: Int(target.teamId) ?? -1, in: AppSession.shared.teams)
                 let count = totals[target.teamId] ?? 0
                 let text: String? = count > 0

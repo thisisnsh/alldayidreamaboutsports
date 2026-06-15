@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { isLive, isRecentlyFinished, partitionFixtures, Poller, utcPollRange } from "../src/poller.js";
+import { isLive, isRecentlyFinished, isStartingSoon, partitionFixtures, Poller, utcPollRange } from "../src/poller.js";
 import type { MatchState } from "../src/types.js";
 
 function state(
@@ -94,6 +94,24 @@ describe("Poller", () => {
     expect(stateStore.save).not.toHaveBeenCalled();
   });
 
+  it("publishes individual state for a fixture starting within one minute", async () => {
+    const scheduled = state(1, new Date(Date.now() + 45_000).toISOString(), "SCHEDULED");
+    const provider = { fixturesForRange: vi.fn().mockResolvedValue([scheduled]) };
+    const stateStore = {
+      load: vi.fn().mockResolvedValue({ state: null, etag: null }),
+      save: vi.fn().mockResolvedValue(undefined),
+    };
+    const fcm = { publishEvent: vi.fn() };
+    const r2 = { putJsonIfChanged: vi.fn().mockResolvedValue(undefined) };
+    const poller = new Poller(provider as never, stateStore as never, fcm as never, r2 as never);
+
+    await poller.fetchOnce();
+
+    expect(stateStore.load).toHaveBeenCalledWith(1);
+    expect(stateStore.save).toHaveBeenCalledWith(scheduled, null);
+    expect(fcm.publishEvent).not.toHaveBeenCalled();
+  });
+
   it("skips the save when the loaded state is unchanged", async () => {
     const now = new Date();
     const finished = state(1, now.toISOString(), "FINISHED", {
@@ -137,5 +155,24 @@ describe("isRecentlyFinished", () => {
     const past = state(2, "2026-06-14T10:00:00Z", "FINISHED", { secondHalfStartISO: null });
     expect(isRecentlyFinished(within, now)).toBe(true);
     expect(isRecentlyFinished(past, now)).toBe(false);
+  });
+});
+
+describe("isStartingSoon", () => {
+  const now = Date.parse("2026-06-14T20:00:00Z");
+
+  it("includes scheduled fixtures starting within one minute", () => {
+    expect(isStartingSoon(state(1, "2026-06-14T20:00:45Z"), now)).toBe(true);
+  });
+
+  it("keeps briefly overdue scheduled fixtures until the provider marks them live", () => {
+    expect(isStartingSoon(state(1, "2026-06-14T19:55:00Z"), now)).toBe(true);
+  });
+
+  it("excludes distant, stale, live, and finished fixtures", () => {
+    expect(isStartingSoon(state(1, "2026-06-14T20:02:00Z"), now)).toBe(false);
+    expect(isStartingSoon(state(2, "2026-06-14T19:40:00Z"), now)).toBe(false);
+    expect(isStartingSoon(state(3, "2026-06-14T20:00:45Z", "LIVE"), now)).toBe(false);
+    expect(isStartingSoon(state(4, "2026-06-14T20:00:45Z", "FINISHED"), now)).toBe(false);
   });
 });

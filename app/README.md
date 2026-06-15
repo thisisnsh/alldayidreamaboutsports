@@ -137,6 +137,11 @@ Key invariants:
   team, sent when the ball disappears.
 - `ControlPlane` gates everything; `kill_switch`/`min_build` from Remote Config
   (real-time) with `config.json` on the scores CDN as backup.
+- Fixture date files bootstrap and persist the daily schedule once. While the
+  menu is open, only followed-team `matches/{fixtureId}.json` objects that are
+  live or starting within one minute are polled. Finished fixtures and
+  celebration totals remain in the local cache; celebration totals refresh
+  only when the cached and newly fetched scores differ.
 
 ## Code signing & notarization (one-time setup)
 
