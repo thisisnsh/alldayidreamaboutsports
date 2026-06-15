@@ -19,32 +19,40 @@ final class EventRouter {
 
     func handlePush(_ userInfo: [String: Any]) {
         guard ControlPlane.shared.isOperational else {
-            NSLog("Push rejected: control plane disabled")
+            AppLog.info(.fcm, "push_rejected reason=control_plane_disabled")
             return
         }
         switch userInfo["kind"] as? String {
         case "match_event":
-            guard let event = MatchEvent(fcmData: userInfo) else { return }
+            guard let event = MatchEvent(fcmData: userInfo) else {
+                AppLog.error(.fcm, "push_decode_failed kind=match_event")
+                return
+            }
+            AppLog.info(.fcm, "event_decoded event_id=\(event.eventId) type=\(event.type.rawValue) fixture_id=\(event.fixtureId)")
             route(event)
         case "celebration_count":
             guard let fixtureId = Int(userInfo["fixtureId"] as? String ?? ""),
                   let json = (userInfo["totals"] as? String)?.data(using: .utf8),
                   let totals = try? JSONDecoder().decode([String: Int].self, from: json)
-            else { return }
+            else {
+                AppLog.error(.fcm, "push_decode_failed kind=celebration_count")
+                return
+            }
+            AppLog.info(.celebrations, "push_totals_received fixture_id=\(fixtureId) teams=\(totals.count)")
             AppSession.shared.mergeCelebrationTotals(totals, fixtureId: fixtureId)
-        default: NSLog("Push rejected: unknown kind")
+        default: AppLog.info(.fcm, "push_rejected reason=unknown_kind")
         }
     }
 
     func route(_ event: MatchEvent) {
         // Signed out = silent, even if a stale topic delivery slips through.
         guard AppSession.shared.isSignedIn else {
-            NSLog("Push rejected: signed out")
+            AppLog.info(.fcm, "event_rejected event_id=\(event.eventId) reason=signed_out")
             return
         }
         // FCM topics can redeliver; drop anything we've animated already.
         guard !seenEventIds.contains(event.eventId) else {
-            NSLog("Push rejected: duplicate \(event.eventId)")
+            AppLog.info(.fcm, "event_rejected event_id=\(event.eventId) reason=duplicate")
             return
         }
         var handled = seenEventIds
@@ -54,7 +62,7 @@ final class EventRouter {
 
         let settings = AppSession.shared.prefs.settings
         guard settings.eventEnabled(event.type) else {
-            NSLog("Push rejected: event disabled \(event.type.rawValue)")
+            AppLog.info(.fcm, "event_rejected event_id=\(event.eventId) reason=event_disabled type=\(event.type.rawValue)")
             return
         }
 
@@ -62,11 +70,12 @@ final class EventRouter {
         // scope this server-side, but dev simulations and redeliveries don't.
         let fans = AppSession.shared.fanTeamIds
         guard fans.contains(event.homeTeamId) || fans.contains(event.awayTeamId) else {
-            NSLog("Push rejected: no followed team")
+            AppLog.info(.fcm, "event_rejected event_id=\(event.eventId) reason=no_followed_team")
             return
         }
 
         let isFanGoal = event.type == .goal && event.teamId.map(fans.contains) == true
+        AppLog.info(.fcm, "event_routed event_id=\(event.eventId) type=\(event.type.rawValue) fixture_id=\(event.fixtureId) fan_goal=\(isFanGoal)")
 
         // One queue for everything: the event joins the next notification
         // set; fan goals additionally drive confetti + the center ball when

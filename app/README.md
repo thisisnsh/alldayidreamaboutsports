@@ -100,6 +100,22 @@ The build phase copies only the selected environment's Firebase plist into the
 app bundle as `GoogleService-Info.plist`; a Release build does not contain or
 use staging Firebase configuration. Both source plists are gitignored.
 
+## Staging diagnostics
+
+The app writes structured `debug`, `info`, and `error` entries through Apple's
+unified logging system. In Console.app, select the Mac and filter for subsystem
+`com.alldayidreamaboutsports.mac`, or stream them in Terminal:
+
+```sh
+log stream --level debug --predicate 'subsystem == "com.alldayidreamaboutsports.mac"'
+```
+
+Staging builds also send log breadcrumbs to Firebase Crashlytics. Errors are
+recorded as non-fatal Crashlytics issues, where their preceding debug/info
+breadcrumbs are visible. Release builds explicitly disable Crashlytics
+collection. Crashlytics is not a live arbitrary-log viewer; use Console.app or
+`log stream` for the complete live stream.
+
 The backend must accept the same client ID as the app. Add each environment's
 `CLIENT_ID` to its GCP Secret Manager secret:
 

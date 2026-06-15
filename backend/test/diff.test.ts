@@ -125,6 +125,17 @@ describe("diffMatch", () => {
     expect(types(bt, state({ rawStatus: "ET", minute: 106 }))).toEqual([]);
   });
 
+  it("emits PENALTY_SHOOTOUT once when penalties begin", () => {
+    const et = state({ rawStatus: "ET", minute: 120 });
+    const penalties = state({
+      rawStatus: "P",
+      minute: 120,
+      shootout: { home: 0, away: 0, kicks: [] },
+    });
+    expect(types(et, penalties)).toEqual(["PENALTY_SHOOTOUT"]);
+    expect(types(penalties, penalties)).toEqual([]);
+  });
+
   it("emits one PENALTY_KICK per new kick with scored flag and running tally", () => {
     const kick = (teamId: number, scored: boolean) => ({ teamId, player: null, scored });
     const prev = state({

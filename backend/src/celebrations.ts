@@ -1,5 +1,6 @@
 import type { Store } from "./store.js";
 import type { R2 } from "./r2.js";
+import { log } from "./log.js";
 
 /**
  * In-memory tap aggregator. Each instance buffers incoming batched celebrate
@@ -20,6 +21,7 @@ export class CelebrationAggregator {
     const counts = this.buffer.get(fixtureId) ?? {};
     counts[teamId] = (counts[teamId] ?? 0) + taps;
     this.buffer.set(fixtureId, counts);
+    log.info("celebration_buffered", { fixtureId, teamId, taps, pendingFixtures: this.buffer.size });
   }
 
   /** Visible for tests. */
@@ -31,10 +33,21 @@ export class CelebrationAggregator {
     if (this.buffer.size === 0) return;
     const batch = this.buffer;
     this.buffer = new Map();
-    await Promise.allSettled([...batch].map(async ([fixtureId, counts]) => {
-      await this.store.addCelebrations(fixtureId, counts);
-      const totals = await this.store.celebrationTotals(fixtureId);
-      await this.r2.putJson(`celebrate/${fixtureId}.json`, { totals }, 2);
+    log.info("celebration_flush_start", { fixtures: batch.size });
+    await Promise.all([...batch].map(async ([fixtureId, counts]) => {
+      try {
+        await this.store.addCelebrations(fixtureId, counts);
+        const totals = await this.store.celebrationTotals(fixtureId);
+        await this.r2.putJson(`celebrate/${fixtureId}.json`, { totals }, 2);
+        log.info("celebration_flush_complete", { fixtureId, counts, totals });
+      } catch (error) {
+        log.error("celebration_flush_failed", error, { fixtureId, counts });
+        const pending = this.buffer.get(fixtureId) ?? {};
+        for (const [teamId, taps] of Object.entries(counts)) {
+          pending[teamId] = (pending[teamId] ?? 0) + taps;
+        }
+        this.buffer.set(fixtureId, pending);
+      }
     }));
   }
 

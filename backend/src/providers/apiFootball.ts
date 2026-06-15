@@ -1,5 +1,6 @@
 import type { MatchState, MatchStatus, PenaltyKick } from "../types.js";
 import type { CatalogTeam, LeagueInfo, ScoreProvider } from "./types.js";
+import { log } from "../log.js";
 
 const BASE = "https://v3.football.api-sports.io";
 
@@ -58,15 +59,27 @@ export class ApiFootballProvider implements ScoreProvider {
   ) {}
 
   private async get<T>(path: string): Promise<T[]> {
-    const res = await this.fetchImpl(`${BASE}${path}`, {
-      headers: { "x-apisports-key": this.apiKey },
-    });
-    if (!res.ok) throw new Error(`API-Football ${path} -> HTTP ${res.status}`);
-    const body = (await res.json()) as { response?: T[]; errors?: unknown };
-    if (!Array.isArray(body.response)) {
-      throw new Error(`API-Football ${path} -> bad body: ${JSON.stringify(body.errors ?? body).slice(0, 300)}`);
+    const started = Date.now();
+    log.debug("provider_request_start", { provider: "api-football", path });
+    try {
+      const res = await this.fetchImpl(`${BASE}${path}`, {
+        headers: { "x-apisports-key": this.apiKey },
+      });
+      if (!res.ok) throw new Error(`API-Football ${path} -> HTTP ${res.status}`);
+      const body = (await res.json()) as { response?: T[]; errors?: unknown };
+      if (!Array.isArray(body.response)) {
+        throw new Error(`API-Football ${path} -> bad body: ${JSON.stringify(body.errors ?? body).slice(0, 300)}`);
+      }
+      log.info("provider_request_complete", {
+        provider: "api-football", path, rows: body.response.length, durationMs: Date.now() - started,
+      });
+      return body.response;
+    } catch (error) {
+      log.error("provider_request_failed", error, {
+        provider: "api-football", path, durationMs: Date.now() - started,
+      });
+      throw error;
     }
-    return body.response;
   }
 
   async fixturesForRange(fromISO: string, toISO: string): Promise<MatchState[]> {
@@ -79,6 +92,9 @@ export class ApiFootballProvider implements ScoreProvider {
     const liveIds = fixtures
       .filter((f) => liveStatuses.has(f.fixture.status.short))
       .map((f) => f.fixture.id);
+    log.info("provider_fixture_range", {
+      fromISO, toISO, fixtures: fixtures.length, liveFixtureIds: liveIds,
+    });
 
     if (liveIds.length > 0) {
       const enriched: ApiFixture[] = [];

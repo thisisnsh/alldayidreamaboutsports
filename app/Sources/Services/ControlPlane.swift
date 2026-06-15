@@ -66,13 +66,17 @@ final class ControlPlane: ObservableObject {
             // a previously-killed install make authenticated requests.
             apply(rc)
             rc.fetchAndActivate { [weak self] _, _ in
-                Task { @MainActor in self?.apply(rc) }
+                Task { @MainActor in
+                    AppLog.info(.remoteConfig, "initial_fetch_complete")
+                    self?.apply(rc)
+                }
             }
             rc.addOnConfigUpdateListener { [weak self] _, error in
                 if let error {
-                    NSLog("Remote Config listener failed: %@", error.localizedDescription)
+                    AppLog.error(.remoteConfig, "listener_failed", error: error)
                     return
                 }
+                AppLog.info(.remoteConfig, "listener_update_received")
                 rc.activate { _, _ in
                     Task { @MainActor in self?.apply(rc) }
                 }
@@ -101,10 +105,18 @@ final class ControlPlane: ObservableObject {
             animationParams = defaultAnimationParams
         }
         applyEffectiveState()
+        AppLog.info(.remoteConfig, "firebase_state_applied kill_switch=\(firebaseKillSwitch) update_required=\(firebaseUpdateRequired) celebration_enabled=\(celebrationEnabled) auto_refresh=\(firebaseAutoRefreshEnabled) interval=\(firebaseAutoRefreshSeconds)")
     }
 
     private func checkBackupConfig() async {
-        guard let config = try? await Services.scores.fetchBackupConfig() else { return }
+        AppLog.debug(.remoteConfig, "backup_refresh_start")
+        let config: BackupConfig
+        do {
+            config = try await Services.scores.fetchBackupConfig()
+        } catch {
+            AppLog.error(.remoteConfig, "backup_refresh_failed", error: error)
+            return
+        }
         backupKillSwitch = config.killSwitch ?? false
         backupKillMessage = config.message ?? ""
         let minBuild = config.minBuild ?? 0
@@ -112,6 +124,7 @@ final class ControlPlane: ObservableObject {
         backupAutoRefreshEnabled = config.autoRefreshEnabled
         backupAutoRefreshSeconds = config.autoRefreshSeconds.flatMap { $0 >= 1 ? $0 : nil }
         applyEffectiveState()
+        AppLog.info(.remoteConfig, "backup_refresh_complete kill_switch=\(backupKillSwitch) update_required=\(backupUpdateRequired)")
     }
 
     private func applyEffectiveState() {
@@ -156,22 +169,24 @@ final class ControlPlane: ObservableObject {
         guard let rc = remoteConfig else { return }
         let completion: (RemoteConfigFetchAndActivateStatus, Error?) -> Void = { [weak self] _, error in
             if let error {
-                NSLog("Remote Config refresh failed: %@", error.localizedDescription)
+                AppLog.error(.remoteConfig, "refresh_failed", error: error)
                 return
             }
+            AppLog.info(.remoteConfig, "refresh_complete ignore_cache=false")
             Task { @MainActor in self?.apply(rc) }
         }
         if ignoreCache {
             rc.fetch(withExpirationDuration: 0) { [weak self] _, error in
                 if let error {
-                    NSLog("Remote Config refresh failed: %@", error.localizedDescription)
+                    AppLog.error(.remoteConfig, "refresh_failed ignore_cache=true", error: error)
                     return
                 }
                 rc.activate { _, error in
                     if let error {
-                        NSLog("Remote Config activation failed: %@", error.localizedDescription)
+                        AppLog.error(.remoteConfig, "activation_failed", error: error)
                         return
                     }
+                    AppLog.info(.remoteConfig, "refresh_complete ignore_cache=true")
                     Task { @MainActor in self?.apply(rc) }
                 }
             }

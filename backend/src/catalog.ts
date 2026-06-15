@@ -1,5 +1,6 @@
 import type { CatalogTeam, ScoreProvider } from "./providers/types.js";
 import type { R2 } from "./r2.js";
+import { log } from "./log.js";
 
 /**
  * Which leagues the app knows about. `active` = users can follow it now;
@@ -49,6 +50,8 @@ export class CatalogService {
   ) {}
 
   async build(): Promise<CatalogPayload> {
+    const started = Date.now();
+    log.info("catalog_build_start", { supportedLeagues: SUPPORTED_LEAGUES.map((league) => league.id) });
     const leagues: CatalogLeague[] = [];
     const teams: Record<string, CatalogTeam[]> = {};
     for (const { id, active } of SUPPORTED_LEAGUES) {
@@ -59,7 +62,11 @@ export class CatalogService {
         info.scheduled && info.season != null
           ? await this.provider.teamsForLeague(id, info.season)
           : [];
+      log.info("catalog_league_complete", {
+        leagueId: id, active, scheduled: info.scheduled, season: info.season, teams: teams[String(id)]!.length,
+      });
     }
+    log.info("catalog_build_complete", { leagues: leagues.length, durationMs: Date.now() - started });
     return { generatedAt: new Date().toISOString(), leagues, teams };
   }
 
@@ -67,6 +74,7 @@ export class CatalogService {
     const payload = await this.build();
     await this.r2.putJson("catalog.json", payload, 86400);
     const teamCount = Object.values(payload.teams).reduce((n, t) => n + t.length, 0);
+    log.info("catalog_sync_complete", { leagues: payload.leagues.length, teams: teamCount });
     return { leagues: payload.leagues.length, teams: teamCount };
   }
 }

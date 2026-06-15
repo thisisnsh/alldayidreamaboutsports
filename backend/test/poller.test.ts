@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
-import { isLive, isRecentlyFinished, isStartingSoon, partitionFixtures, Poller, utcPollRange } from "../src/poller.js";
+import {
+  isLive, isRecentlyFinished, isRegressiveSnapshot, isStartingSoon, partitionFixtures, Poller, utcPollRange,
+} from "../src/poller.js";
 import type { MatchState } from "../src/types.js";
 
 function state(
@@ -131,6 +133,25 @@ describe("Poller", () => {
     expect(result.events).toBe(0);
     expect(stateStore.save).not.toHaveBeenCalled();
   });
+
+  it("ignores a stale scheduled snapshot after a match is live", async () => {
+    const previous = state(1, new Date(Date.now() - 5 * 60_000).toISOString(), "LIVE");
+    const stale = state(1, previous.kickoffISO, "SCHEDULED");
+    const provider = { fixturesForRange: vi.fn().mockResolvedValue([stale]) };
+    const stateStore = {
+      load: vi.fn().mockResolvedValue({ state: previous, etag: "e1" }),
+      save: vi.fn(),
+    };
+    const fcm = { publishEvent: vi.fn() };
+    const r2 = { putJsonIfChanged: vi.fn().mockResolvedValue(undefined) };
+    const poller = new Poller(provider as never, stateStore as never, fcm as never, r2 as never);
+
+    const result = await poller.fetchOnce();
+
+    expect(result.events).toBe(0);
+    expect(fcm.publishEvent).not.toHaveBeenCalled();
+    expect(stateStore.save).not.toHaveBeenCalled();
+  });
 });
 
 describe("isRecentlyFinished", () => {
@@ -174,5 +195,33 @@ describe("isStartingSoon", () => {
     expect(isStartingSoon(state(2, "2026-06-14T19:40:00Z"), now)).toBe(false);
     expect(isStartingSoon(state(3, "2026-06-14T20:00:45Z", "LIVE"), now)).toBe(false);
     expect(isStartingSoon(state(4, "2026-06-14T20:00:45Z", "FINISHED"), now)).toBe(false);
+  });
+});
+
+describe("isRegressiveSnapshot", () => {
+  it("rejects live or finished matches reverting to scheduled", () => {
+    expect(isRegressiveSnapshot(
+      state(1, "2026-06-14T20:00:00Z", "LIVE"),
+      state(1, "2026-06-14T20:00:00Z", "SCHEDULED"),
+    )).toBe(true);
+    expect(isRegressiveSnapshot(
+      state(1, "2026-06-14T20:00:00Z", "FINISHED"),
+      state(1, "2026-06-14T20:00:00Z", "LIVE"),
+    )).toBe(true);
+  });
+
+  it("allows normal scheduled, live, half-time, and finished progression", () => {
+    expect(isRegressiveSnapshot(
+      state(1, "2026-06-14T20:00:00Z", "SCHEDULED"),
+      state(1, "2026-06-14T20:00:00Z", "LIVE"),
+    )).toBe(false);
+    expect(isRegressiveSnapshot(
+      state(1, "2026-06-14T20:00:00Z", "HALF_TIME"),
+      state(1, "2026-06-14T20:00:00Z", "LIVE"),
+    )).toBe(false);
+    expect(isRegressiveSnapshot(
+      state(1, "2026-06-14T20:00:00Z", "LIVE"),
+      state(1, "2026-06-14T20:00:00Z", "FINISHED"),
+    )).toBe(false);
   });
 });

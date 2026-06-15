@@ -34,7 +34,7 @@ struct LoginView: View {
             Text("All Day I Dream\nAbout Sports")
                 .font(.system(size: 28, weight: .heavy, design: .rounded))
                 .multilineTextAlignment(.center)
-            Text("Live World Cup goals, right on your Mac.")
+            Text("Live World Cup Events")
                 .font(.system(size: 14, design: .rounded))
                 .opacity(0.8)
 

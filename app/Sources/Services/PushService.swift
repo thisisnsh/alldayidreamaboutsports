@@ -19,9 +19,13 @@ final class PushService: NSObject, MessagingDelegate {
     }
 
     func syncTopics(to teamIds: Set<Int>) {
-        guard FirebaseConfigured.isConfigured else { return }
+        guard FirebaseConfigured.isConfigured else {
+            AppLog.debug(.fcm, "topic_sync_skipped firebase_unconfigured")
+            return
+        }
         queue.async {
             self.desired = Set(teamIds.map { "l\(AppEnvironment.leagueId)_\($0)" })
+            AppLog.info(.fcm, "topic_sync desired=\(self.desired.sorted()) current=\(self.subscribed.sorted())")
             self.retryPending()
         }
     }
@@ -31,18 +35,20 @@ final class PushService: NSObject, MessagingDelegate {
         queue.async {
             let wanted = self.desired
             let current = self.subscribed
+            AppLog.debug(.fcm, "topic_retry desired=\(wanted.sorted()) current=\(current.sorted()) in_flight=\(self.inFlight.sorted())")
             for topic in current.subtracting(wanted).subtracting(self.inFlight) {
                 self.inFlight.insert(topic)
+                AppLog.info(.fcm, "topic_unsubscribe_start topic=\(topic)")
                 Messaging.messaging().unsubscribe(fromTopic: topic) { error in
                     self.queue.async {
                         self.inFlight.remove(topic)
                         if let error {
-                            NSLog("FCM unsubscribe failed %@: %@", topic, error.localizedDescription)
+                            AppLog.error(.fcm, "topic_unsubscribe_failed topic=\(topic)", error: error)
                         } else {
                             var confirmed = self.subscribed
                             confirmed.remove(topic)
                             self.subscribed = confirmed
-                            NSLog("FCM unsubscribed %@", topic)
+                            AppLog.info(.fcm, "topic_unsubscribe_complete topic=\(topic)")
                             self.retryPending()
                         }
                     }
@@ -50,16 +56,17 @@ final class PushService: NSObject, MessagingDelegate {
             }
             for topic in wanted.subtracting(current).subtracting(self.inFlight) {
                 self.inFlight.insert(topic)
+                AppLog.info(.fcm, "topic_subscribe_start topic=\(topic)")
                 Messaging.messaging().subscribe(toTopic: topic) { error in
                     self.queue.async {
                         self.inFlight.remove(topic)
                         if let error {
-                            NSLog("FCM subscribe failed %@: %@", topic, error.localizedDescription)
+                            AppLog.error(.fcm, "topic_subscribe_failed topic=\(topic)", error: error)
                         } else {
                             var confirmed = self.subscribed
                             confirmed.insert(topic)
                             self.subscribed = confirmed
-                            NSLog("FCM subscribed %@", topic)
+                            AppLog.info(.fcm, "topic_subscribe_complete topic=\(topic)")
                             self.retryPending()
                         }
                     }
@@ -69,7 +76,7 @@ final class PushService: NSObject, MessagingDelegate {
     }
 
     func messaging(_ messaging: Messaging, didReceiveRegistrationToken fcmToken: String?) {
-        NSLog("FCM registration token received: %@", fcmToken ?? "<nil>")
+        AppLog.info(.fcm, "registration_token_received present=\(fcmToken != nil) length=\(fcmToken?.count ?? 0)")
         syncTopics(to: AppSessionTopicsSnapshot.current())
     }
 }

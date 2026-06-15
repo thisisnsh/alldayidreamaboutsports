@@ -21,6 +21,7 @@ final class CelebrationService {
         flush()
         self.targets = targets
         taps = 0
+        AppLog.info(.celebrations, "window_started targets=\(targets.map { "\($0.fixtureId):\($0.teamId)" })")
     }
 
     func registerTap() {
@@ -29,6 +30,7 @@ final class CelebrationService {
     }
 
     func endWindow() {
+        AppLog.info(.celebrations, "window_ended taps=\(taps) targets=\(targets.count)")
         flush()
     }
 
@@ -48,7 +50,12 @@ final class CelebrationService {
         Task {
             for target in batch {
                 guard ControlPlane.shared.isOperational, AppSession.shared.isSignedIn else { return }
-                try? await api.celebrate(fixtureId: target.fixtureId, teamId: target.teamId, taps: count)
+                do {
+                    try await api.celebrate(fixtureId: target.fixtureId, teamId: target.teamId, taps: count)
+                    AppLog.info(.celebrations, "upload_complete fixture_id=\(target.fixtureId) team_id=\(target.teamId) taps=\(count)")
+                } catch {
+                    AppLog.error(.celebrations, "upload_failed fixture_id=\(target.fixtureId) team_id=\(target.teamId) taps=\(count)", error: error)
+                }
             }
         }
     }

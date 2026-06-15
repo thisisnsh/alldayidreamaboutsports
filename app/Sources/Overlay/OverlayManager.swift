@@ -206,7 +206,14 @@ final class OverlayManager: ObservableObject {
               AppSession.shared.prefs.settings.eventEnabled(.celebration) else { return }
         Task { @MainActor in
             for target in targets {
-                let totals = (try? await Services.scores.fetchCelebrations(fixtureId: target.fixtureId)) ?? [:]
+                let totals: [String: Int]
+                do {
+                    totals = try await Services.scores.fetchCelebrations(fixtureId: target.fixtureId)
+                    AppLog.info(.celebrations, "post_window_totals_refresh_complete fixture_id=\(target.fixtureId) teams=\(totals.count)")
+                } catch {
+                    AppLog.error(.celebrations, "post_window_totals_refresh_failed fixture_id=\(target.fixtureId)", error: error)
+                    totals = [:]
+                }
                 AppSession.shared.mergeCelebrationTotals(totals, fixtureId: target.fixtureId)
                 let team = TeamCatalog.team(for: Int(target.teamId) ?? -1, in: AppSession.shared.teams)
                 let count = totals[target.teamId] ?? 0

@@ -1,6 +1,7 @@
 import { getMessaging, Messaging } from "firebase-admin/messaging";
 import { firebaseApp } from "./store.js";
 import type { MatchEvent } from "./types.js";
+import { log } from "./log.js";
 
 export function topicForTeam(leagueId: number, teamId: number): string {
   return `l${leagueId}_${teamId}`;
@@ -15,6 +16,13 @@ export class Fcm {
   }
 
   private async sendData(topic: string, data: Record<string, string>): Promise<void> {
+    const started = Date.now();
+    log.info("fcm_topic_send_start", {
+      topic,
+      eventId: data.eventId,
+      type: data.type,
+      fixtureId: Number(data.fixtureId),
+    });
     try {
       const messageId = await this.messaging.send({
         topic,
@@ -24,11 +32,22 @@ export class Fcm {
           payload: { aps: { contentAvailable: true } },
         },
       });
-      console.log(JSON.stringify({ severity: "INFO", message: "fcm_topic_result", topic, messageId }));
+      log.info("fcm_topic_send_complete", {
+        topic,
+        eventId: data.eventId,
+        type: data.type,
+        fixtureId: Number(data.fixtureId),
+        messageId,
+        durationMs: Date.now() - started,
+      });
     } catch (error) {
-      console.error(JSON.stringify({
-        severity: "ERROR", message: "fcm_topic_result", topic, error: (error as Error).message,
-      }));
+      log.error("fcm_topic_send_failed", error, {
+        topic,
+        eventId: data.eventId,
+        type: data.type,
+        fixtureId: Number(data.fixtureId),
+        durationMs: Date.now() - started,
+      });
       throw error;
     }
   }
@@ -57,7 +76,19 @@ export class Fcm {
       topicForTeam(ev.leagueId, ev.homeTeamId),
       topicForTeam(ev.leagueId, ev.awayTeamId),
     ]);
+    log.info("fcm_event_publish_start", {
+      eventId: ev.eventId,
+      type: ev.type,
+      fixtureId: ev.fixtureId,
+      topics: [...topics],
+    });
     await Promise.all([...topics].map((t) => this.sendData(t, data)));
+    log.info("fcm_event_publish_complete", {
+      eventId: ev.eventId,
+      type: ev.type,
+      fixtureId: ev.fixtureId,
+      topics: [...topics],
+    });
   }
 
 }

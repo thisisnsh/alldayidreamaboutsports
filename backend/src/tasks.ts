@@ -1,5 +1,6 @@
 import { CloudTasksClient } from "@google-cloud/tasks";
 import { env } from "./env.js";
+import { log } from "./log.js";
 
 const GRPC_ALREADY_EXISTS = 6;
 
@@ -28,6 +29,9 @@ export class Dispatcher {
     const url = `${env.serviceUrl}/internal/fetch`;
     const startSeconds = Math.floor(now / 1000);
     const minuteBucket = Math.floor(now / 60_000);
+    log.info("dispatch_start", {
+      count: this.count, stepSeconds: this.stepSeconds, minuteBucket, url,
+    });
 
     await Promise.all(
       Array.from({ length: this.count }, (_, i) =>
@@ -55,6 +59,7 @@ export class Dispatcher {
       ),
     );
 
+    log.info("dispatch_complete", { enqueued: this.count, minuteBucket });
     return { enqueued: this.count };
   }
 }

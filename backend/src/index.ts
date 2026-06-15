@@ -8,6 +8,7 @@ import { R2, R2MatchStateStore } from "./r2.js";
 import { buildApp } from "./routes.js";
 import { Store } from "./store.js";
 import { Dispatcher } from "./tasks.js";
+import { log } from "./log.js";
 
 const store = new Store();
 const fcm = new Fcm();
@@ -23,7 +24,7 @@ celebrations.start();
 
 const app = buildApp({ store, fcm, poller, dispatcher, catalog, celebrations });
 const server = app.listen(env.port, () => {
-  console.log(`alldayidreamaboutsports-backend listening on :${env.port}`);
+  log.info("backend_listening", { port: env.port });
 });
 
 process.on("SIGTERM", async () => {
