@@ -290,7 +290,7 @@ final class OverlayManager: ObservableObject {
         panel.level = .statusBar
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
         panel.ignoresMouseEvents = clickThrough
-        panel.sharingType = .none // celebrations never photobomb screen shares
+        panel.sharingType = .readOnly
         panel.isFloatingPanel = true
         panel.becomesKeyOnlyIfNeeded = true
         return panel
