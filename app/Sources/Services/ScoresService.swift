@@ -25,6 +25,10 @@ struct CDNScoresClient: ScoresProviding {
         return try await fetch("fixtures-\(day).json", as: FixturesPayload.self).matches
     }
 
+    func fetchFixture(fixtureId: Int) async throws -> Fixture {
+        try await fetch("matches/\(fixtureId).json", as: Fixture.self)
+    }
+
     func fetchCelebrations(fixtureId: Int) async throws -> [String: Int] {
         do {
             return try await fetch("celebrate/\(fixtureId).json", as: CelebrationTotals.self).totals

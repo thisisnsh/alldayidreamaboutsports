@@ -100,6 +100,14 @@ struct Fixture: Codable, Identifiable, Hashable {
     var id: Int { fixtureId }
     var isLive: Bool { status == "LIVE" || status == "HALF_TIME" }
     var kickoff: Date? { ISO8601DateFormatter().date(from: kickoffISO) }
+    var score: Score { Score(home: home.goals, away: away.goals) }
+
+    func needsFrequentRefresh(at now: Date = Date()) -> Bool {
+        if isLive { return true }
+        guard status == "SCHEDULED", let kickoff else { return false }
+        let untilKickoff = kickoff.timeIntervalSince(now)
+        return untilKickoff <= 60 && untilKickoff > -15 * 60
+    }
 
     /// Competition stage from API-Football's `league.round`.
     /// "Group A - 1" → "Group A · MD1"; knockout rounds ("Round of 16",
@@ -121,6 +129,11 @@ struct Fixture: Codable, Identifiable, Hashable {
     func involves(_ ids: Set<Int>) -> Bool {
         ids.contains(home.id) || ids.contains(away.id)
     }
+}
+
+struct Score: Codable, Hashable {
+    let home: Int
+    let away: Int
 }
 
 struct FixturesPayload: Codable {

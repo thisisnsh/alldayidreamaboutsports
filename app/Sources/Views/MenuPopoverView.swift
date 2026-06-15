@@ -186,6 +186,9 @@ struct MenuPopoverView: View {
                  : control.killMessage)
                 .font(.system(size: 13))
                 .multilineTextAlignment(.center)
+                .lineLimit(nil)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: 260)
                 .opacity(0.8)
             Button {
                 dismissMenu()

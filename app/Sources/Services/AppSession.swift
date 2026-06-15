@@ -19,6 +19,13 @@ final class AppSession: ObservableObject {
     private var api: BackendAPI { Services.api }
     private var scores: ScoresProviding { Services.scores }
     private let defaults = UserDefaults.standard
+    private var isRefreshingFixtures = false
+
+    private enum CacheKey {
+        static let fixtures = "cachedFixtures"
+        static let celebrationTotals = "cachedCelebrationTotals"
+        static let fixtureBootstrapDay = "fixtureBootstrapDay"
+    }
 
     var isSignedIn: Bool { profile != nil }
     /// Every catalog team, flattened — for id→team lookups across leagues.
@@ -57,6 +64,14 @@ final class AppSession: ObservableObject {
             prefs = stored
         }
         #endif
+        if let data = defaults.data(forKey: CacheKey.fixtures),
+           let stored = try? JSONDecoder().decode([Fixture].self, from: data) {
+            fixtures = stored
+        }
+        if let data = defaults.data(forKey: CacheKey.celebrationTotals),
+           let stored = try? JSONDecoder().decode([Int: [String: Int]].self, from: data) {
+            celebrationTotals = stored
+        }
         Task { await refreshCatalog() }
         // Fan teams sync with the backend ONCE per app start; every other
         // read is local. Changes go up via setFanTeams as they happen.
@@ -128,9 +143,11 @@ final class AppSession: ObservableObject {
     }
 
     /// `showLogin` is false for the kill-switch path, where the gate window
-    /// already covers the UI.
+    /// is replaced by maintenance content in the menu.
     func clearSession(showLogin: Bool) {
-        stopAllActivity()
+        if showLogin {
+            stopAllActivity()
+        }
         Services.google.signOut()
         Keychain.delete("sessionToken")
         defaults.removeObject(forKey: "profile")
@@ -197,26 +214,80 @@ final class AppSession: ObservableObject {
     }
 
     func refreshFixtures() async {
-        guard isSignedIn, ControlPlane.shared.isOperational else { return }
+        guard isSignedIn, ControlPlane.shared.isOperational, !isRefreshingFixtures else { return }
+        isRefreshingFixtures = true
+        defer { isRefreshingFixtures = false }
+
         let calendar = Calendar.current
         let now = Date()
-        let dates = [-1, 0, 1].compactMap { calendar.date(byAdding: .day, value: $0, to: now) }
-        var byId: [Int: Fixture] = [:]
-        for date in dates {
-            for fixture in (try? await scores.fetchFixtures(date: date)) ?? [] {
-                byId[fixture.fixtureId] = fixture
+        var byId = Dictionary(uniqueKeysWithValues: fixtures.map { ($0.fixtureId, $0) })
+
+        // Date files are the schedule bootstrap only. The frequent loop below
+        // polls individual match objects, not three full days of fixtures.
+        let bootstrapDay = ISO8601DateFormatter.dateOnly.string(from: now)
+        if defaults.string(forKey: CacheKey.fixtureBootstrapDay) != bootstrapDay {
+            let dates = [-1, 0, 1].compactMap { calendar.date(byAdding: .day, value: $0, to: now) }
+            var loadedAny = false
+            for date in dates {
+                guard let fetched = try? await scores.fetchFixtures(date: date) else { continue }
+                loadedAny = true
+                for fixture in fetched {
+                    // Preserve an active cached score until its individual
+                    // match read below, so a date bootstrap cannot hide a goal
+                    // transition and skip the corresponding celebration read.
+                    if byId[fixture.fixtureId]?.needsFrequentRefresh(at: now) == true {
+                        continue
+                    }
+                    byId[fixture.fixtureId] = fixture
+                }
+            }
+            if loadedAny {
+                defaults.set(bootstrapDay, forKey: CacheKey.fixtureBootstrapDay)
             }
         }
+
+        let refreshTargets = byId.values.filter {
+            $0.involves(fanTeamIds) && $0.needsFrequentRefresh(at: now)
+        }
+        for previous in refreshTargets {
+            guard let current = try? await scores.fetchFixture(fixtureId: previous.fixtureId) else { continue }
+            byId[current.fixtureId] = current
+
+            // Celebration totals only need a CDN read when a goal/VAR
+            // correction changes the score.
+            if previous.score != current.score,
+               let totals = try? await scores.fetchCelebrations(fixtureId: current.fixtureId) {
+                mergeCelebrationTotals(totals, fixtureId: current.fixtureId)
+            }
+        }
+
         fixtures = byId.values
             .filter { fixture in
                 fixture.kickoff.map { calendar.isDate($0, inSameDayAs: now) } == true
                     || (fixture.isLive && fixture.involves(fanTeamIds))
             }
             .sorted { ($0.kickoff ?? .distantFuture) < ($1.kickoff ?? .distantFuture) }
+        persistFixtureCache()
+    }
 
-        for fixture in fixtures where fixture.involves(fanTeamIds) {
-            celebrationTotals[fixture.fixtureId] =
-                (try? await scores.fetchCelebrations(fixtureId: fixture.fixtureId)) ?? [:]
+    func mergeCelebrationTotals(_ totals: [String: Int], fixtureId: Int) {
+        var cached = celebrationTotals[fixtureId] ?? [:]
+        for (teamId, total) in totals {
+            cached[teamId] = max(cached[teamId] ?? 0, total)
+        }
+        celebrationTotals[fixtureId] = cached
+        persistCelebrationCache()
+    }
+
+    private func persistFixtureCache() {
+        if let data = try? JSONEncoder().encode(fixtures) {
+            defaults.set(data, forKey: CacheKey.fixtures)
+        }
+    }
+
+    private func persistCelebrationCache() {
+        if let data = try? JSONEncoder().encode(celebrationTotals) {
+            defaults.set(data, forKey: CacheKey.celebrationTotals)
         }
     }
 }

@@ -29,6 +29,7 @@ protocol BackendAPI {
 protocol ScoresProviding {
     func fetchCatalog() async throws -> Catalog
     func fetchFixtures(date: Date) async throws -> [Fixture]
+    func fetchFixture(fixtureId: Int) async throws -> Fixture
     func fetchCelebrations(fixtureId: Int) async throws -> [String: Int]
     func fetchBackupConfig() async throws -> BackupConfig
 }

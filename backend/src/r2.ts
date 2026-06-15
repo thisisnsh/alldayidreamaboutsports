@@ -107,6 +107,7 @@ export class R2MatchStateStore {
         Key: this.key(state.fixtureId),
         Body: JSON.stringify(state),
         ContentType: "application/json",
+        CacheControl: "public, max-age=2",
         ...(etag ? { IfMatch: etag } : { IfNoneMatch: "*" }),
       }));
     } catch (error) {

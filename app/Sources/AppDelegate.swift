@@ -109,6 +109,7 @@ final class MenuPopoverController: NSObject, NSPopoverDelegate {
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
     private let popover = NSPopover()
     private var refreshTimer: Timer?
+    private var remoteConfigTimer: Timer?
     private var eventMonitor: Any?
 
     func install() {
@@ -129,7 +130,7 @@ final class MenuPopoverController: NSObject, NSPopoverDelegate {
         if popover.isShown {
             close()
         } else {
-            ControlPlane.shared.refreshRemoteConfig()
+            ControlPlane.shared.refreshRemoteConfig(ignoreCache: true)
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
             button.highlight(true)
             startRefreshing()
@@ -151,6 +152,9 @@ final class MenuPopoverController: NSObject, NSPopoverDelegate {
         // Guard the fetch/timer, not the monitor below — the signed-out popover
         // still needs the outside-click monitor to close.
         startFixtureRefreshing()
+        remoteConfigTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { _ in
+            Task { @MainActor in ControlPlane.shared.refreshRemoteConfig(ignoreCache: true) }
+        }
         // .transient doesn't reliably close the popover on outside clicks for
         // accessory-policy apps on macOS Sequoia+, so we add our own monitor.
         eventMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
@@ -161,17 +165,22 @@ final class MenuPopoverController: NSObject, NSPopoverDelegate {
     private func stopRefreshing() {
         refreshTimer?.invalidate()
         refreshTimer = nil
+        remoteConfigTimer?.invalidate()
+        remoteConfigTimer = nil
         if let monitor = eventMonitor {
             NSEvent.removeMonitor(monitor)
             eventMonitor = nil
         }
     }
 
-    func reconfigureFixtureRefreshing() {
+    func controlPlaneDidChange() {
         guard popover.isShown else { return }
         refreshTimer?.invalidate()
         refreshTimer = nil
         startFixtureRefreshing()
+        DispatchQueue.main.async { [weak self] in
+            self?.resizePopoverToContent()
+        }
     }
 
     private func startFixtureRefreshing() {
@@ -182,6 +191,16 @@ final class MenuPopoverController: NSObject, NSPopoverDelegate {
         refreshTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { _ in
             Task { await AppSession.shared.refreshFixtures() }
         }
+    }
+
+    private func resizePopoverToContent() {
+        guard let view = popover.contentViewController?.view else { return }
+        view.layoutSubtreeIfNeeded()
+        let fitting = view.fittingSize
+        popover.contentSize = NSSize(
+            width: 320,
+            height: min(max(fitting.height, 180), 520)
+        )
     }
 }
 

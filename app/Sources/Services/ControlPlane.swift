@@ -131,6 +131,7 @@ final class ControlPlane: ObservableObject {
                 AppSession.shared.clearSession(showLogin: false)
             }
             closeUtilityWindows()
+            MenuPopoverController.shared.controlPlaneDidChange()
             return
         }
         if updateRequired {
@@ -146,21 +147,38 @@ final class ControlPlane: ObservableObject {
                 AppSession.shared.signInError = nil
             }
         }
-        MenuPopoverController.shared.reconfigureFixtureRefreshing()
+        MenuPopoverController.shared.controlPlaneDidChange()
     }
 
     var isOperational: Bool { !killSwitch && !updateRequired }
 
     /// Real-time Remote Config is primary; this also gives a menu open an
     /// immediate recovery path after connectivity or sleep interruptions.
-    func refreshRemoteConfig() {
+    func refreshRemoteConfig(ignoreCache: Bool = false) {
         guard let rc = remoteConfig else { return }
-        rc.fetchAndActivate { [weak self] _, error in
+        let completion: (RemoteConfigFetchAndActivateStatus, Error?) -> Void = { [weak self] _, error in
             if let error {
                 NSLog("Remote Config refresh failed: %@", error.localizedDescription)
                 return
             }
             Task { @MainActor in self?.apply(rc) }
+        }
+        if ignoreCache {
+            rc.fetch(withExpirationDuration: 0) { [weak self] _, error in
+                if let error {
+                    NSLog("Remote Config refresh failed: %@", error.localizedDescription)
+                    return
+                }
+                rc.activate { _, error in
+                    if let error {
+                        NSLog("Remote Config activation failed: %@", error.localizedDescription)
+                        return
+                    }
+                    Task { @MainActor in self?.apply(rc) }
+                }
+            }
+        } else {
+            rc.fetchAndActivate(completionHandler: completion)
         }
     }
 
