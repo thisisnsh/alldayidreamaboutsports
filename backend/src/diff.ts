@@ -6,6 +6,12 @@ import type { MatchEvent, MatchEventType, MatchState } from "./types.js";
  * store layer can dedupe (publish-once guarantee lives in store.ts).
  */
 export function diffMatch(prev: MatchState | null, next: MatchState): MatchEvent[] {
+  // No previous state means the state file was deleted (or never written). If the
+  // match is already over, treat it as already processed — don't re-fire historical
+  // goals/cards/full-time. Same for a mid-match deletion: LIVE with no history
+  // would otherwise re-emit all goals scored so far.
+  if (prev === null && next.status === "FINISHED") return [];
+
   const events: MatchEvent[] = [];
   const base = {
     fixtureId: next.fixtureId,

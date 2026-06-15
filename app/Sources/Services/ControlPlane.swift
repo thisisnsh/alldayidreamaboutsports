@@ -5,7 +5,7 @@ import SwiftUI
 struct AnimationParams: Codable {
     var ballDropSeconds: Double = 1.5
     /// How long each notification set (and the ball with it) stays on screen.
-    var pillHoldSeconds: Double = 5
+    var pillHoldSeconds: Double = 7
     /// Notification set size — how many pills display at once.
     var notchStackMax: Int = 10
 }
