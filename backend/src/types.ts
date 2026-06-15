@@ -42,6 +42,8 @@ export interface MatchState {
   /** Competition stage from API-Football's `league.round` (e.g. "Group A - 1", "Round of 16"). */
   round?: string;
   kickoffISO: string;
+  /** 2nd-half kickoff (API `periods.second`); used by the poller's recently-finished gate. */
+  secondHalfStartISO?: string | null;
   status: MatchStatus;
   rawStatus: string; // API-Football short code (1H, HT, FT, ...)
   minute: number | null;

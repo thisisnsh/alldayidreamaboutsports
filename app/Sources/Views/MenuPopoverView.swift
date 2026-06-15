@@ -4,6 +4,7 @@ import SwiftUI
 /// followed teams (live scores + celebration counts), and actions.
 struct MenuPopoverView: View {
     @EnvironmentObject var session: AppSession
+    @ObservedObject private var control = ControlPlane.shared
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
@@ -26,15 +27,6 @@ struct MenuPopoverView: View {
         .background(AppBackground())
         .installsWindowOpener()
         .appTheme(session.prefs.settings.theme ?? .system)
-        // Every menu open refreshes match data — all of it comes from the
-        // CDN-cached JSON (R2, zero egress), never the backend API. Fan
-        // teams are deliberately NOT fetched here; they're local state.
-        .onAppear {
-            Task {
-                await session.refreshCatalog()
-                await session.refreshFixtures()
-            }
-        }
     }
 
     private func header(_ profile: Profile) -> some View {
@@ -69,10 +61,21 @@ struct MenuPopoverView: View {
 
     private var fixturesSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Today's matches")
-                .font(.caption)
-                .fontWeight(.semibold)
-                .opacity(0.7)
+            HStack {
+                Text("Today's matches")
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                    .opacity(0.7)
+                Spacer()
+                if !control.autoRefreshEnabled {
+                    Button {
+                        Task { await session.refreshFixtures() }
+                    } label: {
+                        Image(systemName: "arrow.clockwise").font(.caption).opacity(0.5)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
             let shown = session.fixtures.filter { $0.involves(session.fanTeamIds) }
             if shown.isEmpty {
                 Text(session.fixtures.isEmpty
@@ -91,6 +94,7 @@ struct MenuPopoverView: View {
     private var actions: some View {
         VStack(alignment: .leading, spacing: 8) {
             Button {
+                Task { await session.refreshCatalog() }
                 dismissMenu()
                 openWindow(id: WindowID.teamPicker)
                 NSApp.activate(ignoringOtherApps: true)
@@ -220,9 +224,6 @@ private struct FixtureRow: View {
         .buttonStyle(.hoverHighlight)
         .onHover { over in
             withAnimation(.easeOut(duration: 0.15)) { hovering = over }
-            if over, session.celebrationTotals[fixture.fixtureId] == nil {
-                Task { await session.loadCelebrations(fixtureId: fixture.fixtureId, retry: true) }
-            }
         }
     }
 

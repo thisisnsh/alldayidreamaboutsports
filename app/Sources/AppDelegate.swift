@@ -62,6 +62,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    func applicationWillTerminate(_ notification: Notification) {
+        AppSession.shared.stopAllActivity()
+        ControlPlane.shared.stop()
+    }
+
     // App is invisible except the menu bar — reopening from Finder/Spotlight
     // should surface something useful.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
@@ -92,6 +97,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
 /// AppKit owns the status item so a transient popover closes on focus loss and
 /// always clears the status button's highlighted state.
+@MainActor
 final class MenuPopoverController: NSObject, NSPopoverDelegate {
     static let shared = MenuPopoverController()
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
@@ -135,9 +141,16 @@ final class MenuPopoverController: NSObject, NSPopoverDelegate {
     }
 
     private func startRefreshing() {
-        Task { await AppSession.shared.refreshFixtures() }
-        refreshTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { _ in
+        // Guard the fetch/timer, not the monitor below — the signed-out popover
+        // still needs the outside-click monitor to close.
+        if AppSession.shared.isSignedIn, ControlPlane.shared.isOperational {
             Task { await AppSession.shared.refreshFixtures() }
+            if ControlPlane.shared.autoRefreshEnabled {
+                let interval = max(1, ControlPlane.shared.autoRefreshSeconds)
+                refreshTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { _ in
+                    Task { await AppSession.shared.refreshFixtures() }
+                }
+            }
         }
         // .transient doesn't reliably close the popover on outside clicks for
         // accessory-policy apps on macOS Sequoia+, so we add our own monitor.

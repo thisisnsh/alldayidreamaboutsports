@@ -1,13 +1,19 @@
 import { describe, expect, it, vi } from "vitest";
-import { isLive, partitionFixtures, Poller, utcPollRange } from "../src/poller.js";
+import { isLive, isRecentlyFinished, partitionFixtures, Poller, utcPollRange } from "../src/poller.js";
 import type { MatchState } from "../src/types.js";
 
-function state(fixtureId: number, kickoffISO: string, status: MatchState["status"] = "SCHEDULED"): MatchState {
+function state(
+  fixtureId: number,
+  kickoffISO: string,
+  status: MatchState["status"] = "SCHEDULED",
+  extra: Partial<MatchState> = {},
+): MatchState {
   return {
     fixtureId, leagueId: 1, season: 2026, kickoffISO, status,
-    rawStatus: status === "LIVE" ? "1H" : "NS", minute: null,
-    home: { id: 1, name: "A", goals: 0, yellowCards: 0, redCards: 0 },
-    away: { id: 2, name: "B", goals: 0, yellowCards: 0, redCards: 0 },
+    rawStatus: status === "LIVE" ? "1H" : status === "FINISHED" ? "FT" : "NS", minute: null,
+    home: { id: 1, name: "A", goals: 0, yellowCards: 0, redCards: 0, yellowCardEvents: [], redCardEvents: [] },
+    away: { id: 2, name: "B", goals: 0, yellowCards: 0, redCards: 0, yellowCardEvents: [], redCardEvents: [] },
+    ...extra,
   };
 }
 
@@ -38,13 +44,98 @@ describe("Poller", () => {
       save: vi.fn(async () => { calls.push("save"); }),
     };
     const fcm = { publishEvent: vi.fn(async () => { calls.push("fcm"); }) };
-    const r2 = { putJson: vi.fn().mockResolvedValue(undefined) };
+    const r2 = { putJsonIfChanged: vi.fn().mockResolvedValue(undefined) };
     const poller = new Poller(provider as never, stateStore as never, fcm as never, r2 as never);
 
     const result = await poller.fetchOnce();
 
     expect(result).toEqual({ events: 1, live: 1 });
-    expect(r2.putJson).toHaveBeenCalledWith("fixtures-2026-06-14.json", expect.anything(), 10);
+    expect(r2.putJsonIfChanged).toHaveBeenCalledWith("fixtures-2026-06-14.json", expect.anything(), 10);
     expect(calls).toEqual(["fcm", "save"]);
+  });
+
+  it("fires FULL_TIME and saves when a live match flips to FINISHED", async () => {
+    const prev = state(1, "2026-06-14T01:00:00Z", "LIVE");
+    const now = new Date();
+    const finished = state(1, now.toISOString(), "FINISHED", {
+      secondHalfStartISO: new Date(now.getTime() - 60 * 60 * 1000).toISOString(), // 1h ago
+    });
+    const provider = { fixturesForRange: vi.fn().mockResolvedValue([finished]) };
+    const stateStore = {
+      load: vi.fn().mockResolvedValue({ state: prev, etag: "e1" }),
+      save: vi.fn().mockResolvedValue(undefined),
+    };
+    const fcm = { publishEvent: vi.fn().mockResolvedValue(undefined) };
+    const r2 = { putJsonIfChanged: vi.fn().mockResolvedValue(undefined) };
+    const poller = new Poller(provider as never, stateStore as never, fcm as never, r2 as never);
+
+    const result = await poller.fetchOnce();
+
+    expect(result.events).toBe(1);
+    expect(fcm.publishEvent).toHaveBeenCalledWith(expect.objectContaining({ type: "FULL_TIME" }));
+    expect(stateStore.save).toHaveBeenCalledTimes(1);
+  });
+
+  it("skips SCHEDULED and long-finished fixtures: no R2 read, no save", async () => {
+    const scheduled = state(1, "2026-06-14T20:00:00Z", "SCHEDULED");
+    const oldFinished = state(2, "2020-01-01T00:00:00Z", "FINISHED", {
+      secondHalfStartISO: "2020-01-01T01:00:00Z",
+    });
+    const provider = { fixturesForRange: vi.fn().mockResolvedValue([scheduled, oldFinished]) };
+    const stateStore = { load: vi.fn(), save: vi.fn() };
+    const fcm = { publishEvent: vi.fn() };
+    const r2 = { putJsonIfChanged: vi.fn().mockResolvedValue(undefined) };
+    const poller = new Poller(provider as never, stateStore as never, fcm as never, r2 as never);
+
+    const result = await poller.fetchOnce();
+
+    expect(result.events).toBe(0);
+    expect(stateStore.load).not.toHaveBeenCalled();
+    expect(stateStore.save).not.toHaveBeenCalled();
+  });
+
+  it("skips the save when the loaded state is unchanged", async () => {
+    const now = new Date();
+    const finished = state(1, now.toISOString(), "FINISHED", {
+      secondHalfStartISO: new Date(now.getTime() - 60 * 60 * 1000).toISOString(),
+    });
+    const provider = { fixturesForRange: vi.fn().mockResolvedValue([finished]) };
+    const stateStore = {
+      load: vi.fn().mockResolvedValue({ state: finished, etag: "e1" }),
+      save: vi.fn(),
+    };
+    const fcm = { publishEvent: vi.fn() };
+    const r2 = { putJsonIfChanged: vi.fn().mockResolvedValue(undefined) };
+    const poller = new Poller(provider as never, stateStore as never, fcm as never, r2 as never);
+
+    const result = await poller.fetchOnce();
+
+    expect(result.events).toBe(0);
+    expect(stateStore.save).not.toHaveBeenCalled();
+  });
+});
+
+describe("isRecentlyFinished", () => {
+  const now = Date.parse("2026-06-14T20:00:00Z");
+
+  it("is false for non-finished", () => {
+    expect(isRecentlyFinished(state(1, "2026-06-14T18:00:00Z", "LIVE"), now)).toBe(false);
+  });
+
+  it("is true within 2.5h of 2nd-half start", () => {
+    const m = state(1, "2026-06-14T18:00:00Z", "FINISHED", { secondHalfStartISO: "2026-06-14T18:45:00Z" });
+    expect(isRecentlyFinished(m, now)).toBe(true);
+  });
+
+  it("is false well past 2.5h of 2nd-half start", () => {
+    const m = state(1, "2026-06-14T12:00:00Z", "FINISHED", { secondHalfStartISO: "2026-06-14T12:45:00Z" });
+    expect(isRecentlyFinished(m, now)).toBe(false);
+  });
+
+  it("falls back to kickoff + 4h when 2nd-half start is absent", () => {
+    const within = state(1, "2026-06-14T17:00:00Z", "FINISHED", { secondHalfStartISO: null });
+    const past = state(2, "2026-06-14T10:00:00Z", "FINISHED", { secondHalfStartISO: null });
+    expect(isRecentlyFinished(within, now)).toBe(true);
+    expect(isRecentlyFinished(past, now)).toBe(false);
   });
 });

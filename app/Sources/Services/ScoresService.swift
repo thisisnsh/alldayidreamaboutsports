@@ -46,6 +46,8 @@ struct BackupConfig: Codable {
     let killSwitch: Bool?
     let message: String?
     let minBuild: Int?
+    let autoRefreshEnabled: Bool?
+    let autoRefreshSeconds: Double?
 }
 
 extension ISO8601DateFormatter {

@@ -23,6 +23,20 @@ export function isLive(match: MatchState): boolean {
   return match.status === "LIVE" || match.status === "HALF_TIME";
 }
 
+const FINISHED_AFTER_2H_MS = 2.5 * 60 * 60 * 1000; // > ET(30) + breaks + pens(~15) after 2nd-half KO
+const FINISHED_AFTER_KO_MS = 4 * 60 * 60 * 1000; // fallback when periods.second is absent
+
+// API-Football gives no finish time, so a just-finished match (still worth
+// diffing for FULL_TIME) is detected by 2nd-half-kickoff recency, falling back
+// to scheduled kickoff. Old results drop out and stop costing a read.
+export function isRecentlyFinished(match: MatchState, now = Date.now()): boolean {
+  if (match.status !== "FINISHED") return false;
+  if (match.secondHalfStartISO) {
+    return now - Date.parse(match.secondHalfStartISO) < FINISHED_AFTER_2H_MS;
+  }
+  return now - Date.parse(match.kickoffISO) < FINISHED_AFTER_KO_MS;
+}
+
 export class Poller {
   constructor(
     private readonly provider: ScoreProvider,
@@ -46,13 +60,10 @@ export class Poller {
       if (!partitions.has(date)) partitions.set(date, []);
     }
     await Promise.all([...partitions].map(([date, matches]) =>
-      this.r2.putJson(`fixtures-${date}.json`, {
-        generatedAt: new Date().toISOString(),
-        matches,
-      }, 10),
+      this.r2.putJsonIfChanged(`fixtures-${date}.json`, { matches }, 10),
     ));
 
-    for (const match of fixtures) {
+    for (const match of fixtures.filter((m) => isLive(m) || isRecentlyFinished(m))) {
       const previous = await this.state.load(match.fixtureId);
       const events = diffMatch(previous.state, match);
       for (const event of events) {
@@ -60,6 +71,8 @@ export class Poller {
         await this.fcm.publishEvent(event);
         totalEvents++;
       }
+      // Unchanged vs the loaded R2 state — skip the write.
+      if (JSON.stringify(previous.state) === JSON.stringify(match)) continue;
       try {
         await this.state.save(match, previous.etag);
       } catch (error) {

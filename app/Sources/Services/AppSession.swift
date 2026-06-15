@@ -19,8 +19,6 @@ final class AppSession: ObservableObject {
     private var api: BackendAPI { Services.api }
     private var scores: ScoresProviding { Services.scores }
     private let defaults = UserDefaults.standard
-    private var celebrationLoads: [Int: Task<[String: Int]?, Never>] = [:]
-    private var catalogTimer: Timer?
 
     var isSignedIn: Bool { profile != nil }
     /// Every catalog team, flattened — for id→team lookups across leagues.
@@ -60,9 +58,6 @@ final class AppSession: ObservableObject {
         }
         #endif
         Task { await refreshCatalog() }
-        catalogTimer = Timer.scheduledTimer(withTimeInterval: 12 * 3600, repeats: true) { _ in
-            Task { await AppSession.shared.refreshCatalog() }
-        }
         // Fan teams sync with the backend ONCE per app start; every other
         // read is local. Changes go up via setFanTeams as they happen.
         Task { await syncFanTeamsOnLaunch() }
@@ -103,6 +98,7 @@ final class AppSession: ObservableObject {
                 prefs.fanOf = response.prefs.fanOf
                 persistPrefs()
                 PushService.shared.syncTopics(to: fanTeamIds)
+                await refreshCatalog()
             } catch {
                 signInError = error.localizedDescription
             }
@@ -116,6 +112,13 @@ final class AppSession: ObservableObject {
     }
 
     func signOut() {
+        clearSession(showLogin: true)
+    }
+
+    /// `showLogin` is false for the kill-switch path, where the gate window
+    /// already covers the UI.
+    func clearSession(showLogin: Bool) {
+        stopAllActivity()
         Services.google.signOut()
         Keychain.delete("sessionToken")
         defaults.removeObject(forKey: "profile")
@@ -128,7 +131,13 @@ final class AppSession: ObservableObject {
         // Signed out = silent: no topics, nothing left on screen.
         PushService.shared.syncTopics(to: [])
         OverlayManager.shared.dismissAll()
-        openWindow(WindowID.login)
+        if showLogin { openWindow(WindowID.login) }
+    }
+
+    /// Closes the menu (killing its refresh timer). Leaves ControlPlane polling
+    /// so the app can recover from a kill switch.
+    func stopAllActivity() {
+        MenuPopoverController.shared.close()
     }
 
     func deleteAccount() async {
@@ -167,6 +176,7 @@ final class AppSession: ObservableObject {
     // MARK: Data refresh
 
     func refreshCatalog() async {
+        guard isSignedIn, ControlPlane.shared.isOperational else { return }
         guard let catalog = try? await scores.fetchCatalog(), !catalog.leagues.isEmpty else { return }
         leagues = catalog.leagues
         teamsByLeague = Dictionary(
@@ -175,6 +185,7 @@ final class AppSession: ObservableObject {
     }
 
     func refreshFixtures() async {
+        guard isSignedIn, ControlPlane.shared.isOperational else { return }
         let calendar = Calendar.current
         let now = Date()
         let dates = [-1, 0, 1].compactMap { calendar.date(byAdding: .day, value: $0, to: now) }
@@ -192,20 +203,8 @@ final class AppSession: ObservableObject {
             .sorted { ($0.kickoff ?? .distantFuture) < ($1.kickoff ?? .distantFuture) }
 
         for fixture in fixtures where fixture.involves(fanTeamIds) {
-            await loadCelebrations(fixtureId: fixture.fixtureId)
+            celebrationTotals[fixture.fixtureId] =
+                (try? await scores.fetchCelebrations(fixtureId: fixture.fixtureId)) ?? [:]
         }
-    }
-
-    func loadCelebrations(fixtureId: Int, retry: Bool = false) async {
-        if !retry, celebrationTotals[fixtureId] != nil { return }
-        if let existing = celebrationLoads[fixtureId] {
-            if let totals = await existing.value { celebrationTotals[fixtureId] = totals }
-            return
-        }
-        let task = Task { try? await scores.fetchCelebrations(fixtureId: fixtureId) }
-        celebrationLoads[fixtureId] = task
-        let totals = await task.value
-        celebrationLoads[fixtureId] = nil
-        if let totals { celebrationTotals[fixtureId] = totals }
     }
 }
