@@ -70,12 +70,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // App is invisible except the menu bar — reopening from Finder/Spotlight
     // should surface something useful.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
-        guard ControlPlane.shared.isOperational else {
-            if ControlPlane.shared.updateRequired {
-                openWindow(WindowID.gate)
-            }
-            return false
-        }
+        guard ControlPlane.shared.isOperational else { return false }
         openWindow(AppSession.shared.isSignedIn ? WindowID.settings : WindowID.login)
         return false
     }
@@ -133,7 +128,9 @@ final class MenuPopoverController: NSObject, NSPopoverDelegate {
             ControlPlane.shared.refreshRemoteConfig(ignoreCache: true)
             popover.contentSize = NSSize(
                 width: 320,
-                height: AppSession.shared.isSignedIn ? 520 : (ControlPlane.shared.killSwitch ? 300 : 200)
+                height: AppSession.shared.isSignedIn
+                    ? 520
+                    : (ControlPlane.shared.killSwitch || ControlPlane.shared.updateRequired ? 300 : 200)
             )
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
             button.highlight(true)
@@ -198,7 +195,7 @@ final class MenuPopoverController: NSObject, NSPopoverDelegate {
 
 /// SwiftUI utility windows are separate scenes, but maintenance should live
 /// only in the menu bar popover.
-func closeUtilityWindows(titles: Set<String> = ["Sign In", "Become a Fan", "Settings", "Update Required"]) {
+func closeUtilityWindows(titles: Set<String> = ["Sign In", "Become a Fan", "Settings"]) {
     for window in NSApp.windows where titles.contains(window.title) {
         window.close()
     }
@@ -208,14 +205,11 @@ func closeUtilityWindows(titles: Set<String> = ["Sign In", "Become a Fan", "Sett
 func openWindow(_ id: String) {
     DispatchQueue.main.async {
         if ControlPlane.shared.killSwitch,
-           [WindowID.login, WindowID.teamPicker, WindowID.settings, WindowID.gate].contains(id) {
+           [WindowID.login, WindowID.teamPicker, WindowID.settings].contains(id) {
             return
         }
         if ControlPlane.shared.updateRequired,
            [WindowID.login, WindowID.teamPicker, WindowID.settings].contains(id) {
-            return
-        }
-        if id == WindowID.gate, !ControlPlane.shared.updateRequired {
             return
         }
         NSApp.activate(ignoringOtherApps: true)

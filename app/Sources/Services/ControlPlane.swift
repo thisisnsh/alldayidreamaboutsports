@@ -135,13 +135,12 @@ final class ControlPlane: ObservableObject {
         }
         if updateRequired {
             OverlayManager.shared.dismissAll()
-            AppSession.shared.stopAllActivity()
-            closeUtilityWindows(titles: ["Sign In", "Become a Fan", "Settings"])
-            if !wasUpdateRequired || wasKilled {
-                openWindow(WindowID.gate)
+            if !wasUpdateRequired || AppSession.shared.isSignedIn {
+                AppSession.shared.clearSession(showLogin: false)
             }
+            closeUtilityWindows()
+            return
         } else {
-            closeUtilityWindows(titles: ["Update Required"])
             if wasKilled || wasUpdateRequired {
                 AppSession.shared.signInError = nil
             }
