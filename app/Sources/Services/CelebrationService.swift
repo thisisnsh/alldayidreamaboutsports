@@ -33,7 +33,10 @@ final class CelebrationService {
     }
 
     private func flush() {
-        guard !targets.isEmpty, taps > 0, ControlPlane.shared.celebrationEnabled else {
+        guard !targets.isEmpty, taps > 0,
+              ControlPlane.shared.celebrationEnabled,
+              ControlPlane.shared.isOperational,
+              AppSession.shared.isSignedIn else {
             targets = []
             taps = 0
             return

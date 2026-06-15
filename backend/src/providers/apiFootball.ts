@@ -29,7 +29,12 @@ interface ApiTeamRow {
 }
 
 interface ApiFixture {
-  fixture: { id: number; date: string; status: { short: string; elapsed: number | null } };
+  fixture: {
+    id: number;
+    date: string;
+    periods?: { first: number | null; second: number | null };
+    status: { short: string; elapsed: number | null };
+  };
   league: { id: number; season: number; round: string };
   teams: { home: { id: number; name: string }; away: { id: number; name: string } };
   goals: { home: number | null; away: number | null };
@@ -170,6 +175,9 @@ export class ApiFootballProvider implements ScoreProvider {
       season: f.league.season,
       round: f.league.round,
       kickoffISO: f.fixture.date,
+      secondHalfStartISO: f.fixture.periods?.second
+        ? new Date(f.fixture.periods.second * 1000).toISOString()
+        : null,
       status: STATUS_MAP[f.fixture.status.short] ?? "OTHER",
       rawStatus: f.fixture.status.short,
       minute: f.fixture.status.elapsed,

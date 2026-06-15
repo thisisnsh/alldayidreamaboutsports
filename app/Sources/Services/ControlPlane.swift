@@ -23,6 +23,8 @@ final class ControlPlane: ObservableObject {
     @Published var updateRequired = false
     @Published var celebrationEnabled = true
     @Published var animationParams = AnimationParams()
+    @Published var autoRefreshEnabled = false
+    @Published var autoRefreshSeconds: Double = 5
 
     private var backupTimer: Timer?
 
@@ -53,6 +55,9 @@ final class ControlPlane: ObservableObject {
         killSwitch = rc["kill_switch"].boolValue
         killMessage = rc["kill_message"].stringValue
         celebrationEnabled = rc["celebration_enabled"].boolValue
+        autoRefreshEnabled = rc["auto_refresh_enabled"].boolValue
+        let secs = rc["auto_refresh_seconds"].numberValue.doubleValue
+        autoRefreshSeconds = secs >= 1 ? secs : 5
         let minBuild = rc["min_build"].numberValue.intValue
         if minBuild > 0 {
             updateRequired = AppEnvironment.buildNumber < minBuild
@@ -73,15 +78,26 @@ final class ControlPlane: ObservableObject {
         if let minBuild = config.minBuild, AppEnvironment.buildNumber < minBuild {
             updateRequired = true
         }
+        if let enabled = config.autoRefreshEnabled { autoRefreshEnabled = enabled }
+        if let secs = config.autoRefreshSeconds, secs >= 1 { autoRefreshSeconds = secs }
         reactToState()
     }
 
     private func reactToState() {
-        if killSwitch || updateRequired {
-            OverlayManager.shared.dismissAll()
-            openWindow(WindowID.gate)
-        }
+        guard killSwitch || updateRequired else { return }
+        // Stop the app, don't just show the gate. ControlPlane keeps polling so
+        // it can recover when the switch clears.
+        OverlayManager.shared.dismissAll()
+        AppSession.shared.stopAllActivity()
+        if killSwitch { AppSession.shared.clearSession(showLogin: false) }
+        openWindow(WindowID.gate)
     }
 
     var isOperational: Bool { !killSwitch && !updateRequired }
+
+    /// For app termination only — the kill switch must keep polling to recover.
+    func stop() {
+        backupTimer?.invalidate()
+        backupTimer = nil
+    }
 }

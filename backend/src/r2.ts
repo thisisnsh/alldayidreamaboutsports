@@ -13,6 +13,8 @@ export class R2ConflictError extends Error {}
 export class R2 {
   private readonly client: S3Client;
   private readonly bucket: string;
+  /** Last-written body per key; best-effort (per-instance, empty on cold start). */
+  private readonly writeCache = new Map<string, string>();
 
   constructor(client?: S3Client, bucket?: string) {
     this.bucket = bucket ?? env.r2.scoresBucket;
@@ -38,6 +40,14 @@ export class R2 {
         CacheControl: `public, max-age=${maxAgeSeconds}`,
       }),
     );
+  }
+
+  /** Skips the PUT when the value matches the last write of this key in-process. */
+  async putJsonIfChanged(key: string, value: unknown, maxAgeSeconds: number): Promise<void> {
+    const body = JSON.stringify(value);
+    if (this.writeCache.get(key) === body) return;
+    await this.putJson(key, value, maxAgeSeconds);
+    this.writeCache.set(key, body);
   }
 
   async getJson<T>(key: string): Promise<T | null> {

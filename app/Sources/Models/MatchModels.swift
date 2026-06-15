@@ -124,7 +124,6 @@ struct Fixture: Codable, Identifiable, Hashable {
 }
 
 struct FixturesPayload: Codable {
-    let generatedAt: String
     let matches: [Fixture]
 }
 
