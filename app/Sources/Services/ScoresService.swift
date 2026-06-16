@@ -87,9 +87,26 @@ final class ScoresETagStore {
 }
 
 extension ISO8601DateFormatter {
+    /// Formats a date as `YYYY-MM-DD` in UTC. `fixtures-{date}.json` keys are
+    /// UTC dates (the backend writes them that way), so this must stay UTC —
+    /// ISO8601DateFormatter defaults to GMT, which is what we want here.
     static let dateOnly: ISO8601DateFormatter = {
         let f = ISO8601DateFormatter()
         f.formatOptions = [.withFullDate]
         return f
+    }()
+}
+
+extension Calendar {
+    /// Gregorian calendar pinned to UTC, for deriving the UTC day keys used by
+    /// `fixtures-{date}.json`. Day arithmetic must happen in the same zone the
+    /// keys are formatted in (`ISO8601DateFormatter.dateOnly`, also UTC) — using
+    /// the local calendar can yield the wrong UTC day near midnight/DST and miss
+    /// the today±1 file. (Display filtering, by contrast, uses the local zone so
+    /// "today's fixtures" follows the user's wall clock.)
+    static let utc: Calendar = {
+        var c = Calendar(identifier: .gregorian)
+        c.timeZone = TimeZone(identifier: "UTC") ?? c.timeZone
+        return c
     }()
 }

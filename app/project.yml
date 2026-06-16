@@ -63,6 +63,7 @@ targets:
           GOOGLE_REVERSED_CLIENT_ID: UNUSED_IN_DEBUG
           APP_API_BASE_URL: https://unused.invalid
           APP_SCORES_BASE_URL: https://unused.invalid
+          APP_FEED_URL: https://unused.invalid/appcast.xml
         Staging:
           SWIFT_ACTIVE_COMPILATION_CONDITIONS: STAGING
           CODE_SIGN_ENTITLEMENTS: App-Staging.entitlements
@@ -72,6 +73,8 @@ targets:
           # Staging domains deliberately do not point at production.
           APP_API_BASE_URL: https://api-staging.alldayidreamaboutsports.com
           APP_SCORES_BASE_URL: https://scores-staging.alldayidreamaboutsports.com
+          # Staging auto-updates from its own download bucket, never production's.
+          APP_FEED_URL: https://download-staging.alldayidreamaboutsports.com/appcast.xml
         Release:
           CODE_SIGN_ENTITLEMENTS: App.entitlements
           # Set these to the production OAuth plist's CLIENT_ID and
@@ -81,6 +84,7 @@ targets:
           GOOGLE_SERVICE_INFO_PLIST: GoogleService-Info-Production.plist
           APP_API_BASE_URL: https://api.alldayidreamaboutsports.com
           APP_SCORES_BASE_URL: https://scores.alldayidreamaboutsports.com
+          APP_FEED_URL: https://download.alldayidreamaboutsports.com/appcast.xml
     info:
       path: Info.plist
       properties:
@@ -96,8 +100,9 @@ targets:
         CFBundleURLTypes:
           - CFBundleURLSchemes:
               - $(GOOGLE_REVERSED_CLIENT_ID)
-        # Sparkle (same key layout as aithing-mac)
-        SUFeedURL: https://download.alldayidreamaboutsports.com/appcast.xml
+        # Sparkle (same key layout as aithing-mac). Feed URL is per-config so
+        # staging updates from its own bucket; see APP_FEED_URL above.
+        SUFeedURL: $(APP_FEED_URL)
         SUPublicEDKey: ghiXVL8NcRoV6i/FhLk/bHsoeC0afsLGzFMwHqhpQQ4=
         SUEnableAutomaticChecks: true
         SUScheduledCheckInterval: 3600

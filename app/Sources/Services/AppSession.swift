@@ -208,7 +208,14 @@ final class AppSession: ObservableObject {
 
     // MARK: Prefs
 
-    func setFanTeams(_ ids: [String]) {
+    func setFanTeams(_ rawIds: [String]) {
+        // Defensive cap (config-driven): the picker already blocks over-adding,
+        // but a stale roaming list could arrive longer than the current limit.
+        let maxFans = ControlPlane.shared.maxFanTeams
+        let ids = rawIds.count > maxFans ? Array(rawIds.prefix(maxFans)) : rawIds
+        if ids.count != rawIds.count {
+            AppLog.info(.prefs, "fan_teams_capped raw=\(rawIds.count) max=\(maxFans)")
+        }
         AppLog.info(.prefs, "fan_teams_changed old=\(prefs.footballTeams.sorted()) new=\(ids.sorted())")
         prefs.footballTeams = ids
         persistPrefs()
@@ -289,7 +296,10 @@ final class AppSession: ObservableObject {
         isBootstrappingFixtures = true
         defer { isBootstrappingFixtures = false }
 
-        let calendar = Calendar.current
+        // UTC: the fixtures-{date}.json keys are UTC days, so the today±1 math
+        // must be UTC too — the local calendar can pick the wrong day near
+        // midnight/DST and miss the +1 (or -1) file.
+        let calendar = Calendar.utc
         AppLog.info(.fixtures, "bootstrap_start cached=\(fixturesById.count) fan_teams=\(fanTeamIds.sorted())")
         let dates = [-1, 0, 1].compactMap { calendar.date(byAdding: .day, value: $0, to: now) }
         var loadedAny = false

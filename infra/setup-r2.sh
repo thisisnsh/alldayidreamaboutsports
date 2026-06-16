@@ -11,7 +11,9 @@ set -euo pipefail
 # public scores buckets: fixtures-*.json, matches/*.json, celebrate/*.json, catalog.json, config.json
 npx wrangler r2 bucket create alldayidreamaboutsports-staging-scores || true
 npx wrangler r2 bucket create alldayidreamaboutsports-scores || true
-# downloads bucket: app DMGs + appcast.xml (Sparkle feed)
+# downloads buckets: app DMGs + appcast.xml (Sparkle feed). Staging gets its
+# own so test releases never reach production's auto-update feed.
+npx wrangler r2 bucket create alldayidreamaboutsports-staging-downloads || true
 npx wrangler r2 bucket create alldayidreamaboutsports-downloads || true
 
 # ── §0 (a) Disable every bucket's public r2.dev URL ──────────────────────────
@@ -25,6 +27,7 @@ npx wrangler r2 bucket create alldayidreamaboutsports-downloads || true
 for bucket in \
   alldayidreamaboutsports-staging-scores \
   alldayidreamaboutsports-scores \
+  alldayidreamaboutsports-staging-downloads \
   alldayidreamaboutsports-downloads; do
   echo "── Disabling public r2.dev URL on ${bucket}"
   npx wrangler r2 bucket dev-url disable "$bucket" || \
@@ -41,6 +44,7 @@ tooling can script are run above; the rest are explicit manual checklist items
 1. Add scores custom domains (R2 → bucket → Settings → Custom Domains):
    - alldayidreamaboutsports-staging-scores → scores-staging.alldayidreamaboutsports.com
    - alldayidreamaboutsports-scores → scores.alldayidreamaboutsports.com
+   - alldayidreamaboutsports-staging-downloads → download-staging.alldayidreamaboutsports.com
    - alldayidreamaboutsports-downloads → download.alldayidreamaboutsports.com
    (Custom domains route through Cloudflare's CDN: zero egress, cache enabled.)
 
@@ -86,7 +90,7 @@ tooling can script are run above; the rest are explicit manual checklist items
      curl -sI https://scores-staging.alldayidreamaboutsports.com/catalog.json \
        | grep -i '^cf-cache-status:'
 
-6. R2 API token (Object Read & Write, all three buckets) →
+6. R2 API token (Object Read & Write, all four buckets) →
    - each environment's backend secrets: r2-access-key-id / r2-secret-access-key / r2-endpoint
      (endpoint: https://<ACCOUNT_ID>.r2.cloudflarestorage.com)
    - local release env vars: R2_ENDPOINT / AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY
