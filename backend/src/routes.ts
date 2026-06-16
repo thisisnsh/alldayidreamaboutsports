@@ -3,12 +3,13 @@ import { z } from "zod";
 import { requireSchedulerOidc, requireSession, signSession, verifyGoogleIdToken } from "./auth.js";
 import type { CatalogService } from "./catalog.js";
 import type { CelebrationAggregator } from "./celebrations.js";
-import type { Fcm } from "./fcm.js";
+import { env } from "./env.js";
 import type { Poller } from "./poller.js";
+import { CACHE_CONTROL_LIVE, type R2 } from "./r2.js";
 import { FixedWindowRateLimiter } from "./rateLimit.js";
 import type { Store } from "./store.js";
 import type { Dispatcher } from "./tasks.js";
-import type { MatchEvent, UserPrefs } from "./types.js";
+import type { MatchState, Period, UserPrefs } from "./types.js";
 import { log } from "./log.js";
 
 const prefsSchema = z.object({
@@ -33,39 +34,29 @@ const celebrateSchema = z.object({
   taps: z.number().int().min(1).max(200),
 });
 
+// Writes a synthetic matches/{id}.json so the live overlay path can be exercised
+// end-to-end without any push. The fields mirror what the poller would produce.
 const testEventSchema = z.object({
-  type: z.enum([
-    "KICKOFF",
-    "GOAL",
-    "GOAL_CANCELLED",
-    "YELLOW_CARD",
-    "RED_CARD",
-    "HALF_TIME",
-    "EXTRA_TIME",
-    "PENALTY_KICK",
-    "PENALTY_SHOOTOUT",
-    "FULL_TIME",
-  ]),
   fixtureId: z.number().int().default(999999),
   leagueId: z.number().int().default(1),
+  rawStatus: z.string().default("2H"),
+  minute: z.number().int().nullable().default(73),
+  extra: z.number().int().nullable().default(null),
   homeTeamId: z.number().int().default(6), // Brazil
   awayTeamId: z.number().int().default(16), // Mexico
   homeName: z.string().default("Brazil"),
   awayName: z.string().default("Mexico"),
   homeGoals: z.number().int().default(1),
   awayGoals: z.number().int().default(0),
-  teamId: z.number().int().optional(),
-  player: z.string().optional(),
-  minute: z.number().int().optional(),
 });
 
 export interface Deps {
   store: Store;
-  fcm: Fcm;
   poller: Poller;
   dispatcher: Dispatcher;
   catalog: CatalogService;
   celebrations: CelebrationAggregator;
+  r2: R2;
 }
 
 function clientIp(req: Request): string {
@@ -86,7 +77,72 @@ function enforceRateLimit(limiter: FixedWindowRateLimiter, key: (req: Request) =
   };
 }
 
-export function buildApp({ store, fcm, poller, dispatcher, catalog, celebrations }: Deps): Express {
+// Minimal raw-status → (status, period, running) mapping for the synthetic test
+// match. Mirrors the provider's derivation for the codes a test would use.
+function syntheticPhase(rawStatus: string, minute: number | null): {
+  status: MatchState["status"]; period: Period; running: boolean;
+} {
+  switch (rawStatus) {
+    case "1H": return { status: "LIVE", period: "FIRST", running: true };
+    case "HT": return { status: "HALF_TIME", period: "HALF", running: false };
+    case "2H": return { status: "LIVE", period: "SECOND", running: true };
+    case "ET": return {
+      status: "LIVE", period: (minute ?? 0) <= 105 ? "EXTRA_FIRST" : "EXTRA_SECOND", running: true,
+    };
+    case "BT": return { status: "LIVE", period: "EXTRA_BREAK", running: false };
+    case "P": return { status: "LIVE", period: "PENALTIES", running: false };
+    case "FT": case "AET": case "PEN": return { status: "FINISHED", period: "FINISHED", running: false };
+    case "NS": case "TBD": return { status: "SCHEDULED", period: "PRE", running: false };
+    default: return { status: "OTHER", period: "OTHER", running: false };
+  }
+}
+
+/** Cache statuses that prove the edge — not R2 — served the request (§0). */
+const HEALTHY_CACHE_STATUS = new Set(["HIT", "REVALIDATED", "STALE", "UPDATING"]);
+
+export interface CacheProbe {
+  key: string;
+  httpStatus: number;
+  cacheStatus: string;
+  error?: string;
+}
+
+export interface CacheHealthResult {
+  ok: boolean;
+  probes: CacheProbe[];
+  unhealthy: CacheProbe[];
+}
+
+/**
+ * GETs a warm file (`catalog.json`) + each live `matches/{id}.json` on the
+ * scores hostname and reads `cf-cache-status`. Steady-state must be served by
+ * the edge (HIT/REVALIDATED/STALE/UPDATING); sustained MISS/BYPASS/DYNAMIC means
+ * users would reach R2 directly — the §0 catastrophe. Pure (takes `fetchImpl`)
+ * so it's unit-testable without the OIDC-guarded route.
+ */
+export async function probeCacheHealth(
+  scoresDomain: string,
+  fixtureIds: number[],
+  fetchImpl: typeof fetch = fetch,
+): Promise<CacheHealthResult> {
+  const base = scoresDomain.replace(/\/+$/, "");
+  const keys = ["catalog.json", ...fixtureIds.map((id) => `matches/${id}.json`)];
+  const probes = await Promise.all(keys.map(async (key): Promise<CacheProbe> => {
+    const url = `${base}/${key}`;
+    try {
+      const r = await fetchImpl(url, { method: "GET", cache: "no-store" as RequestCache });
+      const cacheStatus = (r.headers.get("cf-cache-status") ?? "UNKNOWN").toUpperCase();
+      await r.arrayBuffer().catch(() => undefined); // drain so the socket is reusable
+      return { key, httpStatus: r.status, cacheStatus };
+    } catch (err) {
+      return { key, httpStatus: 0, cacheStatus: "ERROR", error: (err as Error).message };
+    }
+  }));
+  const unhealthy = probes.filter((p) => !HEALTHY_CACHE_STATUS.has(p.cacheStatus));
+  return { ok: unhealthy.length === 0, probes, unhealthy };
+}
+
+export function buildApp({ store, poller, dispatcher, catalog, celebrations, r2 }: Deps): Express {
   const app = express();
   const signInRateLimiter = new FixedWindowRateLimiter(10, 60_000);
   const sessionRateLimiter = new FixedWindowRateLimiter(120, 60_000);
@@ -183,19 +239,59 @@ export function buildApp({ store, fcm, poller, dispatcher, catalog, celebrations
     }
   });
 
+  // E2E without push: write a synthetic matches/{id}.json so a polling client
+  // picks it up and the existing overlay/diff path fires off the file change.
   app.post("/internal/test-event", requireSchedulerOidc, async (req, res) => {
     const parsed = testEventSchema.safeParse(req.body ?? {});
     if (!parsed.success) return void res.status(400).json({ error: parsed.error.message });
     const d = parsed.data;
-    const event: MatchEvent = {
-      ...d,
-      eventId: `test:${d.fixtureId}:${d.type}:${Date.now()}`,
-      player: d.player ?? null,
-      minute: d.minute ?? null,
+    const phase = syntheticPhase(d.rawStatus, d.minute);
+    const now = new Date().toISOString();
+    const state: MatchState = {
+      fixtureId: d.fixtureId,
+      leagueId: d.leagueId,
+      season: env.season,
+      kickoffISO: now,
+      secondHalfStartISO: null,
+      status: phase.status,
+      rawStatus: d.rawStatus,
+      minute: d.minute,
+      extra: d.extra,
+      period: phase.period,
+      running: phase.running,
+      home: {
+        id: d.homeTeamId, name: d.homeName, goals: d.homeGoals,
+        yellowCards: 0, redCards: 0, yellowCardEvents: [], redCardEvents: [], goalEvents: [],
+      },
+      away: {
+        id: d.awayTeamId, name: d.awayName, goals: d.awayGoals,
+        yellowCards: 0, redCards: 0, yellowCardEvents: [], redCardEvents: [], goalEvents: [],
+      },
     };
-    await fcm.publishEvent(event);
-    log.info("test_event_complete", { eventId: event.eventId, type: event.type, fixtureId: event.fixtureId });
-    res.json({ ok: true, eventId: event.eventId });
+    await r2.putJson(`matches/${d.fixtureId}.json`, state, CACHE_CONTROL_LIVE);
+    log.info("test_event_complete", { fixtureId: d.fixtureId, rawStatus: d.rawStatus });
+    res.json({ ok: true, fixtureId: d.fixtureId });
+  });
+
+  // §0 enforcement probe (Cloud Scheduler every 5 min): GET a warm file +
+  // each live matches/{id}.json on the scores hostname and read `cf-cache-status`.
+  // Steady-state must be HIT/REVALIDATED (a lone MISS at a 5s boundary is fine);
+  // sustained MISS/BYPASS/DYNAMIC means the cache is broken → users would hit R2.
+  app.post("/internal/cache-health", requireSchedulerOidc, async (req, res) => {
+    const body = z.object({ fixtureIds: z.array(z.number().int()).max(64).default([]) })
+      .safeParse(req.body ?? {});
+    if (!body.success) return void res.status(400).json({ error: body.error.message });
+
+    const result = await probeCacheHealth(env.scoresDomain, body.data.fixtureIds);
+    // R2 Class B (read) ops baseline check: no per-request metric is available
+    // from this process (it needs CF/R2 analytics), so the dedicated Class B
+    // alarm lives in infra. TODO(infra): wire the R2 Class B ops alarm (§0).
+    if (!result.ok) {
+      log.error("cache_health_degraded", new Error("non-cache reads detected"), { ...result });
+      return void res.status(503).json(result);
+    }
+    log.info("cache_health_ok", { probed: result.probes.length });
+    res.json(result);
   });
 
   return app;

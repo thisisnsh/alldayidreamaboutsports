@@ -50,4 +50,31 @@ describe("CelebrationAggregator", () => {
     await flushing;
     expect(agg.pending().get(1)).toEqual({ "6": 4 });
   });
+
+  it("publishes exact (un-scaled) totals at sampleRate 1.0 with the live cache header", async () => {
+    const store = fakeStore(); // celebrationTotals -> { "6": 12 }
+    const r2 = fakeR2();
+    const agg = new CelebrationAggregator(store, r2 as never, 1500, 1.0);
+    agg.add(1, "6", 12);
+    await agg.flush();
+    expect(r2.putJson).toHaveBeenCalledWith(
+      "celebrate/1.json",
+      { totals: { "6": 12 } },
+      "public, max-age=5, stale-while-revalidate=25",
+    );
+  });
+
+  it("multiplies the sampled total back up by 1/sampleRate", async () => {
+    const store = fakeStore(); // sampled reported total -> { "6": 12 }
+    const r2 = fakeR2();
+    // 25% of clients reported → the estimated global total is 12 * 4 = 48.
+    const agg = new CelebrationAggregator(store, r2 as never, 1500, 0.25);
+    agg.add(1, "6", 12);
+    await agg.flush();
+    expect(r2.putJson).toHaveBeenCalledWith(
+      "celebrate/1.json",
+      { totals: { "6": 48 } },
+      "public, max-age=5, stale-while-revalidate=25",
+    );
+  });
 });

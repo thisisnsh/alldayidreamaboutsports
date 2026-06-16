@@ -1,4 +1,4 @@
-import type { MatchState, MatchStatus, PenaltyKick } from "../types.js";
+import type { MatchState, MatchStatus, PenaltyKick, Period } from "../types.js";
 import type { CatalogTeam, LeagueInfo, ScoreProvider } from "./types.js";
 import { log } from "../log.js";
 
@@ -20,6 +20,28 @@ const STATUS_MAP: Record<string, MatchStatus> = {
   PEN: "FINISHED",
 };
 
+/**
+ * Map the API-Football short code (+ elapsed for the two ET halves) to a
+ * fine-grained `Period`. ET is cumulative (91→105 first half, 106→120 second),
+ * so the split is on `elapsed <= 105` per §1.
+ */
+function derivePeriod(short: string, elapsed: number | null): Period {
+  switch (short) {
+    case "1H": return "FIRST";
+    case "HT": return "HALF";
+    case "2H": return "SECOND";
+    case "ET": return (elapsed ?? 0) <= 105 ? "EXTRA_FIRST" : "EXTRA_SECOND";
+    case "BT": return "EXTRA_BREAK";
+    case "P": return "PENALTIES";
+    case "NS":
+    case "TBD": return "PRE";
+    case "FT":
+    case "AET":
+    case "PEN": return "FINISHED";
+    default: return "OTHER"; // INT, LIVE (generic), postponed, cancelled, ...
+  }
+}
+
 interface ApiLeague {
   league: { id: number; name: string; type: string; logo: string };
   seasons: Array<{ year: number; current: boolean; end: string }>;
@@ -34,14 +56,14 @@ interface ApiFixture {
     id: number;
     date: string;
     periods?: { first: number | null; second: number | null };
-    status: { short: string; elapsed: number | null };
+    status: { short: string; elapsed: number | null; extra: number | null };
   };
   league: { id: number; season: number; round: string };
   teams: { home: { id: number; name: string }; away: { id: number; name: string } };
   goals: { home: number | null; away: number | null };
   score?: { penalty?: { home: number | null; away: number | null } };
   events?: Array<{
-    time: { elapsed: number | null };
+    time: { elapsed: number | null; extra: number | null };
     team: { id: number; name: string };
     player: { name: string | null };
     type: string;
@@ -147,13 +169,14 @@ export class ApiFootballProvider implements ScoreProvider {
   private toState(f: ApiFixture): MatchState {
     const homeId = f.teams.home.id;
     const awayId = f.teams.away.id;
+    type EventRecord = { player: string | null; minute: number | null; extra: number | null };
     const cards = {
-      home: { yellow: 0, red: 0, yellowEvents: [] as { player: string | null; minute: number | null }[], redEvents: [] as { player: string | null; minute: number | null }[] },
-      away: { yellow: 0, red: 0, yellowEvents: [] as { player: string | null; minute: number | null }[], redEvents: [] as { player: string | null; minute: number | null }[] },
+      home: { yellow: 0, red: 0, yellowEvents: [] as EventRecord[], redEvents: [] as EventRecord[] },
+      away: { yellow: 0, red: 0, yellowEvents: [] as EventRecord[], redEvents: [] as EventRecord[] },
     };
     const goals = {
-      home: [] as { player: string | null; minute: number | null }[],
-      away: [] as { player: string | null; minute: number | null }[],
+      home: [] as EventRecord[],
+      away: [] as EventRecord[],
     };
     let lastGoal: MatchState["lastGoal"];
     const kicks: PenaltyKick[] = [];
@@ -164,7 +187,7 @@ export class ApiFootballProvider implements ScoreProvider {
       const isShootoutKick =
         ev.type === "Goal" && /penalt/i.test(ev.detail) && /shootout/i.test(ev.comments ?? "");
       if (ev.type === "Card") {
-        const cardEv = { player: ev.player?.name ?? null, minute: ev.time.elapsed };
+        const cardEv = { player: ev.player?.name ?? null, minute: ev.time.elapsed, extra: ev.time.extra ?? null };
         if (ev.detail.startsWith("Yellow")) { cards[side].yellow++; cards[side].yellowEvents.push(cardEv); }
         else if (ev.detail.startsWith("Red")) { cards[side].red++; cards[side].redEvents.push(cardEv); }
       } else if (isShootoutKick) {
@@ -173,7 +196,7 @@ export class ApiFootballProvider implements ScoreProvider {
       } else if (ev.type === "Goal" && !/cancell/i.test(ev.detail) && !/missed/i.test(ev.detail)) {
         // Skip "Missed Penalty" — it never increments the score and must not
         // steal scorer attribution from a later real goal.
-        const goalEv = { player: ev.player?.name ?? null, minute: ev.time.elapsed };
+        const goalEv = { player: ev.player?.name ?? null, minute: ev.time.elapsed, extra: ev.time.extra ?? null };
         goals[side].push(goalEv);
         lastGoal = { teamId, ...goalEv };
       }
@@ -188,6 +211,12 @@ export class ApiFootballProvider implements ScoreProvider {
         : undefined;
 
     const status = STATUS_MAP[f.fixture.status.short] ?? "OTHER";
+    const short = f.fixture.status.short;
+    const elapsed = f.fixture.status.elapsed;
+    const extra = f.fixture.status.extra ?? null;
+    const period = derivePeriod(short, elapsed);
+    // The clock only ticks during the three playing halves.
+    const running = short === "1H" || short === "2H" || short === "ET";
     // While a match is in play, API-Football bumps the aggregate `goals`
     // counter a poll or two BEFORE the matching event (with the scorer) lands
     // in `events[]`. Counting from the events list instead means a GOAL is only
@@ -208,8 +237,11 @@ export class ApiFootballProvider implements ScoreProvider {
         ? new Date(f.fixture.periods.second * 1000).toISOString()
         : null,
       status,
-      rawStatus: f.fixture.status.short,
-      minute: f.fixture.status.elapsed,
+      rawStatus: short,
+      minute: elapsed,
+      extra,
+      period,
+      running,
       home: {
         id: homeId,
         name: f.teams.home.name,

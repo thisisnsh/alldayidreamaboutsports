@@ -1,5 +1,6 @@
+import { env } from "./env.js";
 import type { Store } from "./store.js";
-import type { R2 } from "./r2.js";
+import { CACHE_CONTROL_LIVE, type R2 } from "./r2.js";
 import { log } from "./log.js";
 
 /**
@@ -15,6 +16,9 @@ export class CelebrationAggregator {
     private readonly store: Store,
     private readonly r2: R2,
     private readonly flushMs = 1500,
+    // Only a `sampleRate` fraction of clients report taps; the published total is
+    // scaled back up by 1/sampleRate to estimate the global count. 1.0 = exact.
+    private readonly sampleRate = env.celebrationSampleRate,
   ) {}
 
   add(fixtureId: number, teamId: string, taps: number): void {
@@ -37,9 +41,15 @@ export class CelebrationAggregator {
     await Promise.all([...batch].map(async ([fixtureId, counts]) => {
       try {
         await this.store.addCelebrations(fixtureId, counts);
-        const totals = await this.store.celebrationTotals(fixtureId);
-        await this.r2.putJson(`celebrate/${fixtureId}.json`, { totals }, 10);
-        log.info("celebration_flush_complete", { fixtureId, counts, totals });
+        const sampled = await this.store.celebrationTotals(fixtureId);
+        // Scale the sampled (reported) totals up to an estimated global total.
+        const scale = this.sampleRate > 0 ? 1 / this.sampleRate : 1;
+        const totals: Record<string, number> = {};
+        for (const [team, n] of Object.entries(sampled)) {
+          totals[team] = Math.round(n * scale);
+        }
+        await this.r2.putJson(`celebrate/${fixtureId}.json`, { totals }, CACHE_CONTROL_LIVE);
+        log.info("celebration_flush_complete", { fixtureId, counts, sampled, totals });
       } catch (error) {
         log.error("celebration_flush_failed", error, { fixtureId, counts });
         const pending = this.buffer.get(fixtureId) ?? {};

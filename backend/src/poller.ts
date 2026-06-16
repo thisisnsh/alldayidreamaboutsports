@@ -1,7 +1,5 @@
-import { diffMatch } from "./diff.js";
-import { Fcm } from "./fcm.js";
 import type { ScoreProvider } from "./providers/types.js";
-import { R2, R2ConflictError, R2MatchStateStore } from "./r2.js";
+import { CACHE_CONTROL_LIVE, CACHE_CONTROL_LONG, R2, R2ConflictError, R2MatchStateStore } from "./r2.js";
 import type { MatchState } from "./types.js";
 import { log } from "./log.js";
 
@@ -57,16 +55,16 @@ export class Poller {
   constructor(
     private readonly provider: ScoreProvider,
     private readonly state: R2MatchStateStore,
-    private readonly fcm: Fcm,
     private readonly r2: R2,
   ) {}
 
-  // A single fetch: one provider read, publish dated fixtures, diff and notify.
-  // Cadence (e.g. every 5s) is driven externally by staggered Cloud Tasks (see
-  // tasks.ts) so the request returns immediately instead of sleeping/hogging CPU.
-  async fetchOnce(): Promise<{ events: number; live: number }> {
+  // A single fetch: one provider read, publish dated fixtures + per-match state
+  // files (the live source). Freshness is the short cache TTL on those files; no
+  // push, no diff, no purge. Cadence (e.g. every 5s) is driven externally by
+  // staggered Cloud Tasks (see tasks.ts) so the request returns immediately
+  // instead of sleeping/hogging CPU.
+  async fetchOnce(): Promise<{ live: number }> {
     const started = Date.now();
-    let totalEvents = 0;
 
     const range = utcPollRange();
     log.info("poll_start", range);
@@ -74,15 +72,24 @@ export class Poller {
     const liveCount = fixtures.filter(isLive).length;
     log.info("poll_provider_complete", { fixtures: fixtures.length, live: liveCount });
 
+    const eligible = fixtures.filter((m) => isStartingSoon(m) || isLive(m) || isRecentlyFinished(m));
+    // A date file gets the live (5s+SWR) TTL when it's today or holds any
+    // eligible match; otherwise the long (12h) schedule TTL.
+    const today = new Date().toISOString().slice(0, 10);
+    const liveDates = new Set<string>([today, ...eligible.map((m) => m.kickoffISO.slice(0, 10))]);
+
     const partitions = partitionFixtures(fixtures);
-    for (const date of [range.from, new Date().toISOString().slice(0, 10), range.to]) {
+    for (const date of [range.from, today, range.to]) {
       if (!partitions.has(date)) partitions.set(date, []);
     }
     await Promise.all([...partitions].map(([date, matches]) =>
-      this.r2.putJsonIfChanged(`fixtures-${date}.json`, { matches }, 10),
+      this.r2.putJsonIfChanged(
+        `fixtures-${date}.json`,
+        { matches },
+        liveDates.has(date) ? CACHE_CONTROL_LIVE : CACHE_CONTROL_LONG,
+      ),
     ));
 
-    const eligible = fixtures.filter((m) => isStartingSoon(m) || isLive(m) || isRecentlyFinished(m));
     log.info("poll_eligible_fixtures", {
       count: eligible.length,
       fixtures: eligible.map((m) => ({
@@ -101,18 +108,6 @@ export class Poller {
         });
         continue;
       }
-      const events = diffMatch(previous.state, match);
-      log.debug("match_diff_complete", {
-        fixtureId: match.fixtureId,
-        previousStatus: previous.state?.status ?? null,
-        nextStatus: match.status,
-        events: events.map((event) => ({ eventId: event.eventId, type: event.type })),
-      });
-      for (const event of events) {
-        log.info("match_event_detected", { event });
-        await this.fcm.publishEvent(event);
-        totalEvents++;
-      }
       // Unchanged vs the loaded R2 state — skip the write.
       if (JSON.stringify(previous.state) === JSON.stringify(match)) continue;
       try {
@@ -128,8 +123,8 @@ export class Poller {
       }
     }
     log.info("poll_complete", {
-      events: totalEvents, live: liveCount, durationMs: Date.now() - started,
+      live: liveCount, durationMs: Date.now() - started,
     });
-    return { events: totalEvents, live: liveCount };
+    return { live: liveCount };
   }
 }
