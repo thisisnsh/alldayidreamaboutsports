@@ -1,12 +1,325 @@
 #!/usr/bin/env bash
-# Cloudflare R2 buckets + custom domains. Requires wrangler authenticated
-# (`npx wrangler login`) against the alldayidreamaboutsports.com account.
+# Cloudflare R2 buckets, custom domains, CDN cache rules, Smart Tiered Cache,
+# and WAF rate limits.
 #
-# This script also runs the §0 "users hit cache, NEVER R2" enforcement checks
-# (see infra/README.md and the polling-cdn plan). The catastrophe it guards
-# against: clients reaching R2 directly or the edge cache breaking turns ~26
-# cached reads/s into ~200,000 R2 reads/s. The checks below are the tripwires.
+# Bucket creation uses wrangler because it is the most stable R2 bucket create
+# surface. The Cloudflare API configures the zone/bucket edge controls.
+#
+# Required for bucket creation:
+#   npx wrangler login
+#
+# Required for full Cloudflare API automation:
+#   CLOUDFLARE_API_TOKEN  token with R2 edit, Zone Settings Write, Cache Rules
+#                         Edit, and WAF/Rulesets edit permissions
+#   CLOUDFLARE_ACCOUNT_ID account that owns the R2 buckets
+#   CLOUDFLARE_ZONE_ID    zone id for alldayidreamaboutsports.com
+#
+# Optional limit overrides:
+#   SCORES_RATE_LIMIT_REQUESTS_PER_MINUTE=600
+#   SCORES_ORIGIN_RATE_LIMIT_REQUESTS_PER_MINUTE=120
+#   DOWNLOAD_RATE_LIMIT_REQUESTS_PER_MINUTE=120
+#   RATE_LIMIT_MITIGATION_TIMEOUT_SECONDS=60
 set -euo pipefail
+
+API_BASE="https://api.cloudflare.com/client/v4"
+
+SCORES_RATE_LIMIT_REQUESTS_PER_MINUTE="${SCORES_RATE_LIMIT_REQUESTS_PER_MINUTE:-600}"
+SCORES_ORIGIN_RATE_LIMIT_REQUESTS_PER_MINUTE="${SCORES_ORIGIN_RATE_LIMIT_REQUESTS_PER_MINUTE:-120}"
+DOWNLOAD_RATE_LIMIT_REQUESTS_PER_MINUTE="${DOWNLOAD_RATE_LIMIT_REQUESTS_PER_MINUTE:-120}"
+RATE_LIMIT_MITIGATION_TIMEOUT_SECONDS="${RATE_LIMIT_MITIGATION_TIMEOUT_SECONDS:-60}"
+
+SCORES_HOSTS=(
+  "scores-staging.alldayidreamaboutsports.com"
+  "scores.alldayidreamaboutsports.com"
+)
+DOWNLOAD_HOSTS=(
+  "download-staging.alldayidreamaboutsports.com"
+  "download.alldayidreamaboutsports.com"
+)
+
+BUCKET_DOMAIN_PAIRS=(
+  "alldayidreamaboutsports-staging-scores:scores-staging.alldayidreamaboutsports.com"
+  "alldayidreamaboutsports-scores:scores.alldayidreamaboutsports.com"
+  "alldayidreamaboutsports-staging-downloads:download-staging.alldayidreamaboutsports.com"
+  "alldayidreamaboutsports-downloads:download.alldayidreamaboutsports.com"
+)
+
+require_tool() {
+  if ! command -v "$1" >/dev/null 2>&1; then
+    echo "Missing required tool: $1" >&2
+    exit 1
+  fi
+}
+
+cf_api() {
+  local method="$1"
+  local path="$2"
+  local body="${3:-}"
+  if [[ -n "$body" ]]; then
+    curl -fsS "${API_BASE}${path}" \
+      --request "$method" \
+      --header "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+      --header "Content-Type: application/json" \
+      --data "$body"
+  else
+    curl -fsS "${API_BASE}${path}" \
+      --request "$method" \
+      --header "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}"
+  fi
+}
+
+cf_get_entrypoint() {
+  local phase="$1"
+  local body_file status
+  body_file="$(mktemp)"
+  status="$(
+    curl -sS -o "$body_file" -w "%{http_code}" \
+      "${API_BASE}/zones/${CLOUDFLARE_ZONE_ID}/rulesets/phases/${phase}/entrypoint" \
+      --request GET \
+      --header "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}"
+  )"
+  if [[ "$status" == "200" ]]; then
+    cat "$body_file"
+    rm -f "$body_file"
+    return 0
+  fi
+  if [[ "$status" == "404" ]]; then
+    rm -f "$body_file"
+    return 1
+  fi
+  cat "$body_file" >&2
+  rm -f "$body_file"
+  echo "Cloudflare API returned HTTP ${status} for ${phase} entrypoint" >&2
+  exit 1
+}
+
+host_expression() {
+  jq -nr --args "$@" '"(http.host in {" + ([$ARGS.positional[] | @json] | join(" ")) + "})"'
+}
+
+ensure_ruleset() {
+  local phase="$1"
+  local name="$2"
+  local description="$3"
+  local managed_refs="$4"
+  local managed_rules="$5"
+  local entrypoint ruleset_id existing_rules preserved_rules payload
+
+  if entrypoint="$(cf_get_entrypoint "$phase")"; then
+    ruleset_id="$(jq -r '.result.id' <<<"$entrypoint")"
+    existing_rules="$(jq '.result.rules // []' <<<"$entrypoint")"
+    preserved_rules="$(
+      jq \
+        --argjson refs "$managed_refs" \
+        '[.[] | select((.ref // "") as $ref | ($refs | index($ref) | not))]' \
+        <<<"$existing_rules"
+    )"
+    payload="$(
+      jq -n \
+        --arg name "$(jq -r --arg fallback "$name" '.result.name // $fallback' <<<"$entrypoint")" \
+        --arg description "$description" \
+        --arg phase "$phase" \
+        --argjson preserved "$preserved_rules" \
+        --argjson managed "$managed_rules" \
+        '{
+          name: $name,
+          description: $description,
+          kind: "zone",
+          phase: $phase,
+          rules: ($preserved + $managed)
+        }'
+    )"
+    echo "── Updating Cloudflare ${phase} entrypoint ruleset ${ruleset_id}"
+    cf_api PUT "/zones/${CLOUDFLARE_ZONE_ID}/rulesets/${ruleset_id}" "$payload" >/dev/null
+  else
+    payload="$(
+      jq -n \
+        --arg name "$name" \
+        --arg description "$description" \
+        --arg phase "$phase" \
+        --argjson managed "$managed_rules" \
+        '{
+          name: $name,
+          description: $description,
+          kind: "zone",
+          phase: $phase,
+          rules: $managed
+        }'
+    )"
+    echo "── Creating Cloudflare ${phase} entrypoint ruleset"
+    cf_api POST "/zones/${CLOUDFLARE_ZONE_ID}/rulesets" "$payload" >/dev/null
+  fi
+}
+
+cache_rule() {
+  local ref="$1"
+  local description="$2"
+  local expression="$3"
+
+  jq -n \
+    --arg ref "$ref" \
+    --arg description "$description" \
+    --arg expression "$expression" \
+    '{
+      ref: $ref,
+      description: $description,
+      expression: $expression,
+      action: "set_cache_settings",
+      action_parameters: {
+        cache: true,
+        edge_ttl: { mode: "bypass_by_default" },
+        browser_ttl: { mode: "respect_origin" }
+      }
+    }'
+}
+
+rate_limit_rule() {
+  local ref="$1"
+  local description="$2"
+  local expression="$3"
+  local requests_per_period="$4"
+  local requests_to_origin="${5:-false}"
+
+  jq -n \
+    --arg ref "$ref" \
+    --arg description "$description" \
+    --arg expression "$expression" \
+    --argjson requestsPerPeriod "$requests_per_period" \
+    --argjson mitigationTimeout "$RATE_LIMIT_MITIGATION_TIMEOUT_SECONDS" \
+    --argjson requestsToOrigin "$requests_to_origin" \
+    '{
+      ref: $ref,
+      description: $description,
+      expression: $expression,
+      action: "block",
+      action_parameters: {
+        response: {
+          status_code: 429,
+          content: "rate limited\n",
+          content_type: "text/plain"
+        }
+      },
+      ratelimit: {
+        characteristics: ["ip.src", "cf.colo.id"],
+        period: 60,
+        requests_per_period: $requestsPerPeriod,
+        mitigation_timeout: $mitigationTimeout
+      }
+    }
+    | if $requestsToOrigin then .ratelimit.requests_to_origin = true else . end'
+}
+
+r2_custom_domain_exists() {
+  local bucket="$1"
+  local domain="$2"
+
+  cf_api GET "/accounts/${CLOUDFLARE_ACCOUNT_ID}/r2/buckets/${bucket}/domains/custom" \
+    | jq -e --arg domain "$domain" '.result.domains[]? | select(.domain == $domain)' >/dev/null
+}
+
+attach_r2_custom_domain() {
+  local bucket="$1"
+  local domain="$2"
+  local payload
+
+  payload="$(
+    jq -n \
+      --arg domain "$domain" \
+      --arg zoneId "$CLOUDFLARE_ZONE_ID" \
+      '{ domain: $domain, enabled: true, zoneId: $zoneId, minTLS: "1.2" }'
+  )"
+  if r2_custom_domain_exists "$bucket" "$domain"; then
+    echo "── Updating R2 custom domain ${domain} → ${bucket}"
+    cf_api PUT "/accounts/${CLOUDFLARE_ACCOUNT_ID}/r2/buckets/${bucket}/domains/custom/${domain}" "$payload" >/dev/null
+  else
+    echo "── Attaching R2 custom domain ${domain} → ${bucket}"
+    cf_api POST "/accounts/${CLOUDFLARE_ACCOUNT_ID}/r2/buckets/${bucket}/domains/custom" "$payload" >/dev/null
+  fi
+}
+
+disable_r2_dev_url() {
+  local bucket="$1"
+
+  echo "── Disabling public r2.dev URL on ${bucket}"
+  if [[ -n "${CLOUDFLARE_API_TOKEN:-}" && -n "${CLOUDFLARE_ACCOUNT_ID:-}" ]]; then
+    local payload
+    payload="$(jq -n '{ enabled: false }')"
+    cf_api PUT "/accounts/${CLOUDFLARE_ACCOUNT_ID}/r2/buckets/${bucket}/domains/managed" "$payload" >/dev/null
+  else
+    npx wrangler r2 bucket dev-url disable "$bucket" || \
+      echo "   WARNING: Could not disable r2.dev for ${bucket}; verify it is OFF in the dashboard."
+  fi
+}
+
+configure_cloudflare_zone() {
+  local scores_expression downloads_expression cache_refs cache_rules rate_refs rate_rules
+
+  : "${CLOUDFLARE_API_TOKEN:?set CLOUDFLARE_API_TOKEN for Cloudflare API setup}"
+  : "${CLOUDFLARE_ACCOUNT_ID:?set CLOUDFLARE_ACCOUNT_ID for R2 custom-domain setup}"
+  : "${CLOUDFLARE_ZONE_ID:?set CLOUDFLARE_ZONE_ID for zone cache/rate-limit setup}"
+  require_tool curl
+  require_tool jq
+
+  for pair in "${BUCKET_DOMAIN_PAIRS[@]}"; do
+    attach_r2_custom_domain "${pair%%:*}" "${pair#*:}"
+  done
+
+  scores_expression="$(host_expression "${SCORES_HOSTS[@]}")"
+  downloads_expression="$(host_expression "${DOWNLOAD_HOSTS[@]}")"
+
+  cache_refs='["allday_scores_cache_settings", "allday_downloads_cache_settings"]'
+  cache_rules="$(
+    jq -s '.' \
+      <(cache_rule \
+        "allday_scores_cache_settings" \
+        "Cache scores R2 JSON only when objects carry Cache-Control" \
+        "$scores_expression") \
+      <(cache_rule \
+        "allday_downloads_cache_settings" \
+        "Cache downloads R2 objects only when objects carry Cache-Control" \
+        "$downloads_expression")
+  )"
+  ensure_ruleset \
+    "http_request_cache_settings" \
+    "R2 custom domain cache settings" \
+    "Cache settings for R2 custom domains" \
+    "$cache_refs" \
+    "$cache_rules"
+
+  echo "── Enabling Tiered Cache"
+  cf_api PATCH "/zones/${CLOUDFLARE_ZONE_ID}/argo/tiered_caching" '{"value":"on"}' >/dev/null
+  echo "── Enabling Smart Tiered Cache topology"
+  cf_api PATCH "/zones/${CLOUDFLARE_ZONE_ID}/cache/tiered_cache_smart_topology_enable" '{"value":"on"}' >/dev/null
+
+  rate_refs='["allday_scores_cdn_rate_limit", "allday_scores_r2_origin_rate_limit", "allday_downloads_cdn_rate_limit"]'
+  rate_rules="$(
+    jq -s '.' \
+      <(rate_limit_rule \
+        "allday_scores_cdn_rate_limit" \
+        "Rate limit scores CDN requests per IP/colo" \
+        "$scores_expression" \
+        "$SCORES_RATE_LIMIT_REQUESTS_PER_MINUTE") \
+      <(rate_limit_rule \
+        "allday_scores_r2_origin_rate_limit" \
+        "Rate limit scores R2 origin reads per IP/colo" \
+        "$scores_expression" \
+        "$SCORES_ORIGIN_RATE_LIMIT_REQUESTS_PER_MINUTE" \
+        true) \
+      <(rate_limit_rule \
+        "allday_downloads_cdn_rate_limit" \
+        "Rate limit downloads CDN requests per IP/colo" \
+        "$downloads_expression" \
+        "$DOWNLOAD_RATE_LIMIT_REQUESTS_PER_MINUTE")
+  )"
+  ensure_ruleset \
+    "http_ratelimit" \
+    "R2 custom domain rate limits" \
+    "Rate limits for R2 custom domains" \
+    "$rate_refs" \
+    "$rate_rules"
+}
+
+require_tool npx
 
 # public scores buckets: fixtures-*.json, matches/*.json, celebrate/*.json, catalog.json, config.json
 npx wrangler r2 bucket create alldayidreamaboutsports-staging-scores || true
@@ -16,97 +329,45 @@ npx wrangler r2 bucket create alldayidreamaboutsports-scores || true
 npx wrangler r2 bucket create alldayidreamaboutsports-staging-downloads || true
 npx wrangler r2 bucket create alldayidreamaboutsports-downloads || true
 
-# ── §0 (a) Disable every bucket's public r2.dev URL ──────────────────────────
-# r2.dev is the bucket's managed public endpoint. It bypasses the zone Cache
-# Rules entirely, so every r2.dev GET is an uncached origin read — exactly the
-# failure §0 forbids. Clients must use only the scores.* custom domains, which
-# sit behind the CDN. wrangler exposes this toggle, so script it.
-#
-# NOTE: r2.dev access is OFF by default on new buckets; this is idempotent and
-# also re-disables a bucket someone enabled by hand. Re-run any time.
-for bucket in \
-  alldayidreamaboutsports-staging-scores \
-  alldayidreamaboutsports-scores \
-  alldayidreamaboutsports-staging-downloads \
-  alldayidreamaboutsports-downloads; do
-  echo "── Disabling public r2.dev URL on ${bucket}"
-  npx wrangler r2 bucket dev-url disable "$bucket" || \
-    echo "   ⚠️  Could not disable r2.dev for ${bucket}; verify it is OFF in the dashboard (R2 → ${bucket} → Settings → Public access → r2.dev)."
+for pair in "${BUCKET_DOMAIN_PAIRS[@]}"; do
+  disable_r2_dev_url "${pair%%:*}"
 done
 
-cat <<'EOF'
+if [[ -n "${CLOUDFLARE_API_TOKEN:-}" || -n "${CLOUDFLARE_ACCOUNT_ID:-}" || -n "${CLOUDFLARE_ZONE_ID:-}" ]]; then
+  configure_cloudflare_zone
+  cat <<EOF
+✅ Cloudflare R2/CDN setup complete.
+
+Configured:
+- R2 buckets
+- R2 custom domains
+- r2.dev disabled
+- Cache Rules for scores/download hostnames
+- Tiered Cache + Smart Tiered Cache topology
+- WAF rate limits for scores/download hostnames
+
+Rate limits:
+- scores CDN: ${SCORES_RATE_LIMIT_REQUESTS_PER_MINUTE}/minute per IP + colo
+- scores R2 origin reads: ${SCORES_ORIGIN_RATE_LIMIT_REQUESTS_PER_MINUTE}/minute per IP + colo, origin requests only
+- downloads CDN: ${DOWNLOAD_RATE_LIMIT_REQUESTS_PER_MINUTE}/minute per IP + colo
+- mitigation timeout: ${RATE_LIMIT_MITIGATION_TIMEOUT_SECONDS}s
+
+Verify after objects are uploaded:
+  curl -sI https://scores-staging.alldayidreamaboutsports.com/catalog.json | grep -iE '^(cache-control|cf-cache-status):'
+EOF
+else
+  cat <<'EOF'
 ✅ Buckets ready and r2.dev public URLs disabled.
 
-The remaining steps enforce the §0 cache-only invariant. Steps the current
-tooling can script are run above; the rest are explicit manual checklist items
-(wrangler/CF API don't expose them) — do NOT skip them, they are load-bearing.
+Cloudflare API setup skipped because CLOUDFLARE_API_TOKEN,
+CLOUDFLARE_ACCOUNT_ID, and CLOUDFLARE_ZONE_ID were not provided.
 
-1. Add scores custom domains (R2 → bucket → Settings → Custom Domains):
-   - alldayidreamaboutsports-staging-scores → scores-staging.alldayidreamaboutsports.com
-   - alldayidreamaboutsports-scores → scores.alldayidreamaboutsports.com
-   - alldayidreamaboutsports-staging-downloads → download-staging.alldayidreamaboutsports.com
-   - alldayidreamaboutsports-downloads → download.alldayidreamaboutsports.com
-   (Custom domains route through Cloudflare's CDN: zero egress, cache enabled.)
+Run this script again with those variables to create the R2 custom domains,
+cache rules, Smart Tiered Cache settings, and WAF rate limits:
 
-2. ☑ §0 (d) Cache rule on BOTH scores hostnames (Rules → Cache Rules).
-   JSON is NOT cached by Cloudflare by default — without this rule every app
-   request reaches R2 and incurs a Class B op. This rule is load-bearing.
-   Create one rule per hostname (or one rule matching both):
-   - Match hostname: scores-staging.alldayidreamaboutsports.com
-                 AND scores.alldayidreamaboutsports.com
-   - Cache eligibility: Eligible for cache
-   - Edge TTL: Use cache-control header if present, bypass cache if not
-   - Browser TTL: Respect origin
-   Verify after deploy with the probe in step 5 (cf-cache-status must reach
-   HIT/REVALIDATED steady-state on both hosts).
-
-3. ☑ §0 (e) Smart Tiered Caching ON — MANDATORY (per zone: Caching → Tiered
-   Cache → enable "Smart Tiered Caching"). This is the difference between ~26
-   R2 reads/s and ~600/s, and it absorbs the per-TTL expiry stampede by funneling
-   ~300 edge data centers through ~13 regional upper tiers. Not optional.
-
-4. ☑ §0 (b)(c) Cache-Control on every object, correct TTLs.
-   The cache rule above uses cache-control if present and BYPASSES cache if not,
-   so one header-less object = an origin pull on every request. The backend's R2
-   write path is unit-asserted to always set Cache-Control (r2.test.ts), but any
-   manual upload must carry it too. Required values (plan §3):
-     matches/*.json      public, max-age=5, stale-while-revalidate=25  (live)
-     celebrate/*.json    public, max-age=5, stale-while-revalidate=25  (live)
-     fixtures-*.json     public, max-age=43200   (12h; 5s+SWR for dates
-                         containing an eligible/live match)
-     catalog.json        public, max-age=43200   (12h)
-     config.json         set cache-control on manual upload (e.g. the kill-switch
-                         backup), or it falls through to the BYPASS branch.
-   Spot-check a live object actually carries the header:
-     curl -sI https://scores-staging.alldayidreamaboutsports.com/catalog.json \
-       | grep -i '^cache-control:'
-
-5. ☑ §0 monitoring — cf-cache-status probe.
-   /internal/cache-health (Cloud Scheduler every 5 min, set up by setup-gcp.sh)
-   GETs a warm file + each live matches/{id}.json and asserts cf-cache-status is
-   HIT/REVALIDATED steady-state. A lone MISS at a 5s boundary is normal;
-   sustained MISS/BYPASS/DYNAMIC means the cache is broken (treat as sev-1).
-   Manual one-off check of the header:
-     curl -sI https://scores-staging.alldayidreamaboutsports.com/catalog.json \
-       | grep -i '^cf-cache-status:'
-
-6. ☑ Cloudflare WAF rate limits on the R2 custom domains.
-   After the zone exists in Cloudflare, run:
-     CLOUDFLARE_API_TOKEN=<token-with-zone-rulesets-write> \
-     CLOUDFLARE_ZONE_ID=<zone-id> \
-     ./infra/setup-cloudflare-rate-limits.sh
-   This creates/updates the zone's http_ratelimit ruleset with:
-     - scores CDN requests: 600/min per IP + colo
-     - scores R2 origin reads: 120/min per IP + colo, counting origin requests only
-     - downloads CDN requests: 120/min per IP + colo
-   It protects both the edge hostname and R2 origin from cache-busting abuse.
-
-7. R2 API token (Object Read & Write, all four buckets) →
-   - each environment's backend secrets: r2-access-key-id / r2-secret-access-key / r2-endpoint
-     (endpoint: https://<ACCOUNT_ID>.r2.cloudflarestorage.com)
-   - local release env vars: R2_ENDPOINT / AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY
-     (R2 credentials are not GitHub secrets)
-
-8. The website is hosted from the separate public GitHub Pages repo documented
-   in infra/README.md, not from this repository or Cloudflare Pages.
+  CLOUDFLARE_API_TOKEN=<token> \
+  CLOUDFLARE_ACCOUNT_ID=<account-id> \
+  CLOUDFLARE_ZONE_ID=<zone-id> \
+  ./infra/setup-r2.sh
 EOF
+fi
