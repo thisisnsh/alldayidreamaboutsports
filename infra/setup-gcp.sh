@@ -10,6 +10,19 @@ PROJECT_ID="${1:?usage: setup-gcp.sh <project-id> <region>}"
 REGION="${2:?usage: setup-gcp.sh <project-id> <region>}"
 SERVICE="alldayidreamaboutsports-backend"
 
+# Scores CDN hostname for this environment (the cf-cache-status probe targets it).
+# Derived from the project id so staging and prod stay in sync with the R2 custom
+# domains in infra/README.md.
+case "$PROJECT_ID" in
+  *staging*) SCORES_DOMAIN="scores-staging.alldayidreamaboutsports.com" ;;
+  *)         SCORES_DOMAIN="scores.alldayidreamaboutsports.com" ;;
+esac
+
+# Celebration reporter probability / server multiply-back factor. MUST equal the
+# Remote Config key `celebration_sample_percent` (infra/remoteconfig.template.json),
+# or the server's estimated totals will be wrong. 1.0 = exact (no sampling).
+CELEBRATION_SAMPLE_RATE="1.0"
+
 gcloud config set project "$PROJECT_ID"
 
 echo "── Enabling APIs"
@@ -20,7 +33,6 @@ gcloud services enable \
   cloudtasks.googleapis.com \
   firestore.googleapis.com \
   secretmanager.googleapis.com \
-  fcm.googleapis.com \
   firebaseremoteconfig.googleapis.com \
   iamcredentials.googleapis.com
 
@@ -98,9 +110,16 @@ if SERVICE_URL=$(gcloud run services describe "$SERVICE" --region "$REGION" --fo
   # window), so the multi-league catalog stays fresh year-round.
   upsert_scheduler_job sync-catalog '0 4 * * *' /internal/sync-catalog
 
-  echo "── Cloud Run env → SERVICE_URL (dispatcher task target + OIDC audience)"
+  echo "── Cloud Scheduler → /internal/cache-health every 5 min (cf-cache-status probe)"
+  # Enforces the §0 cache-only invariant: GETs a warm file + each live match file on
+  # $SCORES_DOMAIN, reads cf-cache-status, and alerts on sustained MISS/BYPASS/DYNAMIC
+  # (the signal that users are reaching R2 instead of the edge). Runs year-round so a
+  # cache regression is caught even outside match windows.
+  upsert_scheduler_job cache-health '*/5 * * * *' /internal/cache-health
+
+  echo "── Cloud Run env → SERVICE_URL + SCORES_DOMAIN + CELEBRATION_SAMPLE_RATE"
   gcloud run services update "$SERVICE" --region "$REGION" \
-    --update-env-vars "SERVICE_URL=${SERVICE_URL}" >/dev/null
+    --update-env-vars "SERVICE_URL=${SERVICE_URL},SCORES_DOMAIN=${SCORES_DOMAIN},CELEBRATION_SAMPLE_RATE=${CELEBRATION_SAMPLE_RATE}" >/dev/null
 else
   echo "   Cloud Run service not deployed yet — skipping scheduler jobs"
   echo "   Rerun this script after the first deploy to create or update them"
@@ -138,7 +157,8 @@ cat <<EOF
   var    R2_BUCKET_SCORES               = environment's public scores bucket
 
 Manual steps remaining (see infra/README.md):
-  1. Firebase: add project in console, upload APNs key, publish remoteconfig.template.json
+  1. Firebase: add project in console, publish remoteconfig.template.json
+     (no APNs/FCM — push was dropped for polling + CDN)
   2. OAuth consent screen → External → "In production" (basic scopes only)
   3. Set real secret values (API-Football key, JWT secret, R2 creds, OAuth client id)
   4. First deploy: gh workflow run backend-deploy.yml, then rerun this script so

@@ -17,10 +17,10 @@ Then in the [Firebase console](https://console.firebase.google.com):
    Save it locally as `app/Resources/GoogleService-Info-Staging.plist` or
    `app/Resources/GoogleService-Info-Production.plist`. See
    [`app/README.md`](../app/README.md#real-service-configuration).
-2. **Cloud Messaging** → upload the APNs auth key (.p8 from Apple Developer →
-   Keys → Apple Push Notifications service). Without this, zero push delivery.
-3. **Remote Config** → import `remoteconfig.template.json`, publish.
-4. **Firestore rules** → deploy `firestore.rules` (deny-all; backend uses Admin SDK):
+   Firebase is used for Remote Config only — there is no Cloud Messaging / APNs
+   setup (push was dropped in favour of polling + CDN).
+2. **Remote Config** → import `remoteconfig.template.json`, publish.
+3. **Firestore rules** → deploy `firestore.rules` (deny-all; backend uses Admin SDK):
    `firebase deploy --only firestore:rules`
 
 ### Backend API domain
@@ -98,12 +98,17 @@ so staging cannot accidentally write into the production scores bucket.
 The app must access R2 objects only through the custom domains above, never an
 `r2.dev` URL or the S3 API endpoint. The custom domain puts Cloudflare's CDN in
 front of R2. Cache hits are served by Cloudflare; cache misses still read R2 as
-the origin. Disable each bucket's public `r2.dev` URL after its custom domain is
-active.
+the origin. `setup-r2.sh` disables each bucket's public `r2.dev` URL (it bypasses
+the cache rules → uncached origin reads); leave it disabled.
 
 JSON is not cached by Cloudflare by default. Create the cache rule printed by
-`setup-r2.sh`; without it, every app request reaches R2 and incurs a Class B
-operation.
+`setup-r2.sh` on **both** scores hostnames; without it, every app request reaches
+R2 and incurs a Class B operation. Smart Tiered Caching must be ON (mandatory —
+~26 R2 reads/s vs ~600/s). Object TTLs (plan §3): `matches/*` and `celebrate/*`
+are `public, max-age=5, stale-while-revalidate=25`; `fixtures-*` and
+`catalog.json` are `public, max-age=43200` (12h). The `/internal/cache-health`
+scheduler job (every 5 min) reads `cf-cache-status` and alerts if users start
+hitting R2 — treat a falling hit ratio or rising R2 reads as sev-1.
 
 An R2 custom domain returning `404` usually means the domain is connected but
 the requested object has not been uploaded yet. After the first backend deploy:
@@ -222,12 +227,11 @@ The `app-release.yml` workflow imports the `.p12` into a temporary keychain,
 signs the app and DMG, submits both with `notarytool`, and staples Apple's
 notarization tickets.
 
-### App identifier and push notifications
+### App identifier
 
 At [developer.apple.com](https://developer.apple.com/account/resources/identifiers/list),
-register `com.alldayidreamaboutsports.mac` and enable the **Push Notifications**
-capability. Create an APNs auth key (`.p8`) and upload it in Firebase under
-**Cloud Messaging** as described in step 1.
+register `com.alldayidreamaboutsports.mac`. Push Notifications are not used (the
+app polls the scores CDN), so no APNs key / Cloud Messaging setup is required.
 
 ## 7. Other backend secrets
 
