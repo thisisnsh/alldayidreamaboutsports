@@ -38,7 +38,7 @@ export class CelebrationAggregator {
       try {
         await this.store.addCelebrations(fixtureId, counts);
         const totals = await this.store.celebrationTotals(fixtureId);
-        await this.r2.putJson(`celebrate/${fixtureId}.json`, { totals }, 2);
+        await this.r2.putJson(`celebrate/${fixtureId}.json`, { totals }, 10);
         log.info("celebration_flush_complete", { fixtureId, counts, totals });
       } catch (error) {
         log.error("celebration_flush_failed", error, { fixtureId, counts });

@@ -127,4 +127,30 @@ describe("ApiFootballProvider", () => {
       home: { redCards: 1 },
     });
   });
+
+  it("holds a live goal back until its scorer event lands (counter races events)", async () => {
+    // API bumped the aggregate to 1-0 but the goal isn't in events[] yet.
+    const racing = {
+      ...liveFixture,
+      goals: { home: 1, away: 0 },
+      events: [{ time: { elapsed: 22 }, team: { id: 20, name: "USA" }, player: { name: "Adams" }, type: "Card", detail: "Yellow Card" }],
+    };
+    const { provider } = providerReturning({ response: [racing] });
+    const [match] = await provider.fixturesForRange("2026-06-10", "2026-06-12");
+    // Goal count stays at 0 (no scorer yet) and carries no goalEvents — so the
+    // diff won't emit a nameless GOAL this poll.
+    expect(match!.home.goals).toBe(0);
+    expect(match!.home.goalEvents).toEqual([]);
+  });
+
+  it("exposes goalEvents in scoring order and keeps the count once scorers land", async () => {
+    const { provider } = providerReturning({ response: [liveFixture] });
+    const [match] = await provider.fixturesForRange("2026-06-10", "2026-06-12");
+    expect(match!.home.goals).toBe(2);
+    expect(match!.home.goalEvents).toEqual([
+      { player: "Rodrygo", minute: 30 },
+      { player: "Vinícius Jr", minute: 73 },
+    ]);
+    expect(match!.away.goalEvents).toEqual([{ player: "Pulisic", minute: 12 }]);
+  });
 });

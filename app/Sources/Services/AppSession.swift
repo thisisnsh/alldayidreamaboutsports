@@ -355,6 +355,18 @@ final class AppSession: ObservableObject {
         AppLog.info(.fixtures, "refresh_complete visible=\(fixtures.count)")
     }
 
+    /// Optimistically fold the user's own taps into the local total so their
+    /// celebration shows instantly, before the server round-trip. The later
+    /// server merge uses max(), so this never double-counts.
+    func addLocalCelebrations(_ taps: Int, teamId: String, fixtureId: Int) {
+        guard taps > 0 else { return }
+        var cached = celebrationTotals[fixtureId] ?? [:]
+        cached[teamId] = (cached[teamId] ?? 0) + taps
+        celebrationTotals[fixtureId] = cached
+        persistCelebrationCache()
+        AppLog.info(.celebrations, "local_taps_merged fixture_id=\(fixtureId) team_id=\(teamId) taps=\(taps)")
+    }
+
     func mergeCelebrationTotals(_ totals: [String: Int], fixtureId: Int) {
         var cached = celebrationTotals[fixtureId] ?? [:]
         for (teamId, total) in totals {

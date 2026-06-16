@@ -3,7 +3,7 @@ import { diffMatch } from "../src/diff.js";
 import type { MatchState } from "../src/types.js";
 
 function team(id: number, name: string, overrides: Partial<MatchState["home"]> = {}): MatchState["home"] {
-  return { id, name, goals: 0, yellowCards: 0, redCards: 0, yellowCardEvents: [], redCardEvents: [], ...overrides };
+  return { id, name, goals: 0, yellowCards: 0, redCards: 0, yellowCardEvents: [], redCardEvents: [], goalEvents: [], ...overrides };
 }
 
 function state(overrides: Partial<MatchState> = {}): MatchState {
@@ -34,11 +34,10 @@ describe("diffMatch", () => {
     expect(types(null, state())).toEqual(["KICKOFF"]);
   });
 
-  it("emits one GOAL per increment with scorer attribution", () => {
+  it("emits one GOAL per increment with the scorer from goalEvents", () => {
     const prev = state();
     const next = state({
-      home: { ...prev.home, goals: 1 },
-      lastGoal: { teamId: 6, player: "Vinícius Jr", minute: 23 },
+      home: { ...prev.home, goals: 1, goalEvents: [{ player: "Vinícius Jr", minute: 23 }] },
       minute: 23,
     });
     const events = diffMatch(prev, next);
@@ -50,6 +49,15 @@ describe("diffMatch", () => {
       minute: 23,
       eventId: "100:GOAL:6:1",
     });
+  });
+
+  it("never emits a nameless GOAL — falls back to the scoring team's name", () => {
+    // An unenriched finished snapshot can surface a goal with no goalEvents row.
+    const prev = state();
+    const next = state({ home: { ...prev.home, goals: 1 } });
+    const events = diffMatch(prev, next);
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({ type: "GOAL", teamId: 6, player: "Brazil" });
   });
 
   it("emits multiple GOALs if two goals land between polls", () => {

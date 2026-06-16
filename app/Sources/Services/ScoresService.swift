@@ -52,22 +52,10 @@ struct CDNScoresClient: ScoresProviding {
             return [:]
         }
     }
-
-    func fetchBackupConfig() async throws -> BackupConfig {
-        try await fetch("config.json", as: BackupConfig.self)
-    }
 }
 
 private enum ScoresError: Error {
     case notFound
-}
-
-struct BackupConfig: Codable {
-    let killSwitch: Bool?
-    let message: String?
-    let minBuild: Int?
-    let autoRefreshEnabled: Bool?
-    let autoRefreshSeconds: Double?
 }
 
 extension ISO8601DateFormatter {

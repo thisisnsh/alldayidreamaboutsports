@@ -28,7 +28,7 @@ describe("R2MatchStateStore", () => {
     expect(put.input).toMatchObject({
       Bucket: "private-state",
       Key: "matches/7.json",
-      CacheControl: "public, max-age=2",
+      CacheControl: "public, max-age=5",
       IfMatch: "\"v1\"",
     });
   });

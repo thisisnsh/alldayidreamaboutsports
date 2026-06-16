@@ -26,6 +26,8 @@ export interface TeamScore {
   /** Ordered list of cards issued; index 0 = first card. Used by the diff to attach player + minute. */
   yellowCardEvents: CardEvent[];
   redCardEvents: CardEvent[];
+  /** Ordered list of goals scored; index 0 = first goal. Used by the diff to attach the scorer. */
+  goalEvents: CardEvent[];
 }
 
 /** One penalty-shootout kick, in the order it was taken. */

@@ -192,9 +192,10 @@ final class OverlayManager: ObservableObject {
         schedule(after: 0.4) { [self] in hideInteractPanel() }
     }
 
-    /// One batched flush for all celebrated teams; each team's total comes
-    /// back as a normal queued notification (real DB→CDN round trip, so it
-    /// lands in a later set whenever it's ready).
+    /// Your taps show instantly: they're folded into the local total and a
+    /// count pill drops right away. The authoritative server total (everyone's
+    /// taps) lands ~5s later — long enough for the backend to batch the POST we
+    /// just sent into the CDN file — and updates the pill if it grew.
     private func flushTapsAndQueueCounts() {
         let targets: [(fixtureId: Int, teamId: String)] = ballEvents.compactMap { event in
             guard event.fixtureId > 0 else { return nil }
@@ -204,7 +205,19 @@ final class OverlayManager: ObservableObject {
         CelebrationService.shared.endWindow()
         guard !targets.isEmpty,
               AppSession.shared.prefs.settings.eventEnabled(.celebration) else { return }
+
+        // Optimistic: reflect your own taps now, before any network round-trip.
+        if taps > 0 {
+            for target in targets {
+                AppSession.shared.addLocalCelebrations(taps, teamId: target.teamId, fixtureId: target.fixtureId)
+                queueCelebrationPill(for: target, taps: taps)
+            }
+        }
+
         Task { @MainActor in
+            // Give the backend time to aggregate the just-sent taps into the
+            // CDN file so the read reflects them (and doesn't 404 a fresh file).
+            if taps > 0 { try? await Task.sleep(for: .seconds(5)) }
             for target in targets {
                 let totals: [String: Int]
                 do {
@@ -214,24 +227,34 @@ final class OverlayManager: ObservableObject {
                     AppLog.error(.celebrations, "post_window_totals_refresh_failed fixture_id=\(target.fixtureId)", error: error)
                     totals = [:]
                 }
+                let before = AppSession.shared.celebrationTotals[target.fixtureId]?[target.teamId] ?? 0
                 AppSession.shared.mergeCelebrationTotals(totals, fixtureId: target.fixtureId)
-                let team = TeamCatalog.team(for: Int(target.teamId) ?? -1, in: AppSession.shared.teams)
-                let count = totals[target.teamId] ?? 0
-                let text: String? = count > 0
-                    ? "\(count.formattedCompact) celebrations for \(team.name) this match"
-                    : (taps > 0 ? "You celebrated with \(team.name)!" : nil)
-                if let text {
-                    enqueue(NotchItem(
-                        id: "count:\(target.fixtureId):\(target.teamId):\(Date().timeIntervalSince1970)",
-                        icon: pillIcon(for: .celebration),
-                        iconColor: pillIconColor(for: .celebration),
-                        title: [.text(text)],
-                        subtitle: nil,
-                        fanGoal: nil
-                    ))
+                let after = AppSession.shared.celebrationTotals[target.fixtureId]?[target.teamId] ?? 0
+                // Only refresh the pill if the authoritative total beat what we
+                // already showed optimistically — no redundant duplicate.
+                if after > before || (taps == 0 && after > 0) {
+                    queueCelebrationPill(for: target, taps: taps)
                 }
             }
         }
+    }
+
+    /// Drops a celebration-count pill for one team from the current local total.
+    private func queueCelebrationPill(for target: (fixtureId: Int, teamId: String), taps: Int) {
+        let team = TeamCatalog.team(for: Int(target.teamId) ?? -1, in: AppSession.shared.teams)
+        let count = AppSession.shared.celebrationTotals[target.fixtureId]?[target.teamId] ?? 0
+        let text: String? = count > 0
+            ? "\(count.formattedCompact) celebrations for \(team.name) this match"
+            : (taps > 0 ? "You celebrated with \(team.name)!" : nil)
+        guard let text else { return }
+        enqueue(NotchItem(
+            id: "count:\(target.fixtureId):\(target.teamId):\(Date().timeIntervalSince1970)",
+            icon: pillIcon(for: .celebration),
+            iconColor: pillIconColor(for: .celebration),
+            title: [.text(text)],
+            subtitle: nil,
+            fanGoal: nil
+        ))
     }
 
     func registerTap() {
@@ -307,9 +330,14 @@ final class OverlayManager: ObservableObject {
         return panel
     }
 
-    private var screen: NSScreen { NSScreen.main ?? NSScreen.screens[0] }
+    // nil when no display is active (e.g. a Mac mini with its screen asleep or
+    // detached). Every panel show guards on it — the event is still recorded
+    // and the system's time-sensitive notification still fires; we just don't
+    // draw the overlay. Indexing NSScreen.screens here used to crash.
+    private var screen: NSScreen? { NSScreen.main ?? NSScreen.screens.first }
 
     private func showDisplayPanel() {
+        guard let screen else { return }
         if displayPanel == nil {
             let panel = Self.makePanel(frame: screen.frame, clickThrough: true)
             panel.contentView = NSHostingView(rootView: OverlayDisplayView().environmentObject(self))
@@ -338,6 +366,7 @@ final class OverlayManager: ObservableObject {
     }
 
     private func dismissPanelRect() -> NSRect {
+        guard let screen else { return .zero }
         let inset = (NSScreen.main?.safeAreaInsets.top).flatMap { $0 > 0 ? $0 : nil } ?? 26
         let pillSpacing: CGFloat = 8
         let size: CGFloat = 22
@@ -352,6 +381,7 @@ final class OverlayManager: ObservableObject {
     /// Small clickable ✕ floating just below the pill stack (the display
     /// panel is click-through, so the button needs its own panel).
     private func showDismissPanel() {
+        guard screen != nil else { return }
         let rect = dismissPanelRect()
         if dismissPanel == nil {
             let panel = Self.makePanel(frame: rect, clickThrough: false)
@@ -377,6 +407,7 @@ final class OverlayManager: ObservableObject {
     }
 
     private func showInteractPanel() {
+        guard let screen else { return }
         let size: CGFloat = 320
         let rect = NSRect(
             x: screen.frame.midX - size / 2,
