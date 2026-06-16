@@ -27,6 +27,10 @@
     "animation_params": {
       "defaultValue": { "value": "{\"ballDropSeconds\":1.5,\"pillHoldSeconds\":7,\"notchStackMax\":10}" },
       "description": "Tune animation feel without shipping a build."
+    },
+    "max_fan_teams": {
+      "defaultValue": { "value": "10" },
+      "description": "Max teams a user can be a fan of. Raise without shipping a build. Starts at 10."
     }
   }
 }

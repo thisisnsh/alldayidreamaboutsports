@@ -17,11 +17,22 @@ set -euo pipefail
 DMG_PATH="${1:?usage: publish.sh <path-to-dmg> [version]}"
 [[ -f "$DMG_PATH" ]] || { echo "✗ DMG not found: $DMG_PATH" >&2; exit 1; }
 
-DOWNLOAD_HOST="https://download.alldayidreamaboutsports.com"
+# CHANNEL=release (default) publishes to production; CHANNEL=staging targets the
+# staging download bucket + feed so test builds never reach real users.
+CHANNEL="${CHANNEL:-release}"
+case "$CHANNEL" in
+  release) DOWNLOAD_HOST="https://download.alldayidreamaboutsports.com"
+           R2_BUCKET="alldayidreamaboutsports-downloads" ;;
+  staging) DOWNLOAD_HOST="https://download-staging.alldayidreamaboutsports.com"
+           R2_BUCKET="alldayidreamaboutsports-staging-downloads" ;;
+  *) echo "✗ CHANNEL must be 'release' or 'staging' (got '$CHANNEL')" >&2; exit 1 ;;
+esac
+echo "── channel=${CHANNEL} host=${DOWNLOAD_HOST}"
 SPARKLE_VERSION="2.6.4"
 # All released DMGs live here so generate_appcast can compute deltas across
 # versions. Persisted between releases; on a fresh machine we backfill from R2.
-RELEASES_DIR="${RELEASES_DIR:-$HOME/Releases/AllDayIDreamAboutSports}"
+# Per-channel dir so staging and release deltas/appcasts never cross-contaminate.
+RELEASES_DIR="${RELEASES_DIR:-$HOME/Releases/AllDayIDreamAboutSports/${CHANNEL}}"
 SPARKLE_HOME="${SPARKLE_HOME:-$HOME/.cache/sparkle-${SPARKLE_VERSION}}"
 
 echo "── 1/4 Ensure generate_appcast (Sparkle ${SPARKLE_VERSION})"
@@ -52,7 +63,7 @@ echo "── 3/4 Generate appcast + deltas (EdDSA key from keychain)"
 
 echo "── 4/4 Upload to R2 (${DOWNLOAD_HOST})"
 if [[ -n "${R2_ENDPOINT:-}" ]]; then
-  aws s3 sync "$RELEASES_DIR" "s3://alldayidreamaboutsports-downloads/" \
+  aws s3 sync "$RELEASES_DIR" "s3://${R2_BUCKET}/" \
     --endpoint-url "$R2_ENDPOINT" --checksum-algorithm CRC32 \
     --exclude "*" --include "*.dmg" --include "appcast.xml" --include "*.delta"
   echo "✅ Live: ${DOWNLOAD_HOST}/$(basename "$DMG_PATH")"

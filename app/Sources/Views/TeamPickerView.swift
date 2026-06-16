@@ -142,6 +142,9 @@ private struct LeagueSection: View {
         if let index = ids.firstIndex(of: key) {
             ids.remove(at: index)
         } else {
+            // Cap how many teams a user can follow (config-driven). Adding past
+            // the cap is a no-op so the user can't silently lose later picks.
+            guard ids.count < ControlPlane.shared.maxFanTeams else { return }
             ids.append(key)
         }
         session.setFanTeams(ids)

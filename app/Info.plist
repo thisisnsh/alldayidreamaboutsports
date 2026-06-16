@@ -48,7 +48,7 @@
 	<key>SUEnableAutomaticChecks</key>
 	<true/>
 	<key>SUFeedURL</key>
-	<string>https://download.alldayidreamaboutsports.com/appcast.xml</string>
+	<string>$(APP_FEED_URL)</string>
 	<key>SUPublicEDKey</key>
 	<string>ghiXVL8NcRoV6i/FhLk/bHsoeC0afsLGzFMwHqhpQQ4=</string>
 	<key>SUScheduledCheckInterval</key>
