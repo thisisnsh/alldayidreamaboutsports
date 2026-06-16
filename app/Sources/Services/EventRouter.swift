@@ -17,42 +17,21 @@ final class EventRouter {
         set { UserDefaults.standard.set(newValue, forKey: "handledEventIds") }
     }
 
-    func handlePush(_ userInfo: [String: Any]) {
-        guard ControlPlane.shared.isOperational else {
-            AppLog.info(.fcm, "push_rejected reason=control_plane_disabled")
-            return
-        }
-        switch userInfo["kind"] as? String {
-        case "match_event":
-            guard let event = MatchEvent(fcmData: userInfo) else {
-                AppLog.error(.fcm, "push_decode_failed kind=match_event")
-                return
-            }
-            AppLog.info(.fcm, "event_decoded event_id=\(event.eventId) type=\(event.type.rawValue) fixture_id=\(event.fixtureId)")
-            route(event)
-        case "celebration_count":
-            guard let fixtureId = Int(userInfo["fixtureId"] as? String ?? ""),
-                  let json = (userInfo["totals"] as? String)?.data(using: .utf8),
-                  let totals = try? JSONDecoder().decode([String: Int].self, from: json)
-            else {
-                AppLog.error(.fcm, "push_decode_failed kind=celebration_count")
-                return
-            }
-            AppLog.info(.celebrations, "push_totals_received fixture_id=\(fixtureId) teams=\(totals.count)")
-            AppSession.shared.mergeCelebrationTotals(totals, fixtureId: fixtureId)
-        default: AppLog.info(.fcm, "push_rejected reason=unknown_kind")
-        }
-    }
-
     func route(_ event: MatchEvent) {
-        // Signed out = silent, even if a stale topic delivery slips through.
-        guard AppSession.shared.isSignedIn else {
-            AppLog.info(.fcm, "event_rejected event_id=\(event.eventId) reason=signed_out")
+        guard ControlPlane.shared.isOperational else {
+            AppLog.info(.fixtures, "event_rejected event_id=\(event.eventId) reason=control_plane_disabled")
             return
         }
-        // FCM topics can redeliver; drop anything we've animated already.
+        // Signed out = silent.
+        guard AppSession.shared.isSignedIn else {
+            AppLog.info(.fixtures, "event_rejected event_id=\(event.eventId) reason=signed_out")
+            return
+        }
+        // The poll loop recomputes deterministic ids; drop anything we've
+        // animated already (a re-read of an unchanged file diffs to nothing,
+        // but a baseline-less restart could re-surface a recent transition).
         guard !seenEventIds.contains(event.eventId) else {
-            AppLog.info(.fcm, "event_rejected event_id=\(event.eventId) reason=duplicate")
+            AppLog.info(.fixtures, "event_rejected event_id=\(event.eventId) reason=duplicate")
             return
         }
         var handled = seenEventIds
@@ -62,20 +41,20 @@ final class EventRouter {
 
         let settings = AppSession.shared.prefs.settings
         guard settings.eventEnabled(event.type) else {
-            AppLog.info(.fcm, "event_rejected event_id=\(event.eventId) reason=event_disabled type=\(event.type.rawValue)")
+            AppLog.info(.fixtures, "event_rejected event_id=\(event.eventId) reason=event_disabled type=\(event.type.rawValue)")
             return
         }
 
-        // Only matches involving a team the user is a fan of — FCM topics
-        // scope this server-side, but dev simulations and redeliveries don't.
+        // Only matches involving a team the user is a fan of — the poll loop
+        // already scopes which match files we read, but guard anyway.
         let fans = AppSession.shared.fanTeamIds
         guard fans.contains(event.homeTeamId) || fans.contains(event.awayTeamId) else {
-            AppLog.info(.fcm, "event_rejected event_id=\(event.eventId) reason=no_followed_team")
+            AppLog.info(.fixtures, "event_rejected event_id=\(event.eventId) reason=no_followed_team")
             return
         }
 
         let isFanGoal = event.type == .goal && event.teamId.map(fans.contains) == true
-        AppLog.info(.fcm, "event_routed event_id=\(event.eventId) type=\(event.type.rawValue) fixture_id=\(event.fixtureId) fan_goal=\(isFanGoal)")
+        AppLog.info(.fixtures, "event_routed event_id=\(event.eventId) type=\(event.type.rawValue) fixture_id=\(event.fixtureId) fan_goal=\(isFanGoal)")
 
         // One queue for everything: the event joins the next notification
         // set; fan goals additionally drive confetti + the center ball when
@@ -156,7 +135,7 @@ private func leaderSegments(for event: MatchEvent) -> [PillSegment]? {
 
 @MainActor
 func pillTitle(for event: MatchEvent) -> [PillSegment] {
-    let minute = event.minute.map { "\($0)′ " } ?? ""
+    let minute = event.minute.map { "\($0)\(event.extra.map { "+\($0)" } ?? "")′ " } ?? ""
     let teamChip: [PillSegment] = event.teamId.map { [.logo(url: teamLogo($0))] } ?? []
     switch event.type {
     case .kickoff: return [.text("Kickoff — ")] + matchupSegments(for: event)

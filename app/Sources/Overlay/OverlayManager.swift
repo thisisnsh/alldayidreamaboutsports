@@ -283,15 +283,21 @@ final class OverlayManager: ObservableObject {
     /// through the exact same pipeline — pill set + confetti + ball, per the
     /// user's toggles. Jumps ahead of anything queued.
     func preview() {
-        let data: [String: Any] = [
-            "eventId": "preview:\(Date().timeIntervalSince1970)", "type": "GOAL",
-            "fixtureId": "0", "leagueId": "1",
-            "homeTeamId": String(TeamCatalog.previewHome.id), "awayTeamId": String(TeamCatalog.previewAway.id),
-            "homeName": TeamCatalog.previewHome.name, "awayName": TeamCatalog.previewAway.name,
-            "homeGoals": "1", "awayGoals": "0",
-            "teamId": String(TeamCatalog.previewHome.id), "player": "Player Name", "minute": "73",
-        ]
-        guard let event = MatchEvent(fcmData: data) else { return }
+        let event = MatchEvent(
+            eventId: "preview:\(Date().timeIntervalSince1970)",
+            type: .goal,
+            fixtureId: 0,
+            leagueId: 1,
+            teamId: TeamCatalog.previewHome.id,
+            player: "Player Name",
+            minute: 73,
+            homeTeamId: TeamCatalog.previewHome.id,
+            awayTeamId: TeamCatalog.previewAway.id,
+            homeName: TeamCatalog.previewHome.name,
+            awayName: TeamCatalog.previewAway.name,
+            homeGoals: 1,
+            awayGoals: 0
+        )
         dismissAll()
         submit(event, isFanGoal: true)
     }

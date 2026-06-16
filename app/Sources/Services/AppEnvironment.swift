@@ -20,3 +20,11 @@ enum AppEnvironment {
         return url
     }
 }
+
+/// Whether a Firebase config plist is bundled. Gates Remote Config + Crashlytics
+/// (dev builds gitignore the plist). Firebase is no longer used for messaging.
+enum FirebaseConfigured {
+    static var isConfigured: Bool {
+        Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist") != nil
+    }
+}

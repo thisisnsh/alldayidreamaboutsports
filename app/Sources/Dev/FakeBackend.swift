@@ -83,10 +83,28 @@ final class FakeStore {
         let kickoff = Date().addingTimeInterval(-Double(s.minute ?? 0) * 60)
         let shootout = (s.penHome != nil || s.penAway != nil)
             ? Shootout(home: s.penHome ?? 0, away: s.penAway ?? 0) : nil
+        let running = s.status == "LIVE"
+        let period: MatchPeriod = {
+            switch s.status {
+            case "LIVE": return .first
+            case "HALF_TIME": return .half
+            case "FINISHED": return .finished
+            default: return .notStarted
+            }
+        }()
+        let rawStatus: String = {
+            switch s.status {
+            case "LIVE": return "1H"
+            case "HALF_TIME": return "HT"
+            case "FINISHED": return "FT"
+            default: return "NS"
+            }
+        }()
         return Fixture(
             fixtureId: def.id, leagueId: def.leagueId, round: def.round,
             kickoffISO: ISO8601DateFormatter().string(from: kickoff),
-            status: s.status, minute: s.minute,
+            status: s.status, rawStatus: rawStatus, minute: s.minute,
+            extra: nil, period: period, running: running,
             home: ScoreboardTeam(id: def.home.id, name: def.home.name, goals: s.homeGoals),
             away: ScoreboardTeam(id: def.away.id, name: def.away.name, goals: s.awayGoals),
             shootout: shootout
@@ -294,49 +312,42 @@ final class DemoEngine: ObservableObject {
             push(.penaltyKick, def, side: side, player: player, minute: moment.minute, scored: scored)
         case let .celebrationSurge(totals):
             store.celebrations[id] = totals
-            EventRouter.shared.handlePush([
-                "kind": "celebration_count",
-                "fixtureId": String(id),
-                "totals": jsonString(totals),
-            ])
+            AppSession.shared.mergeCelebrationTotals(totals, fixtureId: id)
         }
     }
 
-    /// Build the all-strings FCM data payload the backend publishes for a
-    /// match event and hand it to the router. The scoreline comes from the
-    /// store, which `fire` already updated.
+    /// Build the `MatchEvent` the poll-diff would have produced for this moment
+    /// and route it straight to the overlays (the dev fake stands in for the
+    /// poll loop). The scoreline comes from the store, which `fire` already
+    /// updated.
     private func push(_ type: MatchEventType, _ def: DemoFixture,
                       side: DemoSide? = nil, player: String? = nil, minute: Int,
                       scored: Bool? = nil) {
         let store = FakeStore.shared
         let s = store.states[def.id] ?? LiveMatchState()
         let teamId = side.map { $0 == .home ? def.home.id : def.away.id }
-        var data: [String: Any] = [
-            "kind": "match_event",
-            "eventId": "demo:\(def.id):\(type.rawValue):\(store.eventSeq)",
-            "type": type.rawValue,
-            "fixtureId": String(def.id),
-            "leagueId": String(def.leagueId),
-            "homeTeamId": String(def.home.id), "awayTeamId": String(def.away.id),
-            "homeName": def.home.name, "awayName": def.away.name,
-            "homeGoals": String(s.homeGoals), "awayGoals": String(s.awayGoals),
-            "minute": String(minute),
-            "teamId": teamId.map(String.init) ?? "",
-            "player": player ?? "",
-        ]
-        // Carry the pen tally on every event once a shootout exists, mirroring
-        // the backend (it rides on full-time and every shootout event).
-        if let penHome = s.penHome { data["penHome"] = String(penHome) }
-        if let penAway = s.penAway { data["penAway"] = String(penAway) }
-        if let scored { data["scored"] = String(scored) }
+        let event = MatchEvent(
+            eventId: "demo:\(def.id):\(type.rawValue):\(store.eventSeq)",
+            type: type,
+            fixtureId: def.id,
+            leagueId: def.leagueId,
+            teamId: teamId,
+            player: player,
+            minute: minute,
+            homeTeamId: def.home.id,
+            awayTeamId: def.away.id,
+            homeName: def.home.name,
+            awayName: def.away.name,
+            homeGoals: s.homeGoals,
+            awayGoals: s.awayGoals,
+            // Carry the pen tally once a shootout exists, mirroring the backend
+            // (it rides on full-time and every shootout event).
+            penHome: s.penHome,
+            penAway: s.penAway,
+            scored: scored
+        )
         store.eventSeq += 1
-        EventRouter.shared.handlePush(data)
-    }
-
-    private func jsonString(_ totals: [String: Int]) -> String {
-        guard let data = try? JSONEncoder().encode(totals),
-              let string = String(data: data, encoding: .utf8) else { return "{}" }
-        return string
+        EventRouter.shared.route(event)
     }
 }
 #endif

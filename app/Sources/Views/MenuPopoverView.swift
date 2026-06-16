@@ -71,14 +71,12 @@ struct MenuPopoverView: View {
                     .fontWeight(.semibold)
                     .opacity(0.7)
                 Spacer()
-                if !control.autoRefreshEnabled {
-                    Button {
-                        Task { await session.refreshFixtures() }
-                    } label: {
-                        Image(systemName: "arrow.clockwise").font(.caption).opacity(0.5)
-                    }
-                    .buttonStyle(.plain)
+                Button {
+                    Task { await session.refreshFixtures() }
+                } label: {
+                    Image(systemName: "arrow.clockwise").font(.caption).opacity(0.5)
                 }
+                .buttonStyle(.plain)
             }
             let shown = session.fixtures.filter { $0.involves(session.fanTeamIds) }
             if shown.isEmpty {
@@ -306,7 +304,7 @@ private struct FixtureRow: View {
         if fixture.isLive {
             HStack(spacing: 4) {
                 Circle().fill(.red).frame(width: 6, height: 6)
-                Text(fixture.minute.map { "\($0)′" } ?? "LIVE")
+                Text(fixture.liveMinuteText)
                     .font(.system(size: 10, weight: .bold))
                     .foregroundStyle(.red)
             }

@@ -19,7 +19,10 @@ final class AppSession: ObservableObject {
     private var api: BackendAPI { Services.api }
     private var scores: ScoresProviding { Services.scores }
     private let defaults = UserDefaults.standard
-    private var isRefreshingFixtures = false
+    private var isBootstrappingFixtures = false
+    /// Working set of fixtures keyed by id — the live poll loop merges into this
+    /// and `publishFixtures()` projects the visible, sorted list into `fixtures`.
+    private var fixturesById: [Int: Fixture] = [:]
 
     private enum CacheKey {
         static let fixtures = "cachedFixtures"
@@ -68,6 +71,7 @@ final class AppSession: ObservableObject {
         if let data = defaults.data(forKey: CacheKey.fixtures),
            let stored = try? JSONDecoder().decode([Fixture].self, from: data) {
             fixtures = stored
+            fixturesById = Dictionary(uniqueKeysWithValues: stored.map { ($0.fixtureId, $0) })
         }
         if let data = defaults.data(forKey: CacheKey.celebrationTotals),
            let stored = try? JSONDecoder().decode([Int: [String: Int]].self, from: data) {
@@ -77,9 +81,9 @@ final class AppSession: ObservableObject {
         // Fan teams sync with the backend ONCE per app start; every other
         // read is local. Changes go up via setFanTeams as they happen.
         Task { await syncFanTeamsOnLaunch() }
-        // Topics mirror the signed-in state: signed out means subscribed to
-        // nothing, even if fan teams are still stored locally.
-        PushService.shared.syncTopics(to: isSignedIn ? fanTeamIds : [])
+        // Always-on live polling: one loop, running whenever a fan match is in
+        // its live window — no menu, no push.
+        LiveStore.shared.start()
         AppLog.info(.app, "session_bootstrap_complete signed_in=\(isSignedIn) fan_teams=\(fanTeamIds.sorted()) cached_fixtures=\(fixtures.count)")
     }
 
@@ -115,7 +119,6 @@ final class AppSession: ObservableObject {
             }
         }
         guard isSignedIn, ControlPlane.shared.isOperational else { return }
-        PushService.shared.syncTopics(to: fanTeamIds)
         AppLog.info(.prefs, "fan_sync_complete teams=\(fanTeamIds.sorted())")
     }
 
@@ -147,7 +150,6 @@ final class AppSession: ObservableObject {
                 // previous user's leftovers up). Settings stay device-local.
                 prefs.fanOf = response.prefs.fanOf
                 persistPrefs()
-                PushService.shared.syncTopics(to: fanTeamIds)
                 await refreshCatalog()
                 AppLog.info(.app, "sign_in_complete fan_teams=\(fanTeamIds.sorted())")
             } catch {
@@ -181,8 +183,9 @@ final class AppSession: ObservableObject {
         // server prefs. Settings belong to the DEVICE and stay.
         prefs.fanOf = UserPrefs.empty.fanOf
         persistPrefs()
-        // Signed out = silent: no topics, nothing left on screen.
-        PushService.shared.syncTopics(to: [])
+        // Signed out = silent: drop the diff baseline so the next account never
+        // replays this one's transitions, and clear anything on screen.
+        LiveStore.shared.resetBaseline()
         OverlayManager.shared.dismissAll()
         if showLogin { openWindow(WindowID.login) }
     }
@@ -209,7 +212,6 @@ final class AppSession: ObservableObject {
         AppLog.info(.prefs, "fan_teams_changed old=\(prefs.footballTeams.sorted()) new=\(ids.sorted())")
         prefs.footballTeams = ids
         persistPrefs()
-        PushService.shared.syncTopics(to: Set(ids.compactMap(Int.init)))
         Task {
             guard ControlPlane.shared.isOperational else { return }
             do {
@@ -266,93 +268,80 @@ final class AppSession: ObservableObject {
         AppLog.info(.catalog, "refresh_complete leagues=\(leagues.count) teams=\(allTeams.count)")
     }
 
+    /// Manual refresh (the menu's ↻ button): force a schedule re-bootstrap and
+    /// re-publish. Live scores still flow from `LiveStore`'s poll loop.
     func refreshFixtures() async {
-        guard isSignedIn, ControlPlane.shared.isOperational, !isRefreshingFixtures else {
-            AppLog.debug(.fixtures, "refresh_skipped signed_in=\(isSignedIn) operational=\(ControlPlane.shared.isOperational) in_flight=\(isRefreshingFixtures)")
+        await bootstrapFixturesIfNeeded(force: true)
+        publishFixtures()
+    }
+
+    /// The schedule bootstrap: once per day, read `fixtures-{date}.json` for
+    /// today±1 (12h TTL) for kickoff times + which fan matches play. Live scores
+    /// are never read from here — that's the poll loop's job. Never overwrites a
+    /// live-polled fixture with a (possibly stale) schedule row.
+    func bootstrapFixturesIfNeeded(force: Bool = false) async {
+        guard isSignedIn, ControlPlane.shared.isOperational, !isBootstrappingFixtures else { return }
+        let now = Date()
+        let bootstrapDay = ISO8601DateFormatter.dateOnly.string(from: now)
+        if !force, defaults.string(forKey: CacheKey.fixtureBootstrapDay) == bootstrapDay {
             return
         }
-        isRefreshingFixtures = true
-        defer { isRefreshingFixtures = false }
+        isBootstrappingFixtures = true
+        defer { isBootstrappingFixtures = false }
 
         let calendar = Calendar.current
-        let now = Date()
-        var byId = Dictionary(uniqueKeysWithValues: fixtures.map { ($0.fixtureId, $0) })
-        AppLog.info(.fixtures, "refresh_start cached=\(fixtures.count) fan_teams=\(fanTeamIds.sorted())")
-
-        // Date files are the schedule bootstrap only. The frequent loop below
-        // polls individual match objects, not three full days of fixtures.
-        let bootstrapDay = ISO8601DateFormatter.dateOnly.string(from: now)
-        if defaults.string(forKey: CacheKey.fixtureBootstrapDay) != bootstrapDay {
-            let dates = [-1, 0, 1].compactMap { calendar.date(byAdding: .day, value: $0, to: now) }
-            var loadedAny = false
-            for date in dates {
-                guard isSignedIn, ControlPlane.shared.isOperational else { return }
-                let fetched: [Fixture]
-                do {
-                    fetched = try await scores.fetchFixtures(date: date)
-                    AppLog.info(.fixtures, "date_refresh_complete date=\(ISO8601DateFormatter.dateOnly.string(from: date)) fixtures=\(fetched.count)")
-                } catch {
-                    AppLog.error(.fixtures, "date_refresh_failed date=\(ISO8601DateFormatter.dateOnly.string(from: date))", error: error)
-                    continue
-                }
-                guard isSignedIn, ControlPlane.shared.isOperational else { return }
-                loadedAny = true
-                for fixture in fetched {
-                    // Preserve an active cached score until its individual
-                    // match read below, so a date bootstrap cannot hide a goal
-                    // transition and skip the corresponding celebration read.
-                    if byId[fixture.fixtureId]?.needsFrequentRefresh(at: now) == true {
-                        continue
-                    }
-                    byId[fixture.fixtureId] = fixture
-                }
-            }
-            if loadedAny {
-                defaults.set(bootstrapDay, forKey: CacheKey.fixtureBootstrapDay)
-            }
-        }
-
-        guard isSignedIn, ControlPlane.shared.isOperational else { return }
-        let refreshTargets = byId.values.filter {
-            $0.involves(fanTeamIds) && $0.needsFrequentRefresh(at: now)
-        }
-        AppLog.info(.fixtures, "live_refresh_targets count=\(refreshTargets.count) ids=\(refreshTargets.map(\.fixtureId).sorted())")
-        for previous in refreshTargets {
+        AppLog.info(.fixtures, "bootstrap_start cached=\(fixturesById.count) fan_teams=\(fanTeamIds.sorted())")
+        let dates = [-1, 0, 1].compactMap { calendar.date(byAdding: .day, value: $0, to: now) }
+        var loadedAny = false
+        for date in dates {
             guard isSignedIn, ControlPlane.shared.isOperational else { return }
-            let current: Fixture
+            let fetched: [Fixture]
             do {
-                current = try await scores.fetchFixture(fixtureId: previous.fixtureId)
-                AppLog.info(.fixtures, "fixture_refresh_complete fixture_id=\(current.fixtureId) old_status=\(previous.status) new_status=\(current.status) old_score=\(previous.home.goals)-\(previous.away.goals) new_score=\(current.home.goals)-\(current.away.goals)")
+                fetched = try await scores.fetchFixtures(date: date)
+                AppLog.info(.fixtures, "date_bootstrap_complete date=\(ISO8601DateFormatter.dateOnly.string(from: date)) fixtures=\(fetched.count)")
+            } catch ScoresError.notModified {
+                loadedAny = true
+                continue
             } catch {
-                AppLog.error(.fixtures, "fixture_refresh_failed fixture_id=\(previous.fixtureId)", error: error)
+                AppLog.error(.fixtures, "date_bootstrap_failed date=\(ISO8601DateFormatter.dateOnly.string(from: date))", error: error)
                 continue
             }
             guard isSignedIn, ControlPlane.shared.isOperational else { return }
-            byId[current.fixtureId] = current
-
-            // Celebration totals only need a CDN read when a goal/VAR
-            // correction changes the score.
-            if previous.score != current.score {
-                do {
-                    let totals = try await scores.fetchCelebrations(fixtureId: current.fixtureId)
-                    guard isSignedIn, ControlPlane.shared.isOperational else { return }
-                    AppLog.info(.celebrations, "score_change_totals_refresh fixture_id=\(current.fixtureId) teams=\(totals.count)")
-                    mergeCelebrationTotals(totals, fixtureId: current.fixtureId)
-                } catch {
-                    AppLog.error(.celebrations, "score_change_totals_refresh_failed fixture_id=\(current.fixtureId)", error: error)
+            loadedAny = true
+            for fixture in fetched {
+                // Don't clobber a fixture the live loop is actively polling — the
+                // schedule file can be up to 12h stale on score/status.
+                if fixturesById[fixture.fixtureId]?.needsFrequentRefresh(at: now) == true {
+                    continue
                 }
+                fixturesById[fixture.fixtureId] = fixture
             }
         }
+        if loadedAny {
+            defaults.set(bootstrapDay, forKey: CacheKey.fixtureBootstrapDay)
+        }
+        publishFixtures()
+        AppLog.info(.fixtures, "bootstrap_complete fixtures=\(fixturesById.count)")
+    }
 
-        guard isSignedIn, ControlPlane.shared.isOperational else { return }
-        fixtures = byId.values
+    /// Merge one freshly-polled live fixture into the working set. Called by
+    /// `LiveStore` each poll cycle; `publishFixtures()` projects the visible list.
+    func applyLiveFixture(_ fixture: Fixture) {
+        fixturesById[fixture.fixtureId] = fixture
+    }
+
+    /// Project the working set into the published, sorted, visible `fixtures`
+    /// list and persist it. Visible = kicks off today, or a live fan match.
+    func publishFixtures() {
+        let calendar = Calendar.current
+        let now = Date()
+        fixtures = fixturesById.values
             .filter { fixture in
                 fixture.kickoff.map { calendar.isDate($0, inSameDayAs: now) } == true
                     || (fixture.isLive && fixture.involves(fanTeamIds))
             }
             .sorted { ($0.kickoff ?? .distantFuture) < ($1.kickoff ?? .distantFuture) }
         persistFixtureCache()
-        AppLog.info(.fixtures, "refresh_complete visible=\(fixtures.count)")
     }
 
     /// Optimistically fold the user's own taps into the local total so their
