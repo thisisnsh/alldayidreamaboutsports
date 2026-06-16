@@ -14,10 +14,8 @@ private let defaultAnimationParams = AnimationParams()
 private let defaultAutoRefreshEnabled = false
 private let defaultAutoRefreshSeconds: Double = 5
 
-/// Kill switch + forced updates + remote tunables.
-/// Primary: Firebase Remote Config with real-time listeners (seconds to
-/// propagate). Backup: config.json on the scores CDN every 15 min, so the app
-/// stays controllable even if Firebase itself is the outage.
+/// Kill switch + forced updates + remote tunables, via Firebase Remote Config
+/// with real-time listeners (seconds to propagate).
 @MainActor
 final class ControlPlane: ObservableObject {
     static let shared = ControlPlane()
@@ -30,18 +28,12 @@ final class ControlPlane: ObservableObject {
     @Published var autoRefreshEnabled = false
     @Published var autoRefreshSeconds: Double = 5
 
-    private var backupTimer: Timer?
     private var remoteConfig: RemoteConfig?
     private var firebaseKillSwitch = false
-    private var backupKillSwitch = false
     private var firebaseUpdateRequired = false
-    private var backupUpdateRequired = false
     private var firebaseKillMessage = ""
-    private var backupKillMessage = ""
     private var firebaseAutoRefreshEnabled = defaultAutoRefreshEnabled
     private var firebaseAutoRefreshSeconds = defaultAutoRefreshSeconds
-    private var backupAutoRefreshEnabled: Bool?
-    private var backupAutoRefreshSeconds: Double?
 
     func start() {
         if FirebaseConfigured.isConfigured {
@@ -82,11 +74,6 @@ final class ControlPlane: ObservableObject {
                 }
             }
         }
-
-        backupTimer = Timer.scheduledTimer(withTimeInterval: 900, repeats: true) { _ in
-            Task { @MainActor in await ControlPlane.shared.checkBackupConfig() }
-        }
-        Task { await checkBackupConfig() }
     }
 
     private func apply(_ rc: RemoteConfig) {
@@ -108,35 +95,14 @@ final class ControlPlane: ObservableObject {
         AppLog.info(.remoteConfig, "firebase_state_applied kill_switch=\(firebaseKillSwitch) update_required=\(firebaseUpdateRequired) celebration_enabled=\(celebrationEnabled) auto_refresh=\(firebaseAutoRefreshEnabled) interval=\(firebaseAutoRefreshSeconds)")
     }
 
-    private func checkBackupConfig() async {
-        AppLog.debug(.remoteConfig, "backup_refresh_start")
-        let config: BackupConfig
-        do {
-            config = try await Services.scores.fetchBackupConfig()
-        } catch {
-            AppLog.error(.remoteConfig, "backup_refresh_failed", error: error)
-            return
-        }
-        backupKillSwitch = config.killSwitch ?? false
-        backupKillMessage = config.message ?? ""
-        let minBuild = config.minBuild ?? 0
-        backupUpdateRequired = minBuild > 0 && AppEnvironment.buildNumber < minBuild
-        backupAutoRefreshEnabled = config.autoRefreshEnabled
-        backupAutoRefreshSeconds = config.autoRefreshSeconds.flatMap { $0 >= 1 ? $0 : nil }
-        applyEffectiveState()
-        AppLog.info(.remoteConfig, "backup_refresh_complete kill_switch=\(backupKillSwitch) update_required=\(backupUpdateRequired)")
-    }
-
     private func applyEffectiveState() {
         let wasKilled = killSwitch
         let wasUpdateRequired = updateRequired
-        killSwitch = firebaseKillSwitch || backupKillSwitch
-        updateRequired = firebaseUpdateRequired || backupUpdateRequired
-        killMessage = backupKillSwitch && !backupKillMessage.isEmpty
-            ? backupKillMessage
-            : firebaseKillMessage
-        autoRefreshEnabled = backupAutoRefreshEnabled ?? firebaseAutoRefreshEnabled
-        autoRefreshSeconds = backupAutoRefreshSeconds ?? firebaseAutoRefreshSeconds
+        killSwitch = firebaseKillSwitch
+        updateRequired = firebaseUpdateRequired
+        killMessage = firebaseKillMessage
+        autoRefreshEnabled = firebaseAutoRefreshEnabled
+        autoRefreshSeconds = firebaseAutoRefreshSeconds
 
         if killSwitch {
             OverlayManager.shared.dismissAll()
@@ -195,10 +161,8 @@ final class ControlPlane: ObservableObject {
         }
     }
 
-    /// For app termination only — the kill switch must keep polling to recover.
+    /// For app termination only.
     func stop() {
-        backupTimer?.invalidate()
-        backupTimer = nil
         remoteConfig = nil
     }
 }

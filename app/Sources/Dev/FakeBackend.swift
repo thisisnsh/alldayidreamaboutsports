@@ -159,10 +159,6 @@ final class FakeScores: ScoresProviding {
         try? await Task.sleep(for: .milliseconds(450))
         return FakeStore.shared.celebrations[fixtureId] ?? [:]
     }
-    func fetchBackupConfig() async throws -> BackupConfig {
-        BackupConfig(killSwitch: false, message: nil, minBuild: nil,
-                     autoRefreshEnabled: nil, autoRefreshSeconds: nil)
-    }
 
     /// Multi-league catalog for the picker: World Cup is active/selectable; a
     /// coming-soon club league shows greyed; one league is "not scheduled".

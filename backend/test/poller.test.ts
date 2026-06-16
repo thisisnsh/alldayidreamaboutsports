@@ -13,8 +13,8 @@ function state(
   return {
     fixtureId, leagueId: 1, season: 2026, kickoffISO, status,
     rawStatus: status === "LIVE" ? "1H" : status === "FINISHED" ? "FT" : "NS", minute: null,
-    home: { id: 1, name: "A", goals: 0, yellowCards: 0, redCards: 0, yellowCardEvents: [], redCardEvents: [] },
-    away: { id: 2, name: "B", goals: 0, yellowCards: 0, redCards: 0, yellowCardEvents: [], redCardEvents: [] },
+    home: { id: 1, name: "A", goals: 0, yellowCards: 0, redCards: 0, yellowCardEvents: [], redCardEvents: [], goalEvents: [] },
+    away: { id: 2, name: "B", goals: 0, yellowCards: 0, redCards: 0, yellowCardEvents: [], redCardEvents: [], goalEvents: [] },
     ...extra,
   };
 }

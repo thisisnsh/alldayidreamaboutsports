@@ -31,7 +31,6 @@ protocol ScoresProviding {
     func fetchFixtures(date: Date) async throws -> [Fixture]
     func fetchFixture(fixtureId: Int) async throws -> Fixture
     func fetchCelebrations(fixtureId: Int) async throws -> [String: Int]
-    func fetchBackupConfig() async throws -> BackupConfig
 }
 
 /// Service locator — the single place where the flavor is decided.

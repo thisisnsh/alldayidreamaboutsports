@@ -151,6 +151,10 @@ export class ApiFootballProvider implements ScoreProvider {
       home: { yellow: 0, red: 0, yellowEvents: [] as { player: string | null; minute: number | null }[], redEvents: [] as { player: string | null; minute: number | null }[] },
       away: { yellow: 0, red: 0, yellowEvents: [] as { player: string | null; minute: number | null }[], redEvents: [] as { player: string | null; minute: number | null }[] },
     };
+    const goals = {
+      home: [] as { player: string | null; minute: number | null }[],
+      away: [] as { player: string | null; minute: number | null }[],
+    };
     let lastGoal: MatchState["lastGoal"];
     const kicks: PenaltyKick[] = [];
 
@@ -169,11 +173,9 @@ export class ApiFootballProvider implements ScoreProvider {
       } else if (ev.type === "Goal" && !/cancell/i.test(ev.detail) && !/missed/i.test(ev.detail)) {
         // Skip "Missed Penalty" — it never increments the score and must not
         // steal scorer attribution from a later real goal.
-        lastGoal = {
-          teamId,
-          player: ev.player?.name ?? null,
-          minute: ev.time.elapsed,
-        };
+        const goalEv = { player: ev.player?.name ?? null, minute: ev.time.elapsed };
+        goals[side].push(goalEv);
+        lastGoal = { teamId, ...goalEv };
       }
     }
 
@@ -185,6 +187,17 @@ export class ApiFootballProvider implements ScoreProvider {
         ? { home: penHome ?? 0, away: penAway ?? 0, kicks }
         : undefined;
 
+    const status = STATUS_MAP[f.fixture.status.short] ?? "OTHER";
+    // While a match is in play, API-Football bumps the aggregate `goals`
+    // counter a poll or two BEFORE the matching event (with the scorer) lands
+    // in `events[]`. Counting from the events list instead means a GOAL is only
+    // emitted once its scorer is known — never with an empty/guessed name.
+    // Finished matches aren't enriched with events, so fall back to the
+    // authoritative aggregate (the scorers were already attributed while live).
+    const live = status === "LIVE" || status === "HALF_TIME";
+    const goalCount = (side: "home" | "away") =>
+      live ? Math.min(f.goals[side] ?? 0, goals[side].length) : (f.goals[side] ?? 0);
+
     return {
       fixtureId: f.fixture.id,
       leagueId: f.league.id,
@@ -194,26 +207,28 @@ export class ApiFootballProvider implements ScoreProvider {
       secondHalfStartISO: f.fixture.periods?.second
         ? new Date(f.fixture.periods.second * 1000).toISOString()
         : null,
-      status: STATUS_MAP[f.fixture.status.short] ?? "OTHER",
+      status,
       rawStatus: f.fixture.status.short,
       minute: f.fixture.status.elapsed,
       home: {
         id: homeId,
         name: f.teams.home.name,
-        goals: f.goals.home ?? 0,
+        goals: goalCount("home"),
         yellowCards: cards.home.yellow,
         redCards: cards.home.red,
         yellowCardEvents: cards.home.yellowEvents,
         redCardEvents: cards.home.redEvents,
+        goalEvents: goals.home,
       },
       away: {
         id: awayId,
         name: f.teams.away.name,
-        goals: f.goals.away ?? 0,
+        goals: goalCount("away"),
         yellowCards: cards.away.yellow,
         redCards: cards.away.red,
         yellowCardEvents: cards.away.yellowEvents,
         redCardEvents: cards.away.redEvents,
+        goalEvents: goals.away,
       },
       lastGoal,
       shootout,

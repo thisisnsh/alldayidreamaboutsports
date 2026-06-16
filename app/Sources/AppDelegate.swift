@@ -4,6 +4,7 @@ import FirebaseMessaging
 import GoogleSignIn
 import Sparkle
 import SwiftUI
+import UserNotifications
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let menuController = MenuPopoverController.shared
@@ -32,6 +33,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             FirebaseApp.configure()
             AppLog.configureFirebaseCollection()
             Messaging.messaging().delegate = PushService.shared
+            // Match events are time-sensitive: we deliver them as high-priority
+            // alert pushes (see backend Fcm). Authorization lets the system show
+            // them when the app can't draw its own overlay (asleep screen, etc.);
+            // when it can, willPresent suppresses the banner so only the pill shows.
+            UNUserNotificationCenter.current().delegate = self
+            UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { granted, error in
+                if let error {
+                    AppLog.error(.fcm, "notification_authorization_failed", error: error)
+                } else {
+                    AppLog.info(.fcm, "notification_authorization granted=\(granted)")
+                }
+            }
             AppLog.info(.fcm, "apns_registration_start")
             NSApplication.shared.registerForRemoteNotifications()
         } else {
@@ -89,11 +102,40 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         AppLog.error(.fcm, "apns_registration_failed", error: error)
     }
 
-    // FCM data messages land here while the app runs.
+    // FCM data messages land here while the app runs (the alert pushes carry
+    // content-available, so this still fires and draws the pill).
     func application(_ application: NSApplication,
                      didReceiveRemoteNotification userInfo: [String: Any]) {
         AppLog.info(.fcm, "push_received kind=\(userInfo["kind"] as? String ?? "unknown") event_id=\(userInfo["eventId"] as? String ?? "none") fixture_id=\(userInfo["fixtureId"] as? String ?? "none")")
         EventRouter.shared.handlePush(userInfo)
+    }
+}
+
+extension AppDelegate: UNUserNotificationCenterDelegate {
+    /// Foreground: the app draws its own pill, so suppress the system banner —
+    /// EventRouter dedupes if didReceiveRemoteNotification already handled it.
+    func userNotificationCenter(_ center: UNUserNotificationCenter,
+                                willPresent notification: UNNotification,
+                                withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+        let info = Self.userInfo(from: notification)
+        Task { @MainActor in EventRouter.shared.handlePush(info) }
+        completionHandler([])
+    }
+
+    /// The user clicked a system banner (shown when the app couldn't draw a
+    /// pill, e.g. asleep screen) — route it so state catches up.
+    func userNotificationCenter(_ center: UNUserNotificationCenter,
+                                didReceive response: UNNotificationResponse,
+                                withCompletionHandler completionHandler: @escaping () -> Void) {
+        let info = Self.userInfo(from: response.notification)
+        Task { @MainActor in EventRouter.shared.handlePush(info) }
+        completionHandler()
+    }
+
+    private static func userInfo(from notification: UNNotification) -> [String: Any] {
+        notification.request.content.userInfo.reduce(into: [String: Any]()) { result, pair in
+            if let key = pair.key as? String { result[key] = pair.value }
+        }
     }
 }
 

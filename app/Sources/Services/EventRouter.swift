@@ -128,6 +128,11 @@ private func teamLogo(_ id: Int) -> String {
     TeamCatalog.team(for: id, in: AppSession.shared.teams).logo
 }
 
+@MainActor
+private func teamName(_ id: Int) -> String {
+    TeamCatalog.team(for: id, in: AppSession.shared.teams).name
+}
+
 /// [logo] Home vs Away [logo] — the matchup chip used by kickoff / extra time.
 @MainActor
 private func matchupSegments(for event: MatchEvent) -> [PillSegment] {
@@ -155,7 +160,11 @@ func pillTitle(for event: MatchEvent) -> [PillSegment] {
     let teamChip: [PillSegment] = event.teamId.map { [.logo(url: teamLogo($0))] } ?? []
     switch event.type {
     case .kickoff: return [.text("Kickoff — ")] + matchupSegments(for: event)
-    case .goal: return [.text("\(minute)Goal — \(event.player ?? event.homeName) ")] + teamChip
+    case .goal:
+        // Backend now always sends a scorer; if it's ever missing, name the
+        // scoring team — never the home team (that mislabels away goals).
+        let scorer = event.player ?? event.teamId.map(teamName) ?? ""
+        return [.text("\(minute)Goal — \(scorer) ")] + teamChip
     case .goalCancelled: return [.text("\(minute)VAR — Goal Disallowed ")] + teamChip
     case .yellowCard: return [.text("\(minute)Yellow card — \(event.player ?? "") ")] + teamChip
     case .redCard: return [.text("\(minute)Red card — \(event.player ?? "") ")] + teamChip

@@ -90,14 +90,17 @@ export function diffMatch(prev: MatchState | null, next: MatchState): MatchEvent
     const before = prev?.[side].goals ?? 0;
     const after = next[side].goals;
     const team = next[side];
-    const scorer =
-      next.lastGoal?.teamId === team.id ? next.lastGoal : undefined;
     for (let g = before + 1; g <= after; g++) {
+      // The provider only advances the goal count once the matching scorer
+      // event exists (see apiFootball goalCount), so goalEvents[g-1] is the
+      // scorer. The team-name fallback only fires for a goal an unenriched
+      // finished snapshot surfaced — so a GOAL is never emitted nameless.
+      const goalEv = team.goalEvents?.[g - 1];
       events.push(
         make("GOAL", {
           teamId: team.id,
-          player: scorer?.player ?? null,
-          minute: scorer?.minute ?? next.minute,
+          player: goalEv?.player ?? team.name,
+          minute: goalEv?.minute ?? next.minute,
           idSuffix: `${team.id}:${g}`,
         }),
       );
