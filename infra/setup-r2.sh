@@ -90,12 +90,23 @@ tooling can script are run above; the rest are explicit manual checklist items
      curl -sI https://scores-staging.alldayidreamaboutsports.com/catalog.json \
        | grep -i '^cf-cache-status:'
 
-6. R2 API token (Object Read & Write, all four buckets) →
+6. ☑ Cloudflare WAF rate limits on the R2 custom domains.
+   After the zone exists in Cloudflare, run:
+     CLOUDFLARE_API_TOKEN=<token-with-zone-rulesets-write> \
+     CLOUDFLARE_ZONE_ID=<zone-id> \
+     ./infra/setup-cloudflare-rate-limits.sh
+   This creates/updates the zone's http_ratelimit ruleset with:
+     - scores CDN requests: 600/min per IP + colo
+     - scores R2 origin reads: 120/min per IP + colo, counting origin requests only
+     - downloads CDN requests: 120/min per IP + colo
+   It protects both the edge hostname and R2 origin from cache-busting abuse.
+
+7. R2 API token (Object Read & Write, all four buckets) →
    - each environment's backend secrets: r2-access-key-id / r2-secret-access-key / r2-endpoint
      (endpoint: https://<ACCOUNT_ID>.r2.cloudflarestorage.com)
    - local release env vars: R2_ENDPOINT / AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY
      (R2 credentials are not GitHub secrets)
 
-7. The website is hosted from the separate public GitHub Pages repo documented
+8. The website is hosted from the separate public GitHub Pages repo documented
    in infra/README.md, not from this repository or Cloudflare Pages.
 EOF

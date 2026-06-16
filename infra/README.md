@@ -110,6 +110,28 @@ are `public, max-age=5, stale-while-revalidate=25`; `fixtures-*` and
 scheduler job (every 5 min) reads `cf-cache-status` and alerts if users start
 hitting R2 — treat a falling hit ratio or rising R2 reads as sev-1.
 
+Also apply Cloudflare WAF rate limits to the R2 custom domains:
+
+```sh
+CLOUDFLARE_API_TOKEN=<token-with-zone-rulesets-write> \
+CLOUDFLARE_ZONE_ID=<zone-id> \
+./setup-cloudflare-rate-limits.sh
+```
+
+The script manages the zone `http_ratelimit` ruleset and keeps its rules at the
+end of the phase, as Cloudflare requires for rate limiting. Defaults:
+
+| Scope | Limit | Why |
+|---|---:|---|
+| `scores-staging.` + `scores.` CDN requests | 600/min per IP + colo | Caps abusive clients while leaving normal app polling alone |
+| `scores-staging.` + `scores.` R2 origin reads | 120/min per IP + colo | Counts origin requests only, so cache hits are not penalized |
+| `download-staging.` + `download.` CDN requests | 120/min per IP + colo | Prevents download/appcast scraping from one client |
+
+Override the limits with `SCORES_RATE_LIMIT_REQUESTS_PER_MINUTE`,
+`SCORES_ORIGIN_RATE_LIMIT_REQUESTS_PER_MINUTE`,
+`DOWNLOAD_RATE_LIMIT_REQUESTS_PER_MINUTE`, and
+`RATE_LIMIT_MITIGATION_TIMEOUT_SECONDS`.
+
 An R2 custom domain returning `404` usually means the domain is connected but
 the requested object has not been uploaded yet. After the first backend deploy:
 
