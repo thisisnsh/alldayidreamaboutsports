@@ -11,8 +11,8 @@ struct AnimationParams: Codable {
 }
 
 private let defaultAnimationParams = AnimationParams()
-private let defaultAutoRefreshEnabled = false
-private let defaultAutoRefreshSeconds: Double = 5
+private let defaultPollSeconds: Double = 5
+private let defaultCelebrationSamplePercent: Double = 1.0
 
 /// Kill switch + forced updates + remote tunables, via Firebase Remote Config
 /// with real-time listeners (seconds to propagate).
@@ -25,15 +25,18 @@ final class ControlPlane: ObservableObject {
     @Published var updateRequired = false
     @Published var celebrationEnabled = true
     @Published var animationParams = AnimationParams()
-    @Published var autoRefreshEnabled = false
-    @Published var autoRefreshSeconds: Double = 5
+    /// Live poll interval in seconds (≈5). Drives LiveStore's loop.
+    @Published var pollSeconds: Double = 5
+    /// Probability [0,1] a client reports its real celebration taps. 1.0 =
+    /// everyone reports (exact); lower samples, and the server multiplies back.
+    @Published var celebrationSamplePercent: Double = 1.0
 
     private var remoteConfig: RemoteConfig?
     private var firebaseKillSwitch = false
     private var firebaseUpdateRequired = false
     private var firebaseKillMessage = ""
-    private var firebaseAutoRefreshEnabled = defaultAutoRefreshEnabled
-    private var firebaseAutoRefreshSeconds = defaultAutoRefreshSeconds
+    private var firebasePollSeconds = defaultPollSeconds
+    private var firebaseCelebrationSamplePercent = defaultCelebrationSamplePercent
 
     func start() {
         if FirebaseConfigured.isConfigured {
@@ -51,8 +54,8 @@ final class ControlPlane: ObservableObject {
                 "min_build": 1 as NSNumber,
                 "celebration_enabled": true as NSNumber,
                 "animation_params": #"{"ballDropSeconds":1.5,"pillHoldSeconds":7,"notchStackMax":10}"# as NSString,
-                "auto_refresh_enabled": false as NSNumber,
-                "auto_refresh_seconds": 5 as NSNumber,
+                "poll_seconds": 5 as NSNumber,
+                "celebration_sample_percent": 1.0 as NSNumber,
             ])
             // Apply the last activated values before session bootstrap can let
             // a previously-killed install make authenticated requests.
@@ -80,9 +83,10 @@ final class ControlPlane: ObservableObject {
         firebaseKillSwitch = rc["kill_switch"].boolValue
         firebaseKillMessage = rc["kill_message"].stringValue
         celebrationEnabled = rc["celebration_enabled"].boolValue
-        firebaseAutoRefreshEnabled = rc["auto_refresh_enabled"].boolValue
-        let secs = rc["auto_refresh_seconds"].numberValue.doubleValue
-        firebaseAutoRefreshSeconds = secs >= 1 ? secs : defaultAutoRefreshSeconds
+        let secs = rc["poll_seconds"].numberValue.doubleValue
+        firebasePollSeconds = secs >= 1 ? secs : defaultPollSeconds
+        let sample = rc["celebration_sample_percent"].numberValue.doubleValue
+        firebaseCelebrationSamplePercent = (sample > 0 && sample <= 1) ? sample : defaultCelebrationSamplePercent
         let minBuild = rc["min_build"].numberValue.intValue
         firebaseUpdateRequired = minBuild > 0 && AppEnvironment.buildNumber < minBuild
         if let data = rc["animation_params"].stringValue.data(using: .utf8),
@@ -92,7 +96,7 @@ final class ControlPlane: ObservableObject {
             animationParams = defaultAnimationParams
         }
         applyEffectiveState()
-        AppLog.info(.remoteConfig, "firebase_state_applied kill_switch=\(firebaseKillSwitch) update_required=\(firebaseUpdateRequired) celebration_enabled=\(celebrationEnabled) auto_refresh=\(firebaseAutoRefreshEnabled) interval=\(firebaseAutoRefreshSeconds)")
+        AppLog.info(.remoteConfig, "firebase_state_applied kill_switch=\(firebaseKillSwitch) update_required=\(firebaseUpdateRequired) celebration_enabled=\(celebrationEnabled) poll_seconds=\(firebasePollSeconds) celebration_sample=\(firebaseCelebrationSamplePercent)")
     }
 
     private func applyEffectiveState() {
@@ -101,8 +105,8 @@ final class ControlPlane: ObservableObject {
         killSwitch = firebaseKillSwitch
         updateRequired = firebaseUpdateRequired
         killMessage = firebaseKillMessage
-        autoRefreshEnabled = firebaseAutoRefreshEnabled
-        autoRefreshSeconds = firebaseAutoRefreshSeconds
+        pollSeconds = firebasePollSeconds
+        celebrationSamplePercent = firebaseCelebrationSamplePercent
 
         if killSwitch {
             OverlayManager.shared.dismissAll()

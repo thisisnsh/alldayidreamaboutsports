@@ -1,10 +1,8 @@
 import AppKit
 import FirebaseCore
-import FirebaseMessaging
 import GoogleSignIn
 import Sparkle
 import SwiftUI
-import UserNotifications
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let menuController = MenuPopoverController.shared
@@ -29,26 +27,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         URLCache.shared = URLCache(memoryCapacity: 16 << 20, diskCapacity: 64 << 20)
 
         // Firebase config is optional in dev builds (plist is gitignored).
+        // Live scores arrive by polling (LiveStore) — Firebase is kept solely
+        // for Remote Config (the control plane) and Crashlytics. No FCM/APNs.
         if Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist") != nil {
             FirebaseApp.configure()
             AppLog.configureFirebaseCollection()
-            Messaging.messaging().delegate = PushService.shared
-            // Match events are time-sensitive: we deliver them as high-priority
-            // alert pushes (see backend Fcm). Authorization lets the system show
-            // them when the app can't draw its own overlay (asleep screen, etc.);
-            // when it can, willPresent suppresses the banner so only the pill shows.
-            UNUserNotificationCenter.current().delegate = self
-            UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { granted, error in
-                if let error {
-                    AppLog.error(.fcm, "notification_authorization_failed", error: error)
-                } else {
-                    AppLog.info(.fcm, "notification_authorization granted=\(granted)")
-                }
-            }
-            AppLog.info(.fcm, "apns_registration_start")
-            NSApplication.shared.registerForRemoteNotifications()
         } else {
-            AppLog.info(.app, "firebase_unconfigured push_and_remote_config_disabled")
+            AppLog.info(.app, "firebase_unconfigured remote_config_disabled")
         }
 
         ControlPlane.shared.start()
@@ -88,55 +73,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         openWindow(AppSession.shared.isSignedIn ? WindowID.settings : WindowID.login)
         return false
     }
-
-    // APNs token → FCM (required for topic delivery on macOS).
-    func application(_ application: NSApplication,
-                     didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
-        Messaging.messaging().apnsToken = deviceToken
-        AppLog.info(.fcm, "apns_registration_complete token_bytes=\(deviceToken.count)")
-        PushService.shared.retryPending()
-    }
-
-    func application(_ application: NSApplication,
-                     didFailToRegisterForRemoteNotificationsWithError error: Error) {
-        AppLog.error(.fcm, "apns_registration_failed", error: error)
-    }
-
-    // FCM data messages land here while the app runs (the alert pushes carry
-    // content-available, so this still fires and draws the pill).
-    func application(_ application: NSApplication,
-                     didReceiveRemoteNotification userInfo: [String: Any]) {
-        AppLog.info(.fcm, "push_received kind=\(userInfo["kind"] as? String ?? "unknown") event_id=\(userInfo["eventId"] as? String ?? "none") fixture_id=\(userInfo["fixtureId"] as? String ?? "none")")
-        EventRouter.shared.handlePush(userInfo)
-    }
-}
-
-extension AppDelegate: UNUserNotificationCenterDelegate {
-    /// Foreground: the app draws its own pill, so suppress the system banner —
-    /// EventRouter dedupes if didReceiveRemoteNotification already handled it.
-    func userNotificationCenter(_ center: UNUserNotificationCenter,
-                                willPresent notification: UNNotification,
-                                withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
-        let info = Self.userInfo(from: notification)
-        Task { @MainActor in EventRouter.shared.handlePush(info) }
-        completionHandler([])
-    }
-
-    /// The user clicked a system banner (shown when the app couldn't draw a
-    /// pill, e.g. asleep screen) — route it so state catches up.
-    func userNotificationCenter(_ center: UNUserNotificationCenter,
-                                didReceive response: UNNotificationResponse,
-                                withCompletionHandler completionHandler: @escaping () -> Void) {
-        let info = Self.userInfo(from: response.notification)
-        Task { @MainActor in EventRouter.shared.handlePush(info) }
-        completionHandler()
-    }
-
-    private static func userInfo(from notification: UNNotification) -> [String: Any] {
-        notification.request.content.userInfo.reduce(into: [String: Any]()) { result, pair in
-            if let key = pair.key as? String { result[key] = pair.value }
-        }
-    }
 }
 
 /// AppKit owns the status item so a transient popover closes on focus loss and
@@ -146,7 +82,6 @@ final class MenuPopoverController: NSObject, NSPopoverDelegate {
     static let shared = MenuPopoverController()
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
     private let popover = NSPopover()
-    private var refreshTimer: Timer?
     private var remoteConfigTimer: Timer?
     private var eventMonitor: Any?
 
@@ -193,9 +128,12 @@ final class MenuPopoverController: NSObject, NSPopoverDelegate {
     }
 
     private func startRefreshing() {
-        // Guard the fetch/timer, not the monitor below — the signed-out popover
-        // still needs the outside-click monitor to close.
-        startFixtureRefreshing()
+        // Live scores flow continuously from LiveStore (always-on poll loop) —
+        // opening the menu just nudges a schedule refresh for immediate freshness
+        // and keeps the control plane current.
+        if AppSession.shared.isSignedIn, ControlPlane.shared.isOperational {
+            Task { await AppSession.shared.refreshFixtures() }
+        }
         remoteConfigTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { _ in
             Task { @MainActor in ControlPlane.shared.refreshRemoteConfig(ignoreCache: true) }
         }
@@ -207,8 +145,6 @@ final class MenuPopoverController: NSObject, NSPopoverDelegate {
     }
 
     private func stopRefreshing() {
-        refreshTimer?.invalidate()
-        refreshTimer = nil
         remoteConfigTimer?.invalidate()
         remoteConfigTimer = nil
         if let monitor = eventMonitor {
@@ -217,30 +153,9 @@ final class MenuPopoverController: NSObject, NSPopoverDelegate {
         }
     }
 
-    func controlPlaneDidChange() {
-        guard popover.isShown else { return }
-        refreshTimer?.invalidate()
-        refreshTimer = nil
-        startFixtureRefreshing()
-    }
-
-    private func startFixtureRefreshing() {
-        guard AppSession.shared.isSignedIn, ControlPlane.shared.isOperational else {
-            AppLog.debug(.fixtures, "refresh_timer_not_started signed_in=\(AppSession.shared.isSignedIn) operational=\(ControlPlane.shared.isOperational)")
-            return
-        }
-        Task { await AppSession.shared.refreshFixtures() }
-        guard ControlPlane.shared.autoRefreshEnabled else {
-            AppLog.info(.fixtures, "refresh_timer_disabled")
-            return
-        }
-        let interval = max(1, ControlPlane.shared.autoRefreshSeconds)
-        AppLog.info(.fixtures, "refresh_timer_started interval_seconds=\(interval)")
-        refreshTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { _ in
-            Task { await AppSession.shared.refreshFixtures() }
-        }
-    }
-
+    /// Control-plane recovery: the menu no longer drives a fixture timer (the
+    /// always-on poll loop does), so there's nothing to restart here.
+    func controlPlaneDidChange() {}
 }
 
 /// SwiftUI utility windows are separate scenes, but maintenance should live

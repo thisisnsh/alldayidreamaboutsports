@@ -47,6 +47,16 @@ final class CelebrationService {
         let count = min(taps, 200)
         targets = []
         taps = 0
+        // Sampling: only a sampled fraction of clients POST their real taps; the
+        // server multiplies the received total back up by 1/sample to estimate the
+        // global count. The optimistic local add already happened upstream
+        // (OverlayManager.flushTapsAndQueueCounts), so a skipped POST still shows
+        // the user's own celebration — it just isn't reported. 1.0 = everyone reports.
+        let sample = ControlPlane.shared.celebrationSamplePercent
+        guard sample >= 1.0 || Double.random(in: 0 ..< 1) < sample else {
+            AppLog.info(.celebrations, "upload_sampled_out sample=\(sample) targets=\(batch.count) taps=\(count)")
+            return
+        }
         Task {
             for target in batch {
                 guard ControlPlane.shared.isOperational, AppSession.shared.isSignedIn else { return }

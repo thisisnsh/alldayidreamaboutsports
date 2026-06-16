@@ -33,8 +33,6 @@ targets:
           - "GoogleService-Info*.plist"
     dependencies:
       - package: Firebase
-        product: FirebaseMessaging
-      - package: Firebase
         product: FirebaseRemoteConfig
       - package: Firebase
         product: FirebaseCrashlytics
