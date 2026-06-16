@@ -1,7 +1,5 @@
 import { App, applicationDefault, getApps, initializeApp } from "firebase-admin/app";
 import { FieldValue, Firestore, getFirestore } from "firebase-admin/firestore";
-import type { UserPrefs } from "./types.js";
-import { DEFAULT_PREFS } from "./types.js";
 
 export function firebaseApp(): App {
   return getApps()[0] ?? initializeApp({ credential: applicationDefault() });
@@ -36,29 +34,15 @@ export class Store {
   async upsertUser(
     sub: string,
     profile: { name: string | null; email: string | null; photoURL: string | null },
-  ): Promise<UserPrefs> {
+  ): Promise<void> {
     const ref = this.userRef(sub);
     const snap = await ref.get();
     await ref.set(
       {
         ...profile,
-        ...(snap.exists ? {} : { prefs: DEFAULT_PREFS, createdAt: FieldValue.serverTimestamp() }),
+        ...(snap.exists ? {} : { createdAt: FieldValue.serverTimestamp() }),
         updatedAt: FieldValue.serverTimestamp(),
       },
-      { merge: true },
-    );
-    return (snap.data()?.prefs as UserPrefs | undefined) ?? DEFAULT_PREFS;
-  }
-
-  async getPrefs(sub: string): Promise<UserPrefs | null> {
-    const snap = await this.userRef(sub).get();
-    if (!snap.exists) return null;
-    return (snap.data()?.prefs as UserPrefs | undefined) ?? DEFAULT_PREFS;
-  }
-
-  async putPrefs(sub: string, prefs: UserPrefs): Promise<void> {
-    await this.userRef(sub).set(
-      { prefs, updatedAt: FieldValue.serverTimestamp() },
       { merge: true },
     );
   }

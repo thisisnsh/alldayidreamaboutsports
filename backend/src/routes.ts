@@ -9,23 +9,8 @@ import { CACHE_CONTROL_LIVE, type R2 } from "./r2.js";
 import { FixedWindowRateLimiter } from "./rateLimit.js";
 import type { Store } from "./store.js";
 import type { Dispatcher } from "./tasks.js";
-import type { MatchState, Period, UserPrefs } from "./types.js";
+import type { MatchState, Period } from "./types.js";
 import { log } from "./log.js";
-
-const prefsSchema = z.object({
-  fanOf: z.record(
-    z.string().max(32), // game, e.g. "football"
-    // leagueId -> team ids (as strings); ids can be a single digit, e.g. "6".
-    z.record(z.string().max(16), z.array(z.string().min(1).max(12)).max(64)),
-  ),
-  settings: z
-    .object({
-      launchAtLogin: z.boolean().optional(),
-      theme: z.enum(["system", "light", "dark"]).optional(),
-      notifications: z.record(z.string().max(32), z.boolean()).optional(),
-    })
-    .passthrough(),
-});
 
 const celebrateSchema = z.object({
   fixtureId: z.number().int().positive(),
@@ -156,12 +141,12 @@ export function buildApp({ store, poller, dispatcher, catalog, celebrations, r2 
     try {
       const idToken = z.object({ idToken: z.string().min(10) }).parse(req.body).idToken;
       const user = await verifyGoogleIdToken(idToken);
-      const prefs = await store.upsertUser(user.sub, {
+      await store.upsertUser(user.sub, {
         name: user.name,
         email: user.email,
         photoURL: user.photoURL,
       });
-      res.json({ token: await signSession(user), profile: user, prefs });
+      res.json({ token: await signSession(user), profile: user });
     } catch (err) {
       res.status(401).json({ error: `sign-in failed: ${(err as Error).message}` });
     }
@@ -171,19 +156,6 @@ export function buildApp({ store, poller, dispatcher, catalog, celebrations, r2 
     requireSession,
     enforceRateLimit(sessionRateLimiter, (req) => req.user!.sub),
   ];
-
-  app.get("/me/prefs", requireRateLimitedSession, async (req: Request, res: Response) => {
-    const prefs = await store.getPrefs(req.user!.sub);
-    if (!prefs) return void res.status(404).json({ error: "no such user" });
-    res.json({ prefs });
-  });
-
-  app.put("/me/prefs", requireRateLimitedSession, async (req: Request, res: Response) => {
-    const parsed = prefsSchema.safeParse(req.body);
-    if (!parsed.success) return void res.status(400).json({ error: parsed.error.message });
-    await store.putPrefs(req.user!.sub, parsed.data as UserPrefs);
-    res.json({ ok: true });
-  });
 
   app.post("/celebrate", requireRateLimitedSession, (req: Request, res: Response) => {
     if (!celebrationRateLimiter.allow(req.user!.sub)) {

@@ -1,7 +1,6 @@
 /**
  * Stable global team identity = API-Football's numeric team id (never null,
- * unique across leagues). Used as the celebration counter key and the `fanOf`
- * value.
+ * unique across leagues). Used as the celebration counter key.
  */
 export type TeamId = number;
 
@@ -83,17 +82,3 @@ export interface MatchState {
   /** Penalty shootout, present once the match reaches one (P/PEN). */
   shootout?: { home: number; away: number; kicks: PenaltyKick[] };
 }
-
-export interface UserPrefs {
-  fanOf: Record<string, Record<string, string[]>>; // game -> leagueId -> team ids (as strings)
-  settings: {
-    launchAtLogin?: boolean;
-    theme?: "system" | "light" | "dark";
-    notifications?: Record<string, boolean>;
-  };
-}
-
-export const DEFAULT_PREFS: UserPrefs = {
-  fanOf: { football: { "1": [] } },
-  settings: {},
-};

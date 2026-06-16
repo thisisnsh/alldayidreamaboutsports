@@ -2,14 +2,13 @@ import AppKit
 import Foundation
 import SwiftUI
 
-/// Central app state: identity, prefs (UserDefaults = source of truth, backend
-/// = roaming backup), team catalog, and today's fixtures.
+/// Central app state: identity, local prefs, team catalog, and today's fixtures.
 @MainActor
 final class AppSession: ObservableObject {
     static let shared = AppSession()
 
     @Published var profile: Profile?
-    @Published var prefs: UserPrefs = .empty
+    @Published var prefs: AppPrefs = .empty
     @Published var leagues: [League] = []
     @Published var teamsByLeague: [Int: [Team]] = [1: TeamCatalog.fallback]
     @Published var fixtures: [Fixture] = []
@@ -25,6 +24,8 @@ final class AppSession: ObservableObject {
     private var fixturesById: [Int: Fixture] = [:]
 
     private enum CacheKey {
+        static let fanTeamIds = "fanTeamIds"
+        static let settings = "settings"
         static let fixtures = "cachedFixtures"
         static let celebrationTotals = "cachedCelebrationTotals"
         static let fixtureBootstrapDay = "fixtureBootstrapDay"
@@ -37,9 +38,9 @@ final class AppSession: ObservableObject {
     var teams: [Team] { allTeams }
     /// The single league users can follow today (World Cup); others are "coming soon".
     var activeLeagueId: Int { leagues.first(where: \.active)?.id ?? AppEnvironment.leagueId }
-    var fanTeamIds: Set<Int> { Set(prefs.footballTeams.compactMap(Int.init)) }
+    var fanTeamIds: Set<Int> { Set(prefs.fanTeamIds.compactMap(Int.init)) }
     var fanTeams: [Team] {
-        prefs.footballTeams.compactMap(Int.init).map { TeamCatalog.team(for: $0, in: allTeams) }
+        prefs.fanTeamIds.compactMap(Int.init).map { TeamCatalog.team(for: $0, in: allTeams) }
     }
 
     // MARK: Lifecycle
@@ -48,26 +49,17 @@ final class AppSession: ObservableObject {
         AppLog.info(.app, "session_bootstrap_start")
         #if DEV_BACKEND
         // Sign-in bypass: already signed in before the first frame. Profile
-        // and fan teams come from Dev/DevConfig.swift (code is the source of
-        // truth), but settings still load from UserDefaults so your toggles
-        // survive a relaunch — same as production.
+        // comes from Dev/DevConfig.swift, while fan teams/settings are local.
         profile = DevConfig.profile
-        prefs = FakeStore.shared.prefs
-        if let data = defaults.data(forKey: "prefs"),
-           let stored = try? JSONDecoder().decode(UserPrefs.self, from: data) {
-            prefs.settings = stored.settings
-        }
+        prefs.fanTeamIds = DevConfig.fanTeams
         #else
         if let data = defaults.data(forKey: "profile"),
            let stored = try? JSONDecoder().decode(Profile.self, from: data),
            Keychain.get("sessionToken") != nil {
             profile = stored
         }
-        if let data = defaults.data(forKey: "prefs"),
-           let stored = try? JSONDecoder().decode(UserPrefs.self, from: data) {
-            prefs = stored
-        }
         #endif
+        loadLocalPrefs()
         if let data = defaults.data(forKey: CacheKey.fixtures),
            let stored = try? JSONDecoder().decode([Fixture].self, from: data) {
             fixtures = stored
@@ -78,48 +70,10 @@ final class AppSession: ObservableObject {
             celebrationTotals = stored
         }
         Task { await refreshCatalog() }
-        // Fan teams sync with the backend ONCE per app start; every other
-        // read is local. Changes go up via setFanTeams as they happen.
-        Task { await syncFanTeamsOnLaunch() }
         // Always-on live polling: one loop, running whenever a fan match is in
         // its live window — no menu, no push.
         LiveStore.shared.start()
         AppLog.info(.app, "session_bootstrap_complete signed_in=\(isSignedIn) fan_teams=\(fanTeamIds.sorted()) cached_fixtures=\(fixtures.count)")
-    }
-
-    /// One launch-time reconciliation: server teams win on a fresh machine,
-    /// local teams backfill an empty server. Never called again until the
-    /// next launch — the menu always reads from local state.
-    private func syncFanTeamsOnLaunch() async {
-        guard isSignedIn, ControlPlane.shared.isOperational else {
-            AppLog.debug(.prefs, "fan_sync_skipped signed_in=\(isSignedIn) operational=\(ControlPlane.shared.isOperational)")
-            return
-        }
-        AppLog.info(.prefs, "fan_sync_start local=\(prefs.footballTeams.sorted())")
-        let server: UserPrefs
-        do {
-            server = try await api.fetchPrefs()
-        } catch {
-            AppLog.error(.prefs, "fan_sync_fetch_failed", error: error)
-            return
-        }
-        guard isSignedIn, ControlPlane.shared.isOperational else { return }
-        let serverTeams = server.fanOf["football"]?[String(AppEnvironment.leagueId)] ?? []
-        if !serverTeams.isEmpty && prefs.footballTeams.isEmpty {
-            prefs.fanOf = server.fanOf
-            persistPrefs()
-            AppLog.info(.prefs, "fan_sync_adopted_server teams=\(serverTeams.sorted())")
-        } else if serverTeams != prefs.footballTeams {
-            guard ControlPlane.shared.isOperational else { return }
-            do {
-                try await api.putPrefs(roamingPrefs)
-                AppLog.info(.prefs, "fan_sync_uploaded_local teams=\(prefs.footballTeams.sorted())")
-            } catch {
-                AppLog.error(.prefs, "fan_sync_upload_failed", error: error)
-            }
-        }
-        guard isSignedIn, ControlPlane.shared.isOperational else { return }
-        AppLog.info(.prefs, "fan_sync_complete teams=\(fanTeamIds.sorted())")
     }
 
     // MARK: Sign in / out
@@ -145,11 +99,6 @@ final class AppSession: ObservableObject {
                 Keychain.set(response.token, for: "sessionToken")
                 profile = response.profile
                 persist(profile: response.profile)
-                // Fan teams come from the account: sign-out cleared the local
-                // copy, so adopt whatever roams on the server (never push a
-                // previous user's leftovers up). Settings stay device-local.
-                prefs.fanOf = response.prefs.fanOf
-                persistPrefs()
                 await refreshCatalog()
                 AppLog.info(.app, "sign_in_complete fan_teams=\(fanTeamIds.sorted())")
             } catch {
@@ -157,12 +106,6 @@ final class AppSession: ObservableObject {
                 AppLog.error(.app, "sign_in_failed", error: error)
             }
         }
-    }
-
-    /// What gets synced to the backend: fan teams only. Settings (theme,
-    /// celebration style, event toggles…) live in UserDefaults on this Mac.
-    private var roamingPrefs: UserPrefs {
-        UserPrefs(fanOf: prefs.fanOf, settings: PrefSettings())
     }
 
     func signOut() {
@@ -178,13 +121,8 @@ final class AppSession: ObservableObject {
         Keychain.delete("sessionToken")
         defaults.removeObject(forKey: "profile")
         profile = nil
-        // Fan teams belong to the ACCOUNT (they roam via the backend), so
-        // they leave with it — whoever signs in next starts from their own
-        // server prefs. Settings belong to the DEVICE and stay.
-        prefs.fanOf = UserPrefs.empty.fanOf
-        persistPrefs()
-        // Signed out = silent: drop the diff baseline so the next account never
-        // replays this one's transitions, and clear anything on screen.
+        // Signed out = silent: drop the diff baseline and clear anything on
+        // screen. Fan teams/settings stay in UserDefaults until app data goes.
         LiveStore.shared.resetBaseline()
         OverlayManager.shared.dismissAll()
         if showLogin { openWindow(WindowID.login) }
@@ -203,56 +141,58 @@ final class AppSession: ObservableObject {
         } catch {
             AppLog.error(.app, "account_delete_failed", error: error)
         }
-        signOut() // clears fan teams + topics; device settings stay
+        signOut()
     }
 
     // MARK: Prefs
 
     func setFanTeams(_ rawIds: [String]) {
-        // Defensive cap (config-driven): the picker already blocks over-adding,
-        // but a stale roaming list could arrive longer than the current limit.
+        // Defensive cap (config-driven): the picker already blocks over-adding.
         let maxFans = ControlPlane.shared.maxFanTeams
         let ids = rawIds.count > maxFans ? Array(rawIds.prefix(maxFans)) : rawIds
         if ids.count != rawIds.count {
             AppLog.info(.prefs, "fan_teams_capped raw=\(rawIds.count) max=\(maxFans)")
         }
-        AppLog.info(.prefs, "fan_teams_changed old=\(prefs.footballTeams.sorted()) new=\(ids.sorted())")
-        prefs.footballTeams = ids
-        persistPrefs()
-        Task {
-            guard ControlPlane.shared.isOperational else { return }
-            do {
-                try await api.putPrefs(roamingPrefs)
-                AppLog.info(.prefs, "fan_teams_upload_complete teams=\(ids.sorted())")
-            } catch {
-                AppLog.error(.prefs, "fan_teams_upload_failed", error: error)
-            }
-        }
+        AppLog.info(.prefs, "fan_teams_changed old=\(prefs.fanTeamIds.sorted()) new=\(ids.sorted())")
+        prefs.fanTeamIds = ids
+        persistFanTeamIds()
     }
 
     /// Re-apply the fan-team cap to the already-stored list. Called when Remote
     /// Config changes `max_fan_teams`: if the user follows more teams than the
-    /// (possibly newly-lowered) cap allows, drop the trailing extras and sync.
+    /// (possibly newly-lowered) cap allows, drop the trailing extras locally.
     /// Trailing = most-recently-added (picks are appended), so the oldest picks
     /// are kept. No-op when already within the cap.
     func enforceFanTeamCap() {
         let maxFans = ControlPlane.shared.maxFanTeams
-        guard prefs.footballTeams.count > maxFans else { return }
-        AppLog.info(.prefs, "fan_teams_cap_enforced count=\(prefs.footballTeams.count) max=\(maxFans)")
-        // setFanTeams persists + uploads the truncated list.
-        setFanTeams(Array(prefs.footballTeams.prefix(maxFans)))
+        guard prefs.fanTeamIds.count > maxFans else { return }
+        AppLog.info(.prefs, "fan_teams_cap_enforced count=\(prefs.fanTeamIds.count) max=\(maxFans)")
+        setFanTeams(Array(prefs.fanTeamIds.prefix(maxFans)))
     }
 
-    /// Settings are device-local: persisted to UserDefaults, never sent to
-    /// the backend — only fan teams are worth a database row.
+    /// Settings are device-local and never sent to the backend.
     func updateSettings(_ mutate: (inout PrefSettings) -> Void) {
         mutate(&prefs.settings)
-        persistPrefs()
+        persistSettings()
     }
 
-    private func persistPrefs() {
-        if let data = try? JSONEncoder().encode(prefs) {
-            defaults.set(data, forKey: "prefs")
+    private func loadLocalPrefs() {
+        if let ids = defaults.stringArray(forKey: CacheKey.fanTeamIds) {
+            prefs.fanTeamIds = ids
+        }
+        if let data = defaults.data(forKey: CacheKey.settings),
+           let settings = try? JSONDecoder().decode(PrefSettings.self, from: data) {
+            prefs.settings = settings
+        }
+    }
+
+    private func persistFanTeamIds() {
+        defaults.set(prefs.fanTeamIds, forKey: CacheKey.fanTeamIds)
+    }
+
+    private func persistSettings() {
+        if let data = try? JSONEncoder().encode(prefs.settings) {
+            defaults.set(data, forKey: CacheKey.settings)
         }
     }
 
