@@ -1,7 +1,7 @@
 # Backend — one Cloud Run service
 
 TypeScript/Express. Two personalities in one deployable:
-- **Public API** for the app: sign-in, prefs, celebrate.
+- **Public API** for the app: sign-in, celebrate, account deletion.
 - **Internal fetch** (`/internal/*`): one Cloud Scheduler job hits
   `/internal/dispatch` every minute (OIDC); it enqueues 12 Cloud Tasks spaced 5s
   apart, each calling `/internal/fetch`. A fetch is a single read of a three-day
@@ -43,7 +43,6 @@ Admin SDK credentials.
 |---|---|---|
 | `GET /healthz/` | none | liveness |
 | `POST /auth/signin` | Google ID token | verify → upsert user → session JWT (30d) |
-| `GET/PUT /me/prefs` | session JWT | `fanOf: { football: { "1": ["6"] } }` + settings |
 | `POST /celebrate` | session JWT | `{fixtureId, teamId, taps}` — ONE batched call per goal per user |
 | `DELETE /me` | session JWT | account deletion |
 | `POST /internal/dispatch` | scheduler OIDC | enqueue 12 Cloud Tasks at 5s offsets → `/internal/fetch` |

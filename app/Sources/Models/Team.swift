@@ -1,8 +1,8 @@
 import Foundation
 
 /// A team, sourced from the API-Football catalog. Identity is the numeric `id`
-/// (stable across leagues, used in FCM topics `l{league}_{id}`, the `fanOf`
-/// store and celebration counters). Shown everywhere as its `logo` — no emoji.
+/// (stable across leagues, used in local fan-team prefs and celebration
+/// counters). Shown everywhere as its `logo` — no emoji.
 struct Team: Codable, Identifiable, Hashable {
     let id: Int
     let name: String

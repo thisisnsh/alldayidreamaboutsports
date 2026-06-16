@@ -25,11 +25,6 @@ struct LiveMatchState {
 final class FakeStore {
     static let shared = FakeStore()
 
-    var prefs = UserPrefs(
-        fanOf: ["football": ["1": DevConfig.fanTeams]],
-        settings: PrefSettings(theme: .system, notifications: ["goals": true])
-    )
-
     // Live state per match, keyed by fixture id. DemoEngine walks each one
     // through the script so every scoreboard stays in step with its pills.
     // `eventSeq` is monotonic (never reset) so replays keep producing fresh
@@ -131,17 +126,8 @@ final class FakeBackendAPI: BackendAPI {
     func signIn(googleIdToken: String) async throws -> SignInResponse {
         SignInResponse(
             token: "dev-session-token",
-            profile: DevConfig.profile,
-            prefs: FakeStore.shared.prefs
+            profile: DevConfig.profile
         )
-    }
-
-    func fetchPrefs() async throws -> UserPrefs {
-        FakeStore.shared.prefs
-    }
-
-    func putPrefs(_ prefs: UserPrefs) async throws {
-        FakeStore.shared.prefs = prefs
     }
 
     func celebrate(fixtureId: Int, teamId: String, taps: Int) async throws {
@@ -154,7 +140,6 @@ final class FakeBackendAPI: BackendAPI {
     }
 
     func deleteAccount() async throws {
-        FakeStore.shared.prefs = .empty
         FakeStore.shared.celebrations = [:]
     }
 }

@@ -7,17 +7,12 @@ struct Profile: Codable, Equatable {
     let photoURL: String?
 }
 
-struct UserPrefs: Codable, Equatable {
-    var fanOf: [String: [String: [String]]] // game -> leagueId -> team ids (as strings)
+struct AppPrefs: Equatable {
+    var fanTeamIds: [String]
     var settings: PrefSettings
 
-    static var empty: UserPrefs {
-        UserPrefs(fanOf: ["football": ["1": []]], settings: PrefSettings())
-    }
-
-    var footballTeams: [String] {
-        get { fanOf["football"]?[String(AppEnvironment.leagueId)] ?? [] }
-        set { fanOf["football", default: [:]][String(AppEnvironment.leagueId)] = newValue }
+    static var empty: AppPrefs {
+        AppPrefs(fanTeamIds: [], settings: PrefSettings())
     }
 }
 
@@ -36,7 +31,6 @@ struct PrefSettings: Codable, Equatable {
 struct SignInResponse: Codable {
     let token: String
     let profile: Profile
-    let prefs: UserPrefs
 }
 
 enum APIError: LocalizedError {
@@ -89,16 +83,6 @@ struct APIClient: BackendAPI {
         let data = try await request("/auth/signin", method: "POST",
                                      body: Body(idToken: googleIdToken), authorized: false)
         return try JSONDecoder().decode(SignInResponse.self, from: data)
-    }
-
-    func fetchPrefs() async throws -> UserPrefs {
-        struct Wrapper: Codable { let prefs: UserPrefs }
-        let data = try await request("/me/prefs")
-        return try JSONDecoder().decode(Wrapper.self, from: data).prefs
-    }
-
-    func putPrefs(_ prefs: UserPrefs) async throws {
-        _ = try await request("/me/prefs", method: "PUT", body: prefs)
     }
 
     func celebrate(fixtureId: Int, teamId: String, taps: Int) async throws {

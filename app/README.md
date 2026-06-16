@@ -137,7 +137,7 @@ the build. Neither setting can silently call production.
 |---|---|
 | `Sources/App.swift` | window scenes (login, picker, settings, gate) |
 | `Sources/AppDelegate.swift` | transient AppKit menu, Firebase/APNs bootstrap, Sparkle updater, reopen handling |
-| `Sources/Services/` | session/auth, backend API, FCM topics, kill switch (`ControlPlane`), event routing, tap batching |
+| `Sources/Services/` | session/auth, backend API, local prefs, kill switch (`ControlPlane`), event routing, tap batching |
 | `Sources/Overlay/` | the two overlay panels: full-screen click-through display + small clickable ball; celebration, notch pill, particles |
 | `Sources/Views/` | login, popover, team picker, settings, kill/update gate |
 

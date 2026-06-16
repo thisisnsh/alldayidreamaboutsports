@@ -137,7 +137,7 @@ private struct LeagueSection: View {
 
     private func toggle(_ team: Team) {
         guard league.active else { return }
-        var ids = session.prefs.footballTeams
+        var ids = session.prefs.fanTeamIds
         let key = String(team.id)
         if let index = ids.firstIndex(of: key) {
             ids.remove(at: index)

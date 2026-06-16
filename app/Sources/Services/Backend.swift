@@ -19,8 +19,6 @@ protocol GoogleAuthProviding {
 @MainActor
 protocol BackendAPI {
     func signIn(googleIdToken: String) async throws -> SignInResponse
-    func fetchPrefs() async throws -> UserPrefs
-    func putPrefs(_ prefs: UserPrefs) async throws
     func celebrate(fixtureId: Int, teamId: String, taps: Int) async throws
     func deleteAccount() async throws
 }
