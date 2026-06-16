@@ -137,6 +137,9 @@ final class ControlPlane: ObservableObject {
                 AppSession.shared.signInError = nil
             }
         }
+        // A lowered max_fan_teams must shrink an already-too-long fan list, not
+        // just block future adds. Operational path only (kill/update return above).
+        AppSession.shared.enforceFanTeamCap()
         MenuPopoverController.shared.controlPlaneDidChange()
     }
 

@@ -230,6 +230,19 @@ final class AppSession: ObservableObject {
         }
     }
 
+    /// Re-apply the fan-team cap to the already-stored list. Called when Remote
+    /// Config changes `max_fan_teams`: if the user follows more teams than the
+    /// (possibly newly-lowered) cap allows, drop the trailing extras and sync.
+    /// Trailing = most-recently-added (picks are appended), so the oldest picks
+    /// are kept. No-op when already within the cap.
+    func enforceFanTeamCap() {
+        let maxFans = ControlPlane.shared.maxFanTeams
+        guard prefs.footballTeams.count > maxFans else { return }
+        AppLog.info(.prefs, "fan_teams_cap_enforced count=\(prefs.footballTeams.count) max=\(maxFans)")
+        // setFanTeams persists + uploads the truncated list.
+        setFanTeams(Array(prefs.footballTeams.prefix(maxFans)))
+    }
+
     /// Settings are device-local: persisted to UserDefaults, never sent to
     /// the backend — only fan teams are worth a database row.
     func updateSettings(_ mutate: (inout PrefSettings) -> Void) {
