@@ -106,7 +106,7 @@ describe("CatalogService", () => {
 
     const result = await svc.sync();
 
-    expect(r2.putJson).toHaveBeenCalledWith("catalog.json", expect.objectContaining({ leagues: expect.any(Array) }), 86400);
+    expect(r2.putJson).toHaveBeenCalledWith("catalog.json", expect.objectContaining({ leagues: expect.any(Array) }), "public, max-age=43200");
     expect(result).toEqual({ leagues: 6, teams: 5 }); // 5 scheduled leagues × 1 team each
   });
 });

@@ -1,7 +1,6 @@
 import { CatalogService } from "./catalog.js";
 import { CelebrationAggregator } from "./celebrations.js";
 import { env } from "./env.js";
-import { Fcm } from "./fcm.js";
 import { Poller } from "./poller.js";
 import { ApiFootballProvider } from "./providers/apiFootball.js";
 import { R2, R2MatchStateStore } from "./r2.js";
@@ -11,18 +10,17 @@ import { Dispatcher } from "./tasks.js";
 import { log } from "./log.js";
 
 const store = new Store();
-const fcm = new Fcm();
 const r2 = new R2();
 const provider = new ApiFootballProvider(env.apiFootballKey, env.leagueId, env.season);
 const state = new R2MatchStateStore();
 const celebrations = new CelebrationAggregator(store, r2);
-const poller = new Poller(provider, state, fcm, r2);
+const poller = new Poller(provider, state, r2);
 const dispatcher = new Dispatcher();
 const catalog = new CatalogService(provider, r2);
 
 celebrations.start();
 
-const app = buildApp({ store, fcm, poller, dispatcher, catalog, celebrations });
+const app = buildApp({ store, poller, dispatcher, catalog, celebrations, r2 });
 const server = app.listen(env.port, () => {
   log.info("backend_listening", { port: env.port });
 });

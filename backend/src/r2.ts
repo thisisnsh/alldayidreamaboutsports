@@ -9,6 +9,17 @@ export interface VersionedMatchState {
 
 export class R2ConflictError extends Error {}
 
+/**
+ * Cache-Control for the two live tiers. The zone cache rule serves users from
+ * the edge and revalidates with R2 at most once per `max-age` per object — the
+ * §0 invariant. `stale-while-revalidate` lets the edge serve the stale copy
+ * during that revalidation so a user never waits on origin. EVERY R2 write must
+ * set one of these (or a long TTL); a header-less object bypasses the cache.
+ */
+export const CACHE_CONTROL_LIVE = "public, max-age=5, stale-while-revalidate=25";
+/** Long TTL for rarely-changing schedule/catalog files (12h). */
+export const CACHE_CONTROL_LONG = "public, max-age=43200";
+
 /** Cloudflare R2 via its S3-compatible API. Objects carry their own cache TTLs. */
 export class R2 {
   private readonly client: S3Client;
@@ -30,23 +41,28 @@ export class R2 {
       });
   }
 
-  async putJson(key: string, value: unknown, maxAgeSeconds: number): Promise<void> {
+  /**
+   * Writes a JSON object with an EXPLICIT `Cache-Control` (§0: every object must
+   * carry one or the zone cache rule bypasses it). Callers pass a full header
+   * string (e.g. `CACHE_CONTROL_LIVE` / `CACHE_CONTROL_LONG`).
+   */
+  async putJson(key: string, value: unknown, cacheControl: string): Promise<void> {
     await this.client.send(
       new PutObjectCommand({
         Bucket: this.bucket,
         Key: key,
         Body: JSON.stringify(value),
         ContentType: "application/json",
-        CacheControl: `public, max-age=${maxAgeSeconds}`,
+        CacheControl: cacheControl,
       }),
     );
   }
 
   /** Skips the PUT when the value matches the last write of this key in-process. */
-  async putJsonIfChanged(key: string, value: unknown, maxAgeSeconds: number): Promise<void> {
+  async putJsonIfChanged(key: string, value: unknown, cacheControl: string): Promise<void> {
     const body = JSON.stringify(value);
     if (this.writeCache.get(key) === body) return;
-    await this.putJson(key, value, maxAgeSeconds);
+    await this.putJson(key, value, cacheControl);
     this.writeCache.set(key, body);
   }
 
@@ -107,7 +123,7 @@ export class R2MatchStateStore {
         Key: this.key(state.fixtureId),
         Body: JSON.stringify(state),
         ContentType: "application/json",
-        CacheControl: "public, max-age=5",
+        CacheControl: CACHE_CONTROL_LIVE,
         ...(etag ? { IfMatch: etag } : { IfNoneMatch: "*" }),
       }));
     } catch (error) {

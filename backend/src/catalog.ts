@@ -1,5 +1,5 @@
 import type { CatalogTeam, ScoreProvider } from "./providers/types.js";
-import type { R2 } from "./r2.js";
+import { CACHE_CONTROL_LONG, type R2 } from "./r2.js";
 import { log } from "./log.js";
 
 /**
@@ -72,7 +72,7 @@ export class CatalogService {
 
   async sync(): Promise<{ leagues: number; teams: number }> {
     const payload = await this.build();
-    await this.r2.putJson("catalog.json", payload, 86400);
+    await this.r2.putJson("catalog.json", payload, CACHE_CONTROL_LONG);
     const teamCount = Object.values(payload.teams).reduce((n, t) => n + t.length, 0);
     log.info("catalog_sync_complete", { leagues: payload.leagues.length, teams: teamCount });
     return { leagues: payload.leagues.length, teams: teamCount };

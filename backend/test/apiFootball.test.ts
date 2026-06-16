@@ -39,10 +39,79 @@ describe("ApiFootballProvider", () => {
       rawStatus: "2H",
       round: "Group A - 1",
       minute: 73,
+      extra: null,
+      period: "SECOND",
+      running: true,
       home: { id: 10, name: "Brazil", goals: 2, yellowCards: 0, redCards: 1 },
       away: { id: 20, name: "USA", goals: 1, yellowCards: 1, redCards: 0 },
-      lastGoal: { teamId: 10, player: "Vinícius Jr", minute: 73 },
+      lastGoal: { teamId: 10, player: "Vinícius Jr", minute: 73, extra: null },
     });
+  });
+
+  it("parses status.extra and time.extra so the clock can show stoppage (90+3)", async () => {
+    const stoppageFixture = {
+      fixture: { id: 556, date: "2026-06-11T20:00:00+00:00", status: { short: "2H", elapsed: 90, extra: 3 } },
+      league: { id: 1, season: 2026, round: "Group A - 2" },
+      teams: { home: { id: 10, name: "Brazil" }, away: { id: 20, name: "USA" } },
+      goals: { home: 1, away: 0 },
+      events: [
+        // A 90+3 goal: elapsed pins at 90, extra holds the added minute.
+        { time: { elapsed: 90, extra: 3 }, team: { id: 10, name: "Brazil" }, player: { name: "Rodrygo" }, type: "Goal", detail: "Normal Goal" },
+        { time: { elapsed: 45, extra: 2 }, team: { id: 20, name: "USA" }, player: { name: "Adams" }, type: "Card", detail: "Yellow Card" },
+      ],
+    };
+    const { provider } = providerReturning({ response: [stoppageFixture] });
+    const [match] = await provider.fixturesForRange("2026-06-10", "2026-06-12");
+
+    expect(match).toMatchObject({ minute: 90, extra: 3, period: "SECOND", running: true });
+    // The goal record carries `extra` so a pill can render `90+3′`.
+    expect(match!.home.goalEvents).toEqual([{ player: "Rodrygo", minute: 90, extra: 3 }]);
+    expect(match!.away.yellowCardEvents).toEqual([{ player: "Adams", minute: 45, extra: 2 }]);
+    expect(match!.lastGoal).toMatchObject({ teamId: 10, player: "Rodrygo", minute: 90, extra: 3 });
+  });
+
+  it("derives running=false and the right period for non-playing phases", async () => {
+    const phases: Array<[string, number | null, string, boolean, string]> = [
+      ["HT", 45, "HALF", false, "HALF_TIME"],
+      ["BT", 90, "EXTRA_BREAK", false, "LIVE"],
+      ["P", 120, "PENALTIES", false, "LIVE"],
+      ["FT", 90, "FINISHED", false, "FINISHED"],
+      ["NS", null, "PRE", false, "SCHEDULED"],
+    ];
+    for (const [short, elapsed, period, running, status] of phases) {
+      const fixture = {
+        fixture: { id: 700, date: "2026-06-11T20:00:00+00:00", status: { short, elapsed, extra: null } },
+        league: { id: 1, season: 2026, round: "R16" },
+        teams: { home: { id: 10, name: "Brazil" }, away: { id: 20, name: "USA" } },
+        goals: { home: 0, away: 0 },
+        events: [],
+      };
+      const { provider } = providerReturning({ response: [fixture] });
+      const [match] = await provider.fixturesForRange("2026-06-10", "2026-06-12");
+      expect(match, short).toMatchObject({ period, running, status });
+    }
+  });
+
+  it("splits the two extra-time halves by elapsed (<=105 first, >105 second)", async () => {
+    const make = (elapsed: number) => ({
+      fixture: { id: 701, date: "2026-06-11T20:00:00+00:00", status: { short: "ET", elapsed, extra: null } },
+      league: { id: 1, season: 2026, round: "R16" },
+      teams: { home: { id: 10, name: "Brazil" }, away: { id: 20, name: "USA" } },
+      goals: { home: 0, away: 0 },
+      events: [],
+    });
+
+    const first = providerReturning({ response: [make(100)] });
+    const [etFirst] = await first.provider.fixturesForRange("2026-06-10", "2026-06-12");
+    expect(etFirst).toMatchObject({ period: "EXTRA_FIRST", running: true, status: "LIVE" });
+
+    const boundary = providerReturning({ response: [make(105)] });
+    const [etBoundary] = await boundary.provider.fixturesForRange("2026-06-10", "2026-06-12");
+    expect(etBoundary!.period).toBe("EXTRA_FIRST"); // 105 is still the first half
+
+    const second = providerReturning({ response: [make(106)] });
+    const [etSecond] = await second.provider.fixturesForRange("2026-06-10", "2026-06-12");
+    expect(etSecond).toMatchObject({ period: "EXTRA_SECOND", running: true });
   });
 
   it("parses a penalty shootout into shootout counts + ordered kicks", async () => {
@@ -148,9 +217,9 @@ describe("ApiFootballProvider", () => {
     const [match] = await provider.fixturesForRange("2026-06-10", "2026-06-12");
     expect(match!.home.goals).toBe(2);
     expect(match!.home.goalEvents).toEqual([
-      { player: "Rodrygo", minute: 30 },
-      { player: "Vinícius Jr", minute: 73 },
+      { player: "Rodrygo", minute: 30, extra: null },
+      { player: "Vinícius Jr", minute: 73, extra: null },
     ]);
-    expect(match!.away.goalEvents).toEqual([{ player: "Pulisic", minute: 12 }]);
+    expect(match!.away.goalEvents).toEqual([{ player: "Pulisic", minute: 12, extra: null }]);
   });
 });

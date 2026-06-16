@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   isLive, isRecentlyFinished, isRegressiveSnapshot, isStartingSoon, partitionFixtures, Poller, utcPollRange,
 } from "../src/poller.js";
+import { CACHE_CONTROL_LIVE, CACHE_CONTROL_LONG } from "../src/r2.js";
 import type { MatchState } from "../src/types.js";
 
 function state(
@@ -12,7 +13,8 @@ function state(
 ): MatchState {
   return {
     fixtureId, leagueId: 1, season: 2026, kickoffISO, status,
-    rawStatus: status === "LIVE" ? "1H" : status === "FINISHED" ? "FT" : "NS", minute: null,
+    rawStatus: status === "LIVE" ? "1H" : status === "FINISHED" ? "FT" : "NS",
+    minute: null, extra: null, period: "PRE", running: status === "LIVE",
     home: { id: 1, name: "A", goals: 0, yellowCards: 0, redCards: 0, yellowCardEvents: [], redCardEvents: [], goalEvents: [] },
     away: { id: 2, name: "B", goals: 0, yellowCards: 0, redCards: 0, yellowCardEvents: [], redCardEvents: [], goalEvents: [] },
     ...extra,
@@ -37,26 +39,59 @@ describe("polling helpers", () => {
 });
 
 describe("Poller", () => {
-  it("publishes dated fixtures and sends detected events before saving state", async () => {
-    const match = state(1, "2026-06-14T01:00:00Z", "LIVE");
-    const calls: string[] = [];
+  it("publishes per-match state for a live fixture (no FCM, no purge)", async () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const match = state(1, `${today}T01:00:00Z`, "LIVE");
     const provider = { fixturesForRange: vi.fn().mockResolvedValue([match]) };
     const stateStore = {
       load: vi.fn().mockResolvedValue({ state: null, etag: null }),
-      save: vi.fn(async () => { calls.push("save"); }),
+      save: vi.fn().mockResolvedValue(undefined),
     };
-    const fcm = { publishEvent: vi.fn(async () => { calls.push("fcm"); }) };
     const r2 = { putJsonIfChanged: vi.fn().mockResolvedValue(undefined) };
-    const poller = new Poller(provider as never, stateStore as never, fcm as never, r2 as never);
+    const poller = new Poller(provider as never, stateStore as never, r2 as never);
 
     const result = await poller.fetchOnce();
 
-    expect(result).toEqual({ events: 1, live: 1 });
-    expect(r2.putJsonIfChanged).toHaveBeenCalledWith("fixtures-2026-06-14.json", expect.anything(), 10);
-    expect(calls).toEqual(["fcm", "save"]);
+    expect(result).toEqual({ live: 1 });
+    // A date holding an eligible (live) match gets the 5s+SWR TTL.
+    expect(r2.putJsonIfChanged).toHaveBeenCalledWith(
+      `fixtures-${match.kickoffISO.slice(0, 10)}.json`, expect.anything(), CACHE_CONTROL_LIVE,
+    );
+    expect(stateStore.save).toHaveBeenCalledWith(match, null);
+    // No purge path of any kind.
+    expect((r2 as Record<string, unknown>).purge).toBeUndefined();
   });
 
-  it("fires FULL_TIME and saves when a live match flips to FINISHED", async () => {
+  it("writes the long schedule TTL for a date with no eligible match", async () => {
+    // A scheduled-only fixture far in the future on a non-today date.
+    const future = state(1, "2027-01-02T20:00:00Z", "SCHEDULED");
+    const provider = { fixturesForRange: vi.fn().mockResolvedValue([future]) };
+    const stateStore = { load: vi.fn(), save: vi.fn() };
+    const r2 = { putJsonIfChanged: vi.fn().mockResolvedValue(undefined) };
+    const poller = new Poller(provider as never, stateStore as never, r2 as never);
+
+    await poller.fetchOnce();
+
+    expect(r2.putJsonIfChanged).toHaveBeenCalledWith(
+      "fixtures-2027-01-02.json", expect.anything(), CACHE_CONTROL_LONG,
+    );
+  });
+
+  it("always writes today's fixtures file with the live TTL", async () => {
+    const provider = { fixturesForRange: vi.fn().mockResolvedValue([]) };
+    const stateStore = { load: vi.fn(), save: vi.fn() };
+    const r2 = { putJsonIfChanged: vi.fn().mockResolvedValue(undefined) };
+    const poller = new Poller(provider as never, stateStore as never, r2 as never);
+
+    await poller.fetchOnce();
+
+    const today = new Date().toISOString().slice(0, 10);
+    expect(r2.putJsonIfChanged).toHaveBeenCalledWith(
+      `fixtures-${today}.json`, expect.anything(), CACHE_CONTROL_LIVE,
+    );
+  });
+
+  it("saves when a live match flips to FINISHED (no events emitted)", async () => {
     const prev = state(1, "2026-06-14T01:00:00Z", "LIVE");
     const now = new Date();
     const finished = state(1, now.toISOString(), "FINISHED", {
@@ -67,15 +102,14 @@ describe("Poller", () => {
       load: vi.fn().mockResolvedValue({ state: prev, etag: "e1" }),
       save: vi.fn().mockResolvedValue(undefined),
     };
-    const fcm = { publishEvent: vi.fn().mockResolvedValue(undefined) };
     const r2 = { putJsonIfChanged: vi.fn().mockResolvedValue(undefined) };
-    const poller = new Poller(provider as never, stateStore as never, fcm as never, r2 as never);
+    const poller = new Poller(provider as never, stateStore as never, r2 as never);
 
     const result = await poller.fetchOnce();
 
-    expect(result.events).toBe(1);
-    expect(fcm.publishEvent).toHaveBeenCalledWith(expect.objectContaining({ type: "FULL_TIME" }));
+    expect(result).toEqual({ live: 0 });
     expect(stateStore.save).toHaveBeenCalledTimes(1);
+    expect(stateStore.save).toHaveBeenCalledWith(finished, "e1");
   });
 
   it("skips SCHEDULED and long-finished fixtures: no R2 read, no save", async () => {
@@ -85,13 +119,11 @@ describe("Poller", () => {
     });
     const provider = { fixturesForRange: vi.fn().mockResolvedValue([scheduled, oldFinished]) };
     const stateStore = { load: vi.fn(), save: vi.fn() };
-    const fcm = { publishEvent: vi.fn() };
     const r2 = { putJsonIfChanged: vi.fn().mockResolvedValue(undefined) };
-    const poller = new Poller(provider as never, stateStore as never, fcm as never, r2 as never);
+    const poller = new Poller(provider as never, stateStore as never, r2 as never);
 
-    const result = await poller.fetchOnce();
+    await poller.fetchOnce();
 
-    expect(result.events).toBe(0);
     expect(stateStore.load).not.toHaveBeenCalled();
     expect(stateStore.save).not.toHaveBeenCalled();
   });
@@ -103,15 +135,13 @@ describe("Poller", () => {
       load: vi.fn().mockResolvedValue({ state: null, etag: null }),
       save: vi.fn().mockResolvedValue(undefined),
     };
-    const fcm = { publishEvent: vi.fn() };
     const r2 = { putJsonIfChanged: vi.fn().mockResolvedValue(undefined) };
-    const poller = new Poller(provider as never, stateStore as never, fcm as never, r2 as never);
+    const poller = new Poller(provider as never, stateStore as never, r2 as never);
 
     await poller.fetchOnce();
 
     expect(stateStore.load).toHaveBeenCalledWith(1);
     expect(stateStore.save).toHaveBeenCalledWith(scheduled, null);
-    expect(fcm.publishEvent).not.toHaveBeenCalled();
   });
 
   it("skips the save when the loaded state is unchanged", async () => {
@@ -124,13 +154,11 @@ describe("Poller", () => {
       load: vi.fn().mockResolvedValue({ state: finished, etag: "e1" }),
       save: vi.fn(),
     };
-    const fcm = { publishEvent: vi.fn() };
     const r2 = { putJsonIfChanged: vi.fn().mockResolvedValue(undefined) };
-    const poller = new Poller(provider as never, stateStore as never, fcm as never, r2 as never);
+    const poller = new Poller(provider as never, stateStore as never, r2 as never);
 
-    const result = await poller.fetchOnce();
+    await poller.fetchOnce();
 
-    expect(result.events).toBe(0);
     expect(stateStore.save).not.toHaveBeenCalled();
   });
 
@@ -142,14 +170,11 @@ describe("Poller", () => {
       load: vi.fn().mockResolvedValue({ state: previous, etag: "e1" }),
       save: vi.fn(),
     };
-    const fcm = { publishEvent: vi.fn() };
     const r2 = { putJsonIfChanged: vi.fn().mockResolvedValue(undefined) };
-    const poller = new Poller(provider as never, stateStore as never, fcm as never, r2 as never);
+    const poller = new Poller(provider as never, stateStore as never, r2 as never);
 
-    const result = await poller.fetchOnce();
+    await poller.fetchOnce();
 
-    expect(result.events).toBe(0);
-    expect(fcm.publishEvent).not.toHaveBeenCalled();
     expect(stateStore.save).not.toHaveBeenCalled();
   });
 });
