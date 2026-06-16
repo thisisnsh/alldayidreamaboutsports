@@ -81,7 +81,10 @@ Maximum instances does not cap the total bill or downstream-service usage.
 ## 3. Cloudflare
 
 ```sh
-./setup-r2.sh   # then follow its printed dashboard steps
+CLOUDFLARE_API_TOKEN=<token> \
+CLOUDFLARE_ACCOUNT_ID=<account-id> \
+CLOUDFLARE_ZONE_ID=<zone-id> \
+./setup-r2.sh
 ```
 
 The scores data and comparison state are environment-specific:
@@ -91,35 +94,40 @@ The scores data and comparison state are environment-specific:
 | staging | `alldayidreamaboutsports-staging-scores` | `scores-staging.alldayidreamaboutsports.com` | `R2_BUCKET_SCORES=alldayidreamaboutsports-staging-scores` |
 | prod | `alldayidreamaboutsports-scores` | `scores.alldayidreamaboutsports.com` | `R2_BUCKET_SCORES=alldayidreamaboutsports-scores` |
 
-The downloads bucket/domain is global and production-only.
+Downloads also use separate staging/prod buckets and custom domains so test
+releases never reach the production auto-update feed.
 `R2_BUCKET_SCORES` is required by deployment and the backend has no fallback,
 so staging cannot accidentally write into the production scores bucket.
+
+`setup-r2.sh` owns the full R2/CDN setup: it creates the buckets, attaches the
+custom domains, disables every bucket's public `r2.dev` URL, creates the Cache
+Rules, enables Tiered Cache + Smart Tiered Cache topology, and applies WAF rate
+limits. If the Cloudflare API env vars are omitted it only creates buckets and
+disables `r2.dev` through wrangler, then prints the exact command to rerun for
+the full setup.
 
 The app must access R2 objects only through the custom domains above, never an
 `r2.dev` URL or the S3 API endpoint. The custom domain puts Cloudflare's CDN in
 front of R2. Cache hits are served by Cloudflare; cache misses still read R2 as
-the origin. `setup-r2.sh` disables each bucket's public `r2.dev` URL (it bypasses
-the cache rules → uncached origin reads); leave it disabled.
+the origin. Public `r2.dev` URLs bypass the zone Cache Rules and WAF, so the
+script keeps them disabled.
 
-JSON is not cached by Cloudflare by default. Create the cache rule printed by
-`setup-r2.sh` on **both** scores hostnames; without it, every app request reaches
-R2 and incurs a Class B operation. Smart Tiered Caching must be ON (mandatory —
-~26 R2 reads/s vs ~600/s). Object TTLs (plan §3): `matches/*` and `celebrate/*`
-are `public, max-age=5, stale-while-revalidate=25`; `fixtures-*` and
-`catalog.json` are `public, max-age=43200` (12h). The `/internal/cache-health`
-scheduler job (every 5 min) reads `cf-cache-status` and alerts if users start
-hitting R2 — treat a falling hit ratio or rising R2 reads as sev-1.
+JSON is not cached by Cloudflare by default. The script creates Cache Rules for
+both scores hostnames and the download hostnames in the
+`http_request_cache_settings` phase. Those rules make matching objects eligible
+for cache, set Edge TTL to "use Cache-Control if present, bypass cache if not",
+and set Browser TTL to respect origin. Without this, every app request reaches
+R2 and incurs a Class B operation. Smart Tiered Caching is mandatory —
+~26 R2 reads/s vs ~600/s — because it absorbs the per-TTL expiry stampede by
+funneling edge misses through a small number of upper-tier data centers.
 
-Also apply Cloudflare WAF rate limits to the R2 custom domains:
+Object TTLs (plan §3): `matches/*` and `celebrate/*` are
+`public, max-age=5, stale-while-revalidate=25`; `fixtures-*` and `catalog.json`
+are `public, max-age=43200` (12h). The `/internal/cache-health` scheduler job
+(every 5 min) reads `cf-cache-status` and alerts if users start hitting R2 —
+treat a falling hit ratio or rising R2 reads as sev-1.
 
-```sh
-CLOUDFLARE_API_TOKEN=<token-with-zone-rulesets-write> \
-CLOUDFLARE_ZONE_ID=<zone-id> \
-./setup-cloudflare-rate-limits.sh
-```
-
-The script manages the zone `http_ratelimit` ruleset and keeps its rules at the
-end of the phase, as Cloudflare requires for rate limiting. Defaults:
+The same script manages the zone `http_ratelimit` ruleset. Defaults:
 
 | Scope | Limit | Why |
 |---|---:|---|
@@ -165,8 +173,8 @@ DNS for `alldayidreamaboutsports.com`: apex → **GitHub Pages** (A records
 185.199.108.153/.109/.110/.111). The website lives in the **public** repo
 `thisisnsh/alldayidreamaboutsports.com` (Settings → Pages → Source = "Deploy
 from a branch" `main`/root, custom domain + HTTPS enforced) — Pages isn't free on
-this private repo. `scores-staging.`, `scores.`, and `download.` → R2 custom domains
-(Cloudflare-proxied).
+this private repo. `scores-staging.`, `scores.`, `download-staging.`, and
+`download.` -> R2 custom domains (Cloudflare-proxied).
 
 ## 4. API-Football
 
