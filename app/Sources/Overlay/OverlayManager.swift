@@ -192,10 +192,12 @@ final class OverlayManager: ObservableObject {
         schedule(after: 0.4) { [self] in hideInteractPanel() }
     }
 
-    /// Your taps show instantly: they're folded into the local total and a
-    /// count pill drops right away. The authoritative server total (everyone's
-    /// taps) lands ~5s later — long enough for the backend to batch the POST we
-    /// just sent into the CDN file — and updates the pill if it grew.
+    /// The ball window closed: stop the tap counter (CelebrationService POSTs
+    /// the batch) and fold your own taps into the local match total so the menu
+    /// reflects them at once. The on-screen count notification is NOT queued
+    /// here — it fires for every client, tapper or not, when LiveStore's
+    /// post-goal poll window converges (`notifyCelebrationCount`), so all apps
+    /// show the same final tally instead of a partial, per-client snapshot.
     private func flushTapsAndQueueCounts() {
         let targets: [(fixtureId: Int, teamId: String)] = ballEvents.compactMap { event in
             guard event.fixtureId > 0 else { return nil }
@@ -203,57 +205,30 @@ final class OverlayManager: ObservableObject {
         }
         let taps = tapBursts
         CelebrationService.shared.endWindow()
-        guard !targets.isEmpty,
+        guard !targets.isEmpty, taps > 0,
               AppSession.shared.prefs.settings.eventEnabled(.celebration) else { return }
 
-        // Optimistic: reflect your own taps now, before any network round-trip.
-        if taps > 0 {
-            for target in targets {
-                AppSession.shared.addLocalCelebrations(taps, teamId: target.teamId, fixtureId: target.fixtureId)
-                queueCelebrationPill(for: target, taps: taps)
-            }
-        }
-
-        Task { @MainActor in
-            // Give the backend time to aggregate everyone's just-sent taps into
-            // the CDN file so the read reflects them (and doesn't 404 a fresh
-            // file). This matters even when WE didn't tap: the other apps' taps
-            // need that window to land, or a non-tapping app reads an empty total.
-            try? await Task.sleep(for: .seconds(5))
-            for target in targets {
-                let totals: [String: Int]
-                do {
-                    totals = try await Services.scores.fetchCelebrations(fixtureId: target.fixtureId)
-                    AppLog.info(.celebrations, "post_window_totals_refresh_complete fixture_id=\(target.fixtureId) teams=\(totals.count)")
-                } catch {
-                    AppLog.error(.celebrations, "post_window_totals_refresh_failed fixture_id=\(target.fixtureId)", error: error)
-                    totals = [:]
-                }
-                let before = AppSession.shared.celebrationTotals[target.fixtureId]?[target.teamId] ?? 0
-                AppSession.shared.mergeCelebrationTotals(totals, fixtureId: target.fixtureId)
-                let after = AppSession.shared.celebrationTotals[target.fixtureId]?[target.teamId] ?? 0
-                // Only refresh the pill if the authoritative total beat what we
-                // already showed optimistically — no redundant duplicate.
-                if after > before || (taps == 0 && after > 0) {
-                    queueCelebrationPill(for: target, taps: taps)
-                }
-            }
+        // Optimistic: reflect your own taps in the local total now, before any
+        // network round-trip. The 60s poll later max-merges the server total in,
+        // so this never double-counts.
+        for target in targets {
+            AppSession.shared.addLocalCelebrations(taps, teamId: target.teamId, fixtureId: target.fixtureId)
         }
     }
 
-    /// Drops a celebration-count pill for one team from the current local total.
-    private func queueCelebrationPill(for target: (fixtureId: Int, teamId: String), taps: Int) {
-        let team = TeamCatalog.team(for: Int(target.teamId) ?? -1, in: AppSession.shared.teams)
-        let count = AppSession.shared.celebrationTotals[target.fixtureId]?[target.teamId] ?? 0
-        let text: String? = count > 0
-            ? "\(count.formattedCompact) celebrations for \(team.name) this match"
-            : (taps > 0 ? "You celebrated with \(team.name)!" : nil)
-        guard let text else { return }
+    /// Queue the celebration-count notification for one team from the converged
+    /// match total. Driven by LiveStore when the post-goal poll window ends, so
+    /// every client — whether or not it tapped — surfaces the same final tally.
+    func notifyCelebrationCount(fixtureId: Int, teamId: String) {
+        guard AppSession.shared.prefs.settings.eventEnabled(.celebration) else { return }
+        let count = AppSession.shared.celebrationTotals[fixtureId]?[teamId] ?? 0
+        guard count > 0 else { return }
+        let team = TeamCatalog.team(for: Int(teamId) ?? -1, in: AppSession.shared.teams)
         enqueue(NotchItem(
-            id: "count:\(target.fixtureId):\(target.teamId):\(Date().timeIntervalSince1970)",
+            id: "count:\(fixtureId):\(teamId):\(Date().timeIntervalSince1970)",
             icon: pillIcon(for: .celebration),
             iconColor: pillIconColor(for: .celebration),
-            title: [.text(text)],
+            title: [.text("\(count.formattedCompact) celebrations for \(team.name) this match")],
             subtitle: nil,
             fanGoal: nil
         ))
