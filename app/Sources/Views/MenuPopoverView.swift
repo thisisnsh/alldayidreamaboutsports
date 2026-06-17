@@ -109,16 +109,9 @@ struct MenuPopoverView: View {
             }
             Button {
                 dismissMenu()
-                openWindow(id: WindowID.settings)
-                NSApp.activate(ignoringOtherApps: true)
-            } label: {
-                Label("Settings", systemImage: "gearshape")
-            }
-            Button {
-                dismissMenu()
                 NSWorkspace.shared.open(requestFeatureURL)
             } label: {
-                Label("Request a feature", systemImage: "lightbulb")
+                Label("Request a feature", systemImage: "checklist.unchecked")
             }
             Button {
                 dismissMenu()
@@ -128,14 +121,10 @@ struct MenuPopoverView: View {
             }
             Button {
                 dismissMenu()
-                session.signOut()
+                openWindow(id: WindowID.settings)
+                NSApp.activate(ignoringOtherApps: true)
             } label: {
-                Label("Sign out", systemImage: "rectangle.portrait.and.arrow.right")
-            }
-            Button {
-                NSApp.terminate(nil)
-            } label: {
-                Label("Quit", systemImage: "power")
+                Label("Settings", systemImage: "gearshape")
             }
         }
         // Icons vary in width (the lightbulb is narrow); pin every glyph to the
@@ -169,7 +158,7 @@ struct MenuPopoverView: View {
 
 
         ———
-        Build \(AppEnvironment.buildNumber)
+        \(AppEnvironment.profileName) \(AppEnvironment.appVersion) (Build \(AppEnvironment.buildNumber))
         macOS \(ProcessInfo.processInfo.operatingSystemVersionString)
         """
         func encode(_ s: String) -> String {

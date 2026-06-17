@@ -35,6 +35,10 @@ struct SettingsView: View {
 
             ScrollView {
                 VStack(spacing: 14) {
+                    if let profile = session.profile {
+                        profileCard(profile)
+                    }
+
                     #if DEV_BACKEND
                     Text("🧪 dev session — fake backend, hardcoded data, scripted demo")
                         .font(.caption2)
@@ -60,8 +64,10 @@ struct SettingsView: View {
                         SettingsCard("Goal celebration") {
                             toggleRow("Show goal in center", isOn: settingsBinding(\.goalCenter, default: true))
                             toggleRow("Show confetti in corners", isOn: settingsBinding(\.confetti, default: true))
-                            Button("Preview animation") {
+                            Button {
                                 OverlayManager.shared.preview()
+                            } label: {
+                                Text("Preview animation").frame(maxWidth: .infinity)
                             }
                             .buttonStyle(.cardButton)
                             caption("Choose how your team’s goals are celebrated with animations. You’ll always see the notch drop on goal like every other event. Preview shows exactly what you picked.")
@@ -74,6 +80,8 @@ struct SettingsView: View {
                         }
                         .pickerStyle(.segmented)
                         .labelsHidden()
+                        .fixedSize()
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
 
                     SettingsCard("Behavior") {
@@ -107,6 +115,11 @@ struct SettingsView: View {
                             .buttonStyle(.cardButton)
                         caption("\(AppEnvironment.profileName) v\(AppEnvironment.appVersion) (Build \(AppEnvironment.buildNumber))")
                     }
+
+                    Button { NSApp.terminate(nil) } label: {
+                        Text("Quit").foregroundStyle(.red).frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.cardButton)
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 12)
@@ -120,6 +133,36 @@ struct SettingsView: View {
                     Rectangle()
                 }
             )
+        }
+    }
+
+    // MARK: Profile
+
+    /// Account header card: who you're signed in as, plus the sign-out and
+    /// quit actions that used to live in the menu bar dropdown.
+    private func profileCard(_ profile: Profile) -> some View {
+        SettingsCard("Account") {
+            HStack(spacing: 12) {
+                AsyncImage(url: profile.photoURL.flatMap(URL.init)) { image in
+                    image.resizable()
+                } placeholder: {
+                    Image(systemName: "person.crop.circle.fill").resizable()
+                }
+                .frame(width: 44, height: 44)
+                .clipShape(Circle())
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(profile.name ?? "Fan")
+                        .font(.system(size: 14, weight: .semibold))
+                        .lineLimit(1)
+                    Text(profile.email ?? "")
+                        .font(.caption)
+                        .opacity(0.7)
+                        .lineLimit(1)
+                }
+                Spacer()
+                Button("Sign out") { session.signOut() }
+                    .buttonStyle(.cardButton)
+            }
         }
     }
 
@@ -297,8 +340,10 @@ struct CheckForUpdatesButton: View {
     }
 
     var body: some View {
-        Button("Check for Updates…") { updater.checkForUpdates() }
-            .disabled(!model.canCheckForUpdates)
+        Button { updater.checkForUpdates() } label: {
+            Text("Check for Updates…").frame(maxWidth: .infinity)
+        }
+        .disabled(!model.canCheckForUpdates)
     }
 }
 
