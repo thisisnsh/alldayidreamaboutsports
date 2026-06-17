@@ -66,6 +66,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Quitting drops the cached fixtures/scores/celebrations so the next
         // launch re-fetches fresh rather than flashing a stale board.
         AppSession.shared.clearMatchCache()
+        // UserDefaults writes are async (cfprefsd flushes them on a later runloop
+        // tick). Terminate gives no such tick, so without forcing a flush the
+        // removals in clearMatchCache() are lost and the next launch reads the
+        // stale cache back. synchronize() blocks until the writes hit disk.
+        UserDefaults.standard.synchronize()
         ControlPlane.shared.stop()
     }
 
