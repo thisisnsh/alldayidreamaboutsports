@@ -127,18 +127,17 @@ are `public, max-age=43200` (12h). The `/internal/cache-health` scheduler job
 (every 5 min) reads `cf-cache-status` and alerts if users start hitting R2 —
 treat a falling hit ratio or rising R2 reads as sev-1.
 
-The same script manages the zone `http_ratelimit` ruleset. Defaults:
+The same script manages the zone `http_ratelimit` ruleset. Cloudflare may cap
+the zone at one rate-limit rule depending on plan, so the setup uses a single
+origin-only rule across all R2 custom domains. That protects the expensive path:
+cache-busting requests that would otherwise read R2.
 
 | Scope | Limit | Why |
 |---|---:|---|
-| `scores-staging.` + `scores.` CDN requests | 600/min per IP + colo | Caps abusive clients while leaving normal app polling alone |
-| `scores-staging.` + `scores.` R2 origin reads | 120/min per IP + colo | Counts origin requests only, so cache hits are not penalized |
-| `download-staging.` + `download.` CDN requests | 120/min per IP + colo | Prevents download/appcast scraping from one client |
+| all scores/download custom domains, R2 origin reads only | 20/10s per IP + colo | Counts only origin requests, so cache hits are not penalized |
 
-Override the limits with `SCORES_RATE_LIMIT_REQUESTS_PER_MINUTE`,
-`SCORES_ORIGIN_RATE_LIMIT_REQUESTS_PER_MINUTE`,
-`DOWNLOAD_RATE_LIMIT_REQUESTS_PER_MINUTE`, and
-`RATE_LIMIT_MITIGATION_TIMEOUT_SECONDS`.
+Override the request limit with `R2_ORIGIN_RATE_LIMIT_REQUESTS_PER_10_SECONDS`.
+On Cloudflare Free, the mitigation timeout must stay at 10 seconds.
 
 An R2 custom domain returning `404` usually means the domain is connected but
 the requested object has not been uploaded yet. After the first backend deploy:
