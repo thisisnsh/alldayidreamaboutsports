@@ -4,12 +4,13 @@ import { requireSchedulerOidc, requireSession, signSession, verifyGoogleIdToken 
 import type { CatalogService } from "./catalog.js";
 import type { CelebrationAggregator } from "./celebrations.js";
 import { env } from "./env.js";
+import { syntheticPhase } from "./phase.js";
 import type { Poller } from "./poller.js";
 import { CACHE_CONTROL_LIVE, type R2 } from "./r2.js";
 import { FixedWindowRateLimiter } from "./rateLimit.js";
 import type { Store } from "./store.js";
 import type { Dispatcher } from "./tasks.js";
-import type { MatchState, Period } from "./types.js";
+import type { MatchState } from "./types.js";
 import { log } from "./log.js";
 
 const celebrateSchema = z.object({
@@ -60,26 +61,6 @@ function enforceRateLimit(limiter: FixedWindowRateLimiter, key: (req: Request) =
     }
     res.status(429).json({ error: "rate limit exceeded" });
   };
-}
-
-// Minimal raw-status → (status, period, running) mapping for the synthetic test
-// match. Mirrors the provider's derivation for the codes a test would use.
-function syntheticPhase(rawStatus: string, minute: number | null): {
-  status: MatchState["status"]; period: Period; running: boolean;
-} {
-  switch (rawStatus) {
-    case "1H": return { status: "LIVE", period: "FIRST", running: true };
-    case "HT": return { status: "HALF_TIME", period: "HALF", running: false };
-    case "2H": return { status: "LIVE", period: "SECOND", running: true };
-    case "ET": return {
-      status: "LIVE", period: (minute ?? 0) <= 105 ? "EXTRA_FIRST" : "EXTRA_SECOND", running: true,
-    };
-    case "BT": return { status: "LIVE", period: "EXTRA_BREAK", running: false };
-    case "P": return { status: "LIVE", period: "PENALTIES", running: false };
-    case "FT": case "AET": case "PEN": return { status: "FINISHED", period: "FINISHED", running: false };
-    case "NS": case "TBD": return { status: "SCHEDULED", period: "PRE", running: false };
-    default: return { status: "OTHER", period: "OTHER", running: false };
-  }
 }
 
 /** Cache statuses that prove the edge — not R2 — served the request (§0). */

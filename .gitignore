@@ -21,6 +21,10 @@ node_modules/
 dist/
 *.tsbuildinfo
 
+# tester/ staging-only secrets (never commit real staging creds)
+tester/.staging.env
+tester/node_modules/
+
 # Web
 web/dist/
 .wrangler/
