@@ -84,11 +84,13 @@ function syntheticPhase(rawStatus: string, minute: number | null): {
 
 /** Cache statuses that prove the edge — not R2 — served the request (§0). */
 const HEALTHY_CACHE_STATUS = new Set(["HIT", "REVALIDATED", "STALE", "UPDATING"]);
+const RETRYABLE_CACHE_STATUS = new Set(["MISS", "EXPIRED"]);
 
 export interface CacheProbe {
   key: string;
   httpStatus: number;
   cacheStatus: string;
+  attempts: string[];
   error?: string;
 }
 
@@ -110,17 +112,32 @@ export async function probeCacheHealth(
   fixtureIds: number[],
   fetchImpl: typeof fetch = fetch,
 ): Promise<CacheHealthResult> {
-  const base = scoresDomain.replace(/\/+$/, "");
+  const base = (/^https?:\/\//i.test(scoresDomain) ? scoresDomain : `https://${scoresDomain}`)
+    .replace(/\/+$/, "");
   const keys = ["catalog.json", ...fixtureIds.map((id) => `matches/${id}.json`)];
   const probes = await Promise.all(keys.map(async (key): Promise<CacheProbe> => {
     const url = `${base}/${key}`;
     try {
-      const r = await fetchImpl(url, { method: "GET", cache: "no-store" as RequestCache });
-      const cacheStatus = (r.headers.get("cf-cache-status") ?? "UNKNOWN").toUpperCase();
-      await r.arrayBuffer().catch(() => undefined); // drain so the socket is reusable
-      return { key, httpStatus: r.status, cacheStatus };
+      const probe = async () => {
+        const r = await fetchImpl(url, { method: "GET" });
+        const cacheStatus = (r.headers.get("cf-cache-status") ?? "UNKNOWN").toUpperCase();
+        await r.arrayBuffer().catch(() => undefined); // drain so the socket is reusable
+        return { httpStatus: r.status, cacheStatus };
+      };
+
+      const first = await probe();
+      if (RETRYABLE_CACHE_STATUS.has(first.cacheStatus)) {
+        const second = await probe();
+        return {
+          key,
+          httpStatus: second.httpStatus,
+          cacheStatus: second.cacheStatus,
+          attempts: [first.cacheStatus, second.cacheStatus],
+        };
+      }
+      return { key, httpStatus: first.httpStatus, cacheStatus: first.cacheStatus, attempts: [first.cacheStatus] };
     } catch (err) {
-      return { key, httpStatus: 0, cacheStatus: "ERROR", error: (err as Error).message };
+      return { key, httpStatus: 0, cacheStatus: "ERROR", attempts: ["ERROR"], error: (err as Error).message };
     }
   }));
   const unhealthy = probes.filter((p) => !HEALTHY_CACHE_STATUS.has(p.cacheStatus));

@@ -381,7 +381,7 @@ Rate limits:
 - mitigation timeout: ${RATE_LIMIT_MITIGATION_TIMEOUT_SECONDS}s
 
 Verify after objects are uploaded:
-  curl -sI https://scores-staging.alldayidreamaboutsports.com/catalog.json | grep -iE '^(cache-control|cf-cache-status):'
+  curl -sS -D - -o /dev/null https://scores-staging.alldayidreamaboutsports.com/catalog.json | grep -iE '^(cache-control|cf-cache-status):'
 EOF
 else
   cat <<'EOF'

@@ -1,5 +1,5 @@
 import type { ScoreProvider } from "./providers/types.js";
-import { CACHE_CONTROL_LIVE, CACHE_CONTROL_LONG, R2, R2ConflictError, R2MatchStateStore } from "./r2.js";
+import { CACHE_CONTROL_LONG, R2, R2ConflictError, R2MatchStateStore } from "./r2.js";
 import type { MatchState } from "./types.js";
 import { log } from "./log.js";
 
@@ -73,10 +73,9 @@ export class Poller {
     log.info("poll_provider_complete", { fixtures: fixtures.length, live: liveCount });
 
     const eligible = fixtures.filter((m) => isStartingSoon(m) || isLive(m) || isRecentlyFinished(m));
-    // A date file gets the live (5s+SWR) TTL when it's today or holds any
-    // eligible match; otherwise the long (12h) schedule TTL.
+    // Fixture date files are schedule/bootstrap data. Live changes are served
+    // from matches/*.json, so fixtures always use the long edge TTL.
     const today = new Date().toISOString().slice(0, 10);
-    const liveDates = new Set<string>([today, ...eligible.map((m) => m.kickoffISO.slice(0, 10))]);
 
     const partitions = partitionFixtures(fixtures);
     for (const date of [range.from, today, range.to]) {
@@ -86,7 +85,7 @@ export class Poller {
       this.r2.putJsonIfChanged(
         `fixtures-${date}.json`,
         { matches },
-        liveDates.has(date) ? CACHE_CONTROL_LIVE : CACHE_CONTROL_LONG,
+        CACHE_CONTROL_LONG,
       ),
     ));
 

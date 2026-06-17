@@ -18,7 +18,7 @@ describe("R2MatchStateStore", () => {
       if (command instanceof GetObjectCommand) {
         return { ETag: "\"v1\"", Body: { transformToString: async () => JSON.stringify(match) } };
       }
-      return {};
+      return { ETag: "\"v2\"" };
     });
     const store = new R2MatchStateStore({ send } as never, "private-state");
 
@@ -33,6 +33,40 @@ describe("R2MatchStateStore", () => {
       CacheControl: "public, max-age=5, stale-while-revalidate=25",
       IfMatch: "\"v1\"",
     });
+    await expect(store.load(7)).resolves.toEqual({ state: match, etag: "\"v2\"" });
+    expect(send).toHaveBeenCalledTimes(2);
+  });
+
+  it("caches loaded match state to avoid repeated R2 reads during polling", async () => {
+    const send = vi.fn(async (command: unknown) => {
+      if (command instanceof GetObjectCommand) {
+        return { ETag: "\"v1\"", Body: { transformToString: async () => JSON.stringify(match) } };
+      }
+      return {};
+    });
+    const store = new R2MatchStateStore({ send } as never, "private-state");
+
+    await expect(store.load(7)).resolves.toEqual({ state: match, etag: "\"v1\"" });
+    await expect(store.load(7)).resolves.toEqual({ state: match, etag: "\"v1\"" });
+
+    expect(send).toHaveBeenCalledTimes(1);
+  });
+
+  it("caches missing match state until the process saves it", async () => {
+    const send = vi.fn(async (command: unknown) => {
+      if (command instanceof GetObjectCommand) {
+        throw Object.assign(new Error("missing"), { name: "NoSuchKey" });
+      }
+      return { ETag: "\"v1\"" };
+    });
+    const store = new R2MatchStateStore({ send } as never, "private-state");
+
+    await expect(store.load(7)).resolves.toEqual({ state: null, etag: null });
+    await expect(store.load(7)).resolves.toEqual({ state: null, etag: null });
+    await store.save(match, null);
+    await expect(store.load(7)).resolves.toEqual({ state: match, etag: "\"v1\"" });
+
+    expect(send).toHaveBeenCalledTimes(2);
   });
 
   it("surfaces conditional write conflicts", async () => {

@@ -81,6 +81,7 @@ export class R2 {
 export class R2MatchStateStore {
   private readonly client: S3Client;
   private readonly bucket: string;
+  private readonly stateCache = new Map<string, VersionedMatchState>();
 
   constructor(client?: S3Client, bucket?: string) {
     this.bucket = bucket ?? env.r2.scoresBucket;
@@ -99,34 +100,45 @@ export class R2MatchStateStore {
   }
 
   async load(fixtureId: number): Promise<VersionedMatchState> {
+    const key = this.key(fixtureId);
+    const cached = this.stateCache.get(key);
+    if (cached) return cached;
+
     try {
       const response = await this.client.send(new GetObjectCommand({
         Bucket: this.bucket,
-        Key: this.key(fixtureId),
+        Key: key,
       }));
-      return {
+      const loaded = {
         state: JSON.parse(await response.Body!.transformToString()) as MatchState,
         etag: response.ETag ?? null,
       };
+      this.stateCache.set(key, loaded);
+      return loaded;
     } catch (error) {
       if (["NoSuchKey", "NotFound"].includes((error as { name?: string }).name ?? "")) {
-        return { state: null, etag: null };
+        const missing = { state: null, etag: null };
+        this.stateCache.set(key, missing);
+        return missing;
       }
       throw error;
     }
   }
 
   async save(state: MatchState, etag: string | null): Promise<void> {
+    const key = this.key(state.fixtureId);
     try {
-      await this.client.send(new PutObjectCommand({
+      const response = await this.client.send(new PutObjectCommand({
         Bucket: this.bucket,
-        Key: this.key(state.fixtureId),
+        Key: key,
         Body: JSON.stringify(state),
         ContentType: "application/json",
         CacheControl: CACHE_CONTROL_LIVE,
         ...(etag ? { IfMatch: etag } : { IfNoneMatch: "*" }),
       }));
+      this.stateCache.set(key, { state, etag: response.ETag ?? etag });
     } catch (error) {
+      this.stateCache.delete(key);
       if ((error as { name?: string }).name === "PreconditionFailed") {
         throw new R2ConflictError(`fixture ${state.fixtureId} state changed concurrently`);
       }

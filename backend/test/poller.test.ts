@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   isLive, isRecentlyFinished, isRegressiveSnapshot, isStartingSoon, partitionFixtures, Poller, utcPollRange,
 } from "../src/poller.js";
-import { CACHE_CONTROL_LIVE, CACHE_CONTROL_LONG } from "../src/r2.js";
+import { CACHE_CONTROL_LONG } from "../src/r2.js";
 import type { MatchState } from "../src/types.js";
 
 function state(
@@ -53,9 +53,9 @@ describe("Poller", () => {
     const result = await poller.fetchOnce();
 
     expect(result).toEqual({ live: 1 });
-    // A date holding an eligible (live) match gets the 5s+SWR TTL.
+    // Fixture date files are schedule/bootstrap data; live state is in matches/*.json.
     expect(r2.putJsonIfChanged).toHaveBeenCalledWith(
-      `fixtures-${match.kickoffISO.slice(0, 10)}.json`, expect.anything(), CACHE_CONTROL_LIVE,
+      `fixtures-${match.kickoffISO.slice(0, 10)}.json`, expect.anything(), CACHE_CONTROL_LONG,
     );
     expect(stateStore.save).toHaveBeenCalledWith(match, null);
     // No purge path of any kind.
@@ -77,7 +77,7 @@ describe("Poller", () => {
     );
   });
 
-  it("always writes today's fixtures file with the live TTL", async () => {
+  it("writes today's fixtures file with the long TTL when no match is eligible", async () => {
     const provider = { fixturesForRange: vi.fn().mockResolvedValue([]) };
     const stateStore = { load: vi.fn(), save: vi.fn() };
     const r2 = { putJsonIfChanged: vi.fn().mockResolvedValue(undefined) };
@@ -87,7 +87,7 @@ describe("Poller", () => {
 
     const today = new Date().toISOString().slice(0, 10);
     expect(r2.putJsonIfChanged).toHaveBeenCalledWith(
-      `fixtures-${today}.json`, expect.anything(), CACHE_CONTROL_LIVE,
+      `fixtures-${today}.json`, expect.anything(), CACHE_CONTROL_LONG,
     );
   });
 
