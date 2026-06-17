@@ -228,11 +228,35 @@ final class AppSession: ObservableObject {
         AppLog.info(.catalog, "refresh_complete leagues=\(leagues.count) teams=\(allTeams.count)")
     }
 
-    /// Manual refresh (the menu's ↻ button): force a schedule re-bootstrap and
-    /// re-publish. Live scores still flow from `LiveStore`'s poll loop.
+    /// Manual refresh (the menu's ↻ button): force a schedule re-bootstrap, run
+    /// one live poll pass now (fetch each live fan match, merge its score, fire
+    /// any goal), then pull the latest celebration totals for fan matches that
+    /// have played (live or finished).
     func refreshFixtures() async {
         await bootstrapFixturesIfNeeded(force: true)
-        publishFixtures()
+        await LiveStore.shared.refreshNow()
+        await refreshCelebrationTotals()
+    }
+
+    /// Re-read `celebrate/{id}.json` once for each fan match that is live or
+    /// finished — these are the only fixtures that can have a celebration tally.
+    private func refreshCelebrationTotals() async {
+        guard isSignedIn, ControlPlane.shared.isOperational else { return }
+        let targets = fixtures.filter {
+            $0.involves(fanTeamIds) && ($0.isLive || $0.status == "FINISHED")
+        }
+        for fixture in targets {
+            guard isSignedIn, ControlPlane.shared.isOperational else { return }
+            do {
+                let totals = try await scores.fetchCelebrations(fixtureId: fixture.fixtureId)
+                guard isSignedIn, ControlPlane.shared.isOperational else { return }
+                mergeCelebrationTotals(totals, fixtureId: fixture.fixtureId)
+            } catch ScoresError.notModified {
+                // counts unchanged
+            } catch {
+                AppLog.error(.celebrations, "manual_totals_refresh_failed fixture_id=\(fixture.fixtureId)", error: error)
+            }
+        }
     }
 
     /// The schedule bootstrap: once per day, read `fixtures-{date}.json` for

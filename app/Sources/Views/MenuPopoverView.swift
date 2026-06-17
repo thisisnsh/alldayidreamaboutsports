@@ -71,12 +71,16 @@ struct MenuPopoverView: View {
                     .fontWeight(.semibold)
                     .opacity(0.7)
                 Spacer()
-                Button {
-                    Task { await session.refreshFixtures() }
-                } label: {
-                    Image(systemName: "arrow.clockwise").font(.caption).opacity(0.5)
+                // Hidden for now — `refreshFixtures()` and its wiring stay intact;
+                // re-enable when we revisit the manual refresh UX.
+                if false {
+                    Button {
+                        Task { await session.refreshFixtures() }
+                    } label: {
+                        Image(systemName: "arrow.clockwise").font(.caption).opacity(0.5)
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
             }
             let shown = session.fixtures.filter { $0.involves(session.fanTeamIds) }
             if shown.isEmpty {
