@@ -32,6 +32,11 @@ final class LiveStore {
     /// Per-fixture celebration refresh loops; a goal kicks one off (see
     /// `refreshCelebrations`). Cancelled on sign-out / loop stop.
     private var celebrationRefresh: [Int: Task<Void, Never>] = [:]
+    /// Fan teams that scored in a fixture while its refresh window is open. When
+    /// the window converges we drop ONE celebration-count notification per team
+    /// — on every client, tapper or not (a later goal restarts the window and
+    /// carries these forward so they're notified once, at the final tally).
+    private var celebrationNotify: [Int: Set<Int>] = [:]
     /// Last-seen state per fixture — the diff baseline. A fixture not in here is
     /// being observed for the first time: it seeds the baseline and emits nothing.
     private var baseline: [Int: Fixture] = [:]
@@ -110,13 +115,14 @@ final class LiveStore {
             }
             guard session.isSignedIn, ControlPlane.shared.isOperational else { return }
 
-            ingest(current)
+            let fanGoalTeams = ingest(current)
 
             // A score move (goal / VAR correction) is the only thing that grows
             // the celebration total — taps then trickle in for a while, so we
-            // re-read for a minute rather than once.
-            if previous.score != current.score {
-                refreshCelebrations(fixtureId: current.fixtureId)
+            // re-read for a minute rather than once. Fan goals additionally
+            // schedule the convergence notification for the teams that scored.
+            if previous.score != current.score || !fanGoalTeams.isEmpty {
+                refreshCelebrations(fixtureId: current.fixtureId, notifyTeams: fanGoalTeams)
             }
         }
         session.publishFixtures()
@@ -126,7 +132,12 @@ final class LiveStore {
     /// `celebrationRefreshInterval`s for `celebrationRefreshWindow` so the count
     /// climbs as everyone's taps land in the CDN file — a single snapshot misses
     /// the late tappers. Restarts the window if another goal lands mid-loop.
-    private func refreshCelebrations(fixtureId: Int) {
+    ///
+    /// When the window converges, drops a celebration-count notification for
+    /// each fan team that scored — on EVERY client, so tappers and non-tappers
+    /// alike see the same final tally rather than a partial, per-client snapshot.
+    private func refreshCelebrations(fixtureId: Int, notifyTeams: [Int]) {
+        celebrationNotify[fixtureId, default: []].formUnion(notifyTeams)
         celebrationRefresh[fixtureId]?.cancel()
         celebrationRefresh[fixtureId] = Task { @MainActor in
             let deadline = Date().addingTimeInterval(Self.celebrationRefreshWindow)
@@ -143,6 +154,15 @@ final class LiveStore {
                 }
                 try? await Task.sleep(for: .seconds(Self.celebrationRefreshInterval))
             }
+            // A newer goal cancelled us and restarted the window — it now owns
+            // these teams and the state, and will notify once at the later end.
+            guard !Task.isCancelled else { return }
+            if session.isSignedIn, ControlPlane.shared.isOperational {
+                for teamId in celebrationNotify[fixtureId] ?? [] {
+                    OverlayManager.shared.notifyCelebrationCount(fixtureId: fixtureId, teamId: String(teamId))
+                }
+            }
+            celebrationNotify[fixtureId] = nil
             celebrationRefresh[fixtureId] = nil
         }
     }
@@ -150,21 +170,31 @@ final class LiveStore {
     private func cancelCelebrationRefresh() {
         for task in celebrationRefresh.values { task.cancel() }
         celebrationRefresh.removeAll()
+        celebrationNotify.removeAll()
     }
 
-    /// Merge one freshly-read fixture into state, diffing against the baseline.
+    /// Merge one freshly-read fixture into state, diffing against the baseline,
+    /// and return the fan teams that scored in this delta (drives the post-goal
+    /// celebration notification).
     /// BASELINE GUARD: the first observation seeds the baseline and emits NO
     /// events (don't replay pre-launch goals); only later deltas fire overlays.
-    private func ingest(_ current: Fixture) {
+    @discardableResult
+    private func ingest(_ current: Fixture) -> [Int] {
         let prev = baseline[current.fixtureId]
         session.applyLiveFixture(current)
 
+        var fanGoalTeams: [Int] = []
         if prev == nil {
             AppLog.info(.fixtures, "baseline_seeded fixture_id=\(current.fixtureId) status=\(current.status) score=\(current.home.goals)-\(current.away.goals)")
         } else {
             let events = MatchDiff.diff(prev: prev, next: current)
             for event in events {
                 EventRouter.shared.route(event)
+            }
+            let fans = session.fanTeamIds
+            fanGoalTeams = events.compactMap { event in
+                guard event.type == .goal, let team = event.teamId, fans.contains(team) else { return nil }
+                return team
             }
             if !events.isEmpty {
                 AppLog.info(.fixtures, "diff_fired fixture_id=\(current.fixtureId) events=\(events.count)")
@@ -175,6 +205,7 @@ final class LiveStore {
         if current.status == "FINISHED" {
             finished.insert(current.fixtureId)
         }
+        return fanGoalTeams
     }
 
     /// True from ~5 min before kickoff until the match file reports FINISHED,
