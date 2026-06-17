@@ -7,6 +7,8 @@
 #
 # Required for bucket creation:
 #   npx wrangler login
+#   Bucket creation intentionally ignores CLOUDFLARE_API_TOKEN so wrangler uses
+#   your browser login instead of the narrower setup token.
 #
 # Required for full Cloudflare API automation:
 #   CLOUDFLARE_API_TOKEN  token with R2 edit, Zone Settings Write, Cache Rules
@@ -15,18 +17,14 @@
 #   CLOUDFLARE_ZONE_ID    zone id for alldayidreamaboutsports.com
 #
 # Optional limit overrides:
-#   SCORES_RATE_LIMIT_REQUESTS_PER_MINUTE=600
-#   SCORES_ORIGIN_RATE_LIMIT_REQUESTS_PER_MINUTE=120
-#   DOWNLOAD_RATE_LIMIT_REQUESTS_PER_MINUTE=120
-#   RATE_LIMIT_MITIGATION_TIMEOUT_SECONDS=60
+#   R2_ORIGIN_RATE_LIMIT_REQUESTS_PER_10_SECONDS=20
+#   RATE_LIMIT_MITIGATION_TIMEOUT_SECONDS=10
 set -euo pipefail
 
 API_BASE="https://api.cloudflare.com/client/v4"
 
-SCORES_RATE_LIMIT_REQUESTS_PER_MINUTE="${SCORES_RATE_LIMIT_REQUESTS_PER_MINUTE:-600}"
-SCORES_ORIGIN_RATE_LIMIT_REQUESTS_PER_MINUTE="${SCORES_ORIGIN_RATE_LIMIT_REQUESTS_PER_MINUTE:-120}"
-DOWNLOAD_RATE_LIMIT_REQUESTS_PER_MINUTE="${DOWNLOAD_RATE_LIMIT_REQUESTS_PER_MINUTE:-120}"
-RATE_LIMIT_MITIGATION_TIMEOUT_SECONDS="${RATE_LIMIT_MITIGATION_TIMEOUT_SECONDS:-60}"
+R2_ORIGIN_RATE_LIMIT_REQUESTS_PER_10_SECONDS="${R2_ORIGIN_RATE_LIMIT_REQUESTS_PER_10_SECONDS:-20}"
+RATE_LIMIT_MITIGATION_TIMEOUT_SECONDS="${RATE_LIMIT_MITIGATION_TIMEOUT_SECONDS:-10}"
 
 SCORES_HOSTS=(
   "scores-staging.alldayidreamaboutsports.com"
@@ -55,17 +53,58 @@ cf_api() {
   local method="$1"
   local path="$2"
   local body="${3:-}"
+  local response_file status
+
+  response_file="$(mktemp)"
   if [[ -n "$body" ]]; then
-    curl -fsS "${API_BASE}${path}" \
+    status="$(
+      curl -sS -o "$response_file" -w "%{http_code}" "${API_BASE}${path}" \
       --request "$method" \
       --header "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
       --header "Content-Type: application/json" \
       --data "$body"
+    )"
   else
-    curl -fsS "${API_BASE}${path}" \
+    status="$(
+      curl -sS -o "$response_file" -w "%{http_code}" "${API_BASE}${path}" \
       --request "$method" \
       --header "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}"
+    )"
   fi
+
+  if [[ "$status" =~ ^2 ]]; then
+    cat "$response_file"
+    rm -f "$response_file"
+    return 0
+  fi
+
+  echo "Cloudflare API ${method} ${path} returned HTTP ${status}" >&2
+  cat "$response_file" >&2
+  rm -f "$response_file"
+  exit 1
+}
+
+wrangler() {
+  env -u CLOUDFLARE_API_TOKEN npx wrangler "$@"
+}
+
+create_bucket() {
+  local bucket="$1"
+  local output
+
+  echo "── Ensuring R2 bucket ${bucket}"
+  if output="$(wrangler r2 bucket create "$bucket" 2>&1)"; then
+    printf '%s\n' "$output"
+    return 0
+  fi
+
+  if grep -q "already exists, and you own it" <<<"$output"; then
+    echo "   Bucket already exists."
+    return 0
+  fi
+
+  printf '%s\n' "$output" >&2
+  return 1
 }
 
 cf_get_entrypoint() {
@@ -94,7 +133,7 @@ cf_get_entrypoint() {
 }
 
 host_expression() {
-  jq -nr --args "$@" '"(http.host in {" + ([$ARGS.positional[] | @json] | join(" ")) + "})"'
+  jq -nr '"(http.host in {" + ([$ARGS.positional[] | @json] | join(" ")) + "})"' --args "$@"
 }
 
 ensure_ruleset() {
@@ -201,7 +240,7 @@ rate_limit_rule() {
       },
       ratelimit: {
         characteristics: ["ip.src", "cf.colo.id"],
-        period: 60,
+        period: 10,
         requests_per_period: $requestsPerPeriod,
         mitigation_timeout: $mitigationTimeout
       }
@@ -246,13 +285,13 @@ disable_r2_dev_url() {
     payload="$(jq -n '{ enabled: false }')"
     cf_api PUT "/accounts/${CLOUDFLARE_ACCOUNT_ID}/r2/buckets/${bucket}/domains/managed" "$payload" >/dev/null
   else
-    npx wrangler r2 bucket dev-url disable "$bucket" || \
+    wrangler r2 bucket dev-url disable "$bucket" || \
       echo "   WARNING: Could not disable r2.dev for ${bucket}; verify it is OFF in the dashboard."
   fi
 }
 
 configure_cloudflare_zone() {
-  local scores_expression downloads_expression cache_refs cache_rules rate_refs rate_rules
+  local scores_expression downloads_expression r2_expression cache_refs cache_rules rate_refs rate_rules
 
   : "${CLOUDFLARE_API_TOKEN:?set CLOUDFLARE_API_TOKEN for Cloudflare API setup}"
   : "${CLOUDFLARE_ACCOUNT_ID:?set CLOUDFLARE_ACCOUNT_ID for R2 custom-domain setup}"
@@ -266,6 +305,7 @@ configure_cloudflare_zone() {
 
   scores_expression="$(host_expression "${SCORES_HOSTS[@]}")"
   downloads_expression="$(host_expression "${DOWNLOAD_HOSTS[@]}")"
+  r2_expression="$(host_expression "${SCORES_HOSTS[@]}" "${DOWNLOAD_HOSTS[@]}")"
 
   cache_refs='["allday_scores_cache_settings", "allday_downloads_cache_settings"]'
   cache_rules="$(
@@ -291,25 +331,15 @@ configure_cloudflare_zone() {
   echo "── Enabling Smart Tiered Cache topology"
   cf_api PATCH "/zones/${CLOUDFLARE_ZONE_ID}/cache/tiered_cache_smart_topology_enable" '{"value":"on"}' >/dev/null
 
-  rate_refs='["allday_scores_cdn_rate_limit", "allday_scores_r2_origin_rate_limit", "allday_downloads_cdn_rate_limit"]'
+  rate_refs='["allday_r2_origin_rate_limit"]'
   rate_rules="$(
     jq -s '.' \
       <(rate_limit_rule \
-        "allday_scores_cdn_rate_limit" \
-        "Rate limit scores CDN requests per IP/colo" \
-        "$scores_expression" \
-        "$SCORES_RATE_LIMIT_REQUESTS_PER_MINUTE") \
-      <(rate_limit_rule \
-        "allday_scores_r2_origin_rate_limit" \
-        "Rate limit scores R2 origin reads per IP/colo" \
-        "$scores_expression" \
-        "$SCORES_ORIGIN_RATE_LIMIT_REQUESTS_PER_MINUTE" \
-        true) \
-      <(rate_limit_rule \
-        "allday_downloads_cdn_rate_limit" \
-        "Rate limit downloads CDN requests per IP/colo" \
-        "$downloads_expression" \
-        "$DOWNLOAD_RATE_LIMIT_REQUESTS_PER_MINUTE")
+        "allday_r2_origin_rate_limit" \
+        "Rate limit R2 origin reads for scores and downloads per IP/colo" \
+        "$r2_expression" \
+        "$R2_ORIGIN_RATE_LIMIT_REQUESTS_PER_10_SECONDS" \
+        true)
   )"
   ensure_ruleset \
     "http_ratelimit" \
@@ -322,12 +352,12 @@ configure_cloudflare_zone() {
 require_tool npx
 
 # public scores buckets: fixtures-*.json, matches/*.json, celebrate/*.json, catalog.json, config.json
-npx wrangler r2 bucket create alldayidreamaboutsports-staging-scores || true
-npx wrangler r2 bucket create alldayidreamaboutsports-scores || true
+create_bucket alldayidreamaboutsports-staging-scores
+create_bucket alldayidreamaboutsports-scores
 # downloads buckets: app DMGs + appcast.xml (Sparkle feed). Staging gets its
 # own so test releases never reach production's auto-update feed.
-npx wrangler r2 bucket create alldayidreamaboutsports-staging-downloads || true
-npx wrangler r2 bucket create alldayidreamaboutsports-downloads || true
+create_bucket alldayidreamaboutsports-staging-downloads
+create_bucket alldayidreamaboutsports-downloads
 
 for pair in "${BUCKET_DOMAIN_PAIRS[@]}"; do
   disable_r2_dev_url "${pair%%:*}"
@@ -347,9 +377,7 @@ Configured:
 - WAF rate limits for scores/download hostnames
 
 Rate limits:
-- scores CDN: ${SCORES_RATE_LIMIT_REQUESTS_PER_MINUTE}/minute per IP + colo
-- scores R2 origin reads: ${SCORES_ORIGIN_RATE_LIMIT_REQUESTS_PER_MINUTE}/minute per IP + colo, origin requests only
-- downloads CDN: ${DOWNLOAD_RATE_LIMIT_REQUESTS_PER_MINUTE}/minute per IP + colo
+- R2 origin reads: ${R2_ORIGIN_RATE_LIMIT_REQUESTS_PER_10_SECONDS}/10s per IP + colo across scores/downloads, origin requests only
 - mitigation timeout: ${RATE_LIMIT_MITIGATION_TIMEOUT_SECONDS}s
 
 Verify after objects are uploaded:
