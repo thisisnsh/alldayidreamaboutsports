@@ -42,6 +42,9 @@ final class LiveStore {
     private var baseline: [Int: Fixture] = [:]
     /// Fixtures whose match file has reported FINISHED (stop polling them).
     private var finished: Set<Int> = []
+    /// One-shot launch reconciliation guard — see `reconcileFanMatches`. Reset on
+    /// sign-out so the next signed-in session reconciles afresh.
+    private var didReconcileThisLaunch = false
 
     private var session: AppSession { AppSession.shared }
     private var scores: ScoresProviding { Services.scores }
@@ -67,6 +70,7 @@ final class LiveStore {
     func resetBaseline() {
         baseline = [:]
         finished = []
+        didReconcileThisLaunch = false
         cancelCelebrationRefresh()
     }
 
@@ -78,10 +82,64 @@ final class LiveStore {
         await pollCycle()
     }
 
+    /// One-shot reconciliation, NOT gated on the live window: for each fan match
+    /// that has already kicked off but that the windowed poll loop won't poll
+    /// (past kickoff+3.5h with no FINISHED ever observed), fetch `matches/{id}.json`
+    /// once and merge it over the possibly-stale schedule row. This fixes a match
+    /// that finished while the app was closed — or before its team was followed —
+    /// which would otherwise show the frozen `fixtures-{date}.json` value (itself
+    /// edge-cached up to 12h) until the next daily bootstrap.
+    ///
+    /// Scope keeps requests tiny: only fan matches, only kicked-off, and only
+    /// those outside the live window (in-window matches are already handled by
+    /// `pollCycle`, so this never double-fetches them). `teamIds` narrows it to a
+    /// newly-followed team; nil reconciles every fan team (the launch pass).
+    /// Reuses `ingest`, whose baseline guard emits no events on first observation
+    /// — so reconciling a long-finished match never replays its goals.
+    func reconcileFanMatches(teamIds: Set<Int>? = nil) async {
+        guard session.isSignedIn, ControlPlane.shared.isOperational else { return }
+        let teams = teamIds ?? session.fanTeamIds
+        guard !teams.isEmpty else { return }
+        let now = Date()
+        let targets = session.fixtures.filter { fixture in
+            fixture.involves(teams)
+                && fixture.status != "FINISHED" // schedule already terminal — trust it
+                && (fixture.kickoff.map { $0 <= now } ?? false) // has kicked off
+                && !isInLiveWindow(fixture, at: now) // pollCycle owns in-window matches
+        }
+        guard !targets.isEmpty else { return }
+        AppLog.info(.fixtures, "reconcile_start targets=\(targets.map(\.fixtureId).sorted())")
+
+        var merged = false
+        for previous in targets {
+            guard session.isSignedIn, ControlPlane.shared.isOperational else { return }
+            let current: Fixture
+            do {
+                current = try await scores.fetchFixture(fixtureId: previous.fixtureId)
+            } catch ScoresError.notModified {
+                continue
+            } catch {
+                AppLog.error(.fixtures, "reconcile_fetch_failed fixture_id=\(previous.fixtureId)", error: error)
+                continue
+            }
+            ingest(current)
+            merged = true
+        }
+        if merged { session.publishFixtures() }
+    }
+
     private func run() async {
         while !Task.isCancelled {
             if session.isSignedIn, ControlPlane.shared.isOperational {
                 await session.bootstrapFixturesIfNeeded()
+                // Once per launch, reconcile any already-played fan match the
+                // windowed poll loop won't touch (finished while the app was
+                // closed). Independent of the bootstrap gate so it also fires
+                // after a crash relaunch where the schedule cache survived.
+                if !didReconcileThisLaunch {
+                    await reconcileFanMatches()
+                    didReconcileThisLaunch = true
+                }
                 await pollCycle()
             }
             // ±~15% jitter so a fleet of clients doesn't hit the same 5s boundary.
