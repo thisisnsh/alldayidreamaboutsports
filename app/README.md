@@ -79,21 +79,45 @@ Each environment needs two files from its Firebase/Google Cloud project:
 
 The reversed client ID is not another credential. It is the same client ID
 rearranged into a macOS URL scheme so Google can return control to the app after
-browser sign-in. For the current staging OAuth plist:
+browser sign-in. The OAuth plists for both environments:
 
 ```text
+# staging (dreamaboutsports-staging)
 CLIENT_ID          = 291291942072-cqsmesng18bagi6psv69n5ch4kcnvj2s.apps.googleusercontent.com
 REVERSED_CLIENT_ID = com.googleusercontent.apps.291291942072-cqsmesng18bagi6psv69n5ch4kcnvj2s
+
+# production (dreamaboutsports-prod)
+CLIENT_ID          = 680190781802-t248eiqmjqaorv3ucok84t1ap9rrgc8q.apps.googleusercontent.com
+REVERSED_CLIENT_ID = com.googleusercontent.apps.680190781802-t248eiqmjqaorv3ucok84t1ap9rrgc8q
 ```
 
-The staging values are already configured. Once production exists, replace the
-two `YOUR_PRODUCTION...` placeholders in `project.yml`. Then regenerate and
-build the environment you want:
+Both staging and production values are already configured in `project.yml`. The
+Firebase plists themselves are gitignored, so each must exist locally (and as a
+CI secret) before building — see "CI secrets" below. Regenerate and build the
+environment you want:
 
 ```sh
 xcodegen
 xcodebuild -scheme AllDayIDreamAboutSports -configuration Staging build
 xcodebuild -scheme AllDayIDreamAboutSports -configuration Release build
+```
+
+### CI secrets
+
+`app-release.yml` builds the `Release` config and so needs the production
+Firebase/OAuth values as GitHub Actions secrets (the plists are gitignored and
+never reach the runner otherwise):
+
+| Secret | Value |
+|---|---|
+| `GOOGLE_SERVICE_INFO_PRODUCTION_PLIST_B64` | base64 of `GoogleService-Info-Production.plist` |
+| `GOOGLE_OAUTH_PRODUCTION_CLIENT_ID` | production `CLIENT_ID` |
+| `GOOGLE_OAUTH_PRODUCTION_REVERSED_CLIENT_ID` | production `REVERSED_CLIENT_ID` |
+
+Regenerate the base64 whenever the plist changes:
+
+```sh
+base64 -i app/Resources/GoogleService-Info-Production.plist | tr -d '\n'
 ```
 
 The build phase copies only the selected environment's Firebase plist into the

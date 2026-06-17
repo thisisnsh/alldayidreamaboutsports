@@ -77,10 +77,8 @@ targets:
           APP_FEED_URL: https://download-staging.alldayidreamaboutsports.com/appcast.xml
         Release:
           CODE_SIGN_ENTITLEMENTS: App.entitlements
-          # Set these to the production OAuth plist's CLIENT_ID and
-          # REVERSED_CLIENT_ID before shipping.
-          GOOGLE_CLIENT_ID: YOUR_PRODUCTION_CLIENT_ID.apps.googleusercontent.com
-          GOOGLE_REVERSED_CLIENT_ID: com.googleusercontent.apps.YOUR_PRODUCTION_CLIENT_ID
+          GOOGLE_CLIENT_ID: 680190781802-t248eiqmjqaorv3ucok84t1ap9rrgc8q.apps.googleusercontent.com
+          GOOGLE_REVERSED_CLIENT_ID: com.googleusercontent.apps.680190781802-t248eiqmjqaorv3ucok84t1ap9rrgc8q
           GOOGLE_SERVICE_INFO_PLIST: GoogleService-Info-Production.plist
           APP_API_BASE_URL: https://api.alldayidreamaboutsports.com
           APP_SCORES_BASE_URL: https://scores.alldayidreamaboutsports.com
