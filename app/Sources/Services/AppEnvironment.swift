@@ -11,6 +11,11 @@ enum AppEnvironment {
         Int(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "1") ?? 1
     }
 
+    /// Marketing version (CFBundleShortVersionString), e.g. "1.2.0".
+    static var appVersion: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0"
+    }
+
     /// Build configuration name, derived from compile-time flags.
     static var profileName: String {
         #if DEBUG
