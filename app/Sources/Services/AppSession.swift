@@ -122,9 +122,10 @@ final class AppSession: ObservableObject {
         Keychain.delete("sessionToken")
         defaults.removeObject(forKey: "profile")
         profile = nil
-        // Signed out = silent: drop the diff baseline and clear anything on
-        // screen. Fan teams/settings stay in UserDefaults until app data goes.
-        LiveStore.shared.resetBaseline()
+        // Signed out = silent: wipe the cached fixtures/scores/celebrations so
+        // the next session re-fetches fresh, and clear anything on screen. Fan
+        // teams/settings stay in UserDefaults until app data goes.
+        clearMatchCache()
         OverlayManager.shared.dismissAll()
         if showLogin { openWindow(WindowID.login) }
     }
@@ -396,5 +397,24 @@ final class AppSession: ObservableObject {
         if let data = try? JSONEncoder().encode(celebrationTotals) {
             defaults.set(data, forKey: CacheKey.celebrationTotals)
         }
+    }
+
+    /// Wipe the cached fixtures, live scores, and celebration tallies — the
+    /// in-memory working set, their UserDefaults backing, and the once-per-day
+    /// schedule gate — and reset the live-poll baseline and conditional-GET
+    /// ETags so the next session re-fetches everything fresh from the CDN (no
+    /// 304s against now-dropped data). Fan teams and settings are preserved.
+    /// Called on sign-out and the kill-switch/forced-update gate (both via
+    /// `clearSession`), and on quit (`applicationWillTerminate`).
+    func clearMatchCache() {
+        fixtures = []
+        fixturesById = [:]
+        celebrationTotals = [:]
+        defaults.removeObject(forKey: CacheKey.fixtures)
+        defaults.removeObject(forKey: CacheKey.celebrationTotals)
+        defaults.removeObject(forKey: CacheKey.fixtureBootstrapDay)
+        ScoresETagStore.shared.clear()
+        LiveStore.shared.resetBaseline()
+        AppLog.info(.fixtures, "match_cache_cleared")
     }
 }
