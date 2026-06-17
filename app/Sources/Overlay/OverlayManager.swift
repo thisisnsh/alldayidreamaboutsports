@@ -215,9 +215,11 @@ final class OverlayManager: ObservableObject {
         }
 
         Task { @MainActor in
-            // Give the backend time to aggregate the just-sent taps into the
-            // CDN file so the read reflects them (and doesn't 404 a fresh file).
-            if taps > 0 { try? await Task.sleep(for: .seconds(5)) }
+            // Give the backend time to aggregate everyone's just-sent taps into
+            // the CDN file so the read reflects them (and doesn't 404 a fresh
+            // file). This matters even when WE didn't tap: the other apps' taps
+            // need that window to land, or a non-tapping app reads an empty total.
+            try? await Task.sleep(for: .seconds(5))
             for target in targets {
                 let totals: [String: Int]
                 do {
@@ -336,6 +338,18 @@ final class OverlayManager: ObservableObject {
         return panel
     }
 
+    /// Hosting view for a panel whose frame WE control. `sizingOptions = []`
+    /// stops the hosting view from driving the window's content-size
+    /// constraints off the SwiftUI ideal size — without it, continuously
+    /// animating content (confetti, the dropping ball, spring-inserted pills)
+    /// re-marks the window for an "Update Constraints in Window" pass every
+    /// frame until AppKit exceeds its pass budget and throws (app crash).
+    private static func makeHostingView<Content: View>(_ rootView: Content) -> NSHostingView<Content> {
+        let hostingView = NSHostingView(rootView: rootView)
+        hostingView.sizingOptions = []
+        return hostingView
+    }
+
     // nil when no display is active (e.g. a Mac mini with its screen asleep or
     // detached). Every panel show guards on it — the event is still recorded
     // and the system's time-sensitive notification still fires; we just don't
@@ -346,7 +360,7 @@ final class OverlayManager: ObservableObject {
         guard let screen else { return }
         if displayPanel == nil {
             let panel = Self.makePanel(frame: screen.frame, clickThrough: true)
-            panel.contentView = NSHostingView(rootView: OverlayDisplayView().environmentObject(self))
+            panel.contentView = Self.makeHostingView(OverlayDisplayView().environmentObject(self))
             displayPanel = panel
         }
         displayPanel?.setFrame(screen.frame, display: true)
@@ -391,7 +405,7 @@ final class OverlayManager: ObservableObject {
         let rect = dismissPanelRect()
         if dismissPanel == nil {
             let panel = Self.makePanel(frame: rect, clickThrough: false)
-            panel.contentView = NSHostingView(rootView: SetDismissButton().environmentObject(self))
+            panel.contentView = Self.makeHostingView(SetDismissButton().environmentObject(self))
             dismissPanel = panel
         }
         dismissPanel?.setFrame(rect, display: true)
@@ -423,7 +437,7 @@ final class OverlayManager: ObservableObject {
         )
         if interactPanel == nil {
             let panel = Self.makePanel(frame: rect, clickThrough: false)
-            panel.contentView = NSHostingView(rootView: InteractiveBallView().environmentObject(self))
+            panel.contentView = Self.makeHostingView(InteractiveBallView().environmentObject(self))
             interactPanel = panel
         }
         interactPanel?.setFrame(rect, display: true)

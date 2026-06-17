@@ -23,8 +23,15 @@ final class LiveStore {
     private static let preKickoffLead: TimeInterval = 5 * 60
     /// Hard cap on the trailing window (in case we never see FINISHED).
     private static let maxLiveWindow: TimeInterval = 3.5 * 60 * 60
+    /// After a goal, re-read the celebration total for this long…
+    private static let celebrationRefreshWindow: TimeInterval = 60
+    /// …at this cadence, as everyone's taps trickle into the CDN file.
+    private static let celebrationRefreshInterval: TimeInterval = 5
 
     private var loopTask: Task<Void, Never>?
+    /// Per-fixture celebration refresh loops; a goal kicks one off (see
+    /// `refreshCelebrations`). Cancelled on sign-out / loop stop.
+    private var celebrationRefresh: [Int: Task<Void, Never>] = [:]
     /// Last-seen state per fixture — the diff baseline. A fixture not in here is
     /// being observed for the first time: it seeds the baseline and emits nothing.
     private var baseline: [Int: Fixture] = [:]
@@ -46,6 +53,7 @@ final class LiveStore {
     func stop() {
         loopTask?.cancel()
         loopTask = nil
+        cancelCelebrationRefresh()
         AppLog.info(.fixtures, "live_loop_stop")
     }
 
@@ -54,6 +62,15 @@ final class LiveStore {
     func resetBaseline() {
         baseline = [:]
         finished = []
+        cancelCelebrationRefresh()
+    }
+
+    /// Manual refresh (the menu's ↻ button): run one poll pass right now — fetch
+    /// each live fan match's `matches/{id}.json`, diff/merge the score, fire any
+    /// new goal's events, and kick off the celebration refresh on a score move.
+    func refreshNow() async {
+        guard session.isSignedIn, ControlPlane.shared.isOperational else { return }
+        await pollCycle()
     }
 
     private func run() async {
@@ -95,21 +112,44 @@ final class LiveStore {
 
             ingest(current)
 
-            // Celebration totals only need a CDN read when the score actually
-            // moved (goal / VAR correction).
+            // A score move (goal / VAR correction) is the only thing that grows
+            // the celebration total — taps then trickle in for a while, so we
+            // re-read for a minute rather than once.
             if previous.score != current.score {
-                do {
-                    let totals = try await scores.fetchCelebrations(fixtureId: current.fixtureId)
-                    guard session.isSignedIn, ControlPlane.shared.isOperational else { return }
-                    session.mergeCelebrationTotals(totals, fixtureId: current.fixtureId)
-                } catch ScoresError.notModified {
-                    // counts unchanged
-                } catch {
-                    AppLog.error(.celebrations, "poll_totals_refresh_failed fixture_id=\(current.fixtureId)", error: error)
-                }
+                refreshCelebrations(fixtureId: current.fixtureId)
             }
         }
         session.publishFixtures()
+    }
+
+    /// A goal just fired: re-read `celebrate/{id}.json` every
+    /// `celebrationRefreshInterval`s for `celebrationRefreshWindow` so the count
+    /// climbs as everyone's taps land in the CDN file — a single snapshot misses
+    /// the late tappers. Restarts the window if another goal lands mid-loop.
+    private func refreshCelebrations(fixtureId: Int) {
+        celebrationRefresh[fixtureId]?.cancel()
+        celebrationRefresh[fixtureId] = Task { @MainActor in
+            let deadline = Date().addingTimeInterval(Self.celebrationRefreshWindow)
+            while !Task.isCancelled, Date() < deadline {
+                guard session.isSignedIn, ControlPlane.shared.isOperational else { break }
+                do {
+                    let totals = try await scores.fetchCelebrations(fixtureId: fixtureId)
+                    guard session.isSignedIn, ControlPlane.shared.isOperational else { break }
+                    session.mergeCelebrationTotals(totals, fixtureId: fixtureId)
+                } catch ScoresError.notModified {
+                    // counts unchanged
+                } catch {
+                    AppLog.error(.celebrations, "celebration_refresh_failed fixture_id=\(fixtureId)", error: error)
+                }
+                try? await Task.sleep(for: .seconds(Self.celebrationRefreshInterval))
+            }
+            celebrationRefresh[fixtureId] = nil
+        }
+    }
+
+    private func cancelCelebrationRefresh() {
+        for task in celebrationRefresh.values { task.cancel() }
+        celebrationRefresh.removeAll()
     }
 
     /// Merge one freshly-read fixture into state, diffing against the baseline.
