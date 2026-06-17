@@ -116,6 +116,12 @@ struct MenuPopoverView: View {
             }
             Button {
                 dismissMenu()
+                NSWorkspace.shared.open(requestFeatureURL)
+            } label: {
+                Label("Request a feature", systemImage: "lightbulb")
+            }
+            Button {
+                dismissMenu()
                 NSWorkspace.shared.open(reportBugURL)
             } label: {
                 Label("Report a bug", systemImage: "ladybug")
@@ -132,6 +138,9 @@ struct MenuPopoverView: View {
                 Label("Quit", systemImage: "power")
             }
         }
+        // Icons vary in width (the lightbulb is narrow); pin every glyph to the
+        // same column so the labels line up.
+        .labelStyle(.fixedIcon)
         .buttonStyle(.hoverHighlight)
         .font(.system(size: 13))
     }
@@ -147,7 +156,15 @@ struct MenuPopoverView: View {
     /// public issue tracker to point at. Build + OS go in the body so reports
     /// arrive with the version already attached.
     private var reportBugURL: URL {
-        let subject = "Bug report — All Day I Dream About Sports"
+        supportMail(subject: "Bug report — All Day I Dream About Sports")
+    }
+
+    /// Same support inbox, framed for feature ideas instead of bugs.
+    private var requestFeatureURL: URL {
+        supportMail(subject: "Feature request — All Day I Dream About Sports")
+    }
+
+    private func supportMail(subject: String) -> URL {
         let body = """
 
 
@@ -237,6 +254,23 @@ struct MenuPopoverView: View {
         .frame(maxWidth: .infinity)
         .padding(.vertical, 12)
     }
+}
+
+/// Lines menu-row labels up by pinning each icon to a fixed-width column —
+/// SF Symbols like `lightbulb` are narrower than `gearshape`, so without this
+/// the text would start at different x positions per row.
+private struct FixedIconLabelStyle: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: 8) {
+            configuration.icon
+                .frame(width: 18, alignment: .center)
+            configuration.title
+        }
+    }
+}
+
+extension LabelStyle where Self == FixedIconLabelStyle {
+    static var fixedIcon: FixedIconLabelStyle { .init() }
 }
 
 private struct FixtureRow: View {
