@@ -160,11 +160,19 @@ final class AppSession: ObservableObject {
         let after = Set(ids)
         prefs.fanTeamIds = ids
         persistFanTeamIds()
-        for added in after.subtracting(before) {
-            AppAnalytics.teamFollow(teamId: added, fanCount: ids.count)
+        let added = after.subtracting(before)
+        for teamId in added {
+            AppAnalytics.teamFollow(teamId: teamId, fanCount: ids.count)
         }
         for removed in before.subtracting(after) {
             AppAnalytics.teamUnfollow(teamId: removed, fanCount: ids.count)
+        }
+        // A newly-followed team's match may have already finished today — the
+        // windowed poll loop won't pick it up once past kickoff+3.5h, so do a
+        // one-shot reconcile against the per-match files for just these teams.
+        let addedTeamIds = Set(added.compactMap(Int.init))
+        if !addedTeamIds.isEmpty {
+            Task { await LiveStore.shared.reconcileFanMatches(teamIds: addedTeamIds) }
         }
     }
 
