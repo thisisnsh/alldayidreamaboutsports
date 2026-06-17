@@ -56,7 +56,7 @@ private struct BallScene: View {
             .allowsHitTesting(false)
 
             if overlay.ballPhase == .dropping {
-                FallingBall(teams: teams, size: size)
+                FadingBall(teams: teams, size: size)
             }
 
             if overlay.ballPhase == .tapping {
@@ -123,43 +123,21 @@ private struct BallScene: View {
     }
 }
 
-/// Drops from the notch, bounces off the bottom edge, settles center while
-/// growing — all analytic (time-based), so it stays smooth and interruptible.
-private struct FallingBall: View {
+/// Fades into the center of the screen at full size, then hands off to the
+/// tappable interact panel — no drop, no bounce.
+private struct FadingBall: View {
     let teams: [Team]
     let size: CGSize
-    @State private var start = Date()
+    @State private var shown = false
 
     var body: some View {
-        TimelineView(.animation) { context in
-            let total = ControlPlane.shared.animationParams.ballDropSeconds
-            let t = min(max(context.date.timeIntervalSince(start) / total, 0), 1)
-            BallView(teams: teams, diameter: 60 + 100 * t)
-                .position(position(at: t))
-        }
-        .allowsHitTesting(false)
-        .onAppear { start = Date() }
-    }
-
-    private func position(at t: Double) -> CGPoint {
-        let topY: CGFloat = -60
-        let bottomY = size.height - 40
-        let centerY = size.height / 2
-        let x = size.width / 2
-        switch t {
-        case ..<0.45: // accelerating fall from the notch
-            let p = t / 0.45
-            return CGPoint(x: x, y: topY + (bottomY - topY) * p * p)
-        case ..<0.75: // bounce off the bottom edge
-            let p = (t - 0.45) / 0.3
-            let bounceHeight = (bottomY - centerY) * 0.55
-            return CGPoint(x: x, y: bottomY - bounceHeight * sin(p * .pi))
-        default: // settle into the center
-            let p = (t - 0.75) / 0.25
-            let from = bottomY
-            let eased = 1 - pow(1 - p, 2)
-            return CGPoint(x: x, y: from + (centerY - from) * eased)
-        }
+        BallView(teams: teams, diameter: 160)
+            .position(x: size.width / 2, y: size.height / 2)
+            .opacity(shown ? 1 : 0)
+            .allowsHitTesting(false)
+            .onAppear {
+                withAnimation(.easeOut(duration: 0.35)) { shown = true }
+            }
     }
 }
 
@@ -176,7 +154,7 @@ struct BallView: View {
                 .foregroundStyle(.white)
                 .frame(width: diameter, height: diameter)
                 .shadow(color: .black.opacity(0.5), radius: 8, y: 4)
-            HStack(spacing: -diameter * 0.04) {
+            HStack(spacing: diameter * 0.05) {
                 ForEach(teams) { team in
                     CachedTeamLogo(url: team.logo, size: diameter * (teams.count > 2 ? 0.30 : 0.42))
                 }
