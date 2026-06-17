@@ -5,7 +5,6 @@ struct SettingsView: View {
     let updater: SPUUpdater
     @EnvironmentObject var session: AppSession
     @State private var launchAtLogin = LaunchAtLogin.isEnabled
-    @State private var confirmDelete = false
     // Sparkle persists both flags in UserDefaults itself; we just mirror them.
     @State private var autoCheck = true
     @State private var autoInstall = true
@@ -21,14 +20,6 @@ struct SettingsView: View {
         .onAppear {
             autoCheck = updater.automaticallyChecksForUpdates
             autoInstall = updater.automaticallyDownloadsUpdates
-        }
-        .confirmationDialog(
-            "Delete your account and all preferences?",
-            isPresented: $confirmDelete
-        ) {
-            Button("Delete", role: .destructive) {
-                Task { await session.deleteAccount() }
-            }
         }
     }
 
@@ -115,12 +106,6 @@ struct SettingsView: View {
                         CheckForUpdatesButton(updater: updater)
                             .buttonStyle(.cardButton)
                         caption("Build \(AppEnvironment.buildNumber)")
-                    }
-
-                    SettingsCard(nil) {
-                        Button("Delete account…", role: .destructive) { confirmDelete = true }
-                            .buttonStyle(.cardButton)
-                            .foregroundStyle(.red)
                     }
                 }
                 .padding(.horizontal, 16)
