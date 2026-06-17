@@ -1,10 +1,11 @@
 name: app-release
 
-# Tag v1.2.3 → code-signed, notarized, stapled, styled DMG uploaded as a workflow
+# Tag v1.2.3.45 → code-signed, notarized, stapled, styled DMG uploaded as a workflow
 # artifact. Sparkle appcast/delta generation and the R2 upload happen locally
 # (see app/scripts/publish.sh) — not in CI.
-# Build number = GitHub run number (monotonic), used by the Remote Config
-# min_build force-update gate.
+# Tag format is <major>.<minor>.<patch>.<build>: the first three components are
+# the marketing version, the fourth is the build number used by the Remote
+# Config min_build force-update gate.
 
 on:
   push:
@@ -62,14 +63,20 @@ jobs:
       - name: Build and archive
         working-directory: app
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
+          TAG="${GITHUB_REF_NAME#v}"
+          if [[ ! "$TAG" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Tag '$GITHUB_REF_NAME' must be v<major>.<minor>.<patch>.<build>, e.g. v1.2.3.45"
+            exit 1
+          fi
+          VERSION="${TAG%.*}"
+          BUILD="${TAG##*.}"
           xcodebuild archive \
             -project AllDayIDreamAboutSports.xcodeproj \
             -scheme "$SCHEME" \
             -configuration Release \
             -archivePath build/App.xcarchive \
             MARKETING_VERSION="$VERSION" \
-            CURRENT_PROJECT_VERSION="${GITHUB_RUN_NUMBER}" \
+            CURRENT_PROJECT_VERSION="$BUILD" \
             GOOGLE_CLIENT_ID="${{ secrets.GOOGLE_OAUTH_PRODUCTION_CLIENT_ID }}" \
             GOOGLE_REVERSED_CLIENT_ID="${{ secrets.GOOGLE_OAUTH_PRODUCTION_REVERSED_CLIENT_ID }}" \
             DEVELOPMENT_TEAM="${{ secrets.APPLE_TEAM_ID }}" \
@@ -104,7 +111,8 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
+          TAG="${GITHUB_REF_NAME#v}"
+          VERSION="${TAG%.*}"
           DMG="AllDayIDreamAboutSports-${VERSION}.dmg"
           mkdir -p build/dist build/dmgsrc
           cp -R "build/export/${APP_NAME}.app" build/dmgsrc/
