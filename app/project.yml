@@ -87,6 +87,11 @@ targets:
       path: Info.plist
       properties:
         CFBundleDisplayName: All Day I Dream About Sports
+        # Reference the build settings (not literals) so MARKETING_VERSION /
+        # CURRENT_PROJECT_VERSION — including the release.sh overrides — flow
+        # through to the bundle. Otherwise XcodeGen bakes in "1.0" / "1".
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         LSUIElement: true # menu bar only — never in the Dock, by design
         LSApplicationCategoryType: public.app-category.sports
         LSMinimumSystemVersion: "14.0"
