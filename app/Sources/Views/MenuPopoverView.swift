@@ -245,8 +245,10 @@ private struct FixtureRow: View {
     @State private var hovering = false
 
     var body: some View {
+        // The row is hover-only (reveals the celebration tally) — clicking it
+        // no longer navigates anywhere; the FIFA page was rarely what people
+        // wanted and stole focus from the menu.
         Button {
-            NSWorkspace.shared.open(fixture.fifaURL)
         } label: {
             VStack(alignment: .leading, spacing: 3) {
                 if hovering, let totals = session.celebrationTotals[fixture.fixtureId] {

@@ -184,6 +184,33 @@ func openWindow(_ id: String) {
         // SwiftUI exposes scene opening via EnvironmentValues; from AppKit we
         // go through the shared opener installed by RootWindowOpener.
         WindowOpener.shared.open(id)
+        // As an accessory (menu-bar) app, openWindow doesn't reliably raise the
+        // window above other apps — especially when the scene already exists and
+        // is just being re-shown. Force it to the front once it has rendered.
+        bringWindowToFront(id)
+    }
+}
+
+/// Window titles keyed by scene id, so AppKit can find a just-opened SwiftUI
+/// window in `NSApp.windows` (which exposes title, not scene id).
+private let windowTitleByID: [String: String] = [
+    WindowID.login: "Sign In",
+    WindowID.teamPicker: "Become a Fan",
+    WindowID.settings: "Settings",
+]
+
+/// Raises the window for a scene id above all other apps. Retries briefly
+/// because SwiftUI may not have inserted the window into `NSApp.windows` yet.
+private func bringWindowToFront(_ id: String, attempt: Int = 0) {
+    guard let title = windowTitleByID[id] else { return }
+    if let window = NSApp.windows.first(where: { $0.title == title }) {
+        window.makeKeyAndOrderFront(nil)
+        window.orderFrontRegardless()
+        return
+    }
+    guard attempt < 10 else { return }
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+        bringWindowToFront(id, attempt: attempt + 1)
     }
 }
 

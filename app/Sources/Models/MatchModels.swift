@@ -331,11 +331,6 @@ struct Fixture: Codable, Identifiable, Hashable {
         return round
     }
 
-    /// FIFA.com match page (the official destination for details).
-    var fifaURL: URL {
-        URL(string: "https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026/scores-fixtures")!
-    }
-
     func involves(_ ids: Set<Int>) -> Bool {
         ids.contains(home.id) || ids.contains(away.id)
     }
