@@ -60,6 +60,7 @@ final class AppSession: ObservableObject {
         }
         #endif
         loadLocalPrefs()
+        AppAnalytics.syncSettingProperties(prefs.settings)
         if let data = defaults.data(forKey: CacheKey.fixtures),
            let stored = try? JSONDecoder().decode([Fixture].self, from: data) {
             fixtures = stored
@@ -154,8 +155,16 @@ final class AppSession: ObservableObject {
             AppLog.info(.prefs, "fan_teams_capped raw=\(rawIds.count) max=\(maxFans)")
         }
         AppLog.info(.prefs, "fan_teams_changed old=\(prefs.fanTeamIds.sorted()) new=\(ids.sorted())")
+        let before = Set(prefs.fanTeamIds)
+        let after = Set(ids)
         prefs.fanTeamIds = ids
         persistFanTeamIds()
+        for added in after.subtracting(before) {
+            AppAnalytics.teamFollow(teamId: added, fanCount: ids.count)
+        }
+        for removed in before.subtracting(after) {
+            AppAnalytics.teamUnfollow(teamId: removed, fanCount: ids.count)
+        }
     }
 
     /// Re-apply the fan-team cap to the already-stored list. Called when Remote
@@ -170,10 +179,34 @@ final class AppSession: ObservableObject {
         setFanTeams(Array(prefs.fanTeamIds.prefix(maxFans)))
     }
 
-    /// Settings are device-local and never sent to the backend.
+    /// Settings are device-local and never sent to the backend. The anonymous
+    /// analytics below see only which toggles flipped, never any identity.
     func updateSettings(_ mutate: (inout PrefSettings) -> Void) {
+        let before = prefs.settings
         mutate(&prefs.settings)
         persistSettings()
+        reportSettingsChange(before: before, after: prefs.settings)
+    }
+
+    /// Emit one `setting_changed` per field that actually changed.
+    private func reportSettingsChange(before: PrefSettings, after: PrefSettings) {
+        if before.launchAtLogin != after.launchAtLogin {
+            AppAnalytics.settingChanged(key: "launch_at_login", enabled: after.launchAtLogin ?? true)
+        }
+        if before.goalCenter != after.goalCenter {
+            AppAnalytics.settingChanged(key: "goal_center", enabled: after.goalCenter ?? true)
+        }
+        if before.confetti != after.confetti {
+            AppAnalytics.settingChanged(key: "confetti", enabled: after.confetti ?? true)
+        }
+        if before.theme != after.theme {
+            AppAnalytics.themeChanged((after.theme ?? .system).rawValue)
+        }
+        let beforeNotifs = before.notifications ?? [:]
+        let afterNotifs = after.notifications ?? [:]
+        for (key, value) in afterNotifs where beforeNotifs[key] != value {
+            AppAnalytics.settingChanged(key: "event_\(key)", enabled: value)
+        }
     }
 
     private func loadLocalPrefs() {

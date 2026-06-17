@@ -31,6 +31,10 @@ final class CelebrationService {
 
     func endWindow() {
         AppLog.info(.celebrations, "window_ended taps=\(taps) targets=\(targets.count)")
+        // Did the user engage with this celebration? Capture before flush() zeroes it.
+        if !targets.isEmpty {
+            AppAnalytics.celebrationTap(tapped: taps > 0)
+        }
         flush()
     }
 
