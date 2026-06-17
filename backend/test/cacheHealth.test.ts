@@ -17,15 +17,15 @@ describe("probeCacheHealth (§0 cf-cache-status probe)", () => {
     expect(result.ok).toBe(true);
     expect(fetchMock).toHaveBeenCalledWith(
       "https://scores.example.com/catalog.json",
-      { method: "GET", cache: "no-store" },
+      { method: "GET" },
     );
     expect(fetchMock).toHaveBeenCalledWith(
       "https://scores.example.com/matches/101.json",
-      { method: "GET", cache: "no-store" },
+      { method: "GET" },
     );
     expect(fetchMock).toHaveBeenCalledWith(
       "https://scores.example.com/matches/202.json",
-      { method: "GET", cache: "no-store" },
+      { method: "GET" },
     );
     expect(result.probes.map((p) => p.cacheStatus)).toEqual(["HIT", "HIT", "HIT"]);
   });
@@ -40,6 +40,22 @@ describe("probeCacheHealth (§0 cf-cache-status probe)", () => {
     const result = await probeCacheHealth("https://scores.example.com", [1, 2, 3], fetchMock as never);
     expect(result.ok).toBe(true);
     expect(result.unhealthy).toEqual([]);
+  });
+
+  it("retries a cold MISS/EXPIRED once and accepts the warmed HIT", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(response("EXPIRED"))
+      .mockResolvedValueOnce(response("HIT"));
+
+    const result = await probeCacheHealth("https://scores.example.com", [], fetchMock as never);
+
+    expect(result.ok).toBe(true);
+    expect(result.probes[0]).toMatchObject({
+      key: "catalog.json",
+      cacheStatus: "HIT",
+      attempts: ["EXPIRED", "HIT"],
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it("flags sustained MISS/BYPASS/DYNAMIC as unhealthy (users would hit R2)", async () => {
@@ -67,6 +83,15 @@ describe("probeCacheHealth (§0 cf-cache-status probe)", () => {
     expect(fetchMock).toHaveBeenCalledWith(
       "https://scores.example.com/catalog.json",
       expect.anything(),
+    );
+  });
+
+  it("accepts a bare scores hostname from Cloud Run env", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(response("HIT"));
+    await probeCacheHealth("scores.example.com", [], fetchMock as never);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://scores.example.com/catalog.json",
+      { method: "GET" },
     );
   });
 });

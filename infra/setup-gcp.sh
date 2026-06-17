@@ -14,8 +14,8 @@ SERVICE="alldayidreamaboutsports-backend"
 # Derived from the project id so staging and prod stay in sync with the R2 custom
 # domains in infra/README.md.
 case "$PROJECT_ID" in
-  *staging*) SCORES_DOMAIN="scores-staging.alldayidreamaboutsports.com" ;;
-  *)         SCORES_DOMAIN="scores.alldayidreamaboutsports.com" ;;
+  *staging*) SCORES_DOMAIN="https://scores-staging.alldayidreamaboutsports.com" ;;
+  *)         SCORES_DOMAIN="https://scores.alldayidreamaboutsports.com" ;;
 esac
 
 # Celebration reporter probability / server multiply-back factor. MUST equal the
