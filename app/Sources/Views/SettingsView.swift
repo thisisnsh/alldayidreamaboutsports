@@ -105,7 +105,7 @@ struct SettingsView: View {
                         ))
                         CheckForUpdatesButton(updater: updater)
                             .buttonStyle(.cardButton)
-                        caption("Build \(AppEnvironment.buildNumber)")
+                        caption("\(AppEnvironment.profileName) Build: \(AppEnvironment.buildNumber)")
                     }
                 }
                 .padding(.horizontal, 16)

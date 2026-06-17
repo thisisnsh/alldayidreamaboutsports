@@ -11,6 +11,17 @@ enum AppEnvironment {
         Int(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "1") ?? 1
     }
 
+    /// Build configuration name, derived from compile-time flags.
+    static var profileName: String {
+        #if DEBUG
+        return "Debug"
+        #elseif STAGING
+        return "Staging"
+        #else
+        return "Release"
+        #endif
+    }
+
     private static func configuredURL(_ key: String) -> URL {
         guard let value = Bundle.main.object(forInfoDictionaryKey: key) as? String,
               let url = URL(string: value),
