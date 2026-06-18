@@ -4,6 +4,8 @@ import SwiftUI
 /// The real-time notification stack hanging off the notch: every match event
 /// appears the moment it arrives — newest at the bottom, oldest sliding up
 /// and out at the top. Styled to read as an extension of the notch hardware.
+/// Rendered in the full-screen overlay panel and pinned to the top; it reports
+/// its measured size so the panel knows which region should capture clicks.
 struct NotchStackView: View {
     let items: [NotchItem]
 
@@ -23,18 +25,15 @@ struct NotchStackView: View {
                         .transition(.move(edge: .top).combined(with: .opacity))
                 }
             }
-            // Clip ONLY above the top edge so pills visibly emerge from (and
-            // disappear into) the notch line — sides and bottom stay open so
-            // the pills' soft shadows aren't cut into rectangles.
-            // .clipShape(TopOnlyClip())
-            // Report the real rendered height — the ✕ panel is positioned
-            // from it (estimates break: emoji lines make pills taller).
+            // Report the real rendered size — the ✕ panel is positioned from it
+            // and the hover region is derived from it (estimates break: emoji
+            // lines make pills taller, names make them wider).
             .background(
                 GeometryReader { proxy in
                     Color.clear
-                        .onAppear { OverlayManager.shared.reportStackHeight(proxy.size.height) }
-                        .onChange(of: proxy.size.height) { _, height in
-                            OverlayManager.shared.reportStackHeight(height)
+                        .onAppear { OverlayManager.shared.reportStackSize(proxy.size) }
+                        .onChange(of: proxy.size) { _, size in
+                            OverlayManager.shared.reportStackSize(size)
                         }
                 }
             )
@@ -46,19 +45,6 @@ struct NotchStackView: View {
     }
 }
 
-/// Clips at the top edge only; extends generously on the other three sides
-/// so shadows survive while the slide-into-the-notch illusion holds.
-private struct TopOnlyClip: Shape {
-    func path(in rect: CGRect) -> Path {
-        Path(CGRect(
-            x: rect.minX - 60,
-            y: rect.minY,
-            width: rect.width + 120,
-            height: rect.height + 60
-        ))
-    }
-}
-
 private struct NotchPillRow: View {
     let item: NotchItem
     // Black pill in dark mode, white pill in light mode; text/icons use
@@ -67,8 +53,8 @@ private struct NotchPillRow: View {
 
     var body: some View {
         VStack(alignment: .center, spacing: 2) {
-            // The SF Symbol now leads the headline row instead of sitting in a
-            // left rail spanning both lines — icon and the label it describes
+            // The SF Symbol leads the headline row instead of sitting in a left
+            // rail spanning both lines — icon and the label it describes
             // ("Goal", "Yellow card") read on the same line.
             HStack(spacing: 6) {
                 Image(systemName: item.icon)

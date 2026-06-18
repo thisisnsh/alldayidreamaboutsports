@@ -1,8 +1,8 @@
 import SwiftUI
 
 /// Full-screen, click-through layer hosting everything at once: the pill set
-/// under the notch, fire-and-forget confetti bursts, and the center ball
-/// scene for the set's fan goals.
+/// under the notch, fire-and-forget confetti bursts, and the center ball scene
+/// for the set's fan goals. The single stack ✕ lives in its own small panel.
 struct OverlayDisplayView: View {
     @EnvironmentObject var overlay: OverlayManager
 
@@ -62,13 +62,8 @@ private struct BallScene: View {
             if overlay.ballPhase == .tapping {
                 goalLines
                 MiniBallBursts(teams: teams, size: size, bursts: overlay.tapBursts)
-
-                // Small tip floating just above the ball — not a notch drop.
-                Text("Tap the ball to show support")
-                    .font(.system(size: 11, weight: .medium, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.8))
-                    .position(x: size.width / 2, y: size.height / 2 - 110)
-                    .allowsHitTesting(false)
+                // The "Tap the ball to show support" prompt now lives in the
+                // interactive ball panel, revealed on hover (see InteractiveBallView).
             }
         }
     }
@@ -156,7 +151,7 @@ struct BallView: View {
                 .shadow(color: .black.opacity(0.5), radius: 8, y: 4)
             HStack(spacing: diameter * 0.05) {
                 ForEach(teams) { team in
-                    CachedTeamLogo(url: team.logo, size: diameter * (teams.count > 2 ? 0.30 : 0.42))
+                    CachedTeamLogo(url: team.logo, size: diameter * (teams.count > 2 ? 0.26 : 0.36))
                 }
             }
         }

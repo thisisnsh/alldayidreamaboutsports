@@ -288,8 +288,10 @@ final class LiveStore {
         }
 
         baseline[current.fixtureId] = current
-        if current.status == "FINISHED" {
-            finished.insert(current.fixtureId)
+        if current.status == "FINISHED", finished.insert(current.fixtureId).inserted {
+            // First time we see this match end — its events will never recur, so
+            // drop them from the dedupe store instead of letting it grow forever.
+            EventRouter.shared.purgeEvents(forFixture: current.fixtureId)
         }
         return fanGoalTeams
     }
