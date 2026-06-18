@@ -319,12 +319,7 @@ private struct FixtureRow: View {
 
     private var score: String {
         if fixture.status == "SCHEDULED" { return "vs" }
-        let goals = "\(fixture.home.goals)–\(fixture.away.goals)"
-        // A shootout isn't in the goals count — show it alongside (e.g. 3–3 · pens 4–2).
-        if let pso = fixture.shootout {
-            return "\(goals) · pens \(pso.home)–\(pso.away)"
-        }
-        return goals
+        return fixture.scorelineText
     }
 
     /// The right edge is always about time: minute when live, kickoff time
