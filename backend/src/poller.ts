@@ -51,6 +51,41 @@ export function isRecentlyFinished(match: MatchState, now = Date.now()): boolean
   return now - Date.parse(match.kickoffISO) < FINISHED_AFTER_KO_MS;
 }
 
+// `fixtures-{date}.json` is served with a 12h edge TTL, so it must carry ONLY
+// schedule/bootstrap data — kickoff time, teams, stage. Baking live status/
+// minute/score into it lets Cloudflare freeze a mid-match snapshot at the edge
+// for up to 12h (the app then shows e.g. a stuck "86′"), and rewrites the
+// long-TTL object on every live tick. Live data flows solely via matches/*.json.
+export function toScheduleRow(m: MatchState): MatchState {
+  const schedTeam = (t: MatchState["home"]): MatchState["home"] => ({
+    id: t.id,
+    name: t.name,
+    goals: 0,
+    yellowCards: 0,
+    redCards: 0,
+    yellowCardEvents: [],
+    redCardEvents: [],
+    goalEvents: [],
+  });
+  return {
+    fixtureId: m.fixtureId,
+    leagueId: m.leagueId,
+    season: m.season,
+    round: m.round,
+    kickoffISO: m.kickoffISO,
+    secondHalfStartISO: null,
+    status: "SCHEDULED",
+    rawStatus: "NS",
+    minute: null,
+    extra: null,
+    period: "PRE",
+    running: false,
+    home: schedTeam(m.home),
+    away: schedTeam(m.away),
+    // lastGoal / shootout intentionally dropped — schedule data only.
+  };
+}
+
 export class Poller {
   constructor(
     private readonly provider: ScoreProvider,
@@ -84,7 +119,7 @@ export class Poller {
     await Promise.all([...partitions].map(([date, matches]) =>
       this.r2.putJsonIfChanged(
         `fixtures-${date}.json`,
-        { matches },
+        { matches: matches.map(toScheduleRow) },
         CACHE_CONTROL_LONG,
       ),
     ));

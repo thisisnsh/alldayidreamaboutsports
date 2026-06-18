@@ -227,6 +227,24 @@ export class ApiFootballProvider implements ScoreProvider {
     const goalCount = (side: "home" | "away") =>
       live ? Math.min(f.goals[side] ?? 0, goals[side].length) : (f.goals[side] ?? 0);
 
+    // Diagnostic for goal LATENESS: log whenever API-Football's aggregate count
+    // leads the scorer-attributed events[] — i.e. exactly when the Math.min above
+    // is WITHHOLDING a goal until the scorer lands. If this fires for several
+    // consecutive polls before a goal surfaces, our suppression (not upstream/VAR)
+    // is the delay → revisit counting from `f.goals` directly. Quiet in the common
+    // case (aggregate and events advance together).
+    if (live) {
+      for (const side of ["home", "away"] as const) {
+        const aggregate = f.goals[side] ?? 0;
+        if (aggregate > goals[side].length) {
+          log.info("goal_attribution_pending", {
+            fixtureId: f.fixture.id, side, aggregate, attributed: goals[side].length,
+            minute: elapsed, extra,
+          });
+        }
+      }
+    }
+
     return {
       fixtureId: f.fixture.id,
       leagueId: f.league.id,

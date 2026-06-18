@@ -45,6 +45,9 @@ final class LiveStore {
     /// One-shot launch reconciliation guard — see `reconcileFanMatches`. Reset on
     /// sign-out so the next signed-in session reconciles afresh.
     private var didReconcileThisLaunch = false
+    /// App Nap opt-out, held ONLY while ≥1 fan match is in its live window (see
+    /// `updateAppNapActivity`). nil = no live window / not asserting.
+    private var liveActivity: NSObjectProtocol?
 
     private var session: AppSession { AppSession.shared }
     private var scores: ScoresProviding { Services.scores }
@@ -62,7 +65,27 @@ final class LiveStore {
         loopTask?.cancel()
         loopTask = nil
         cancelCelebrationRefresh()
+        updateAppNapActivity(active: false)
         AppLog.info(.fixtures, "live_loop_stop")
+    }
+
+    /// While ≥1 fan match is in its live window, hold a `.background` activity
+    /// assertion so macOS App Nap doesn't throttle/suspend the poll loop's
+    /// `Task.sleep` ticks — the app is an `LSUIElement` accessory app and would
+    /// otherwise nap while idle in the menu bar, freezing live scores. We use
+    /// `.background` (NOT `.idleSystemSleepDisabled`) so the Mac still sleeps
+    /// normally; wake/foreground reconciliation (AppDelegate) recovers after sleep.
+    private func updateAppNapActivity(active: Bool) {
+        if active, liveActivity == nil {
+            liveActivity = ProcessInfo.processInfo.beginActivity(
+                options: .background, reason: "Polling live fan matches",
+            )
+            AppLog.info(.fixtures, "app_nap_activity_begin")
+        } else if !active, let token = liveActivity {
+            ProcessInfo.processInfo.endActivity(token)
+            liveActivity = nil
+            AppLog.info(.fixtures, "app_nap_activity_end")
+        }
     }
 
     /// Drop the diff baseline (e.g. on sign-out) so the next observation seeds
@@ -141,6 +164,9 @@ final class LiveStore {
                     didReconcileThisLaunch = true
                 }
                 await pollCycle()
+            } else {
+                // Signed out / gated: hold no power assertion while we idle-spin.
+                updateAppNapActivity(active: false)
             }
             // ±~15% jitter so a fleet of clients doesn't hit the same 5s boundary.
             let base = max(1, ControlPlane.shared.pollSeconds)
@@ -157,6 +183,8 @@ final class LiveStore {
         let targets = session.fixtures.filter { fixture in
             fixture.involves(session.fanTeamIds) && isInLiveWindow(fixture, at: now)
         }
+        // Defeat App Nap while a fan match is live; release it when none are.
+        updateAppNapActivity(active: !targets.isEmpty)
         guard !targets.isEmpty else { return }
         AppLog.debug(.fixtures, "poll_cycle targets=\(targets.map(\.fixtureId).sorted())")
 

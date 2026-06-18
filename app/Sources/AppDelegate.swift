@@ -53,11 +53,40 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             openWindow(WindowID.login)
         }
         #endif
+
+        // Recover live polling after system sleep: App Nap + sleep suspend the
+        // LiveStore loop, so on wake we reconcile finished matches and poll now.
+        NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didWakeNotification, object: nil, queue: .main,
+        ) { [weak self] _ in
+            Task { @MainActor in self?.recoverLivePolling() }
+        }
     }
 
     func application(_ application: NSApplication, open urls: [URL]) {
         for url in urls {
             GIDSignIn.sharedInstance.handle(url)
+        }
+    }
+
+    // Foreground (e.g. the user clicks into the app): same recovery as wake —
+    // the loop may have been App-Napped while idle in the menu bar.
+    func applicationDidBecomeActive(_ notification: Notification) {
+        recoverLivePolling()
+    }
+
+    /// After idle/sleep the LiveStore `Task.sleep` loop may be throttled or
+    /// suspended and the Remote Config socket dead. Refresh the control plane,
+    /// then (if signed in + operational) reconcile any finished-while-suspended
+    /// fan match and run one immediate poll pass. `reconcileFanMatches` is the
+    /// only path that can un-stick a past-window match; `refreshNow` covers
+    /// in-window ones.
+    @MainActor private func recoverLivePolling() {
+        ControlPlane.shared.refreshRemoteConfig(ignoreCache: true)
+        guard AppSession.shared.isSignedIn, ControlPlane.shared.isOperational else { return }
+        Task {
+            await LiveStore.shared.reconcileFanMatches()
+            await LiveStore.shared.refreshNow()
         }
     }
 
