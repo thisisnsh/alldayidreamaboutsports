@@ -31,6 +31,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // for Remote Config (the control plane) and Crashlytics. No FCM/APNs.
         if Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist") != nil {
             FirebaseApp.configure()
+            AppAnalytics.configureAppMetadata()
             AppLog.configureFirebaseCollection()
         } else {
             AppLog.info(.app, "firebase_unconfigured remote_config_disabled")
