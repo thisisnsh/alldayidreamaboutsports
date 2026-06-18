@@ -191,7 +191,7 @@ Subscribe to **Ultra** ($29/mo, cancel after the final) at
 
 - Public key → `SUPublicEDKey` in `app/project.yml`.
 - Private key stays in your **login Keychain** — the appcast is signed locally by
-  `app/scripts/publish.sh` / `release.sh`, not in CI. Keep a
+  `app/scripts/publish.sh`, not in CI. Keep a
   Keychain/password-manager backup — losing it strands all installed apps.
 
 ## 6. Apple signing (global, once)
