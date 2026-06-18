@@ -34,7 +34,9 @@ struct LoginView: View {
             Text("All Day I Dream\nAbout Sports")
                 .font(.system(size: 28, weight: .heavy, design: .rounded))
                 .multilineTextAlignment(.center)
-            Text("Live Sports Events")
+            Text(session.isSignedIn
+                 ? "Signed in as \(session.profile?.name ?? session.profile?.email ?? "your account")"
+                 : "Live Sports Events")
                 .font(.system(size: 14, design: .rounded))
                 .opacity(0.8)
 
@@ -47,7 +49,7 @@ struct LoginView: View {
                 }
             }
             .buttonStyle(.primaryPill)
-            .disabled(!control.isOperational)
+            .disabled(!control.isOperational || session.isSignedIn)
 
             if control.killSwitch {
                 Text(control.killMessage.isEmpty
