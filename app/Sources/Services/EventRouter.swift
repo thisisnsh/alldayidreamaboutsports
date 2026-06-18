@@ -183,8 +183,9 @@ func pillTitle(for event: MatchEvent) -> [PillSegment] {
     }
 }
 
-/// Score subheading: [logo] Team 1 - 0 Team [logo], with "(pens 4-2)" when a
-/// shootout is in play.
+/// Score subheading: Team 1 - 0 Team, with "(pens 4-2)" when a shootout is in
+/// play. Text only — the secondary row carries no team logos (the title row's
+/// trailing logo already identifies the subject team).
 @MainActor
 func pillSubtitle(for event: MatchEvent) -> [PillSegment]? {
     switch event.type {
@@ -196,11 +197,9 @@ func pillSubtitle(for event: MatchEvent) -> [PillSegment]? {
         let pens = (event.penHome != nil || event.penAway != nil)
             ? " (pens \(event.penHome ?? 0)-\(event.penAway ?? 0))" : ""
         return [
-            .logo(url: teamLogo(event.homeTeamId)),
-            .text(" \(event.homeName) \(event.homeGoals) "),
+            .text("\(event.homeName) \(event.homeGoals) "),
             .text("-"),
-            .text(" \(event.awayGoals) \(event.awayName) "),
-            .logo(url: teamLogo(event.awayTeamId)),
+            .text(" \(event.awayGoals) \(event.awayName)"),
             .text(pens),
         ]
     default:

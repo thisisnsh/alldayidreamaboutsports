@@ -1,8 +1,8 @@
 import SwiftUI
 
-/// Full-screen, click-through layer hosting everything at once: the pill set
-/// under the notch, fire-and-forget confetti bursts, and the center ball scene
-/// for the set's fan goals. The single stack ✕ lives in its own small panel.
+/// Full-screen, click-through layer hosting fire-and-forget confetti bursts and
+/// the center ball scene for the set's fan goals. The pill stack lives in its
+/// own non-click-through panel (NotchStackHost) so it can hover-reveal its ✕.
 struct OverlayDisplayView: View {
     @EnvironmentObject var overlay: OverlayManager
 
@@ -23,8 +23,6 @@ struct OverlayDisplayView: View {
                     ConfettiView(size: geo.size)
                         .id(burst.id)
                 }
-
-                NotchStackView(items: overlay.activeSet)
             }
             .animation(.easeOut(duration: 0.35), value: overlay.ballPhase)
             .frame(width: geo.size.width, height: geo.size.height)
@@ -34,7 +32,8 @@ struct OverlayDisplayView: View {
 }
 
 /// The center celebration for one set: a single ball carrying the flags of
-/// every team that scored, with the goals stacked vertically beneath it.
+/// every team that scored. Just the ball carrying their logos — no names or
+/// scoreline (that detail rides in the notification pills).
 private struct BallScene: View {
     let events: [MatchEvent]
     let size: CGSize
@@ -46,7 +45,7 @@ private struct BallScene: View {
 
     var body: some View {
         ZStack {
-            // Center dark gradient so text stays readable over any wallpaper.
+            // Center dark gradient so the white ball pops over any wallpaper.
             RadialGradient(
                 colors: [Color.black.opacity(0.55), .clear],
                 center: .center,
@@ -55,84 +54,13 @@ private struct BallScene: View {
             )
             .allowsHitTesting(false)
 
-            if overlay.ballPhase == .dropping {
-                FadingBall(teams: teams, size: size)
-            }
-
             if overlay.ballPhase == .tapping {
-                goalLines
+                // Each user tap spawns a mini ball; the ✕ and "tap to…" prompt
+                // live in the interactive ball panel, revealed on hover
+                // (see InteractiveBallView).
                 MiniBallBursts(teams: teams, size: size, bursts: overlay.tapBursts)
-                // The "Tap the ball to show support" prompt now lives in the
-                // interactive ball panel, revealed on hover (see InteractiveBallView).
             }
         }
-    }
-
-    /// One block per fan goal in the set, stacked vertically under the ball:
-    /// the scoreline (scoring side bold) over the scorer and minute.
-    private var goalLines: some View {
-        VStack(spacing: events.count > 2 ? 10 : 14) {
-            Spacer().frame(height: size.height / 2 + 95)
-            ForEach(events, id: \.eventId) { event in
-                VStack(spacing: 2) {
-                    scoreLine(for: event)
-                        .font(.system(size: events.count > 2 ? 16 : 22, design: .rounded))
-                        .lineLimit(1)
-                    if let scorer = scorerLine(for: event) {
-                        Text(scorer)
-                            .font(.system(size: events.count > 2 ? 11 : 14, weight: .medium, design: .rounded))
-                            .opacity(0.85)
-                            .lineLimit(1)
-                    }
-                }
-            }
-            Spacer()
-        }
-        .foregroundStyle(.white)
-        .shadow(radius: 6)
-        .transition(.opacity)
-        .allowsHitTesting(false)
-    }
-
-    /// [logo] Team 1 - 0 Team [logo] — the side that scored is bold.
-    private func scoreLine(for event: MatchEvent) -> some View {
-        let homeScored = event.teamId == event.homeTeamId
-        let logoSize: CGFloat = events.count > 2 ? 20 : 26
-        return HStack(spacing: 6) {
-            CachedTeamLogo(url: logo(event.homeTeamId), size: logoSize)
-            Text("\(event.homeName) \(event.homeGoals)").fontWeight(homeScored ? .bold : .medium)
-            Text("-").fontWeight(.medium)
-            Text("\(event.awayGoals) \(event.awayName)").fontWeight(homeScored ? .medium : .bold)
-            CachedTeamLogo(url: logo(event.awayTeamId), size: logoSize)
-        }
-    }
-
-    private func scorerLine(for event: MatchEvent) -> String? {
-        let minute = event.minute.map { "\($0)′" }
-        guard let player = event.player else { return minute }
-        return minute.map { "\(player) \($0)" } ?? player
-    }
-
-    private func logo(_ id: Int) -> String {
-        TeamCatalog.team(for: id, in: AppSession.shared.teams).logo
-    }
-}
-
-/// Fades into the center of the screen at full size, then hands off to the
-/// tappable interact panel — no drop, no bounce.
-private struct FadingBall: View {
-    let teams: [Team]
-    let size: CGSize
-    @State private var shown = false
-
-    var body: some View {
-        BallView(teams: teams, diameter: 160)
-            .position(x: size.width / 2, y: size.height / 2)
-            .opacity(shown ? 1 : 0)
-            .allowsHitTesting(false)
-            .onAppear {
-                withAnimation(.easeOut(duration: 0.35)) { shown = true }
-            }
     }
 }
 
