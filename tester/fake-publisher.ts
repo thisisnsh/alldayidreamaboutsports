@@ -8,8 +8,8 @@
  * live overlay / celebration UI end-to-end without API-Football or the Cloud
  * Scheduler/Tasks pipeline.
  *
- * Fake fixtures use a reserved id range (900001+) so they never collide with real
- * WC matches and are trivial to purge with `clear`.
+ * Fake fixtures use a reserved fixture id range (900001+) but real API-Football
+ * league/team ids, so they are safe to purge while still resolving catalog logos.
  *
  *   npm run fake -- seed --count 3 --state LIVE
  *   npm run fake -- advance --fixture 900001 --status HT
@@ -24,12 +24,24 @@ import {
 } from "@aws-sdk/client-s3";
 import { env } from "../backend/src/env.js";
 import { syntheticPhase } from "../backend/src/phase.js";
+import { toScheduleRow, utcPollRange } from "../backend/src/poller.js";
 import { CACHE_CONTROL_LIVE, CACHE_CONTROL_LONG, R2 } from "../backend/src/r2.js";
 import type { CardEvent, MatchState, TeamScore } from "../backend/src/types.js";
 
 /** Fake fixtures live at/above this id so they never collide with real matches. */
 const RESERVED_ID_MIN = 900001;
 const isFakeId = (id: number) => id >= RESERVED_ID_MIN;
+
+const REAL_LEAGUE_ID = 1; // API-Football: FIFA World Cup
+const REAL_WORLD_CUP_TEAMS = [
+  { id: 2, name: "France" },
+  { id: 26, name: "Argentina" },
+  { id: 6, name: "Brazil" },
+  { id: 10, name: "England" },
+  { id: 9, name: "Spain" },
+  { id: 25, name: "Germany" },
+  { id: 27, name: "Portugal" },
+];
 
 /** Friendly state name → API-Football raw short code + a sensible default minute. */
 const STATE_TO_RAW: Record<string, { raw: string; minute: number | null }> = {
@@ -60,6 +72,16 @@ function today(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+function utcDay(offset: number, base = new Date()): string {
+  const day = Date.UTC(base.getUTCFullYear(), base.getUTCMonth(), base.getUTCDate());
+  return new Date(day + offset * 86_400_000).toISOString().slice(0, 10);
+}
+
+function pollRangeDates(now = new Date()): string[] {
+  const range = utcPollRange(now);
+  return [range.from, today(), range.to];
+}
+
 function fixturesKey(date = today()): string {
   return `fixtures-${date}.json`;
 }
@@ -74,6 +96,42 @@ function makeTeam(id: number, name: string): TeamScore {
     yellowCardEvents: [],
     redCardEvents: [],
     goalEvents: [],
+  };
+}
+
+function parseDayOffsets(value: string): number[] {
+  const offsets = value
+    .split(",")
+    .map((s) => Number(s.trim()))
+    .filter((n) => Number.isInteger(n));
+  if (offsets.length === 0) throw new Error("--days must include comma-separated integer offsets, e.g. -1,0,1");
+  return offsets;
+}
+
+function kickoffFor(index: number, dayOffsets: number[], time: string, spacingMinutes: number): string {
+  if (!/^\d{2}:\d{2}$/.test(time)) throw new Error('--time must be UTC "HH:MM", e.g. 18:00');
+  const [hours, minutes] = time.split(":").map(Number);
+  if (hours === undefined || minutes === undefined || hours > 23 || minutes > 59) {
+    throw new Error('--time must be UTC "HH:MM", e.g. 18:00');
+  }
+  const dayOffset = dayOffsets[index % dayOffsets.length]!;
+  const matchesEarlierOnSameDay = Math.floor(index / dayOffsets.length);
+  const started = Date.UTC(
+    new Date().getUTCFullYear(),
+    new Date().getUTCMonth(),
+    new Date().getUTCDate() + dayOffset,
+    hours,
+    minutes + matchesEarlierOnSameDay * spacingMinutes,
+  );
+  return new Date(started).toISOString();
+}
+
+function teamPair(index: number): { home: TeamScore; away: TeamScore } {
+  const home = REAL_WORLD_CUP_TEAMS[index % REAL_WORLD_CUP_TEAMS.length]!;
+  const away = REAL_WORLD_CUP_TEAMS[(index + 1) % REAL_WORLD_CUP_TEAMS.length]!;
+  return {
+    home: makeTeam(home.id, home.name),
+    away: makeTeam(away.id, away.name),
   };
 }
 
@@ -103,22 +161,38 @@ interface FixturesFile {
   matches: MatchState[];
 }
 
-/** Splice a fresh set of fake matches into today's fixtures file (long TTL). */
-async function mergeFixtures(r2: R2, fakes: MatchState[]): Promise<void> {
-  const key = fixturesKey();
-  const current = (await r2.getJson<FixturesFile>(key)) ?? { matches: [] };
-  const byId = new Map<number, MatchState>();
-  for (const m of current.matches) if (!isFakeId(m.fixtureId)) byId.set(m.fixtureId, m);
-  for (const m of fakes) byId.set(m.fixtureId, m);
-  await r2.putJson(key, { matches: [...byId.values()] }, CACHE_CONTROL_LONG);
+async function ensurePollRangeFixtureFiles(r2: R2): Promise<void> {
+  for (const date of pollRangeDates()) {
+    const key = fixturesKey(date);
+    const current = (await r2.getJson<FixturesFile>(key)) ?? { matches: [] };
+    await r2.putJson(key, current, CACHE_CONTROL_LONG);
+  }
 }
 
-/** Replace one fake match inside today's fixtures file so its snapshot stays in sync. */
+/** Splice a fresh set of fake matches into the UTC fixture files (long TTL). */
+async function mergeFixtures(r2: R2, fakes: MatchState[]): Promise<void> {
+  await ensurePollRangeFixtureFiles(r2);
+  const dates = new Set([...pollRangeDates(), ...fakes.map((m) => m.kickoffISO.slice(0, 10))]);
+  for (const date of dates) {
+    const key = fixturesKey(date);
+    const current = (await r2.getJson<FixturesFile>(key)) ?? { matches: [] };
+    const byId = new Map<number, MatchState>();
+    for (const m of current.matches) if (!isFakeId(m.fixtureId)) byId.set(m.fixtureId, m);
+    for (const m of fakes.filter((m) => m.kickoffISO.slice(0, 10) === date)) {
+      byId.set(m.fixtureId, toScheduleRow(m));
+    }
+    await r2.putJson(key, { matches: [...byId.values()] }, CACHE_CONTROL_LONG);
+  }
+}
+
+/** Replace one fake match inside its UTC fixtures file so its schedule row stays in sync. */
 async function upsertFixture(r2: R2, match: MatchState): Promise<void> {
-  const key = fixturesKey();
+  await ensurePollRangeFixtureFiles(r2);
+  const date = match.kickoffISO.slice(0, 10);
+  const key = fixturesKey(date);
   const current = (await r2.getJson<FixturesFile>(key)) ?? { matches: [] };
   const matches = current.matches.filter((m) => m.fixtureId !== match.fixtureId);
-  matches.push(match);
+  matches.push(toScheduleRow(match));
   await r2.putJson(key, { matches }, CACHE_CONTROL_LONG);
 }
 
@@ -132,6 +206,17 @@ async function loadMatch(r2: R2, fixtureId: number): Promise<MatchState> {
 
 async function seed(r2: R2, args: Map<string, string>): Promise<void> {
   const count = Number(args.get("count") ?? 3);
+  const fixtureStart = Number(args.get("fixture-start") ?? RESERVED_ID_MIN);
+  const dayOffsets = parseDayOffsets(args.get("days") ?? "0");
+  const kickoffTime = args.get("time") ?? "18:00";
+  const spacingMinutes = Number(args.get("spacing-minutes") ?? 120);
+  if (!Number.isInteger(count) || count < 1) throw new Error("--count must be a positive integer");
+  if (!Number.isInteger(fixtureStart) || fixtureStart < RESERVED_ID_MIN) {
+    throw new Error(`--fixture-start must be an integer >= ${RESERVED_ID_MIN}`);
+  }
+  if (!Number.isFinite(spacingMinutes) || spacingMinutes < 0) {
+    throw new Error("--spacing-minutes must be a non-negative number");
+  }
   const states = (args.get("state") ?? "LIVE")
     .split(",")
     .map((s) => s.trim().toUpperCase());
@@ -141,21 +226,19 @@ async function seed(r2: R2, args: Map<string, string>): Promise<void> {
     }
   }
 
-  const now = new Date().toISOString();
   const fakes: MatchState[] = [];
   for (let i = 0; i < count; i++) {
-    const fixtureId = RESERVED_ID_MIN + i;
+    const fixtureId = fixtureStart + i;
     const stateName = states[i % states.length]!;
     const { raw, minute } = STATE_TO_RAW[stateName]!;
     const phase = syntheticPhase(raw, minute);
-    const homeId = 910000 + i;
-    const awayId = 920000 + i;
+    const { home, away } = teamPair(i);
     const state: MatchState = {
       fixtureId,
-      leagueId: env.leagueId,
+      leagueId: REAL_LEAGUE_ID,
       season: env.season,
-      round: "Test - Group Z",
-      kickoffISO: now,
+      round: `Test - ${utcDay(dayOffsets[i % dayOffsets.length]!)} ${Math.floor(i / dayOffsets.length) + 1}`,
+      kickoffISO: kickoffFor(i, dayOffsets, kickoffTime, spacingMinutes),
       secondHalfStartISO: null,
       status: phase.status,
       rawStatus: raw,
@@ -163,16 +246,19 @@ async function seed(r2: R2, args: Map<string, string>): Promise<void> {
       extra: null,
       period: phase.period,
       running: phase.running,
-      home: makeTeam(homeId, `Test Home ${i + 1}`),
-      away: makeTeam(awayId, `Test Away ${i + 1}`),
+      home,
+      away,
     };
     fakes.push(state);
     await r2.putJson(`matches/${fixtureId}.json`, state, CACHE_CONTROL_LIVE);
     await r2.putJson(`celebrate/${fixtureId}.json`, { totals: {} }, CACHE_CONTROL_LIVE);
-    console.log(`seeded matches/${fixtureId}.json (${stateName}) + celebrate/${fixtureId}.json`);
+    console.log(
+      `seeded matches/${fixtureId}.json (${stateName}, ${state.kickoffISO}, ` +
+        `${home.name} ${home.id} vs ${away.name} ${away.id}) + celebrate/${fixtureId}.json`,
+    );
   }
   await mergeFixtures(r2, fakes);
-  console.log(`merged ${fakes.length} fake match(es) into ${fixturesKey()}`);
+  console.log(`merged ${fakes.length} fake match(es) into UTC fixture files`);
 }
 
 async function advance(r2: R2, args: Map<string, string>): Promise<void> {
@@ -299,7 +385,7 @@ async function main(): Promise<void> {
     default:
       console.error(
         "usage: npm run fake -- <seed|advance|goal|celebrate|clear> [flags]\n" +
-          "  seed      --count N --state SCHEDULED|LIVE|HT|FINISHED[,...]\n" +
+          "  seed      --count N --state SCHEDULED|LIVE|HT|FINISHED[,...] [--days -1,0,1] [--time HH:MM] [--spacing-minutes N] [--fixture-start ID]\n" +
           "  advance   --fixture ID --status <1H|HT|2H|ET|FT|...> [--minute N]\n" +
           "  goal      --fixture ID --team <home|away> [--count N]\n" +
           "  celebrate --fixture ID --team <teamId> --count N\n" +
