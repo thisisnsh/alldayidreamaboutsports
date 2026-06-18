@@ -134,7 +134,13 @@ final class AppSession: ObservableObject {
         // teams/settings stay in UserDefaults until app data goes.
         clearMatchCache()
         OverlayManager.shared.dismissAll()
-        if showLogin { openWindow(WindowID.login) }
+        if showLogin {
+            // Tear down Settings (or whatever utility window prompted the
+            // sign-out) before re-presenting the login window, so the user
+            // lands on a clean Sign In rather than a stack of stale windows.
+            closeUtilityWindows(titles: ["Become a Fan", "Settings", "Update"])
+            openWindow(WindowID.login)
+        }
     }
 
     /// Closes the menu (killing its refresh timer). Leaves ControlPlane polling
