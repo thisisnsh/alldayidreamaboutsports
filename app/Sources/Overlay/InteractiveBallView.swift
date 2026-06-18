@@ -26,21 +26,19 @@ struct InteractiveBallView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
             if hovering {
-                // ✕ at the top, the prompt at the bottom — both only while
-                // hovering, so neither sits over the ball or each other.
-                DismissCrossButton { overlay.dismissBall() }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                    .padding(.top, 24)
-                    .transition(.opacity)
-
-                Text("Tap the ball to show support")
-                    .font(.system(size: 11, weight: .medium, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.9))
-                    .shadow(radius: 4)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-                    .padding(.bottom, 20)
-                    .transition(.opacity)
-                    .allowsHitTesting(false)
+                // ✕ with the prompt right beneath it — both only while
+                // hovering, stacked below the ball so neither overlaps it.
+                VStack(spacing: 8) {
+                    DismissCrossButton { overlay.dismissBall() }
+                    Text("Tap the ball to show support")
+                        .font(.system(size: 11, weight: .medium, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.9))
+                        .shadow(radius: 4)
+                        .allowsHitTesting(false)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                .padding(.bottom, 20)
+                .transition(.opacity)
             }
         }
         .onHover { hovering = $0 }

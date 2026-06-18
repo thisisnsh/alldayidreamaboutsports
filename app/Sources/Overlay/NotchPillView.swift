@@ -4,10 +4,15 @@ import SwiftUI
 /// The real-time notification stack hanging off the notch: every match event
 /// appears the moment it arrives — newest at the bottom, oldest sliding up
 /// and out at the top. Styled to read as an extension of the notch hardware.
-/// Rendered in the full-screen overlay panel and pinned to the top; it reports
-/// its measured size so the panel knows which region should capture clicks.
-struct NotchStackView: View {
-    let items: [NotchItem]
+///
+/// Hosted in its OWN fixed-size non-click-through panel pinned under the notch,
+/// so it can use SwiftUI `.onHover` to reveal the set's ✕ — the same reliable
+/// mechanism the celebration ball uses, instead of polling the cursor against a
+/// rect. Laid out like `OverlayDisplayView`: a `GeometryReader` gives the root
+/// an explicit frame so the content fills the panel and renders dependably.
+struct NotchStackHost: View {
+    @EnvironmentObject var overlay: OverlayManager
+    @State private var hovering = false
 
     private var topInset: CGFloat {
         let inset = NSScreen.main?.safeAreaInsets.top ?? 0
@@ -15,33 +20,35 @@ struct NotchStackView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
+        GeometryReader { geo in
             VStack(spacing: 8) {
-                ForEach(items) { item in
-                    NotchPillRow(item: item)
-                        // Drop down out of the notch; rise back into it.
-                        // (Each new pill is inserted at the top, so the ones
-                        // already showing get pushed down by the layout.)
-                        .transition(.move(edge: .top).combined(with: .opacity))
+                VStack(spacing: 8) {
+                    ForEach(overlay.activeSet) { item in
+                        NotchPillRow(item: item)
+                            // Drop down out of the notch; rise back into it.
+                            // (Each new pill is inserted at the top, so the ones
+                            // already showing get pushed down by the layout.)
+                            .transition(.move(edge: .top).combined(with: .opacity))
+                    }
                 }
+
+                // The ✕ sits just below the stack and only while hovering —
+                // moving onto it stays within the panel, so the hover holds.
+                if hovering, !overlay.activeSet.isEmpty {
+                    DismissCrossButton { overlay.endSet() }
+                        .transition(.opacity)
+                }
+
+                Spacer(minLength: 0)
             }
-            // Report the real rendered size — the ✕ panel is positioned from it
-            // and the hover region is derived from it (estimates break: emoji
-            // lines make pills taller, names make them wider).
-            .background(
-                GeometryReader { proxy in
-                    Color.clear
-                        .onAppear { OverlayManager.shared.reportStackSize(proxy.size) }
-                        .onChange(of: proxy.size) { _, size in
-                            OverlayManager.shared.reportStackSize(size)
-                        }
-                }
-            )
-            Spacer()
+            .padding(.top, topInset + 6)
+            .frame(width: geo.size.width, height: geo.size.height, alignment: .top)
+            // Track hover across the whole panel, including the transparent gaps
+            // around the pills (the pills themselves aren't interactive).
+            .contentShape(Rectangle())
+            .onHover { hovering = $0 }
         }
-        .padding(.top, topInset + 6)
-        .frame(maxWidth: .infinity)
-        .allowsHitTesting(false)
+        .ignoresSafeArea()
     }
 }
 
