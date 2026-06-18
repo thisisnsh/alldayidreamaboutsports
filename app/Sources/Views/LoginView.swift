@@ -24,19 +24,46 @@ struct LoginView: View {
         }
     }
 
-    private var loginContent: some View {
+    @ViewBuilder private var loginContent: some View {
+        if session.isSignedIn {
+            signedInContent
+        } else {
+            signedOutContent
+        }
+    }
+
+    /// Already signed in: the window doubles as a "where did the app go?" guide,
+    /// since the app itself lives in the menu bar. No sign-in affordance.
+    private var signedInContent: some View {
         VStack(spacing: 22) {
             Spacer()
-            Image(systemName: "soccerball")
-                .font(.system(size: 56))
-                .foregroundStyle(.primary)
-                .shadow(radius: 8)
+            ballMark
             Text("All Day I Dream\nAbout Sports")
                 .font(.system(size: 28, weight: .heavy, design: .rounded))
                 .multilineTextAlignment(.center)
-            Text(session.isSignedIn
-                 ? "Signed in as \(session.profile?.name ?? session.profile?.email ?? "your account")"
-                 : "Live Sports Events")
+            Text("Look for the \(Image(systemName: "soccerball")) icon in your status menu")
+                .font(.system(size: 14, design: .rounded))
+                .multilineTextAlignment(.center)
+                .opacity(0.8)
+            Spacer()
+            Text("Tip: Can't find the icon? Open Finder, then check the top bar.")
+                .font(.caption)
+                .multilineTextAlignment(.center)
+                .opacity(0.6)
+                .frame(maxWidth: 300)
+                .padding(.bottom, 14)
+        }
+        .padding(28)
+    }
+
+    private var signedOutContent: some View {
+        VStack(spacing: 22) {
+            Spacer()
+            ballMark
+            Text("All Day I Dream\nAbout Sports")
+                .font(.system(size: 28, weight: .heavy, design: .rounded))
+                .multilineTextAlignment(.center)
+            Text("Live Sports Events")
                 .font(.system(size: 14, design: .rounded))
                 .opacity(0.8)
 
@@ -49,7 +76,7 @@ struct LoginView: View {
                 }
             }
             .buttonStyle(.primaryPill)
-            .disabled(!control.isOperational || session.isSignedIn)
+            .disabled(!control.isOperational)
 
             if control.killSwitch {
                 Text(control.killMessage.isEmpty
@@ -79,5 +106,12 @@ struct LoginView: View {
                 .padding(.bottom, 14)
         }
         .padding(28)
+    }
+
+    private var ballMark: some View {
+        Image(systemName: "soccerball")
+            .font(.system(size: 56))
+            .foregroundStyle(.primary)
+            .shadow(radius: 8)
     }
 }
