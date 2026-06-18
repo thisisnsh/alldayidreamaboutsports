@@ -35,6 +35,14 @@ enum DevConfig {
     /// kiosk demo. Off = play through once and stop.
     static let loops = true
 
+    /// Before the timeline proper, fire one pill of EVERY event type (kickoff,
+    /// goal, VAR, cards, half/full-time, extra time, shootout, penalty kicks)
+    /// so you can eyeball every pill layout the moment the show starts. Runs
+    /// once per Play/Restart, then the normal timeline takes over from 0–0.
+    static let showcaseAtStart = true
+    /// Seconds between showcase pills — enough to read each as it stacks.
+    static let showcaseSpacing = 2.5
+
     // ── THE TIMELINE ────────────────────────────────────────────────────
     // `at`      seconds after the demo starts (deterministic — not random).
     // fixture   which parallel match the event belongs to (.braArg, …).

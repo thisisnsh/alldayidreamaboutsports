@@ -213,9 +213,13 @@ final class DemoEngine: ObservableObject {
         guard !isPlaying else { return }
         isPlaying = true
         task = Task { @MainActor in
-            repeat {
+            if DevConfig.showcaseAtStart && !Task.isCancelled {
+                await runShowcase()
+            }
+            while !Task.isCancelled {
                 await playThrough()
-            } while DevConfig.loops && !Task.isCancelled
+                if !DevConfig.loops { break }
+            }
             isPlaying = false
             task = nil
         }
@@ -238,6 +242,36 @@ final class DemoEngine: ObservableObject {
         firedCount = 0
         Task { await AppSession.shared.refreshFixtures() }
         start()
+    }
+
+    /// A one-off parade of every pill layout, fired through the real pipeline
+    /// before the timeline proper. Uses one match (FRA vs GER) and only the
+    /// opponent (GER) side for goal-type events, so each shows as a notch PILL
+    /// rather than a fan-goal celebration — the point here is to preview the
+    /// pills. Scores are coherent so the subtitle row reads sensibly, and a
+    /// shootout decides it so full-time shows the "won on pens" variant.
+    private func runShowcase() async {
+        let f = DemoFixture.fraGer
+        let beats: [DemoMoment] = [
+            DemoMoment(at: 0, f, minute: 1,   .kickoff),
+            DemoMoment(at: 0, f, minute: 9,   .goal(.away, player: "Musiala")),       // GER 0–1 → goal pill
+            DemoMoment(at: 0, f, minute: 20,  .yellowCard(.away, player: "Rüdiger")),
+            DemoMoment(at: 0, f, minute: 24,  .goalDisallowed(.away)),                // VAR → back to 0–0
+            DemoMoment(at: 0, f, minute: 33,  .goal(.away, player: "Havertz")),       // GER 0–1 again, for a leader
+            DemoMoment(at: 0, f, minute: 41,  .redCard(.away, player: "Tah")),
+            DemoMoment(at: 0, f, minute: 45,  .halfTime),                             // "Germany ahead"
+            DemoMoment(at: 0, f, minute: 91,  .extraTime),
+            DemoMoment(at: 0, f, minute: 120, .penaltyShootout),
+            DemoMoment(at: 0, f, minute: 120, .penaltyKick(.home, player: "Mbappé", scored: true)),  // pens 1–0
+            DemoMoment(at: 0, f, minute: 120, .penaltyKick(.away, player: "Sané",   scored: false)), // missed ✗
+            DemoMoment(at: 0, f, minute: 120, .fullTime),                             // "France won on pens"
+        ]
+        FakeStore.shared.resetMatches()
+        for beat in beats {
+            if Task.isCancelled { return }
+            fire(beat)
+            try? await Task.sleep(for: .seconds(DevConfig.showcaseSpacing))
+        }
     }
 
     private func playThrough() async {

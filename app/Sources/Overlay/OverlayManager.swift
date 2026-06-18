@@ -331,6 +331,27 @@ final class OverlayManager: ObservableObject {
     // draw the overlay. Indexing NSScreen.screens here used to crash.
     private var screen: NSScreen? { NSScreen.main ?? NSScreen.screens.first }
 
+    // The overlay lives in its own NSPanels, so SwiftUI's `preferredColorScheme`
+    // (which only affects the app's own windows) never reaches it. Drive each
+    // panel's appearance from the user's theme so the pill is black in dark and
+    // white in light, independent of the system setting. nil = follow system.
+    private var overlayAppearance: NSAppearance? {
+        switch AppSession.shared.prefs.settings.theme ?? .system {
+        case .system: nil
+        case .light: NSAppearance(named: .aqua)
+        case .dark: NSAppearance(named: .darkAqua)
+        }
+    }
+
+    /// Re-apply the theme to any panels already on screen — the Appearance
+    /// setting can change while a pill/ball is showing.
+    func applyOverlayTheme() {
+        let appearance = overlayAppearance
+        displayPanel?.appearance = appearance
+        interactPanel?.appearance = appearance
+        dismissPanel?.appearance = appearance
+    }
+
     private func showDisplayPanel() {
         guard let screen else { return }
         if displayPanel == nil {
@@ -338,6 +359,7 @@ final class OverlayManager: ObservableObject {
             panel.contentView = Self.makeHostingView(OverlayDisplayView().environmentObject(self))
             displayPanel = panel
         }
+        displayPanel?.appearance = overlayAppearance
         displayPanel?.setFrame(screen.frame, display: true)
         displayPanel?.orderFrontRegardless()
     }
@@ -383,6 +405,7 @@ final class OverlayManager: ObservableObject {
             panel.contentView = Self.makeHostingView(SetDismissButton().environmentObject(self))
             dismissPanel = panel
         }
+        dismissPanel?.appearance = overlayAppearance
         dismissPanel?.setFrame(rect, display: true)
         dismissPanel?.orderFrontRegardless()
     }
@@ -415,6 +438,7 @@ final class OverlayManager: ObservableObject {
             panel.contentView = Self.makeHostingView(InteractiveBallView().environmentObject(self))
             interactPanel = panel
         }
+        interactPanel?.appearance = overlayAppearance
         interactPanel?.setFrame(rect, display: true)
         interactPanel?.orderFrontRegardless()
     }

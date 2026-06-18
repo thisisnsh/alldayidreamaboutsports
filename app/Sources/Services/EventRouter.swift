@@ -112,60 +112,54 @@ private func teamName(_ id: Int) -> String {
     TeamCatalog.team(for: id, in: AppSession.shared.teams).name
 }
 
-/// [logo] Home vs Away [logo] — the matchup chip used by kickoff / extra time.
+/// The leading team's (name, id), or nil when level. The matchup / score
+/// itself rides in the subtitle row, so the title only needs the one team.
 @MainActor
-private func matchupSegments(for event: MatchEvent) -> [PillSegment] {
-    [
-        .logo(url: teamLogo(event.homeTeamId)),
-        .text(" \(event.homeName) vs \(event.awayName) "),
-        .logo(url: teamLogo(event.awayTeamId)),
-    ]
-}
-
-/// The leading team as [logo, name], or nil when level.
-@MainActor
-private func leaderSegments(for event: MatchEvent) -> [PillSegment]? {
+private func leaderInfo(for event: MatchEvent) -> (name: String, teamId: Int)? {
     guard event.homeGoals != event.awayGoals else { return nil }
     let homeLeads = event.homeGoals > event.awayGoals
-    return [
-        .logo(url: teamLogo(homeLeads ? event.homeTeamId : event.awayTeamId)),
-        .text(" \(homeLeads ? event.homeName : event.awayName)"),
-    ]
+    return homeLeads ? (event.homeName, event.homeTeamId) : (event.awayName, event.awayTeamId)
 }
 
+// Every in-match pill follows one grammar so the eye can learn it:
+//   [SF icon] [minute′] Label — <bold key noun> [team logo]
+// The SF icon (added by NotchPillRow) carries the event type; the team logo is
+// always the rightmost element; the score lives in the subtitle. The three
+// whole-match events (kickoff / extra time / shootout) have no single subject
+// team, so they carry no trailing logo — both teams show in the score row.
 @MainActor
 func pillTitle(for event: MatchEvent) -> [PillSegment] {
     let minute = event.minute.map { "\($0)\(event.extra.map { "+\($0)" } ?? "")′ " } ?? ""
     let teamChip: [PillSegment] = event.teamId.map { [.logo(url: teamLogo($0))] } ?? []
     switch event.type {
-    case .kickoff: return [.text("Kickoff — ")] + matchupSegments(for: event)
+    case .kickoff: return [.text("Kickoff")]
     case .goal:
         // Backend now always sends a scorer; if it's ever missing, name the
         // scoring team — never the home team (that mislabels away goals).
         let scorer = event.player ?? event.teamId.map(teamName) ?? ""
-        return [.text("\(minute)Goal — \(scorer) ")] + teamChip
-    case .goalCancelled: return [.text("\(minute)VAR — Goal Disallowed ")] + teamChip
-    case .yellowCard: return [.text("\(minute)Yellow card — \(event.player ?? "") ")] + teamChip
-    case .redCard: return [.text("\(minute)Red card — \(event.player ?? "") ")] + teamChip
+        return [.text("\(minute)Goal — "), .text("\(scorer) ", bold: true)] + teamChip
+    case .goalCancelled: return [.text("\(minute)VAR — Goal disallowed ")] + teamChip
+    case .yellowCard: return [.text("\(minute)Yellow card — "), .text("\(event.player ?? "") ", bold: true)] + teamChip
+    case .redCard: return [.text("\(minute)Red card — "), .text("\(event.player ?? "") ", bold: true)] + teamChip
     case .halfTime:
-        if let leader = leaderSegments(for: event) {
-            return [.text("Half-time — ")] + leader + [.text(" Ahead")]
+        if let leader = leaderInfo(for: event) {
+            return [.text("Half-time — "), .text(leader.name, bold: true), .text(" ahead "), .logo(url: teamLogo(leader.teamId))]
         }
         return [.text("Half-time — Tight match")]
     case .fullTime:
         // After a shootout the winner is whoever has more pens, not goals.
-        if let winner = shootoutWinnerSegments(for: event) {
-            return [.text("Full-time — ")] + winner + [.text(" Won on pens")]
+        if let winner = shootoutWinnerInfo(for: event) {
+            return [.text("Full-time — "), .text(winner.name, bold: true), .text(" won on pens "), .logo(url: teamLogo(winner.teamId))]
         }
-        if let leader = leaderSegments(for: event) {
-            return [.text("Full-time — ")] + leader + [.text(" Won")]
+        if let leader = leaderInfo(for: event) {
+            return [.text("Full-time — "), .text(leader.name, bold: true), .text(" won "), .logo(url: teamLogo(leader.teamId))]
         }
-        return [.text("Full-time — Match Draw")]
-    case .extraTime: return [.text("Extra time — ")] + matchupSegments(for: event)
+        return [.text("Full-time — Match draw")]
+    case .extraTime: return [.text("Extra time")]
     case .penaltyShootout: return [.text("Penalty shootout!")]
     case .penaltyKick:
         let outcome = (event.scored ?? false) ? "scored ✓" : "missed ✗"
-        return [.text("Penalties — \(event.player ?? "") \(outcome) ")] + teamChip
+        return [.text("\(minute)Penalty — "), .text("\(event.player ?? "") ", bold: true), .text("\(outcome) ")] + teamChip
     case .celebration: return [] // never a backend event; counts build their own text
     }
 }
@@ -175,7 +169,11 @@ func pillTitle(for event: MatchEvent) -> [PillSegment] {
 @MainActor
 func pillSubtitle(for event: MatchEvent) -> [PillSegment]? {
     switch event.type {
-    case .goal, .goalCancelled, .halfTime, .fullTime, .extraTime, .penaltyShootout, .penaltyKick:
+    // Every in-match event shows the score row (kickoff reads 0 - 0, which
+    // also gives us the "–" separator instead of a "vs"); only celebrations,
+    // which build their own text, fall through to nil.
+    case .kickoff, .goal, .goalCancelled, .yellowCard, .redCard, .halfTime,
+         .fullTime, .extraTime, .penaltyShootout, .penaltyKick:
         let pens = (event.penHome != nil || event.penAway != nil)
             ? " (pens \(event.penHome ?? 0)-\(event.penAway ?? 0))" : ""
         return [
@@ -191,15 +189,12 @@ func pillSubtitle(for event: MatchEvent) -> [PillSegment]? {
     }
 }
 
-/// Winner of a decided shootout as [logo, name], or nil if level / no shootout.
+/// Winner of a decided shootout as (name, id), or nil if level / no shootout.
 @MainActor
-private func shootoutWinnerSegments(for event: MatchEvent) -> [PillSegment]? {
+private func shootoutWinnerInfo(for event: MatchEvent) -> (name: String, teamId: Int)? {
     guard let home = event.penHome, let away = event.penAway, home != away else { return nil }
     let homeWon = home > away
-    return [
-        .logo(url: teamLogo(homeWon ? event.homeTeamId : event.awayTeamId)),
-        .text(" \(homeWon ? event.homeName : event.awayName)"),
-    ]
+    return homeWon ? (event.homeName, event.homeTeamId) : (event.awayName, event.awayTeamId)
 }
 
 func pillIcon(for event: MatchEvent) -> String {
