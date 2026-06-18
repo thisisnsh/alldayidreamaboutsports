@@ -27,10 +27,15 @@ final class FakeStore {
 
     // Live state per match, keyed by fixture id. DemoEngine walks each one
     // through the script so every scoreboard stays in step with its pills.
-    // `eventSeq` is monotonic (never reset) so replays keep producing fresh
-    // eventIds that EventRouter won't dedupe away.
+    // `eventSeq` is monotonic (never reset) so replays within a run keep
+    // producing fresh eventIds that EventRouter won't dedupe away.
     var states: [Int: LiveMatchState] = FakeStore.freshStates()
     var eventSeq = 0
+
+    // EventRouter's dedupe list persists in UserDefaults, but Debug demo event
+    // ids restart on every app launch. Stamp each launch so the showcase always
+    // routes, even if the same timeline played in a previous run.
+    let launchToken = UUID().uuidString.prefix(8)
 
     /// Celebration tap totals per fixture; surges in the timeline overwrite
     /// this and a user tapping in the app adds to it.
@@ -267,6 +272,7 @@ final class DemoEngine: ObservableObject {
             DemoMoment(at: 0, f, minute: 120, .fullTime),                             // "France won on pens"
         ]
         FakeStore.shared.resetMatches()
+        publishAllFixtures()
         for beat in beats {
             if Task.isCancelled { return }
             fire(beat)
@@ -276,6 +282,7 @@ final class DemoEngine: ObservableObject {
 
     private func playThrough() async {
         FakeStore.shared.resetMatches()
+        publishAllFixtures()
         firedCount = 0
         let start = Date()
         for moment in DevConfig.timeline {
@@ -333,6 +340,7 @@ final class DemoEngine: ObservableObject {
             store.celebrations[id] = totals
             AppSession.shared.mergeCelebrationTotals(totals, fixtureId: id)
         }
+        publishFixture(def)
     }
 
     /// Build the `MatchEvent` the poll-diff would have produced for this moment
@@ -346,7 +354,7 @@ final class DemoEngine: ObservableObject {
         let s = store.states[def.id] ?? LiveMatchState()
         let teamId = side.map { $0 == .home ? def.home.id : def.away.id }
         let event = MatchEvent(
-            eventId: "demo:\(def.id):\(type.rawValue):\(store.eventSeq)",
+            eventId: "demo:\(store.launchToken):\(def.id):\(type.rawValue):\(store.eventSeq)",
             type: type,
             fixtureId: def.id,
             leagueId: def.leagueId,
@@ -367,6 +375,18 @@ final class DemoEngine: ObservableObject {
         )
         store.eventSeq += 1
         EventRouter.shared.route(event)
+    }
+
+    private func publishFixture(_ def: DemoFixture) {
+        AppSession.shared.applyLiveFixture(FakeStore.shared.fixture(def))
+        AppSession.shared.publishFixtures()
+    }
+
+    private func publishAllFixtures() {
+        for fixture in FakeStore.shared.allFixtures {
+            AppSession.shared.applyLiveFixture(fixture)
+        }
+        AppSession.shared.publishFixtures()
     }
 }
 #endif

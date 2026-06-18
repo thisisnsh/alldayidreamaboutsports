@@ -65,7 +65,7 @@ private struct BallScene: View {
     }
 }
 
-/// The ball: SF soccerball.inverse in white, with a logo badge for EVERY team
+/// The ball: SF soccerball in white, with a logo badge for EVERY team
 /// being celebrated.
 struct BallView: View {
     let teams: [Team]
@@ -73,7 +73,7 @@ struct BallView: View {
 
     var body: some View {
         ZStack(alignment: .center) {
-            Image(systemName: "soccerball.inverse")
+            Image(systemName: "soccerball")
                 .resizable()
                 .foregroundStyle(.white)
                 .frame(width: diameter, height: diameter)
@@ -87,8 +87,19 @@ struct BallView: View {
             .padding(.vertical, diameter * 0.03)
             .background(
                 Capsule(style: .continuous)
-                    .fill(Color.black.opacity(0.42))
-                    .blur(radius: 0.4)
+                    .fill(
+                        LinearGradient(
+                            stops: [
+                                .init(color: .clear, location: 0),
+                                .init(color: .black.opacity(0.38), location: 0.18),
+                                .init(color: .black.opacity(0.48), location: 0.5),
+                                .init(color: .black.opacity(0.38), location: 0.82),
+                                .init(color: .clear, location: 1),
+                            ],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
                     .shadow(color: .black.opacity(0.45), radius: 9, y: 3)
             )
         }
