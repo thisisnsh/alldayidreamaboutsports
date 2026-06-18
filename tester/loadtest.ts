@@ -5,8 +5,9 @@
  * real app (GET matches/{id}.json + celebrate/{id}.json every ~5s, plus today's
  * fixtures file + catalog.json). It records latency and `cf-cache-status` per
  * response and reports a §0 verdict: in steady state ~100% of responses must be
- * served by the edge (HIT/REVALIDATED/STALE/UPDATING). A high MISS/BYPASS/DYNAMIC
- * share means clients are reaching R2 directly — a broken cache rule.
+ * served by the edge (HIT/REVALIDATED/STALE/UPDATING), or rejected by the edge
+ * rate limiter (429). A high MISS/BYPASS/DYNAMIC share means clients are
+ * reaching R2 directly — a broken cache rule.
  *
  * Read-only: GETs are public, so no credentials are used here. Run against the
  * STAGING scores domain only.
@@ -17,6 +18,7 @@ import { env } from "../backend/src/env.js";
 
 /** Cache statuses that prove the edge — not R2 — served the request (§0). */
 const HEALTHY_CACHE_STATUS = new Set(["HIT", "REVALIDATED", "STALE", "UPDATING"]);
+const RATE_LIMITED_STATUS = 429;
 
 interface Sample {
   key: string;
@@ -122,22 +124,29 @@ async function main(): Promise<void> {
 
   // ── Report ────────────────────────────────────────────────────────────────
   const latencies = samples.map((s) => s.latencyMs).sort((a, b) => a - b);
-  const histogram = new Map<string, number>();
+  const cacheHistogram = new Map<string, number>();
+  const httpHistogram = new Map<number, number>();
   let healthy = 0;
+  let rateLimited = 0;
   let errors = 0;
   for (const s of samples) {
-    histogram.set(s.cacheStatus, (histogram.get(s.cacheStatus) ?? 0) + 1);
+    cacheHistogram.set(s.cacheStatus, (cacheHistogram.get(s.cacheStatus) ?? 0) + 1);
+    httpHistogram.set(s.httpStatus, (httpHistogram.get(s.httpStatus) ?? 0) + 1);
     if (HEALTHY_CACHE_STATUS.has(s.cacheStatus)) healthy++;
-    if (!s.ok) errors++;
+    if (s.httpStatus === RATE_LIMITED_STATUS) rateLimited++;
+    if (!s.ok && s.httpStatus !== RATE_LIMITED_STATUS) errors++;
   }
   const total = samples.length;
   const healthyShare = total > 0 ? (healthy / total) * 100 : 0;
+  const accepted = healthy + rateLimited;
+  const acceptedShare = total > 0 ? (accepted / total) * 100 : 0;
 
   console.log("Summary");
   console.table({
     requests: total,
     rps: Number((total / wallSec).toFixed(1)),
     errors,
+    "rate limited": rateLimited,
     "latency p50 (ms)": Number(percentile(latencies, 50).toFixed(1)),
     "latency p90 (ms)": Number(percentile(latencies, 90).toFixed(1)),
     "latency p99 (ms)": Number(percentile(latencies, 99).toFixed(1)),
@@ -147,7 +156,7 @@ async function main(): Promise<void> {
   console.log("\ncf-cache-status histogram");
   console.table(
     Object.fromEntries(
-      [...histogram.entries()]
+      [...cacheHistogram.entries()]
         .sort((a, b) => b[1] - a[1])
         .map(([status, count]) => [
           status,
@@ -156,10 +165,23 @@ async function main(): Promise<void> {
     ),
   );
 
-  const verdict = healthyShare >= 99 ? "PASS" : healthyShare >= 90 ? "WARN" : "FAIL";
+  console.log("\nHTTP status histogram");
+  console.table(
+    Object.fromEntries(
+      [...httpHistogram.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .map(([status, count]) => [
+          status === 0 ? "CLIENT_ERROR" : String(status),
+          { count, share: `${((count / total) * 100).toFixed(1)}%` },
+        ]),
+    ),
+  );
+
+  const verdict = acceptedShare >= 99 ? "PASS" : acceptedShare >= 90 ? "WARN" : "FAIL";
   console.log(
-    `\n§0 verdict: ${verdict} — ${healthyShare.toFixed(1)}% of responses served by the edge ` +
-      `(${healthy}/${total} HIT/REVALIDATED/STALE/UPDATING)`,
+    `\n§0 verdict: ${verdict} — ${acceptedShare.toFixed(1)}% accepted ` +
+      `(${healthy}/${total} HIT/REVALIDATED/STALE/UPDATING, ` +
+      `${rateLimited}/${total} rate limited; ${healthyShare.toFixed(1)}% cache-served)`,
   );
   if (verdict === "FAIL") process.exitCode = 1;
 }

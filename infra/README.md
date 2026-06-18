@@ -134,7 +134,7 @@ cache-busting requests that would otherwise read R2.
 
 | Scope | Limit | Why |
 |---|---:|---|
-| all scores/download custom domains, R2 origin reads only | 60/10s per IP + colo | Counts only origin requests, so cache hits are not penalized |
+| all scores/download custom domains, R2 origin reads only | 200/10s per IP + colo | Counts only origin requests, so cache hits are not penalized |
 
 Override the request limit with `R2_ORIGIN_RATE_LIMIT_REQUESTS_PER_10_SECONDS`.
 On Cloudflare Free, the mitigation timeout must stay at 10 seconds.
