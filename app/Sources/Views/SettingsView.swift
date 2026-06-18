@@ -9,6 +9,11 @@ struct SettingsView: View {
     // Sparkle persists both flags in UserDefaults itself; we just mirror them.
     @State private var autoCheck = true
     @State private var autoInstall = true
+    // Local mirror of the theme so `.appTheme()` reacts synchronously when the
+    // user clicks a segment — `preferredColorScheme(nil)` (System) needs an extra
+    // render pass to resolve the system appearance, making it feel slower than
+    // Light/Dark if we wait for the deferred session write.
+    @State private var activeTheme: ThemeChoice = .system
 
     var body: some View {
         ZStack {
@@ -17,8 +22,9 @@ struct SettingsView: View {
         }
         .frame(width: 440, height: 640)
         .installsWindowOpener()
-        .appTheme(session.prefs.settings.theme ?? .system)
+        .appTheme(activeTheme)
         .onAppear {
+            activeTheme = session.prefs.settings.theme ?? .system
             autoCheck = updater.automaticallyChecksForUpdates
             autoInstall = updater.automaticallyDownloadsUpdates
         }
@@ -239,12 +245,12 @@ struct SettingsView: View {
 
     private var themeBinding: Binding<ThemeChoice> {
         Binding(
-            get: { session.prefs.settings.theme ?? .system },
-            // Defer: selecting a theme flips `preferredColorScheme`, which
-            // SwiftUI applies in the current update pass. Mutating published
-            // prefs synchronously inside that pass trips "Publishing changes
-            // from within view updates"; hop to the next runloop tick instead.
+            get: { activeTheme },
             set: { choice in
+                activeTheme = choice
+                // Defer the @Published mutation to avoid "Publishing changes
+                // from within view updates" — the @State update above is safe
+                // to do synchronously and drives the immediate visual change.
                 DispatchQueue.main.async {
                     session.updateSettings { $0.theme = choice }
                 }
