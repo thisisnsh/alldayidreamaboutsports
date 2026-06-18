@@ -70,9 +70,9 @@ final class EventRouter {
         let isFanGoal = event.type == .goal && event.teamId.map(fans.contains) == true
         AppLog.info(.fixtures, "event_routed event_id=\(event.eventId) type=\(event.type.rawValue) fixture_id=\(event.fixtureId) fan_goal=\(isFanGoal)")
 
-        // One queue for everything: the event joins the next notification
-        // set; fan goals additionally drive confetti + the center ball when
-        // their set displays.
+        // Every event joins the overlay queues. Goals are prioritized for the
+        // next displayed set; followed-team goals start the center celebration
+        // only once their goal pill reaches that set.
         OverlayManager.shared.submit(event, isFanGoal: isFanGoal)
 
         // VAR took the goal back — stop celebrating it.
@@ -192,7 +192,13 @@ func pillSubtitle(for event: MatchEvent) -> [PillSegment]? {
     // Every in-match event shows the score row (kickoff reads 0 - 0, which
     // also gives us the "–" separator instead of a "vs"); only celebrations,
     // which build their own text, fall through to nil.
-    case .kickoff, .goal, .goalCancelled, .yellowCard, .redCard, .halfTime,
+    case .kickoff:
+        return [
+            .text("\(event.homeName) "),
+            .text("vs"),
+            .text(" \(event.awayName)"),
+        ]
+    case .goal, .goalCancelled, .yellowCard, .redCard, .halfTime,
          .fullTime, .extraTime, .penaltyShootout, .penaltyKick:
         let pens = (event.penHome != nil || event.penAway != nil)
             ? " (pens \(event.penHome ?? 0)-\(event.penAway ?? 0))" : ""

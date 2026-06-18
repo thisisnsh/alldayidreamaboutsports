@@ -6,7 +6,7 @@ struct AnimationParams: Codable {
     /// How long each notification set (and the ball with it) stays on screen.
     var pillHoldSeconds: Double = 7
     /// Notification set size — how many pills display at once.
-    var notchStackMax: Int = 10
+    var notchStackMax: Int = 5
 }
 
 private let defaultAnimationParams = AnimationParams()
@@ -57,7 +57,7 @@ final class ControlPlane: ObservableObject {
                 "kill_message": "" as NSString,
                 "min_build": 1 as NSNumber,
                 "celebration_enabled": true as NSNumber,
-                "animation_params": #"{"pillHoldSeconds":7,"notchStackMax":10}"# as NSString,
+                "animation_params": #"{"pillHoldSeconds":7,"notchStackMax":5}"# as NSString,
                 "poll_seconds": 5 as NSNumber,
                 "celebration_sample_percent": 1.0 as NSNumber,
                 "max_fan_teams": defaultMaxFanTeams as NSNumber,
