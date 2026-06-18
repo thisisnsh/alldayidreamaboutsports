@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
-  isLive, isRecentlyFinished, isRegressiveSnapshot, isStartingSoon, partitionFixtures, Poller, utcPollRange,
+  isLive, isRecentlyFinished, isRegressiveSnapshot, isStartingSoon, partitionFixtures, Poller, toScheduleRow, utcPollRange,
 } from "../src/poller.js";
 import { CACHE_CONTROL_LONG } from "../src/r2.js";
 import type { MatchState } from "../src/types.js";
@@ -36,6 +36,23 @@ describe("polling helpers", () => {
     expect(isLive(a)).toBe(true);
     expect(isLive(b)).toBe(true);
   });
+
+  it("toScheduleRow drops all live fields, keeps schedule data", () => {
+    const live = state(7, "2026-06-14T20:00:00Z", "LIVE", {
+      round: "Group A - 1", minute: 86, extra: 2, period: "SECOND", running: true,
+      secondHalfStartISO: "2026-06-14T21:00:00Z",
+      lastGoal: { teamId: 1, player: "X", minute: 20, extra: null },
+      home: { id: 1, name: "A", goals: 2, yellowCards: 1, redCards: 0, yellowCardEvents: [], redCardEvents: [], goalEvents: [{ player: "X", minute: 20, extra: null }] },
+    });
+    const row = toScheduleRow(live);
+    expect(row).toMatchObject({
+      fixtureId: 7, round: "Group A - 1", kickoffISO: "2026-06-14T20:00:00Z",
+      status: "SCHEDULED", rawStatus: "NS", minute: null, extra: null, period: "PRE", running: false,
+      secondHalfStartISO: null,
+    });
+    expect(row.home).toMatchObject({ id: 1, name: "A", goals: 0, yellowCards: 0, goalEvents: [] });
+    expect(row.lastGoal).toBeUndefined();
+  });
 });
 
 describe("Poller", () => {
@@ -60,6 +77,34 @@ describe("Poller", () => {
     expect(stateStore.save).toHaveBeenCalledWith(match, null);
     // No purge path of any kind.
     expect((r2 as Record<string, unknown>).purge).toBeUndefined();
+  });
+
+  it("writes schedule-only data into fixtures-{date}.json for a live match", async () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const live = state(1, `${today}T01:00:00Z`, "LIVE", {
+      minute: 86, period: "SECOND", running: true,
+      home: { id: 1, name: "A", goals: 2, yellowCards: 0, redCards: 0, yellowCardEvents: [], redCardEvents: [], goalEvents: [{ player: "X", minute: 20, extra: null }] },
+    });
+    const provider = { fixturesForRange: vi.fn().mockResolvedValue([live]) };
+    const stateStore = {
+      load: vi.fn().mockResolvedValue({ state: null, etag: null }),
+      save: vi.fn().mockResolvedValue(undefined),
+    };
+    const r2 = { putJsonIfChanged: vi.fn().mockResolvedValue(undefined) };
+    const poller = new Poller(provider as never, stateStore as never, r2 as never);
+
+    await poller.fetchOnce();
+
+    const call = r2.putJsonIfChanged.mock.calls.find(([key]) => key === `fixtures-${today}.json`);
+    expect(call).toBeDefined();
+    const row = (call![1] as { matches: MatchState[] }).matches[0];
+    expect(row.status).toBe("SCHEDULED");
+    expect(row.minute).toBeNull();
+    expect(row.running).toBe(false);
+    expect(row.home.goals).toBe(0);
+    expect(row.home.goalEvents).toEqual([]);
+    // The live per-match file still gets the REAL state.
+    expect(stateStore.save).toHaveBeenCalledWith(live, null);
   });
 
   it("writes the long schedule TTL for a date with no eligible match", async () => {

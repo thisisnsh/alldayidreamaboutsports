@@ -276,6 +276,9 @@ final class AppSession: ObservableObject {
     /// have played (live or finished).
     func refreshFixtures() async {
         await bootstrapFixturesIfNeeded(force: true)
+        // Un-stick a past-window finished match too: refreshNow()/pollCycle is
+        // window-gated and can't, but reconcile (non-window-gated) can.
+        await LiveStore.shared.reconcileFanMatches()
         await LiveStore.shared.refreshNow()
         await refreshCelebrationTotals()
     }
