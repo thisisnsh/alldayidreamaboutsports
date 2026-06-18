@@ -67,6 +67,16 @@ targets:
         Staging:
           SWIFT_ACTIVE_COMPILATION_CONDITIONS: STAGING
           CODE_SIGN_ENTITLEMENTS: App-Staging.entitlements
+          # Manual Developer ID signing (not Automatic) so command-line and
+          # verify-skill builds sign with our real, stable identity instead of
+          # falling back to a per-build ad-hoc/linker signature. A stable,
+          # identity-based code signature keeps the keychain ACL on the session
+          # token matching across rebuilds — otherwise macOS re-prompts for
+          # keychain access on every new build. No provisioning profile is
+          # needed: the app is non-sandboxed with no restricted entitlements.
+          CODE_SIGN_STYLE: Manual
+          CODE_SIGN_IDENTITY: "Developer ID Application"
+          PROVISIONING_PROFILE_SPECIFIER: ""
           GOOGLE_CLIENT_ID: 291291942072-cqsmesng18bagi6psv69n5ch4kcnvj2s.apps.googleusercontent.com
           GOOGLE_REVERSED_CLIENT_ID: com.googleusercontent.apps.291291942072-cqsmesng18bagi6psv69n5ch4kcnvj2s
           GOOGLE_SERVICE_INFO_PLIST: GoogleService-Info-Staging.plist
@@ -77,6 +87,13 @@ targets:
           APP_FEED_URL: https://download-staging.alldayidreamaboutsports.com/appcast.xml
         Release:
           CODE_SIGN_ENTITLEMENTS: App.entitlements
+          # Manual Developer ID signing — see the Staging note above. This also
+          # matches the archive/CI overrides (app-release.yml), so local Release
+          # builds, CI, and the shipped app all share one stable designated
+          # requirement.
+          CODE_SIGN_STYLE: Manual
+          CODE_SIGN_IDENTITY: "Developer ID Application"
+          PROVISIONING_PROFILE_SPECIFIER: ""
           GOOGLE_CLIENT_ID: 680190781802-t248eiqmjqaorv3ucok84t1ap9rrgc8q.apps.googleusercontent.com
           GOOGLE_REVERSED_CLIENT_ID: com.googleusercontent.apps.680190781802-t248eiqmjqaorv3ucok84t1ap9rrgc8q
           GOOGLE_SERVICE_INFO_PLIST: GoogleService-Info-Production.plist
@@ -88,8 +105,8 @@ targets:
       properties:
         CFBundleDisplayName: All Day I Dream About Sports
         # Reference the build settings (not literals) so MARKETING_VERSION /
-        # CURRENT_PROJECT_VERSION — including the release.sh overrides — flow
-        # through to the bundle. Otherwise XcodeGen bakes in "1.0" / "1".
+        # CURRENT_PROJECT_VERSION overrides flow through to the bundle.
+        # Otherwise XcodeGen bakes in "1.0" / "1".
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         LSUIElement: true # menu bar only — never in the Dock, by design
