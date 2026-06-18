@@ -183,9 +183,8 @@ func pillTitle(for event: MatchEvent) -> [PillSegment] {
     }
 }
 
-/// Score subheading: Team 1 - 0 Team, with "(pens 4-2)" when a shootout is in
-/// play. Text only — the secondary row carries no team logos (the title row's
-/// trailing logo already identifies the subject team).
+/// Score subheading. Text only — the secondary row carries no team logos (the
+/// title row's trailing logo already identifies the subject team).
 @MainActor
 func pillSubtitle(for event: MatchEvent) -> [PillSegment]? {
     switch event.type {
@@ -200,13 +199,17 @@ func pillSubtitle(for event: MatchEvent) -> [PillSegment]? {
         ]
     case .goal, .goalCancelled, .yellowCard, .redCard, .halfTime,
          .fullTime, .extraTime, .penaltyShootout, .penaltyKick:
-        let pens = (event.penHome != nil || event.penAway != nil)
-            ? " (pens \(event.penHome ?? 0)-\(event.penAway ?? 0))" : ""
+        let scoreline = ScorelineFormatter.text(
+            homeGoals: event.homeGoals,
+            awayGoals: event.awayGoals,
+            penHome: event.penHome,
+            penAway: event.penAway,
+            separator: " - "
+        )
         return [
-            .text("\(event.homeName) \(event.homeGoals) "),
-            .text("-"),
-            .text(" \(event.awayGoals) \(event.awayName)"),
-            .text(pens),
+            .text("\(event.homeName) "),
+            .text(scoreline),
+            .text(" \(event.awayName)"),
         ]
     default:
         return nil

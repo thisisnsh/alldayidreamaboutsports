@@ -15,6 +15,7 @@ struct LiveMatchState {
     var awayGoals = 0
     var minute: Int?
     var status = "SCHEDULED"
+    var rawStatus = "NS"
     // Set once a shootout starts so the scoreboard can show the pen tally.
     var penHome: Int?
     var penAway: Int?
@@ -66,6 +67,13 @@ final class FakeStore {
 
     /// Record a shootout kick: a scored kick bumps that side's pen tally; the
     /// pens always become non-nil so the scoreboard switches to showing them.
+    func beginShootout(in id: Int) {
+        guard var state = states[id] else { return }
+        state.penHome = state.penHome ?? 0
+        state.penAway = state.penAway ?? 0
+        states[id] = state
+    }
+
     func addPenalty(_ side: DemoSide, scored: Bool, in id: Int) {
         guard var state = states[id] else { return }
         state.penHome = state.penHome ?? 0
@@ -83,27 +91,21 @@ final class FakeStore {
         let kickoff = Date().addingTimeInterval(-Double(s.minute ?? 0) * 60)
         let shootout = (s.penHome != nil || s.penAway != nil)
             ? Shootout(home: s.penHome ?? 0, away: s.penAway ?? 0) : nil
-        let running = s.status == "LIVE"
+        let running = s.rawStatus == "1H" || s.rawStatus == "2H" || s.rawStatus == "ET"
         let period: MatchPeriod = {
-            switch s.status {
-            case "LIVE": return .first
-            case "HALF_TIME": return .half
-            case "FINISHED": return .finished
+            switch s.rawStatus {
+            case "1H": return .first
+            case "HT": return .half
+            case "ET": return (s.minute ?? 0) <= 105 ? .extraFirst : .extraSecond
+            case "P": return .pens
+            case "PEN", "FT", "AET": return .finished
             default: return .notStarted
-            }
-        }()
-        let rawStatus: String = {
-            switch s.status {
-            case "LIVE": return "1H"
-            case "HALF_TIME": return "HT"
-            case "FINISHED": return "FT"
-            default: return "NS"
             }
         }()
         return Fixture(
             fixtureId: def.id, leagueId: def.leagueId, round: def.round,
             kickoffISO: ISO8601DateFormatter().string(from: kickoff),
-            status: s.status, rawStatus: rawStatus, minute: s.minute,
+            status: s.status, rawStatus: s.rawStatus, minute: s.minute,
             extra: nil, period: period, running: running,
             home: ScoreboardTeam(id: def.home.id, name: def.home.name, goals: s.homeGoals),
             away: ScoreboardTeam(id: def.away.id, name: def.away.name, goals: s.awayGoals),
@@ -301,10 +303,12 @@ final class DemoEngine: ObservableObject {
         switch moment.action {
         case .kickoff:
             store.states[id]?.status = "LIVE"
+            store.states[id]?.rawStatus = "1H"
             store.states[id]?.minute = moment.minute
             push(.kickoff, def, minute: moment.minute)
         case let .goal(side, player):
             store.states[id]?.status = "LIVE"
+            store.states[id]?.rawStatus = "1H"
             store.states[id]?.minute = moment.minute
             store.addGoal(side, in: id)
             push(.goal, def, side: side, player: player, minute: moment.minute)
@@ -320,19 +324,29 @@ final class DemoEngine: ObservableObject {
             push(.redCard, def, side: side, player: player, minute: moment.minute)
         case .halfTime:
             store.states[id]?.status = "HALF_TIME"
+            store.states[id]?.rawStatus = "HT"
             store.states[id]?.minute = moment.minute
             push(.halfTime, def, minute: moment.minute)
         case .fullTime:
+            let finishedAfterPens = store.states[id]?.penHome != nil || store.states[id]?.penAway != nil
             store.states[id]?.status = "FINISHED"
+            store.states[id]?.rawStatus = finishedAfterPens ? "PEN" : "FT"
             store.states[id]?.minute = moment.minute
             push(.fullTime, def, minute: moment.minute)
         case .extraTime:
+            store.states[id]?.status = "LIVE"
+            store.states[id]?.rawStatus = "ET"
             store.states[id]?.minute = moment.minute
             push(.extraTime, def, minute: moment.minute)
         case .penaltyShootout:
+            store.states[id]?.status = "LIVE"
+            store.states[id]?.rawStatus = "P"
             store.states[id]?.minute = moment.minute
+            store.beginShootout(in: id)
             push(.penaltyShootout, def, minute: moment.minute)
         case let .penaltyKick(side, player, scored):
+            store.states[id]?.status = "LIVE"
+            store.states[id]?.rawStatus = "P"
             store.states[id]?.minute = moment.minute
             store.addPenalty(side, scored: scored, in: id)
             push(.penaltyKick, def, side: side, player: player, minute: moment.minute, scored: scored)

@@ -334,11 +334,41 @@ struct Fixture: Codable, Identifiable, Hashable {
     func involves(_ ids: Set<Int>) -> Bool {
         ids.contains(home.id) || ids.contains(away.id)
     }
+
+    var scorelineText: String {
+        ScorelineFormatter.text(
+            homeGoals: home.goals,
+            awayGoals: away.goals,
+            penHome: shootout?.home,
+            penAway: shootout?.away,
+            separator: shootout == nil ? "–" : " - "
+        )
+    }
 }
 
 struct Score: Codable, Hashable {
     let home: Int
     let away: Int
+}
+
+enum ScorelineFormatter {
+    static func text(
+        homeGoals: Int,
+        awayGoals: Int,
+        penHome: Int?,
+        penAway: Int?,
+        separator: String = "–"
+    ) -> String {
+        let hasPens = penHome != nil || penAway != nil
+        let home = scoreText(goals: homeGoals, pens: hasPens ? (penHome ?? 0) : nil)
+        let away = scoreText(goals: awayGoals, pens: hasPens ? (penAway ?? 0) : nil)
+        return "\(home)\(separator)\(away)"
+    }
+
+    private static func scoreText(goals: Int, pens: Int?) -> String {
+        guard let pens else { return "\(goals)" }
+        return "\(goals)+P\(pens)"
+    }
 }
 
 struct FixturesPayload: Codable {
