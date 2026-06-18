@@ -25,7 +25,7 @@
       "description": "Client reporter probability + server multiply-back factor. Must equal CELEBRATION_SAMPLE_RATE on the backend. 1.0 = everyone reports (exact, no sampling)."
     },
     "animation_params": {
-      "defaultValue": { "value": "{\"pillHoldSeconds\":7,\"notchStackMax\":10}" },
+      "defaultValue": { "value": "{\"pillHoldSeconds\":7,\"notchStackMax\":5}" },
       "description": "Tune animation feel without shipping a build."
     },
     "max_fan_teams": {

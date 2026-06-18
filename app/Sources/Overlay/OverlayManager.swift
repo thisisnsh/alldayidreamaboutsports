@@ -19,17 +19,23 @@ struct ConfettiBurst: Identifiable {
     let id = UUID()
 }
 
+private struct QueuedNotchItem {
+    var item: NotchItem
+    let arrivalSeq: Int
+    let isGoal: Bool
+}
+
 enum BallPhase {
     case hidden, tapping
 }
 
-/// ONE queue of events, displayed in SETS:
-/// - A set is up to `notchStackMax` pills stacked under the notch. It shows
-///   at once, stays `pillHoldSeconds`, then the next set follows. Events that
-///   arrive while a set is up simply wait — nothing is ever dropped.
-/// - Fan goals in the displayed set drive the celebration: one confetti burst
-///   per goal (fire-and-forget), and a single center ball carrying the flags
-///   of every team that scored — taps celebrate all of them.
+/// TWO queues of events, displayed in SETS:
+/// - Goals are kept in a priority queue; every other event waits separately.
+///   Each set takes goals first, then fills remaining slots with other events.
+/// - The visible stack is chronological within the selected set: oldest at the
+///   top, newest at the bottom, and it stays up for `pillHoldSeconds`.
+/// - Fan goals start confetti and one shared center ball only when their goal
+///   notification reaches the displayed set.
 @MainActor
 final class OverlayManager: ObservableObject {
     static let shared = OverlayManager()
@@ -40,8 +46,11 @@ final class OverlayManager: ObservableObject {
     @Published private(set) var confettiBursts: [ConfettiBurst] = []
     @Published var tapBursts = 0 // increments per user tap → spawns mini balls
 
-    private var queue: [NotchItem] = []
-    private var scheduled: [DispatchWorkItem] = []
+    private var goalQueue: [QueuedNotchItem] = []
+    private var otherQueue: [QueuedNotchItem] = []
+    private var nextArrivalSeq = 0
+    private var lifecycleScheduled: [DispatchWorkItem] = []
+    private var ballScheduled: DispatchWorkItem?
     private var queueBusy = false  // set synchronously so rapid-fire pushes can't race startNextSetIfIdle
     private var displayPanel: NSPanel?
     private var interactPanel: NSPanel?
@@ -49,7 +58,7 @@ final class OverlayManager: ObservableObject {
     private var params: AnimationParams { ControlPlane.shared.animationParams }
     private var setSize: Int { max(1, params.notchStackMax) }
 
-    // MARK: Intake — the single queue
+    // MARK: Intake — two queues, goals prioritized for selection
 
     func submit(_ event: MatchEvent, isFanGoal: Bool) {
         enqueue(NotchItem(
@@ -59,16 +68,23 @@ final class OverlayManager: ObservableObject {
             title: pillTitle(for: event),
             subtitle: pillSubtitle(for: event),
             fanGoal: isFanGoal ? event : nil
-        ))
+        ), isGoal: event.type == .goal)
     }
 
-    private func enqueue(_ item: NotchItem) {
+    private func enqueue(_ item: NotchItem, isGoal: Bool = false) {
         // Covers stragglers that bypass EventRouter (celebration count pills
         // resolving after a sign-out mid-set).
         guard AppSession.shared.isSignedIn else { return }
-        guard queue.allSatisfy({ $0.id != item.id }),
+        guard goalQueue.allSatisfy({ $0.item.id != item.id }),
+              otherQueue.allSatisfy({ $0.item.id != item.id }),
               activeSet.allSatisfy({ $0.id != item.id }) else { return }
-        queue.append(item)
+        let queued = QueuedNotchItem(item: item, arrivalSeq: nextArrivalSeq, isGoal: isGoal)
+        nextArrivalSeq += 1
+        if isGoal {
+            goalQueue.append(queued)
+        } else {
+            otherQueue.append(queued)
+        }
         startNextSetIfIdle()
     }
 
@@ -76,9 +92,9 @@ final class OverlayManager: ObservableObject {
     /// no longer triggers ball/confetti; if the ball is currently celebrating
     /// that team, it stops celebrating it (and goes away if no teams remain).
     func cancelGoal(fixtureId: Int, teamId: Int?) {
-        for index in queue.indices
-        where queue[index].fanGoal?.fixtureId == fixtureId && queue[index].fanGoal?.teamId == teamId {
-            queue[index].fanGoal = nil
+        for index in goalQueue.indices
+        where goalQueue[index].item.fanGoal?.fixtureId == fixtureId && goalQueue[index].item.fanGoal?.teamId == teamId {
+            goalQueue[index].item.fanGoal = nil
         }
         guard ballPhase != .hidden else { return }
         ballEvents.removeAll { $0.fixtureId == fixtureId && $0.teamId == teamId }
@@ -89,7 +105,10 @@ final class OverlayManager: ObservableObject {
 
     /// Kill switch / preview: drop everything pending and end the current set.
     func dismissAll() {
-        queue.removeAll()
+        goalQueue.removeAll()
+        otherQueue.removeAll()
+        cancelBallScheduled()
+        dismissBall()
         endSet()
     }
 
@@ -99,18 +118,30 @@ final class OverlayManager: ObservableObject {
     private static let pillDropStagger = 0.18
 
     private func startNextSetIfIdle() {
-        guard !queueBusy, !queue.isEmpty else { return }
+        guard !queueBusy, !goalQueue.isEmpty || !otherQueue.isEmpty else { return }
         queueBusy = true
-        let set = Array(queue.prefix(setSize))
-        queue.removeFirst(set.count)
+        let goalsToTake = min(setSize, goalQueue.count)
+        var selected = Array(goalQueue.prefix(goalsToTake))
+        goalQueue.removeFirst(goalsToTake)
+
+        let remainingSlots = setSize - selected.count
+        if remainingSlots > 0 {
+            let othersToTake = min(remainingSlots, otherQueue.count)
+            selected.append(contentsOf: otherQueue.prefix(othersToTake))
+            otherQueue.removeFirst(othersToTake)
+        }
+
+        let set = selected
+            .sorted { $0.arrivalSeq < $1.arrivalSeq }
+            .map(\.item)
         showDisplayPanel()
 
-        // Pills drop from the notch one by one — each new one takes the top
-        // spot and pushes the existing ones down.
+        // Pills publish top-to-bottom in chronological order: oldest first,
+        // newest last, even though goals were prioritized for selection.
         for (index, item) in set.enumerated() {
-            schedule(after: Double(index) * Self.pillDropStagger) { [self] in
+            scheduleLifecycle(after: Double(index) * Self.pillDropStagger) { [self] in
                 withAnimation(.spring(duration: 0.45, bounce: 0.25)) {
-                    activeSet.insert(item, at: 0)
+                    activeSet.append(item)
                 }
             }
         }
@@ -123,59 +154,66 @@ final class OverlayManager: ObservableObject {
         if settings.goalCenter ?? true, !fanGoals.isEmpty {
             startBall(for: fanGoals)
         }
-        schedule(after: params.pillHoldSeconds) { [self] in endSet() }
+        scheduleLifecycle(after: params.pillHoldSeconds) { [self] in endSet() }
     }
 
     /// Natural expiry: the whole set leaves, then the next set follows.
     func endSet() {
         guard !activeSet.isEmpty || queueBusy else { return }
-        cancelScheduled()
-        finishBall()
+        cancelLifecycleScheduled()
         withAnimation(.easeIn(duration: 0.35)) {
             activeSet = []
         }
-        schedule(after: 0.45) { [self] in
+        scheduleLifecycle(after: 0.45) { [self] in
             queueBusy = false
             startNextSetIfIdle()
             hidePanelsIfDone()
         }
     }
 
-    // MARK: Ball — one ball for every goaled team in the set
+    // MARK: Ball — fan-goal celebration for the active displayed set
 
     private func startBall(for goals: [MatchEvent]) {
+        cancelBallScheduled()
+        if ballPhase != .hidden {
+            flushTapsAndQueueCounts()
+        }
         ballEvents = goals
         tapBursts = 0
         // The ball is tappable the instant it appears — no separate drop phase.
-        // It stays for the set's `pillHoldSeconds` like everything else.
+        // It stays for `pillHoldSeconds`, independent of the notification set.
         ballPhase = .tapping
         CelebrationService.shared.beginWindow(
             targets: celebrationTargets(for: ballEvents)
         )
         showInteractPanel()
+        scheduleBall(after: params.pillHoldSeconds) { [self] in finishBall() }
     }
 
     /// Ball ✕ — only the ball goes; the notification set stays.
     func dismissBall() {
         guard ballPhase != .hidden else { return }
+        cancelBallScheduled()
         flushTapsAndQueueCounts()
         withAnimation(.easeOut(duration: 0.3)) {
             ballPhase = .hidden
             ballEvents = []
         }
         hideInteractPanel()
+        hidePanelsIfDone()
     }
 
-    /// Set is ending — the ball fades out with it.
+    /// Natural ball expiry — independent of the notification set.
     private func finishBall() {
         guard ballPhase != .hidden else { return }
+        cancelBallScheduled()
         flushTapsAndQueueCounts()
         fadeOutInteractPanel(duration: 0.35)
         withAnimation(.easeOut(duration: 0.35)) {
             ballPhase = .hidden
             ballEvents = []
         }
-        schedule(after: 0.4) { [self] in hideInteractPanel() }
+        scheduleAmbient(after: 0.4) { [self] in hideInteractPanel() }
     }
 
     /// The ball window closed: stop the tap counter (CelebrationService POSTs
@@ -221,7 +259,7 @@ final class OverlayManager: ObservableObject {
             title: [.text("\(count.formattedCompact) celebrations for \(team.name) this match")],
             subtitle: nil,
             fanGoal: nil
-        ))
+        ), isGoal: false)
     }
 
     func registerTap() {
@@ -236,7 +274,7 @@ final class OverlayManager: ObservableObject {
         for _ in 0 ..< count {
             let burst = ConfettiBurst()
             confettiBursts.append(burst)
-            schedule(after: 5.5) { [self] in
+            scheduleAmbient(after: 5.5) { [self] in
                 confettiBursts.removeAll { $0.id == burst.id }
                 hidePanelsIfDone()
             }
@@ -271,15 +309,30 @@ final class OverlayManager: ObservableObject {
 
     // MARK: Scheduling
 
-    private func schedule(after seconds: Double, _ block: @escaping () -> Void) {
+    private func scheduleLifecycle(after seconds: Double, _ block: @escaping () -> Void) {
         let work = DispatchWorkItem(block: block)
-        scheduled.append(work)
+        lifecycleScheduled.append(work)
         DispatchQueue.main.asyncAfter(deadline: .now() + seconds, execute: work)
     }
 
-    private func cancelScheduled() {
-        scheduled.forEach { $0.cancel() }
-        scheduled.removeAll()
+    private func scheduleAmbient(after seconds: Double, _ block: @escaping () -> Void) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + seconds, execute: block)
+    }
+
+    private func scheduleBall(after seconds: Double, _ block: @escaping () -> Void) {
+        let work = DispatchWorkItem(block: block)
+        ballScheduled = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + seconds, execute: work)
+    }
+
+    private func cancelLifecycleScheduled() {
+        lifecycleScheduled.forEach { $0.cancel() }
+        lifecycleScheduled.removeAll()
+    }
+
+    private func cancelBallScheduled() {
+        ballScheduled?.cancel()
+        ballScheduled = nil
     }
 
     // MARK: Panels
@@ -355,7 +408,7 @@ final class OverlayManager: ObservableObject {
 
     /// The display panel stays while anything is on screen in either form.
     private func hidePanelsIfDone() {
-        guard activeSet.isEmpty, queue.isEmpty, ballPhase == .hidden, confettiBursts.isEmpty else { return }
+        guard activeSet.isEmpty, goalQueue.isEmpty, otherQueue.isEmpty, ballPhase == .hidden, confettiBursts.isEmpty else { return }
         displayPanel?.orderOut(nil)
     }
 

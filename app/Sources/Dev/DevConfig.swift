@@ -49,37 +49,51 @@ enum DevConfig {
     // `minute`  match clock shown in the pill.
     // Scores per match are tracked automatically as goals fire, so you never
     // hand-maintain a scoreline: a `.goal(.home)` makes it 1-0, a later
-    // `.goalDisallowed(.home)` puts it back. Two (or three) moments sharing
-    // the same `at` fire together — that's how you stage overlaps across
-    // matches to stress the notch stack (real-time arrival, cap,
-    // oldest-leaves-early) and the celebration queue.
+    // `.goalDisallowed(.home)` puts it back. Multiple moments sharing the same
+    // `at` fire together — that's how you stage overlaps across matches to
+    // stress the notch stack, goal-priority selection, chronological display
+    // order, and shared center-ball celebrations.
     static let timeline: [DemoMoment] = [
         // Three matches kick off seconds apart.
         DemoMoment(at: 0,  .braArg, minute: 1,  .kickoff),
         DemoMoment(at: 1,  .engUsa, minute: 1,  .kickoff),
         DemoMoment(at: 2,  .fraGer, minute: 1,  .kickoff),
 
-        // BRA open the scoring — full celebration (you follow BRA).
-        DemoMoment(at: 5,  .braArg, minute: 9,  .goal(.home, player: "Vinícius Jr")),
+        // QUEUE STRESS: kickoff pills are still on screen, so this whole burst
+        // waits. The next visible set should pick all goals first (fan + nonfan
+        // across several teams), fill remaining slots with cards/VAR, and keep
+        // the visible stack chronological inside that selected set.
+        DemoMoment(at: 5,  .braArg, minute: 9,  .goal(.home, player: "Vinícius Jr")), // fan
+        DemoMoment(at: 5,  .engUsa, minute: 9,  .goal(.away, player: "Pulisic")),     // nonfan opponent
+        DemoMoment(at: 5,  .fraGer, minute: 9,  .goal(.home, player: "Mbappé")),      // fan
+        DemoMoment(at: 5,  .fraGer, minute: 10, .goal(.away, player: "Musiala")),     // nonfan opponent
+        DemoMoment(at: 5,  .engUsa, minute: 10, .goal(.home, player: "Kane")),        // fan
+        DemoMoment(at: 5,  .braArg, minute: 10, .goal(.away, player: "Messi")),       // fan, different team
+        DemoMoment(at: 5,  .engUsa, minute: 11, .yellowCard(.away, player: "Adams")),
+        DemoMoment(at: 5,  .fraGer, minute: 11, .yellowCard(.away, player: "Rüdiger")),
+        DemoMoment(at: 5,  .braArg, minute: 12, .redCard(.away, player: "Otamendi")),
+        DemoMoment(at: 5,  .braArg, minute: 12, .yellowCard(.home, player: "Casemiro")),
+        DemoMoment(at: 5,  .engUsa, minute: 12, .yellowCard(.home, player: "Rice")),
+        DemoMoment(at: 5,  .fraGer, minute: 12, .redCard(.away, player: "Tah")),
+        DemoMoment(at: 5,  .braArg, minute: 13, .goalDisallowed(.home)),             // fan goal cancelled before display
 
-        // OVERLAP: England and France score at the same instant — two pills
-        // stack in the notch together (only the followed side of each).
-        DemoMoment(at: 9,  .engUsa, minute: 14, .goal(.home, player: "Kane")),
-        DemoMoment(at: 9,  .fraGer, minute: 15, .goal(.home, player: "Mbappé")),
+        // More goals arrive while the stress burst is still draining.
+        DemoMoment(at: 9,  .engUsa, minute: 14, .goal(.home, player: "Saka")),
+        DemoMoment(at: 9,  .fraGer, minute: 15, .goal(.home, player: "Griezmann")),
 
-        // ARG equalise — you're a fan of BOTH teams in this match, so an
-        // away goal here ALSO runs the full celebration.
-        DemoMoment(at: 13, .braArg, minute: 22, .goal(.away, player: "Messi")),
+        // ARG extend the lead — you're a fan of BOTH teams in this match, so
+        // an away goal here ALSO runs the full celebration when displayed.
+        DemoMoment(at: 13, .braArg, minute: 22, .goal(.away, player: "Álvarez")),
 
-        DemoMoment(at: 16, .engUsa, minute: 26, .yellowCard(.away, player: "Adams")),
-        DemoMoment(at: 18, .fraGer, minute: 30, .goal(.away, player: "Musiala")), // opponent → pill only
+        DemoMoment(at: 16, .engUsa, minute: 26, .yellowCard(.away, player: "McKennie")),
+        DemoMoment(at: 18, .fraGer, minute: 30, .goal(.away, player: "Wirtz")), // opponent → pill only
 
         // TRIPLE OVERLAP: a goal in every match at the same second.
         DemoMoment(at: 22, .braArg, minute: 35, .goal(.home, player: "Rodrygo")),
-        DemoMoment(at: 22, .engUsa, minute: 35, .goal(.away, player: "Pulisic")), // opponent → pill only
-        DemoMoment(at: 22, .fraGer, minute: 36, .goal(.home, player: "Griezmann")),
+        DemoMoment(at: 22, .engUsa, minute: 35, .goal(.away, player: "Reyna")), // opponent → pill only
+        DemoMoment(at: 22, .fraGer, minute: 36, .goal(.home, player: "Dembélé")),
 
-        DemoMoment(at: 26, .braArg, minute: 37, .goalDisallowed(.home)),          // VAR pulls BRA's 3rd back
+        DemoMoment(at: 26, .braArg, minute: 37, .goalDisallowed(.home)),          // VAR pulls BRA's latest back
 
         // Half-times roll in close together.
         DemoMoment(at: 30, .braArg, minute: 45, .halfTime),
@@ -91,7 +105,7 @@ enum DevConfig {
         DemoMoment(at: 37, .engUsa, minute: 45, .celebrationSurge(["10": 1_900_000, "2384": 540_000])),
 
         // Second half.
-        DemoMoment(at: 41, .fraGer, minute: 52, .goal(.home, player: "Dembélé")),   // FRA 3-1
+        DemoMoment(at: 41, .fraGer, minute: 52, .goal(.home, player: "Kolo Muani")),
         DemoMoment(at: 45, .engUsa, minute: 61, .redCard(.away, player: "Robinson")),
 
         // OVERLAP in one match: ARG go ahead and BRA reply in the same
@@ -100,10 +114,10 @@ enum DevConfig {
         DemoMoment(at: 49, .braArg, minute: 70, .goal(.home, player: "Raphinha")),
 
         // Germany claw back to level — the France match is heading the distance.
-        DemoMoment(at: 50, .fraGer, minute: 74, .goal(.away, player: "Wirtz")),     // 3-2
+        DemoMoment(at: 50, .fraGer, minute: 74, .goal(.away, player: "Gnabry")),
         DemoMoment(at: 53, .engUsa, minute: 82, .goal(.home, player: "Bellingham")),
         DemoMoment(at: 56, .fraGer, minute: 88, .celebrationSurge(["2": 4_100_000, "25": 770_000])),
-        DemoMoment(at: 58, .fraGer, minute: 90, .goal(.away, player: "Havertz")),   // 3-3
+        DemoMoment(at: 58, .fraGer, minute: 90, .goal(.away, player: "Havertz")),
 
         // Two matches end in normal time.
         DemoMoment(at: 60, .braArg, minute: 90, .fullTime),
@@ -111,8 +125,8 @@ enum DevConfig {
 
         // Extra time, a goal each way, then a shootout decides it.
         DemoMoment(at: 63, .fraGer, minute: 91,  .extraTime),
-        DemoMoment(at: 66, .fraGer, minute: 105, .goal(.home, player: "Kolo Muani")), // 4-3
-        DemoMoment(at: 69, .fraGer, minute: 118, .goal(.away, player: "Füllkrug")),   // 4-4
+        DemoMoment(at: 66, .fraGer, minute: 105, .goal(.home, player: "Thuram")),
+        DemoMoment(at: 69, .fraGer, minute: 118, .goal(.away, player: "Füllkrug")),
         DemoMoment(at: 72, .fraGer, minute: 120, .penaltyShootout),
 
         // The shootout — every kick is its own pill (scored ✓ / missed ✗),

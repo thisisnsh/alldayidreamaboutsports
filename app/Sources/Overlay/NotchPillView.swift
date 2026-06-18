@@ -2,8 +2,8 @@ import AppKit
 import SwiftUI
 
 /// The real-time notification stack hanging off the notch: every match event
-/// appears the moment it arrives — newest at the bottom, oldest sliding up
-/// and out at the top. Styled to read as an extension of the notch hardware.
+/// appears in a displayed set, ordered oldest at the top and newest at the
+/// bottom. Styled to read as an extension of the notch hardware.
 struct NotchStackView: View {
     let items: [NotchItem]
 
