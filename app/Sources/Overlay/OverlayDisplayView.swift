@@ -87,20 +87,12 @@ struct BallView: View {
             .padding(.vertical, diameter * 0.03)
             .background(
                 Capsule(style: .continuous)
-                    .fill(
-                        LinearGradient(
-                            stops: [
-                                .init(color: .clear, location: 0),
-                                .init(color: .black.opacity(0.38), location: 0.18),
-                                .init(color: .black.opacity(0.48), location: 0.5),
-                                .init(color: .black.opacity(0.38), location: 0.82),
-                                .init(color: .clear, location: 1),
-                            ],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
+                    .fill(.black.opacity(0.32))
+                    .overlay(
+                        Capsule(style: .continuous)
+                            .stroke(.white.opacity(0.16), lineWidth: 1)
                     )
-                    .shadow(color: .black.opacity(0.45), radius: 9, y: 3)
+                    .shadow(color: .black.opacity(0.35), radius: 10, y: 4)
             )
         }
     }
