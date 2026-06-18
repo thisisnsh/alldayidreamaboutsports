@@ -61,6 +61,9 @@ private struct TopOnlyClip: Shape {
 
 private struct NotchPillRow: View {
     let item: NotchItem
+    // Black pill in dark mode, white pill in light mode; text/icons use
+    // `.primary` so they always invert against the fill.
+    @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         HStack(spacing: 10) {
@@ -68,9 +71,9 @@ private struct NotchPillRow: View {
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(item.iconColor)
             VStack(alignment: .center, spacing: 2) {
-                SegmentLine(segments: item.title, size: 13, weight: .semibold, color: .white)
+                SegmentLine(segments: item.title, size: 13, weight: .semibold, color: .primary)
                 if let subtitle = item.subtitle {
-                    SegmentLine(segments: subtitle, size: 11, weight: .medium, color: .white.opacity(0.8))
+                    SegmentLine(segments: subtitle, size: 11, weight: .medium, color: .primary.opacity(0.8))
                 }
             }
         }
@@ -78,7 +81,7 @@ private struct NotchPillRow: View {
         .padding(.vertical, 10)
         .background(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(.black)
+                .fill(scheme == .dark ? Color.black : Color.white)
                 .shadow(color: .black.opacity(0.4), radius: 10, y: 4)
         )
     }

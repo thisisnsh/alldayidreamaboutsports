@@ -239,6 +239,6 @@ func pillIconColor(for type: MatchEventType) -> Color {
     case .fullTime: .green
     case .penaltyShootout: .purple
     case .celebration: .blue
-    default: .white
+    default: .primary
     }
 }
