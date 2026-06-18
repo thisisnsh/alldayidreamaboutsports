@@ -50,8 +50,9 @@ The landing page + privacy policy live in the separate **public** repo
 
 Tag `v*` → GitHub Actions builds, signs (Developer ID), notarizes, staples a
 styled DMG and uploads it as a **workflow artifact**. You download it, test, then
-run `app/scripts/publish.sh <dmg>` locally to generate the Sparkle appcast +
-deltas and upload to `download.alldayidreamaboutsports.com` (the EdDSA key and R2
-creds stay local). See [app/README.md](app/README.md#releasing). Kill switch and
-forced updates are driven by Firebase Remote Config (`kill_switch`, `min_build`)
-with an R2 `config.json` backup.
+run `app/scripts/publish.sh <dmg> --release` locally to generate the Sparkle
+appcast + deltas and upload to `download.alldayidreamaboutsports.com` (the EdDSA
+key and R2 creds stay local). Without `--release`, publishing defaults to
+staging. See [app/README.md](app/README.md#releasing). Kill switch and forced
+updates are driven by Firebase Remote Config (`kill_switch`, `min_build`) with
+an R2 `config.json` backup.

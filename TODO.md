@@ -163,12 +163,7 @@ update itself.
       Sparkle updates", or `generate_keys -x`). This key signs every update — if
       you lose it, *no existing install can ever update again* and you'd have to
       get everyone to reinstall by hand. It lives in your Keychain (used locally
-      by `publish.sh`/`release.sh`), not in CI.
-- [ ] **Store notarization credentials:**
-      `xcrun notarytool store-credentials notary-alldayidreamaboutsports --apple-id <id>
-      --team-id 983LBM5U6B --password <app-specific-pw>`. This lets
-      `app/scripts/release.sh` send builds to Apple to be notarized (Apple's
-      malware scan that makes the app open without scary warnings).
+      by `publish.sh`), not in CI.
 - [ ] **Export your Developer ID certificate** as a `.p12` → add to CI secrets so
       CI can sign release builds.
 
@@ -198,9 +193,8 @@ Don't ship without watching the whole pipeline work on a real goal. Use a
 - [ ] **Redo sections 2–3 for prod** (`dreamaboutsports-prod` + prod
       plist/secrets) and deploy the backend to prod.
 - [ ] **Tag `v1.0.0`** → CI builds the DMG. Download and test it, then
-      `./app/scripts/publish.sh <dmg>` to push the appcast + delta updates to the
-      `download.` domain (or do it all locally with
-      `./app/scripts/release.sh 1.0.0`).
+      `./app/scripts/publish.sh <dmg> --release` to push the appcast + delta
+      updates to the `download.` domain.
 - [ ] **Verify Gatekeeper** on a *clean* Mac: `spctl --assess` should say
       "Notarized Developer ID" — that's macOS confirming the app is trusted.
 - [ ] **Check the website is live** (public repo): download button works and the

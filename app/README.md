@@ -187,7 +187,7 @@ Key invariants:
 
 1. **Certificate**: Xcode → Settings → Accounts → team 983LBM5U6B → download
    "Developer ID Application". Verify: `security find-identity -v -p codesigning`.
-2. **Notary profile** (used by `scripts/release.sh`):
+2. **Notary profile**:
    ```sh
    xcrun notarytool store-credentials notary-alldayidreamaboutsports \
      --apple-id <your-apple-id> --team-id 983LBM5U6B \
@@ -202,8 +202,8 @@ Key invariants:
 - `SUPublicEDKey` in `project.yml` is the public half of the key generated on
   this machine (2026-06-11); the private key lives in your login Keychain as
   "Private key for signing Sparkle updates". The appcast is signed **locally**
-  (`publish.sh` / `release.sh` read the key from the Keychain) — it is no longer
-  a CI secret. **Back it up** — losing it strands every installed copy:
+  (`publish.sh` reads the key from the Keychain) — it is no longer a CI secret.
+  **Back it up** — losing it strands every installed copy:
   ```sh
   # export for backup (any Sparkle download's generate_keys works)
   ./bin/generate_keys -x sparkle_private_key
@@ -226,21 +226,20 @@ CI builds the DMG; the Sparkle appcast + delta generation and the R2 upload are
 3. Publish it:
    ```sh
    export R2_ENDPOINT=https://<ACCOUNT_ID>.r2.cloudflarestorage.com
-   export AWS_ACCESS_KEY_ID=... AWS_SECRET_ACCESS_KEY=...
-   ./scripts/publish.sh ~/Downloads/AllDayIDreamAboutSports-1.0.0.dmg
-   # → appcast + deltas (vs prior DMGs) → upload DMG/appcast/deltas to R2
+   export R2_ACCESS_KEY_ID=... R2_SECRET_ACCESS_KEY=...
+   ./scripts/publish.sh ~/Downloads/AllDayIDreamAboutSports-1.0.0.dmg \
+     --notes ~/Downloads/AllDayIDreamAboutSports-1.0.0.html \
+     --release
+   # → appcast + deltas (vs prior DMGs) → upload DMG/appcast/deltas/notes to R2
    ```
    Then ensure `download.alldayidreamaboutsports.com/latest` redirects to the
    new DMG.
 
-**Full local alternative** (build the DMG locally too, e.g. no runner):
-```sh
-./scripts/release.sh 1.0.0          # build → notarize app → styled DMG →
-                                    # notarize DMG → staple → appcast → R2
-```
-Both scripts keep every shipped DMG in `~/Releases/AllDayIDreamAboutSports` so
-`generate_appcast` can emit delta updates (the styled DMG needs
-`brew install create-dmg`).
+`publish.sh` defaults to the staging feed and bucket. Use `--release` or
+`CHANNEL=release` only when you are intentionally publishing to production.
 
-Build numbers: CI uses the workflow run number; local uses `yymmddHHMM`. Both
-are monotonic — `min_build` comparisons stay sane.
+The script keeps every shipped DMG in `~/Releases/AllDayIDreamAboutSports` so
+`generate_appcast` can emit delta updates.
+
+Build numbers: CI uses the workflow run number, so `min_build` comparisons stay
+sane.
