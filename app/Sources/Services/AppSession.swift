@@ -194,6 +194,11 @@ final class AppSession: ObservableObject {
         let before = prefs.settings
         mutate(&prefs.settings)
         persistSettings()
+        // The overlay panels are separate windows, so they don't inherit the
+        // app's color scheme — push the theme to them directly.
+        if before.theme != prefs.settings.theme {
+            OverlayManager.shared.applyOverlayTheme()
+        }
         reportSettingsChange(before: before, after: prefs.settings)
     }
 

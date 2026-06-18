@@ -240,7 +240,15 @@ struct SettingsView: View {
     private var themeBinding: Binding<ThemeChoice> {
         Binding(
             get: { session.prefs.settings.theme ?? .system },
-            set: { choice in session.updateSettings { $0.theme = choice } }
+            // Defer: selecting a theme flips `preferredColorScheme`, which
+            // SwiftUI applies in the current update pass. Mutating published
+            // prefs synchronously inside that pass trips "Publishing changes
+            // from within view updates"; hop to the next runloop tick instead.
+            set: { choice in
+                DispatchQueue.main.async {
+                    session.updateSettings { $0.theme = choice }
+                }
+            }
         )
     }
 }

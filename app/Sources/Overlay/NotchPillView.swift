@@ -66,15 +66,18 @@ private struct NotchPillRow: View {
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
-        HStack(spacing: 10) {
-            Image(systemName: item.icon)
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(item.iconColor)
-            VStack(alignment: .center, spacing: 2) {
+        VStack(alignment: .center, spacing: 2) {
+            // The SF Symbol now leads the headline row instead of sitting in a
+            // left rail spanning both lines — icon and the label it describes
+            // ("Goal", "Yellow card") read on the same line.
+            HStack(spacing: 6) {
+                Image(systemName: item.icon)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(item.iconColor)
                 SegmentLine(segments: item.title, size: 13, weight: .semibold, color: .primary)
-                if let subtitle = item.subtitle {
-                    SegmentLine(segments: subtitle, size: 11, weight: .medium, color: .primary.opacity(0.8))
-                }
+            }
+            if let subtitle = item.subtitle {
+                SegmentLine(segments: subtitle, size: 11, weight: .medium, color: .primary.opacity(0.8))
             }
         }
         .padding(.horizontal, 18)
