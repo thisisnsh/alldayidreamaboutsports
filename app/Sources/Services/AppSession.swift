@@ -70,10 +70,17 @@ final class AppSession: ObservableObject {
            let stored = try? JSONDecoder().decode([Int: [String: Int]].self, from: data) {
             celebrationTotals = stored
         }
-        Task { await refreshCatalog() }
+        Task {
+            await refreshCatalog()
+            #if DEV_BACKEND
+            await bootstrapFixturesIfNeeded(force: true)
+            #endif
+        }
+        #if !DEV_BACKEND
         // Always-on live polling: one loop, running whenever a fan match is in
         // its live window — no menu, no push.
         LiveStore.shared.start()
+        #endif
         AppLog.info(.app, "session_bootstrap_complete signed_in=\(isSignedIn) fan_teams=\(fanTeamIds.sorted()) cached_fixtures=\(fixtures.count)")
     }
 
@@ -281,10 +288,12 @@ final class AppSession: ObservableObject {
     /// have played (live or finished).
     func refreshFixtures() async {
         await bootstrapFixturesIfNeeded(force: true)
+        #if !DEV_BACKEND
         // Un-stick a past-window finished match too: refreshNow()/pollCycle is
         // window-gated and can't, but reconcile (non-window-gated) can.
         await LiveStore.shared.reconcileFanMatches()
         await LiveStore.shared.refreshNow()
+        #endif
         await refreshCelebrationTotals()
     }
 

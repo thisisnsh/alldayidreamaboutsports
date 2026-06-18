@@ -83,12 +83,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// only path that can un-stick a past-window match; `refreshNow` covers
     /// in-window ones.
     @MainActor private func recoverLivePolling() {
+        #if DEV_BACKEND
+        return
+        #else
         ControlPlane.shared.refreshRemoteConfig(ignoreCache: true)
         guard AppSession.shared.isSignedIn, ControlPlane.shared.isOperational else { return }
         Task {
             await LiveStore.shared.reconcileFanMatches()
             await LiveStore.shared.refreshNow()
         }
+        #endif
     }
 
     func applicationWillTerminate(_ notification: Notification) {
