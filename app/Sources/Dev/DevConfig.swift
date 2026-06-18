@@ -142,6 +142,67 @@ enum DevConfig {
 
         DemoMoment(at: 90, .fraGer, minute: 120, .fullTime),  // France win 3-2 on penalties
     ]
+
+    // ── DEMO REEL (unused) ──────────────────────────────────────────────
+    // The 2022 World Cup Final, beat for beat, for SCREEN-RECORDING a demo:
+    // Argentina 3–3 France, Argentina win 4–2 on penalties (Lusail,
+    // 18 Dec 2022). Real scorers, real bookings, real minutes, real shootout
+    // order (France shot first; Montiel's kick won it). You follow both ARG
+    // and FRA, so every goal here is a full center-ball celebration. There
+    // were no red cards in the final. Stoppage-time bookings use the clock
+    // minute (45/90); the true time is noted in the trailing comment.
+    //
+    // NOT wired in. To record with it: swap this in for `timeline` above
+    // (e.g. rename to `timeline`), and add `argFra` to
+    // `DemoFixture.demoMatches` so its scoreboard renders.
+    static let demo: [DemoMoment] = [
+        DemoMoment(at: 0,  .argFra, minute: 1,   .kickoff),
+
+        // Argentina race into a two-goal lead. A celebration surge follows
+        // every goal, ramping toward 6.5M (ARG) / 5.4M (FRA) by full time.
+        DemoMoment(at: 4,  .argFra, minute: 23,  .goal(.home, player: "Lionel Messi")),   // 1–0 (penalty)
+        DemoMoment(at: 6,  .argFra, minute: 23,  .celebrationSurge(["26": 1_100_000, "2": 0])),
+        DemoMoment(at: 11, .argFra, minute: 36,  .goal(.home, player: "Ángel Di María")), // 2–0
+        DemoMoment(at: 13, .argFra, minute: 36,  .celebrationSurge(["26": 2_400_000, "2": 0])),
+
+        DemoMoment(at: 15, .argFra, minute: 45,  .yellowCard(.home, player: "Enzo Fernández")), // 45+7'
+        DemoMoment(at: 18, .argFra, minute: 45,  .halfTime),
+
+        DemoMoment(at: 22, .argFra, minute: 55,  .yellowCard(.away, player: "Adrien Rabiot")),
+
+        // Mbappé's 97-second double drags France level.
+        DemoMoment(at: 26, .argFra, minute: 80,  .goal(.away, player: "Kylian Mbappé")),  // 2–1 (penalty)
+        DemoMoment(at: 27, .argFra, minute: 80,  .celebrationSurge(["26": 2_400_000, "2": 1_100_000])),
+        DemoMoment(at: 28, .argFra, minute: 81,  .goal(.away, player: "Kylian Mbappé")),  // 2–2
+        DemoMoment(at: 30, .argFra, minute: 81,  .celebrationSurge(["26": 2_400_000, "2": 3_400_000])),
+        DemoMoment(at: 31, .argFra, minute: 87,  .yellowCard(.away, player: "Marcus Thuram")),
+        DemoMoment(at: 34, .argFra, minute: 90,  .yellowCard(.away, player: "Olivier Giroud")), // 90+5'
+        DemoMoment(at: 36, .argFra, minute: 90,  .yellowCard(.home, player: "Marcos Acuña")),   // 90+8'
+
+        // Extra time: Messi edges Argentina ahead, Mbappé's third levels it again.
+        DemoMoment(at: 39, .argFra, minute: 91,  .extraTime),
+        DemoMoment(at: 43, .argFra, minute: 108, .goal(.home, player: "Lionel Messi")),   // 3–2
+        DemoMoment(at: 45, .argFra, minute: 108, .celebrationSurge(["26": 5_100_000, "2": 3_400_000])),
+        DemoMoment(at: 48, .argFra, minute: 114, .yellowCard(.home, player: "Leandro Paredes")),
+        DemoMoment(at: 50, .argFra, minute: 116, .yellowCard(.home, player: "Gonzalo Montiel")),
+        DemoMoment(at: 52, .argFra, minute: 118, .goal(.away, player: "Kylian Mbappé")),  // 3–3 (penalty)
+        DemoMoment(at: 53, .argFra, minute: 118, .celebrationSurge(["26": 5_700_000, "2": 4_900_000])),
+
+        // The shootout — France first; each kick its own pill (scored ✓ /
+        // missed ✗) with the running pen tally riding along in the subheading.
+        DemoMoment(at: 55, .argFra, minute: 120, .penaltyShootout),
+        DemoMoment(at: 57, .argFra, minute: 120, .yellowCard(.home, player: "Emiliano Martínez")), // booked in the shootout
+        DemoMoment(at: 59, .argFra, minute: 120, .penaltyKick(.away, player: "Kylian Mbappé",      scored: true)),  // 0–1
+        DemoMoment(at: 61, .argFra, minute: 120, .penaltyKick(.home, player: "Lionel Messi",       scored: true)),  // 1–1
+        DemoMoment(at: 63, .argFra, minute: 120, .penaltyKick(.away, player: "Kingsley Coman",     scored: false)), // 1–1 ✗ (saved)
+        DemoMoment(at: 65, .argFra, minute: 120, .penaltyKick(.home, player: "Paulo Dybala",       scored: true)),  // 2–1
+        DemoMoment(at: 67, .argFra, minute: 120, .penaltyKick(.away, player: "Aurélien Tchouaméni", scored: false)), // 2–1 ✗
+        DemoMoment(at: 69, .argFra, minute: 120, .penaltyKick(.home, player: "Leandro Paredes",    scored: true)),  // 3–1
+        DemoMoment(at: 71, .argFra, minute: 120, .penaltyKick(.away, player: "Randal Kolo Muani",  scored: true)),  // 3–2
+        DemoMoment(at: 73, .argFra, minute: 120, .penaltyKick(.home, player: "Gonzalo Montiel",    scored: true)),  // 4–2 — champions
+        
+        DemoMoment(at: 78, .argFra, minute: 120, .fullTime),  // Argentina win 4–2 on penalties
+    ]
 }
 
 // MARK: - Timeline vocabulary
@@ -182,6 +243,15 @@ extension DemoFixture {
         id: 1003, leagueId: 1, round: "Quarter-finals",
         home: DemoTeam(id: 2, code: "FRA", name: "France"),
         away: DemoTeam(id: 25, code: "GER", name: "Germany")
+    )
+
+    // ── Fixture for the unused `demo` reel (see DevConfig.demo) ───────────
+    /// The 2022 World Cup Final. Fan of BOTH sides — every goal is a full
+    /// celebration.
+    static let argFra = DemoFixture(
+        id: 2001, leagueId: 1, round: "Final",
+        home: DemoTeam(id: 26, code: "ARG", name: "Argentina"),
+        away: DemoTeam(id: 2, code: "FRA", name: "France")
     )
 
     /// Every match the demo runs in parallel (drives the live scoreboard).
