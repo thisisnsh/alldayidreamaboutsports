@@ -16,6 +16,16 @@ import FirebaseAnalytics
 /// open Firebase → Analytics → DebugView.
 @MainActor
 enum AppAnalytics {
+    // MARK: App metadata
+
+    /// Firebase collects its own app version automatically, but this publishes
+    /// the exact marketing.build value we use for releases.
+    static func configureAppMetadata() {
+        let version = AppEnvironment.fullAppVersion
+        setUserProperty(version, forName: "app_version_full")
+        setDefaultEventParameters(["app_version_full": version])
+    }
+
     // MARK: Fan teams
 
     static func teamFollow(teamId: String, fanCount: Int) {
@@ -62,6 +72,13 @@ enum AppAnalytics {
         #if !DEV_BACKEND
         guard FirebaseConfigured.isConfigured else { return }
         Analytics.setUserProperty(value, forName: name)
+        #endif
+    }
+
+    private static func setDefaultEventParameters(_ parameters: [String: Any]) {
+        #if !DEV_BACKEND
+        guard FirebaseConfigured.isConfigured else { return }
+        Analytics.setDefaultEventParameters(parameters)
         #endif
     }
 
