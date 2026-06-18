@@ -229,9 +229,8 @@ struct MenuPopoverView: View {
                 .opacity(0.8)
             Button {
                 dismissMenu()
-                if let appDelegate = NSApp.delegate as? AppDelegate {
-                    appDelegate.updaterController.checkForUpdates(nil)
-                }
+                openWindow(id: WindowID.update)
+                NSApp.activate(ignoringOtherApps: true)
             } label: {
                 Label("Update now", systemImage: "arrow.down.circle")
             }
