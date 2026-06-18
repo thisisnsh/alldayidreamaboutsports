@@ -88,7 +88,7 @@ SPARKLE_VERSION="2.6.4"
 # versions. Persisted between releases; on a fresh machine we backfill from R2.
 # Per-channel dir so staging and release deltas/appcasts never cross-contaminate.
 RELEASES_DIR="${RELEASES_DIR:-$HOME/Releases/AllDayIDreamAboutSports/${CHANNEL}}"
-SPARKLE_HOME="${SPARKLE_HOME:-$HOME/.cache/sparkle-${SPARKLE_VERSION}}"
+SPARKLE_HOME="${SPARKLE_HOME:-/Users/thisisnsh/projects/Sparkle}"
 
 echo "── 1/4 Ensure generate_appcast (Sparkle ${SPARKLE_VERSION})"
 GEN="$SPARKLE_HOME/bin/generate_appcast"
