@@ -39,7 +39,7 @@ enum DevConfig {
     /// goal, VAR, cards, half/full-time, extra time, shootout, penalty kicks)
     /// so you can eyeball every pill layout the moment the show starts. Runs
     /// once per Play/Restart, then the normal timeline takes over from 0–0.
-    static let showcaseAtStart = true
+    static let showcaseAtStart = false
     /// Seconds between showcase pills — enough to read each as it stacks.
     static let showcaseSpacing = 2.5
 
@@ -53,7 +53,7 @@ enum DevConfig {
     // `at` fire together — that's how you stage overlaps across matches to
     // stress the notch stack, goal-priority selection, chronological display
     // order, and shared center-ball celebrations.
-    static let timeline: [DemoMoment] = [
+    static let timeline1: [DemoMoment] = [
         // Three matches kick off seconds apart.
         DemoMoment(at: 0,  .braArg, minute: 1,  .kickoff),
         DemoMoment(at: 1,  .engUsa, minute: 1,  .kickoff),
@@ -144,64 +144,63 @@ enum DevConfig {
     ]
 
     // ── DEMO REEL (unused) ──────────────────────────────────────────────
-    // The 2022 World Cup Final, beat for beat, for SCREEN-RECORDING a demo:
-    // Argentina 3–3 France, Argentina win 4–2 on penalties (Lusail,
-    // 18 Dec 2022). Real scorers, real bookings, real minutes, real shootout
-    // order (France shot first; Montiel's kick won it). You follow both ARG
-    // and FRA, so every goal here is a full center-ball celebration. There
-    // were no red cards in the final. Stoppage-time bookings use the clock
-    // minute (45/90); the true time is noted in the trailing comment.
+    // Jun 17 2026, Group Stage Day 7: England 4-2 Croatia, with realistic
+    // context from the same calendar day. Real scorers, real minutes.
+    // You follow England (10 is in fanTeams), so every ENG goal is a full
+    // center-ball celebration; Croatia goals and all other events are pills.
     //
-    // NOT wired in. To record with it: swap this in for `timeline` above
-    // (e.g. rename to `timeline`), and add `argFra` to
-    // `DemoFixture.demoMatches` so its scoreboard renders.
-    static let demo: [DemoMoment] = [
-        DemoMoment(at: 0,  .argFra, minute: 1,   .kickoff),
+    // NOT wired in. To record with it:
+    //   1. Rename this `demo` to `timeline` (rename the existing `timeline`).
+    //   2. Change DemoFixture.demoMatches to:
+    //         [engCro, autJor, porCon, ghaPan, uzbCol]
+    //   3. Set showcaseAtStart = false (showcase fixture fraGer won't be in
+    //      demoMatches and will fire silently into nothing).
+    //   4. Optionally set fanTeams = ["10"] for a clean England-only view.
+    static let timeline: [DemoMoment] = [
+        // ── Past matches — fire at t=0 so the scoreboard opens with them
+        // already finished. Their pills appear as a brief burst up front.
 
-        // Argentina race into a two-goal lead. A celebration surge follows
-        // every goal, ramping toward 6.5M (ARG) / 5.4M (FRA) by full time.
-        DemoMoment(at: 4,  .argFra, minute: 23,  .goal(.home, player: "Lionel Messi")),   // 1–0 (penalty)
-        DemoMoment(at: 6,  .argFra, minute: 23,  .celebrationSurge(["26": 1_100_000, "2": 0])),
-        DemoMoment(at: 11, .argFra, minute: 36,  .goal(.home, player: "Ángel Di María")), // 2–0
-        DemoMoment(at: 13, .argFra, minute: 36,  .celebrationSurge(["26": 2_400_000, "2": 0])),
+        // Austria 3-1 Jordan (kicked off 4 AM UTC; finished hours before ENG-CRO)
+//        DemoMoment(at: 0, .autJor, minute: 1,  .kickoff),
+//        DemoMoment(at: 0, .autJor, minute: 21, .goal(.home, player: "Schmid")),         // 1-0
+//        DemoMoment(at: 0, .autJor, minute: 45, .halfTime),
+//        DemoMoment(at: 0, .autJor, minute: 50, .goal(.away, player: "Olwan")),           // 1-1
+//        DemoMoment(at: 0, .autJor, minute: 76, .goal(.home, player: "Al Arab (OG)")),    // 2-1
+//        DemoMoment(at: 0, .autJor, minute: 77, .yellowCard(.home, player: "Sabitzer")),
+//        DemoMoment(at: 0, .autJor, minute: 90, .goal(.home, player: "Arnautovic")),      // 3-1 (pen)
+//        DemoMoment(at: 0, .autJor, minute: 90, .fullTime),
+//
+//        // Portugal 1-1 Congo DR (kicked off 5 PM UTC; finished before ENG-CRO)
+        DemoMoment(at: 0, .porCon, minute: 1,  .kickoff),
+        DemoMoment(at: 10, .porCon, minute: 6,  .goal(.home, player: "João Neves")),      // 1-0
+        DemoMoment(at: 20, .porCon, minute: 13, .yellowCard(.home, player: "Bernardo Silva")),
+        DemoMoment(at: 30, .porCon, minute: 32, .yellowCard(.away, player: "Mbemba")),
+        DemoMoment(at: 40, .porCon, minute: 45, .goal(.away, player: "Yoane Wissa")),     // 1-1 (45+5')
+        DemoMoment(at: 50, .porCon, minute: 45, .halfTime),
+        DemoMoment(at: 60, .porCon, minute: 90, .fullTime),
 
-        DemoMoment(at: 15, .argFra, minute: 45,  .yellowCard(.home, player: "Enzo Fernández")), // 45+7'
-        DemoMoment(at: 18, .argFra, minute: 45,  .halfTime),
+        // Ghana vs Panama and Uzbekistan vs Colombia have no events →
+        // they stay SCHEDULED, appearing as upcoming in the scoreboard.
 
-        DemoMoment(at: 22, .argFra, minute: 55,  .yellowCard(.away, player: "Adrien Rabiot")),
+        // ── England 4-2 Croatia (live, 8 PM UTC / 4 PM ET) ─────────────
+        DemoMoment(at: 70,  .engCro, minute: 1,  .kickoff),
+    
+        DemoMoment(at: 80, .engCro, minute: 12, .goal(.home, player: "Harry Kane")),    // pen → 1-0
+//        DemoMoment(at: 90, .engCro, minute: 12, .celebrationSurge(["10": 2_400_000, "3": 0])),
 
-        // Mbappé's 97-second double drags France level.
-        DemoMoment(at: 26, .argFra, minute: 80,  .goal(.away, player: "Kylian Mbappé")),  // 2–1 (penalty)
-        DemoMoment(at: 27, .argFra, minute: 80,  .celebrationSurge(["26": 2_400_000, "2": 1_100_000])),
-        DemoMoment(at: 28, .argFra, minute: 81,  .goal(.away, player: "Kylian Mbappé")),  // 2–2
-        DemoMoment(at: 30, .argFra, minute: 81,  .celebrationSurge(["26": 2_400_000, "2": 3_400_000])),
-        DemoMoment(at: 31, .argFra, minute: 87,  .yellowCard(.away, player: "Marcus Thuram")),
-        DemoMoment(at: 34, .argFra, minute: 90,  .yellowCard(.away, player: "Olivier Giroud")), // 90+5'
-        DemoMoment(at: 36, .argFra, minute: 90,  .yellowCard(.home, player: "Marcos Acuña")),   // 90+8'
+        DemoMoment(at: 90, .engCro, minute: 36, .goal(.away, player: "Baturina")),      // 1-1
+        DemoMoment(at: 100, .engCro, minute: 42, .goal(.home, player: "Harry Kane")),    // 2-1
+//        DemoMoment(at: 47, .engCro, minute: 42, .celebrationSurge(["10": 3_800_000, "3": 120_000])),
+        DemoMoment(at: 110, .engCro, minute: 45, .goal(.away, player: "Petar Musa")),    // 2-2 (45+5')
+        DemoMoment(at: 120, .engCro, minute: 45, .halfTime),
 
-        // Extra time: Messi edges Argentina ahead, Mbappé's third levels it again.
-        DemoMoment(at: 39, .argFra, minute: 91,  .extraTime),
-        DemoMoment(at: 43, .argFra, minute: 108, .goal(.home, player: "Lionel Messi")),   // 3–2
-        DemoMoment(at: 45, .argFra, minute: 108, .celebrationSurge(["26": 5_100_000, "2": 3_400_000])),
-        DemoMoment(at: 48, .argFra, minute: 114, .yellowCard(.home, player: "Leandro Paredes")),
-        DemoMoment(at: 50, .argFra, minute: 116, .yellowCard(.home, player: "Gonzalo Montiel")),
-        DemoMoment(at: 52, .argFra, minute: 118, .goal(.away, player: "Kylian Mbappé")),  // 3–3 (penalty)
-        DemoMoment(at: 53, .argFra, minute: 118, .celebrationSurge(["26": 5_700_000, "2": 4_900_000])),
+        DemoMoment(at: 130, .engCro, minute: 47, .goal(.home, player: "Bellingham")),    // 3-2
+//        DemoMoment(at: 130, .engCro, minute: 47, .celebrationSurge(["10": 5_200_000, "3": 140_000])),
 
-        // The shootout — France first; each kick its own pill (scored ✓ /
-        // missed ✗) with the running pen tally riding along in the subheading.
-        DemoMoment(at: 55, .argFra, minute: 120, .penaltyShootout),
-        DemoMoment(at: 57, .argFra, minute: 120, .yellowCard(.home, player: "Emiliano Martínez")), // booked in the shootout
-        DemoMoment(at: 59, .argFra, minute: 120, .penaltyKick(.away, player: "Kylian Mbappé",      scored: true)),  // 0–1
-        DemoMoment(at: 61, .argFra, minute: 120, .penaltyKick(.home, player: "Lionel Messi",       scored: true)),  // 1–1
-        DemoMoment(at: 63, .argFra, minute: 120, .penaltyKick(.away, player: "Kingsley Coman",     scored: false)), // 1–1 ✗ (saved)
-        DemoMoment(at: 65, .argFra, minute: 120, .penaltyKick(.home, player: "Paulo Dybala",       scored: true)),  // 2–1
-        DemoMoment(at: 67, .argFra, minute: 120, .penaltyKick(.away, player: "Aurélien Tchouaméni", scored: false)), // 2–1 ✗
-        DemoMoment(at: 69, .argFra, minute: 120, .penaltyKick(.home, player: "Leandro Paredes",    scored: true)),  // 3–1
-        DemoMoment(at: 71, .argFra, minute: 120, .penaltyKick(.away, player: "Randal Kolo Muani",  scored: true)),  // 3–2
-        DemoMoment(at: 73, .argFra, minute: 120, .penaltyKick(.home, player: "Gonzalo Montiel",    scored: true)),  // 4–2 — champions
-        
-        DemoMoment(at: 78, .argFra, minute: 120, .fullTime),  // Argentina win 4–2 on penalties
+        DemoMoment(at: 140, .engCro, minute: 85, .goal(.home, player: "Rashford")),      // 4-2
+//        DemoMoment(at: 150, .engCro, minute: 85, .celebrationSurge(["10": 6_800_000, "3": 140_000])),
+
+        DemoMoment(at: 150, .engCro, minute: 90, .fullTime),
     ]
 }
 
@@ -245,7 +244,8 @@ extension DemoFixture {
         away: DemoTeam(id: 25, code: "GER", name: "Germany")
     )
 
-    // ── Fixture for the unused `demo` reel (see DevConfig.demo) ───────────
+    // ── Fixtures for the unused `demo` reel (see DevConfig.demo) ─────────
+
     /// The 2022 World Cup Final. Fan of BOTH sides — every goal is a full
     /// celebration.
     static let argFra = DemoFixture(
@@ -254,8 +254,35 @@ extension DemoFixture {
         away: DemoTeam(id: 2, code: "FRA", name: "France")
     )
 
+    // Jun 17 2026 demo reel — swap demoMatches to [engCro, autJor, porCon, ghaPan, uzbCol] when using.
+    static let engCro = DemoFixture(
+        id: 1489384, leagueId: 1, round: "Group L - Matchday 1",
+        home: DemoTeam(id: 10,   code: "ENG", name: "England"),
+        away: DemoTeam(id: 3,    code: "CRO", name: "Croatia")
+    )
+    static let autJor = DemoFixture(
+        id: 1489382, leagueId: 1, round: "Group J - Matchday 1",
+        home: DemoTeam(id: 775,  code: "AUT", name: "Austria"),
+        away: DemoTeam(id: 1548, code: "JOR", name: "Jordan")
+    )
+    static let porCon = DemoFixture(
+        id: 1539003, leagueId: 1, round: "Group K - Matchday 1",
+        home: DemoTeam(id: 27,   code: "POR", name: "Portugal"),
+        away: DemoTeam(id: 1508, code: "COD", name: "Congo DR")
+    )
+    static let ghaPan = DemoFixture(
+        id: 1489385, leagueId: 1, round: "Group L - Matchday 1",
+        home: DemoTeam(id: 1504, code: "GHA", name: "Ghana"),
+        away: DemoTeam(id: 11,   code: "PAN", name: "Panama")
+    )
+    static let uzbCol = DemoFixture(
+        id: 1489386, leagueId: 1, round: "Group K - Matchday 1",
+        home: DemoTeam(id: 1568, code: "UZB", name: "Uzbekistan"),
+        away: DemoTeam(id: 8,    code: "COL", name: "Colombia")
+    )
+
     /// Every match the demo runs in parallel (drives the live scoreboard).
-    static let demoMatches = [braArg, engUsa, fraGer]
+    static let demoMatches = [engCro, autJor, porCon, ghaPan, uzbCol]
 }
 
 /// Which team an action belongs to, relative to its match's fixture.

@@ -185,10 +185,14 @@ final class FakeScores: ScoresProviding {
             ],
             teams: [
                 "1": [
-                    team(6, "Brazil", "BRA", 1), team(26, "Argentina", "ARG", 1),
-                    team(10, "England", "ENG", 1), team(2384, "United States", "USA", 1),
-                    team(2, "France", "FRA", 1), team(25, "Germany", "GER", 1),
-                    team(9, "Spain", "ESP", 1), team(27, "Portugal", "POR", 1),
+                    team(6,    "Brazil",       "BRA", 1), team(26,   "Argentina",  "ARG", 1),
+                    team(10,   "England",      "ENG", 1), team(2384, "United States", "USA", 1),
+                    team(2,    "France",       "FRA", 1), team(25,   "Germany",    "GER", 1),
+                    team(9,    "Spain",        "ESP", 1), team(27,   "Portugal",   "POR", 1),
+                    team(3,    "Croatia",      "CRO", 1), team(775,  "Austria",    "AUT", 1),
+                    team(1548, "Jordan",       "JOR", 1), team(1508, "Congo DR",   "COD", 1),
+                    team(1504, "Ghana",        "GHA", 1), team(11,   "Panama",     "PAN", 1),
+                    team(1568, "Uzbekistan",   "UZB", 1), team(8,   "Colombia",   "COL", 1),
                 ],
                 "39": [
                     team(33, "Manchester United", "MUN", 39), team(40, "Liverpool", "LIV", 39),
