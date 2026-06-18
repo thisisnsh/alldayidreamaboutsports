@@ -6,6 +6,12 @@ import SwiftUI
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let menuController = MenuPopoverController.shared
+    // Invisible SwiftUI host kept alive for the whole process so the
+    // `WindowOpener` bridge (`@Environment(\.openWindow)`) is captured at launch
+    // — before the user touches the menu bar. Without it, a launch-time
+    // `openWindow(.login)` sits queued until the first utility view renders
+    // (i.e. until the user clicks the status item).
+    private var windowOpenerHost: NSWindow?
     // Dev builds never start Sparkle: the scheduled appcast fetch is a network
     // hit, and a Debug build registering for auto-updates is wrong anyway.
     #if DEV_BACKEND
@@ -40,6 +46,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ControlPlane.shared.start()
         AppSession.shared.bootstrap()
         menuController.install()
+        installWindowOpenerBridge()
 
         #if DEV_BACKEND
         // Bypassed sign-in means we're already in; play the deterministic
@@ -50,7 +57,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         #else
         LaunchAtLogin.registerByDefault()
-        if !AppSession.shared.isSignedIn, ControlPlane.shared.isOperational {
+        // Opening the app always surfaces the login window. Signed out, it's the
+        // sign-in prompt; signed in, it shows the account ("Signed in as …") with
+        // the sign-in button disabled.
+        if ControlPlane.shared.isOperational {
             openWindow(WindowID.login)
         }
         #endif
@@ -62,6 +72,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ) { [weak self] _ in
             Task { @MainActor in self?.recoverLivePolling() }
         }
+    }
+
+    /// Mount a 1×1, fully transparent SwiftUI window once at launch. Its only
+    /// job is to render `WindowOpenerBridge`, whose `.installsWindowOpener()`
+    /// captures the `openWindow` action into `WindowOpener.shared`. Ordered to
+    /// the back, alpha 0, click-through, and excluded from the Windows menu, so
+    /// it is invisible and inert.
+    private func installWindowOpenerBridge() {
+        let host = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 1, height: 1),
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false,
+        )
+        host.contentViewController = NSHostingController(rootView: WindowOpenerBridge())
+        host.alphaValue = 0
+        host.ignoresMouseEvents = true
+        host.isExcludedFromWindowsMenu = true
+        host.isReleasedWhenClosed = false
+        host.collectionBehavior = [.stationary, .ignoresCycle]
+        host.orderBack(nil)
+        windowOpenerHost = host
     }
 
     func application(_ application: NSApplication, open urls: [URL]) {
@@ -112,7 +144,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // should surface something useful.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
         guard ControlPlane.shared.isOperational else { return false }
-        openWindow(AppSession.shared.isSignedIn ? WindowID.settings : WindowID.login)
+        openWindow(WindowID.login)
         return false
     }
 }
@@ -141,21 +173,31 @@ final class MenuPopoverController: NSObject, NSPopoverDelegate {
     }
 
     @objc private func toggle() {
-        guard let button = statusItem.button else { return }
         if popover.isShown {
             close()
         } else {
-            ControlPlane.shared.refreshRemoteConfig(ignoreCache: true)
-            popover.contentSize = NSSize(
-                width: 320,
-                height: AppSession.shared.isSignedIn
-                    ? 520
-                    : (ControlPlane.shared.killSwitch || ControlPlane.shared.updateRequired ? 300 : 200)
-            )
-            popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
-            button.highlight(true)
-            startRefreshing()
+            showMenu()
         }
+    }
+
+    /// Open the menu popover anchored to the status item. No-op if it's already
+    /// shown or the status item isn't available yet — the popover anchors to the
+    /// button, and a button that hasn't been placed in the menu bar (e.g. at cold
+    /// launch) would drop the popover in a random corner. Callers that need it
+    /// shown reliably must do so once the menu bar item exists (a reopen/click).
+    func showMenu() {
+        guard let button = statusItem.button, button.window != nil, !popover.isShown else { return }
+        NSApp.activate(ignoringOtherApps: true)
+        ControlPlane.shared.refreshRemoteConfig(ignoreCache: true)
+        popover.contentSize = NSSize(
+            width: 320,
+            height: AppSession.shared.isSignedIn
+                ? 520
+                : (ControlPlane.shared.killSwitch || ControlPlane.shared.updateRequired ? 300 : 200)
+        )
+        popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+        button.highlight(true)
+        startRefreshing()
     }
 
     func close() {
@@ -296,4 +338,13 @@ struct WindowOpenerInstaller: ViewModifier {
 
 extension View {
     func installsWindowOpener() -> some View { modifier(WindowOpenerInstaller()) }
+}
+
+/// The content of the invisible launch-time host window: nothing visible, just
+/// a carrier for `.installsWindowOpener()` so the bridge is wired up before any
+/// utility window or the menu popover has rendered.
+struct WindowOpenerBridge: View {
+    var body: some View {
+        Color.clear.installsWindowOpener()
+    }
 }
