@@ -58,6 +58,23 @@ app/scripts/publish.sh ~/Downloads/AllDayIDreamAboutSports-1.0.0.dmg \
 
 Without `--release` or `CHANNEL=release`, `publish.sh` targets staging.
 
+## Latest Redirect
+
+The website download button can point at `/latest` so it does not need to know
+the current DMG filename. Keep that redirect updated after each release:
+
+- Staging:
+  `https://download-staging.alldayidreamaboutsports.com/latest` →
+  `https://download-staging.alldayidreamaboutsports.com/AllDayIDreamAboutSports-1.0.0.dmg`
+- Production:
+  `https://download.alldayidreamaboutsports.com/latest` →
+  `https://download.alldayidreamaboutsports.com/AllDayIDreamAboutSports-1.0.0.dmg`
+
+Create this in Cloudflare under `Rules` → `Redirect Rules` for the
+`alldayidreamaboutsports.com` zone. Match the download hostname and URI path
+`/latest`, then redirect to the versioned DMG. Use a temporary redirect (`302`
+or `307`), not `301`, so clients and caches do not pin an old release forever.
+
 ## Remove A Bad Version
 
 The appcast is Sparkle's source of truth. Do not only delete a bad DMG from R2:
