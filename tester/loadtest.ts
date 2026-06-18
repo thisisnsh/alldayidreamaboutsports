@@ -15,6 +15,7 @@
  *   npm run loadtest -- --fixtures 900001,900002 --clients 200 --duration 60
  */
 import { env } from "../backend/src/env.js";
+import { utcPollRange } from "../backend/src/poller.js";
 
 /** Cache statuses that prove the edge — not R2 — served the request (§0). */
 const HEALTHY_CACHE_STATUS = new Set(["HIT", "REVALIDATED", "STALE", "UPDATING"]);
@@ -94,9 +95,10 @@ async function main(): Promise<void> {
   const intervalMs = Number(args.get("interval") ?? 5000);
 
   const today = new Date().toISOString().slice(0, 10);
+  const range = utcPollRange();
   const keys = [
     "catalog.json",
-    `fixtures-${today}.json`,
+    ...[range.from, today, range.to].map((date) => `fixtures-${date}.json`),
     ...fixtureIds.flatMap((id) => [`matches/${id}.json`, `celebrate/${id}.json`]),
   ];
 
