@@ -17,6 +17,20 @@ final class EventRouter {
         set { UserDefaults.standard.set(newValue, forKey: "handledEventIds") }
     }
 
+    /// Drop every stored id for a fixture once its match is over. Event ids are
+    /// `"<fixtureId>:<type>:…"`, so a finished match's ids share that prefix. A
+    /// finished fixture is never polled again (LiveStore.finished) and a re-seen
+    /// baseline is FINISHED (MatchDiff guard), so these ids can't recur —
+    /// keeping them would just grow `handledEventIds` across a whole tournament.
+    func purgeEvents(forFixture fixtureId: Int) {
+        let prefix = "\(fixtureId):"
+        let before = seenEventIds
+        let remaining = before.filter { !$0.hasPrefix(prefix) }
+        guard remaining.count != before.count else { return }
+        seenEventIds = remaining
+        AppLog.info(.fixtures, "event_storage_purged fixture_id=\(fixtureId) removed=\(before.count - remaining.count) remaining=\(remaining.count)")
+    }
+
     func route(_ event: MatchEvent) {
         guard ControlPlane.shared.isOperational else {
             AppLog.info(.fixtures, "event_rejected event_id=\(event.eventId) reason=control_plane_disabled")
@@ -131,35 +145,40 @@ private func leaderInfo(for event: MatchEvent) -> (name: String, teamId: Int)? {
 func pillTitle(for event: MatchEvent) -> [PillSegment] {
     let minute = event.minute.map { "\($0)\(event.extra.map { "+\($0)" } ?? "")′ " } ?? ""
     let teamChip: [PillSegment] = event.teamId.map { [.logo(url: teamLogo($0))] } ?? []
+    // The em-dash is its OWN segment (not baked into the label string) so the
+    // uniform inter-segment gap falls equally on both sides — otherwise the
+    // left gap is just the in-string space while the right gap is space + the
+    // HStack spacing, and the dash sits visibly off-centre.
+    let dash: PillSegment = .text(" — ")
     switch event.type {
     case .kickoff: return [.text("Kickoff")]
     case .goal:
         // Backend now always sends a scorer; if it's ever missing, name the
         // scoring team — never the home team (that mislabels away goals).
         let scorer = event.player ?? event.teamId.map(teamName) ?? ""
-        return [.text("\(minute)Goal — "), .text("\(scorer) ", bold: true)] + teamChip
-    case .goalCancelled: return [.text("\(minute)VAR — Goal disallowed ")] + teamChip
-    case .yellowCard: return [.text("\(minute)Yellow card — "), .text("\(event.player ?? "") ", bold: true)] + teamChip
-    case .redCard: return [.text("\(minute)Red card — "), .text("\(event.player ?? "") ", bold: true)] + teamChip
+        return [.text("\(minute)Goal"), dash, .text("\(scorer) ", bold: true)] + teamChip
+    case .goalCancelled: return [.text("\(minute)VAR"), dash, .text("Goal disallowed ")] + teamChip
+    case .yellowCard: return [.text("\(minute)Yellow card"), dash, .text("\(event.player ?? "") ", bold: true)] + teamChip
+    case .redCard: return [.text("\(minute)Red card"), dash, .text("\(event.player ?? "") ", bold: true)] + teamChip
     case .halfTime:
         if let leader = leaderInfo(for: event) {
-            return [.text("Half-time — "), .text(leader.name, bold: true), .text(" ahead "), .logo(url: teamLogo(leader.teamId))]
+            return [.text("Half-time"), dash, .text(leader.name, bold: true), .text(" ahead "), .logo(url: teamLogo(leader.teamId))]
         }
-        return [.text("Half-time — Tight match")]
+        return [.text("Half-time"), dash, .text("Tight match")]
     case .fullTime:
         // After a shootout the winner is whoever has more pens, not goals.
         if let winner = shootoutWinnerInfo(for: event) {
-            return [.text("Full-time — "), .text(winner.name, bold: true), .text(" won on pens "), .logo(url: teamLogo(winner.teamId))]
+            return [.text("Full-time"), dash, .text(winner.name, bold: true), .text(" won on pens "), .logo(url: teamLogo(winner.teamId))]
         }
         if let leader = leaderInfo(for: event) {
-            return [.text("Full-time — "), .text(leader.name, bold: true), .text(" won "), .logo(url: teamLogo(leader.teamId))]
+            return [.text("Full-time"), dash, .text(leader.name, bold: true), .text(" won "), .logo(url: teamLogo(leader.teamId))]
         }
-        return [.text("Full-time — Match draw")]
+        return [.text("Full-time"), dash, .text("Match draw")]
     case .extraTime: return [.text("Extra time")]
     case .penaltyShootout: return [.text("Penalty shootout!")]
     case .penaltyKick:
         let outcome = (event.scored ?? false) ? "scored ✓" : "missed ✗"
-        return [.text("\(minute)Penalty — "), .text("\(event.player ?? "") ", bold: true), .text("\(outcome) ")] + teamChip
+        return [.text("\(minute)Penalty"), dash, .text("\(event.player ?? "") ", bold: true), .text("\(outcome) ")] + teamChip
     case .celebration: return [] // never a backend event; counts build their own text
     }
 }

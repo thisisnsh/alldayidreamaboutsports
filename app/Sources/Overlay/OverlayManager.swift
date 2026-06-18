@@ -44,6 +44,10 @@ final class OverlayManager: ObservableObject {
     private var queue: [NotchItem] = []
     private var scheduled: [DispatchWorkItem] = []
     private var queueBusy = false  // set synchronously so rapid-fire pushes can't race startNextSetIfIdle
+    // Full-screen, click-through panel hosting confetti, the ball, and the pill
+    // stack (so the rest of the screen stays fully usable). The single stack ✕
+    // gets its own tiny non-click-through panel below the stack, since the
+    // display panel passes all clicks through.
     private var displayPanel: NSPanel?
     private var interactPanel: NSPanel?
     private var dismissPanel: NSPanel?
@@ -106,6 +110,7 @@ final class OverlayManager: ObservableObject {
         let set = Array(queue.prefix(setSize))
         queue.removeFirst(set.count)
         showDisplayPanel()
+        startHoverTracking()
 
         // Pills drop from the notch one by one — each new one takes the top
         // spot and pushes the existing ones down.
@@ -115,11 +120,6 @@ final class OverlayManager: ObservableObject {
                     activeSet.insert(item, at: 0)
                 }
             }
-        }
-        // The ✕ appears once the last pill has landed; its position comes
-        // from the stack's MEASURED height (see reportStackHeight).
-        schedule(after: Double(set.count - 1) * Self.pillDropStagger + 0.35) { [self] in
-            showDismissPanel()
         }
 
         let fanGoals = set.compactMap(\.fanGoal)
@@ -133,8 +133,8 @@ final class OverlayManager: ObservableObject {
         schedule(after: params.pillHoldSeconds) { [self] in endSet() }
     }
 
-    /// Natural expiry or the ✕ under the stack: the whole set leaves (ball
-    /// included), then the next set follows.
+    /// Natural expiry or the stack ✕: the whole set leaves (ball included),
+    /// then the next set follows.
     func endSet() {
         guard !activeSet.isEmpty || queueBusy else { return }
         cancelScheduled()
@@ -146,6 +146,7 @@ final class OverlayManager: ObservableObject {
         schedule(after: 0.45) { [self] in
             queueBusy = false
             startNextSetIfIdle()
+            if activeSet.isEmpty { stopHoverTracking() }
             hidePanelsIfDone()
         }
     }
@@ -370,16 +371,17 @@ final class OverlayManager: ObservableObject {
         displayPanel?.orderOut(nil)
     }
 
-    /// The pill stack reports its real rendered height (emoji lines make
-    /// pills taller than any estimate) so the ✕ always sits exactly one
-    /// pill-gap below the last pill.
-    private var measuredStackHeight: CGFloat = 0
+    /// The pill stack reports its real rendered size as pills drop in and out;
+    /// it positions the ✕ and defines the hover region that reveals it.
+    private var measuredStackSize: CGSize = .zero
 
-    func reportStackHeight(_ height: CGFloat) {
-        measuredStackHeight = height
+    func reportStackSize(_ size: CGSize) {
+        measuredStackSize = size
+        // Keep the ✕ pinned under the stack if it's currently showing.
         if dismissPanel?.isVisible == true {
             dismissPanel?.setFrame(dismissPanelRect(), display: true)
         }
+        refreshDismissCross()
     }
 
     private func dismissPanelRect() -> NSRect {
@@ -389,14 +391,61 @@ final class OverlayManager: ObservableObject {
         let size: CGFloat = 22
         return NSRect(
             x: screen.frame.midX - size / 2,
-            y: screen.frame.maxY - inset - 6 - measuredStackHeight - pillSpacing - size,
+            y: screen.frame.maxY - inset - 6 - measuredStackSize.height - pillSpacing - size,
             width: size,
             height: size
         )
     }
 
-    /// Small clickable ✕ floating just below the pill stack (the display
-    /// panel is click-through, so the button needs its own panel).
+    // MARK: Stack ✕ — hover-revealed
+
+    private var hoverTimer: Timer?
+
+    /// Poll the cursor while a set is up (passive — never consumes clicks, so
+    /// the screen stays fully usable) so the ✕ shows only while the pointer is
+    /// over the stack. A timer is used rather than a global mouse-moved monitor
+    /// because those fire unreliably over click-through windows like ours.
+    private func startHoverTracking() {
+        guard hoverTimer == nil else { return }
+        let timer = Timer(timeInterval: 0.06, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.refreshDismissCross() }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        hoverTimer = timer
+    }
+
+    private func stopHoverTracking() {
+        hoverTimer?.invalidate()
+        hoverTimer = nil
+        hideDismissPanel()
+    }
+
+    /// The screen rect (bottom-left origin) that counts as "hovering the stack":
+    /// the pills plus a margin reaching down to include the ✕ itself, so moving
+    /// onto the ✕ doesn't dismiss the hover.
+    private func stackHoverRegion() -> NSRect? {
+        guard let screen, measuredStackSize.height > 0 else { return nil }
+        let inset = (NSScreen.main?.safeAreaInsets.top).flatMap { $0 > 0 ? $0 : nil } ?? 26
+        let pad: CGFloat = 14
+        let belowExtent: CGFloat = 8 + 22 + 10 // pill gap + ✕ + slack
+        let w = max(measuredStackSize.width, 60) + pad * 2
+        let top = screen.frame.maxY - inset - 6
+        let bottom = top - measuredStackSize.height - belowExtent
+        return NSRect(x: screen.frame.midX - w / 2, y: bottom, width: w, height: top + pad - bottom)
+    }
+
+    /// Show the ✕ iff there are pills and the cursor is over the stack region.
+    private func refreshDismissCross() {
+        guard !activeSet.isEmpty, let region = stackHoverRegion(),
+              region.contains(NSEvent.mouseLocation) else {
+            hideDismissPanel()
+            return
+        }
+        showDismissPanel()
+    }
+
+    /// Small clickable ✕ floating just below the pill stack (the display panel
+    /// is click-through, so the button needs its own panel).
     private func showDismissPanel() {
         guard screen != nil else { return }
         let rect = dismissPanelRect()
@@ -449,20 +498,28 @@ final class OverlayManager: ObservableObject {
     }
 }
 
-/// The ✕ under the notification set — clicking it ends the whole set early.
+/// The ✕ shared by the notification stack and the celebration ball, so both
+/// look identical. The caller supplies what dismissing means.
+struct DismissCrossButton: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "xmark.circle.fill")
+                .font(.system(size: 22))
+                .foregroundStyle(.white, .black.opacity(0.6))
+        }
+        .buttonStyle(.plain)
+        .hoverLift()
+    }
+}
+
+/// The ✕ below the notification set — clicking it ends the whole set early.
 struct SetDismissButton: View {
     @EnvironmentObject var overlay: OverlayManager
 
     var body: some View {
-        Button {
-            overlay.endSet()
-        } label: {
-            Image(systemName: "xmark.circle.fill")
-                .font(.system(size: 20))
-                .foregroundStyle(.white, .black.opacity(0.75))
-        }
-        .buttonStyle(.plain)
-        .hoverLift()
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        DismissCrossButton { overlay.endSet() }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 }

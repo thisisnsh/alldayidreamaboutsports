@@ -27,10 +27,17 @@ final class FakeStore {
 
     // Live state per match, keyed by fixture id. DemoEngine walks each one
     // through the script so every scoreboard stays in step with its pills.
-    // `eventSeq` is monotonic (never reset) so replays keep producing fresh
-    // eventIds that EventRouter won't dedupe away.
+    // `eventSeq` is monotonic (never reset) so replays within a run keep
+    // producing fresh eventIds that EventRouter won't dedupe away.
     var states: [Int: LiveMatchState] = FakeStore.freshStates()
     var eventSeq = 0
+
+    // Unique per app launch. EventRouter's dedupe list (handledEventIds)
+    // persists in UserDefaults, but `eventSeq` restarts at 0 each launch — so
+    // without this every fresh run regenerates ids it already saw last run and
+    // they all get rejected as duplicates. Stamping the launch keeps each run's
+    // events new.
+    let launchToken = UUID().uuidString.prefix(8)
 
     /// Celebration tap totals per fixture; surges in the timeline overwrite
     /// this and a user tapping in the app adds to it.
@@ -346,7 +353,7 @@ final class DemoEngine: ObservableObject {
         let s = store.states[def.id] ?? LiveMatchState()
         let teamId = side.map { $0 == .home ? def.home.id : def.away.id }
         let event = MatchEvent(
-            eventId: "demo:\(def.id):\(type.rawValue):\(store.eventSeq)",
+            eventId: "demo:\(store.launchToken):\(def.id):\(type.rawValue):\(store.eventSeq)",
             type: type,
             fixtureId: def.id,
             leagueId: def.leagueId,
