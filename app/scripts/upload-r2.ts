@@ -1,7 +1,7 @@
 import { createReadStream } from "node:fs";
 import { readdir, stat } from "node:fs/promises";
 import path from "node:path";
-import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { ListObjectsV2Command, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 
 function required(name: string): string {
   const value = process.env[name];
@@ -22,7 +22,6 @@ function contentType(file: string): string {
 }
 
 function cacheControl(file: string): string {
-  if (file === "appcast.xml") return "public, max-age=300, stale-while-revalidate=3600";
   return "public, max-age=31536000, immutable";
 }
 
@@ -36,22 +35,37 @@ async function uploadDirectory(releasesDir: string, bucket: string): Promise<voi
     },
   });
 
+  try {
+    await client.send(new ListObjectsV2Command({ Bucket: bucket, MaxKeys: 1 }));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `Cannot access R2 bucket "${bucket}". Check that R2_ENDPOINT belongs to the right account ` +
+        `and the R2 API token can read/write this bucket. Underlying error: ${message}`,
+    );
+  }
+
   const entries = await readdir(releasesDir);
   for (const file of entries.filter(shouldUpload).sort()) {
     const fullPath = path.join(releasesDir, file);
     const info = await stat(fullPath);
     if (!info.isFile()) continue;
 
-    await client.send(
-      new PutObjectCommand({
-        Bucket: bucket,
-        Key: file,
-        Body: createReadStream(fullPath),
-        ContentLength: info.size,
-        ContentType: contentType(file),
-        CacheControl: cacheControl(file),
-      }),
-    );
+    try {
+      await client.send(
+        new PutObjectCommand({
+          Bucket: bucket,
+          Key: file,
+          Body: createReadStream(fullPath),
+          ContentLength: info.size,
+          ContentType: contentType(file),
+          CacheControl: cacheControl(file),
+        }),
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`Failed to upload "${file}" to R2 bucket "${bucket}": ${message}`);
+    }
     console.log(`uploaded ${file}`);
   }
 }

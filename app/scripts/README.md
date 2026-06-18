@@ -91,8 +91,8 @@ Cloudflare R2 S3-compatible endpoint through `@aws-sdk/client-s3`. The first
 upload run installs `app/scripts` Node dependencies if needed.
 
 After upload, `publish.sh` purges `${DOWNLOAD_HOST}/appcast.xml` from
-Cloudflare so a republished appcast is visible immediately even though the
-object carries a five-minute cache TTL.
+Cloudflare so a republished appcast is visible immediately even though release
+objects carry a long cache TTL.
 
 Sparkle release notes are included by placing an `.html` file beside the DMG
 with the same basename. `publish.sh --notes` handles that staging automatically.
