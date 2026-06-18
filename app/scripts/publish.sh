@@ -10,9 +10,12 @@
 # One-time prereqs:
 #   - Sparkle EdDSA private key in your keychain (created by generate_keys);
 #     generate_appcast reads it automatically.
-#   - aws CLI, used only as an S3-compatible client for R2 uploads.
-#   - R2 env vars: R2_ENDPOINT, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY
+#   - Sparkle generate_appcast at $SPARKLE_HOME/bin/generate_appcast.
+#   - Node 22+; uploader deps are installed under app/scripts on first use.
+#   - R2 env file: app/scripts/.publish.env (or R2_ENV_FILE=/path/to/env).
 set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 usage() {
   echo "usage: publish.sh <path-to-dmg> [--notes release-notes.html] [--channel staging|release]" >&2
@@ -83,20 +86,18 @@ case "$CHANNEL" in
   *) echo "✗ CHANNEL must be 'release' or 'staging' (got '$CHANNEL')" >&2; exit 1 ;;
 esac
 echo "── channel=${CHANNEL} host=${DOWNLOAD_HOST}"
-SPARKLE_VERSION="2.6.4"
 # All released DMGs live here so generate_appcast can compute deltas across
 # versions. Persisted between releases; on a fresh machine we backfill from R2.
 # Per-channel dir so staging and release deltas/appcasts never cross-contaminate.
 RELEASES_DIR="${RELEASES_DIR:-$HOME/Releases/AllDayIDreamAboutSports/${CHANNEL}}"
 SPARKLE_HOME="${SPARKLE_HOME:-/Users/thisisnsh/projects/Sparkle}"
 
-echo "── 1/4 Ensure generate_appcast (Sparkle ${SPARKLE_VERSION})"
+echo "── 1/4 Check generate_appcast"
 GEN="$SPARKLE_HOME/bin/generate_appcast"
 if [[ ! -x "$GEN" ]]; then
-  mkdir -p "$SPARKLE_HOME"
-  curl -fsSL -o "$SPARKLE_HOME/sparkle.tar.xz" \
-    "https://github.com/sparkle-project/Sparkle/releases/download/${SPARKLE_VERSION}/Sparkle-${SPARKLE_VERSION}.tar.xz"
-  tar -xf "$SPARKLE_HOME/sparkle.tar.xz" -C "$SPARKLE_HOME"
+  echo "✗ generate_appcast not found or not executable: $GEN" >&2
+  echo "  Set SPARKLE_HOME to a local Sparkle checkout/release directory." >&2
+  exit 1
 fi
 
 echo "── 2/4 Stage DMG + backfill prior versions for deltas"
@@ -127,14 +128,24 @@ echo "── 3/4 Generate appcast + deltas (EdDSA key from keychain)"
 "$GEN" --download-url-prefix "${DOWNLOAD_HOST}/" "$RELEASES_DIR"
 
 echo "── 4/4 Upload to R2 (${DOWNLOAD_HOST})"
-if [[ -n "${R2_ENDPOINT:-}" ]]; then
-  export AWS_ACCESS_KEY_ID="${R2_ACCESS_KEY_ID:?R2_ACCESS_KEY_ID is required for R2 upload}"
-  export AWS_SECRET_ACCESS_KEY="${R2_SECRET_ACCESS_KEY:?R2_SECRET_ACCESS_KEY is required for R2 upload}"
-  aws s3 sync "$RELEASES_DIR" "s3://${R2_BUCKET}/" \
-    --endpoint-url "$R2_ENDPOINT" --checksum-algorithm CRC32 \
-    --exclude "*" --include "*.dmg" --include "appcast.xml" --include "*.delta" --include "*.html"
+R2_ENV_FILE="${R2_ENV_FILE:-$SCRIPT_DIR/.publish.env}"
+if [[ -n "${R2_ENDPOINT:-}" || -f "$R2_ENV_FILE" ]]; then
+  if [[ ! -x "$SCRIPT_DIR/node_modules/.bin/tsx" || ! -d "$SCRIPT_DIR/node_modules/@aws-sdk/client-s3" ]]; then
+    npm --prefix "$SCRIPT_DIR" install
+  fi
+  APPCAST_URL="${DOWNLOAD_HOST}/appcast.xml"
+  if [[ -f "$R2_ENV_FILE" ]]; then
+    "$SCRIPT_DIR/node_modules/.bin/tsx" --env-file="$R2_ENV_FILE" "$SCRIPT_DIR/upload-r2.ts" \
+      "$RELEASES_DIR" "$R2_BUCKET"
+    "$SCRIPT_DIR/node_modules/.bin/tsx" --env-file="$R2_ENV_FILE" "$SCRIPT_DIR/purge-cloudflare.ts" \
+      "$APPCAST_URL"
+  else
+    "$SCRIPT_DIR/node_modules/.bin/tsx" "$SCRIPT_DIR/upload-r2.ts" "$RELEASES_DIR" "$R2_BUCKET"
+    "$SCRIPT_DIR/node_modules/.bin/tsx" "$SCRIPT_DIR/purge-cloudflare.ts" "$APPCAST_URL"
+  fi
   echo "✅ Live: ${DOWNLOAD_HOST}/$(basename "$DMG_PATH")"
   echo "   Ensure ${DOWNLOAD_HOST}/latest redirects to this DMG."
 else
-  echo "⚠️ R2_ENDPOINT not set — upload skipped. Files ready in $RELEASES_DIR"
+  echo "⚠️ R2 env not found — upload skipped. Files ready in $RELEASES_DIR"
+  echo "   Create $R2_ENV_FILE or set R2_ENDPOINT/R2_ACCESS_KEY_ID/R2_SECRET_ACCESS_KEY."
 fi
