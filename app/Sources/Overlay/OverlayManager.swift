@@ -27,7 +27,6 @@ enum BallPhase {
 /// - A set is up to `notchStackMax` pills stacked under the notch. It shows
 ///   at once, stays `pillHoldSeconds`, then the next set follows. Events that
 ///   arrive while a set is up simply wait — nothing is ever dropped.
-/// - A ✕ under the stack dismisses the whole set early (next set comes).
 /// - Fan goals in the displayed set drive the celebration: one confetti burst
 ///   per goal (fire-and-forget), and a single center ball carrying the flags
 ///   of every team that scored — taps celebrate all of them.
@@ -44,14 +43,8 @@ final class OverlayManager: ObservableObject {
     private var queue: [NotchItem] = []
     private var scheduled: [DispatchWorkItem] = []
     private var queueBusy = false  // set synchronously so rapid-fire pushes can't race startNextSetIfIdle
-    // Full-screen, click-through panel hosting confetti and the center ball
-    // scene (so the rest of the screen stays fully usable). The pill stack gets
-    // its own small NON-click-through panel pinned under the notch — that lets
-    // it use SwiftUI `.onHover` to reveal its ✕ (the same reliable mechanism the
-    // ball panel uses), instead of polling the cursor against a computed rect.
     private var displayPanel: NSPanel?
     private var interactPanel: NSPanel?
-    private var stackPanel: NSPanel?
 
     private var params: AnimationParams { ControlPlane.shared.animationParams }
     private var setSize: Int { max(1, params.notchStackMax) }
@@ -111,7 +104,6 @@ final class OverlayManager: ObservableObject {
         let set = Array(queue.prefix(setSize))
         queue.removeFirst(set.count)
         showDisplayPanel()
-        showStackPanel()
 
         // Pills drop from the notch one by one — each new one takes the top
         // spot and pushes the existing ones down.
@@ -134,8 +126,7 @@ final class OverlayManager: ObservableObject {
         schedule(after: params.pillHoldSeconds) { [self] in endSet() }
     }
 
-    /// Natural expiry or the stack ✕: the whole set leaves (ball included),
-    /// then the next set follows.
+    /// Natural expiry: the whole set leaves, then the next set follows.
     func endSet() {
         guard !activeSet.isEmpty || queueBusy else { return }
         cancelScheduled()
@@ -146,7 +137,6 @@ final class OverlayManager: ObservableObject {
         schedule(after: 0.45) { [self] in
             queueBusy = false
             startNextSetIfIdle()
-            if activeSet.isEmpty { hideStackPanel() }
             hidePanelsIfDone()
         }
     }
@@ -160,10 +150,7 @@ final class OverlayManager: ObservableObject {
         // It stays for the set's `pillHoldSeconds` like everything else.
         ballPhase = .tapping
         CelebrationService.shared.beginWindow(
-            targets: ballEvents.compactMap { event in
-                guard event.fixtureId > 0 else { return nil }
-                return event.teamId.map { (fixtureId: event.fixtureId, teamId: String($0)) }
-            }
+            targets: celebrationTargets(for: ballEvents)
         )
         showInteractPanel()
     }
@@ -198,10 +185,7 @@ final class OverlayManager: ObservableObject {
     /// post-goal poll window converges (`notifyCelebrationCount`), so all apps
     /// show the same final tally instead of a partial, per-client snapshot.
     private func flushTapsAndQueueCounts() {
-        let targets: [(fixtureId: Int, teamId: String)] = ballEvents.compactMap { event in
-            guard event.fixtureId > 0 else { return nil }
-            return event.teamId.map { (fixtureId: event.fixtureId, teamId: String($0)) }
-        }
+        let targets = celebrationTargets(for: ballEvents)
         let taps = tapBursts
         CelebrationService.shared.endWindow()
         guard !targets.isEmpty, taps > 0,
@@ -212,6 +196,13 @@ final class OverlayManager: ObservableObject {
         // so this never double-counts.
         for target in targets {
             AppSession.shared.addLocalCelebrations(taps, teamId: target.teamId, fixtureId: target.fixtureId)
+        }
+    }
+
+    private func celebrationTargets(for events: [MatchEvent]) -> [(fixtureId: Int, teamId: String)] {
+        events.compactMap { event in
+            guard event.fixtureId > 0 else { return nil }
+            return event.teamId.map { (fixtureId: event.fixtureId, teamId: String($0)) }
         }
     }
 
@@ -315,7 +306,7 @@ final class OverlayManager: ObservableObject {
     /// Hosting view for a panel whose frame WE control. `sizingOptions = []`
     /// stops the hosting view from driving the window's content-size
     /// constraints off the SwiftUI ideal size — without it, continuously
-    /// animating content (confetti, the dropping ball, spring-inserted pills)
+    /// animating content (confetti, spring-inserted pills)
     /// re-marks the window for an "Update Constraints in Window" pass every
     /// frame until AppKit exceeds its pass budget and throws (app crash).
     private static func makeHostingView<Content: View>(_ rootView: Content) -> NSHostingView<Content> {
@@ -348,7 +339,6 @@ final class OverlayManager: ObservableObject {
         let appearance = overlayAppearance
         displayPanel?.appearance = appearance
         interactPanel?.appearance = appearance
-        stackPanel?.appearance = appearance
     }
 
     private func showDisplayPanel() {
@@ -367,47 +357,6 @@ final class OverlayManager: ObservableObject {
     private func hidePanelsIfDone() {
         guard activeSet.isEmpty, queue.isEmpty, ballPhase == .hidden, confettiBursts.isEmpty else { return }
         displayPanel?.orderOut(nil)
-    }
-
-    // MARK: Pill stack panel — its own non-click-through panel pinned under the
-    // notch, so SwiftUI `.onHover` reveals the set's ✕ reliably (same approach
-    // as the ball). It is a FIXED size, never resized from its content: the
-    // ball panel works precisely because it never feeds its rendered size back
-    // into its frame — doing that here drove a setFrame⇄relayout loop that
-    // exhausted AppKit's "Update Constraints in Window" budget and crashed.
-
-    /// Fixed top-centred rect: wide enough for any pill and tall enough to cover
-    /// a full set plus the hover-revealed ✕ beneath it. The view inside anchors
-    /// the pills to the top (just under the notch), exactly where they sat
-    /// before; empty space is transparent.
-    private func stackPanelRect() -> NSRect {
-        guard let screen else { return .zero }
-        let inset = (NSScreen.main?.safeAreaInsets.top).flatMap { $0 > 0 ? $0 : nil } ?? 26
-        let w: CGFloat = min(640, screen.frame.width - 80)
-        let h = inset + 6 + 480 // room for a full set of pills + the ✕ below
-        return NSRect(
-            x: screen.frame.midX - w / 2,
-            y: screen.frame.maxY - h,
-            width: w,
-            height: h
-        )
-    }
-
-    private func showStackPanel() {
-        guard screen != nil else { return }
-        let rect = stackPanelRect()
-        if stackPanel == nil {
-            let panel = Self.makePanel(frame: rect, clickThrough: false)
-            panel.contentView = Self.makeHostingView(NotchStackHost().environmentObject(self))
-            stackPanel = panel
-        }
-        stackPanel?.appearance = overlayAppearance
-        stackPanel?.setFrame(rect, display: true)
-        stackPanel?.orderFrontRegardless()
-    }
-
-    private func hideStackPanel() {
-        stackPanel?.orderOut(nil)
     }
 
     /// Fades the tappable ball in lockstep with the scene so the celebration

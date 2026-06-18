@@ -21,10 +21,11 @@ enum DevConfig {
         photoURL: nil
     )
 
-    /// Teams you follow, as API team ids. Covers BOTH sides of every demo match
-    /// (BRA 6 / ARG 26, ENG 10 / USA 2384, FRA 2 / GER 25) so the full roster of
-    /// fixtures is followed and any goal runs the full celebration.
-    static let fanTeams = ["6", "26", "10", "2384", "2", "25"]
+    /// Teams you follow, as API team ids (BRA 6, ARG 26, ENG 10, FRA 2). A goal
+    /// by ANY of these runs the full celebration; everyone else's goals are
+    /// notch pills. Must cover both sides of the `braArg` match below (you're a
+    /// fan of both teams there) and the followed side of every other match.
+    static let fanTeams = ["6", "26", "10", "2"]
 
     /// Start the timeline automatically at launch. Turn off to drive the
     /// show by hand from Settings → Developer (Play / Restart / Stop).

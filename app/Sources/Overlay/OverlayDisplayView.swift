@@ -1,8 +1,7 @@
 import SwiftUI
 
-/// Full-screen, click-through layer hosting fire-and-forget confetti bursts and
-/// the center ball scene for the set's fan goals. The pill stack lives in its
-/// own non-click-through panel (NotchStackHost) so it can hover-reveal its ✕.
+/// Full-screen, click-through layer hosting fire-and-forget confetti bursts,
+/// the center ball scene for the set's fan goals, and passive notch pills.
 struct OverlayDisplayView: View {
     @EnvironmentObject var overlay: OverlayManager
 
@@ -23,6 +22,8 @@ struct OverlayDisplayView: View {
                     ConfettiView(size: geo.size)
                         .id(burst.id)
                 }
+
+                NotchStackView(items: overlay.activeSet)
             }
             .animation(.easeOut(duration: 0.35), value: overlay.ballPhase)
             .frame(width: geo.size.width, height: geo.size.height)
@@ -78,10 +79,18 @@ struct BallView: View {
                 .frame(width: diameter, height: diameter)
                 .shadow(color: .black.opacity(0.5), radius: 8, y: 4)
             HStack(spacing: diameter * 0.05) {
-                ForEach(teams) { team in
-                    CachedTeamLogo(url: team.logo, size: diameter * (teams.count > 2 ? 0.26 : 0.36))
+                ForEach(Array(teams.enumerated()), id: \.offset) { _, team in
+                    CachedTeamLogo(url: team.logo, size: diameter * (teams.count > 2 ? 0.14 : 0.18))
                 }
             }
+            .padding(.horizontal, diameter * 0.045)
+            .padding(.vertical, diameter * 0.03)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(Color.black.opacity(0.42))
+                    .blur(radius: 0.4)
+                    .shadow(color: .black.opacity(0.45), radius: 9, y: 3)
+            )
         }
     }
 }
