@@ -4,6 +4,7 @@ import SwiftUI
 struct SettingsView: View {
     let updater: SPUUpdater
     @EnvironmentObject var session: AppSession
+    @Environment(\.colorScheme) private var scheme
     @State private var launchAtLogin = LaunchAtLogin.isEnabled
     // Sparkle persists both flags in UserDefaults itself; we just mirror them.
     @State private var autoCheck = true
@@ -178,12 +179,12 @@ struct SettingsView: View {
                     .foregroundStyle(pillIconColor(for: type))
                 Text(type.displayName)
                     .font(.system(size: 11, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.primary)
                     .lineLimit(1)
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
-            .background(Capsule().fill(.black))
+            .background(Capsule().fill(scheme == .dark ? Color.black : Color.white))
             Spacer()
             Toggle("", isOn: eventBinding(type))
                 .labelsHidden()
