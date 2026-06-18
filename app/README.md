@@ -217,6 +217,8 @@ Key invariants:
 
 CI builds the DMG; the Sparkle appcast + delta generation and the R2 upload are
 **local** (the EdDSA key and R2 creds stay on your machine, not in CI).
+`publish.sh` expects a local Sparkle install with
+`$SPARKLE_HOME/bin/generate_appcast`; it does not download Sparkle.
 
 **Normal flow:**
 1. Tag `v1.0.0` → `.github/workflows/app-release.yml` builds the code-signed,
@@ -225,8 +227,9 @@ CI builds the DMG; the Sparkle appcast + delta generation and the R2 upload are
 2. Download the artifact, install the DMG, test it.
 3. Publish it:
    ```sh
-   export R2_ENDPOINT=https://<ACCOUNT_ID>.r2.cloudflarestorage.com
-   export R2_ACCESS_KEY_ID=... R2_SECRET_ACCESS_KEY=...
+   cp scripts/.publish.env.example scripts/.publish.env
+   # Fill in scripts/.publish.env with R2_* plus Cloudflare purge credentials once.
+
    ./scripts/publish.sh ~/Downloads/AllDayIDreamAboutSports-1.0.0.dmg \
      --notes ~/Downloads/AllDayIDreamAboutSports-1.0.0.html \
      --release

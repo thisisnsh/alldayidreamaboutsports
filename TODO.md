@@ -121,7 +121,7 @@ the menu opens, and downloads ship from here too. Custom domains (`scores.` /
 - [ ] **Create an R2 API token** (read+write all four buckets) → save as GCP secrets
       `r2-access-key-id` / `r2-secret-access-key` / `r2-endpoint` so the backend
       can write score files. Releases upload to R2 from your Mac via
-      `app/scripts/publish.sh` using your own local R2 env vars — no GitHub
+      `app/scripts/publish.sh` using your own local R2 env file — no GitHub
       `R2_*` secrets needed.
 - [ ] **After the first release:** add a redirect rule so
       `download.../latest` always points at the newest DMG (the website's

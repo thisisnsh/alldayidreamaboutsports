@@ -24,6 +24,8 @@ dist/
 # tester/ staging-only secrets (never commit real staging creds)
 tester/.staging.env
 tester/node_modules/
+app/scripts/.publish.env
+app/scripts/node_modules/
 
 # Web
 web/dist/
