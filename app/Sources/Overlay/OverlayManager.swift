@@ -347,8 +347,12 @@ final class OverlayManager: ObservableObject {
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = false
-        panel.level = .statusBar
-        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
+        // `.screenSaver` (not `.statusBar`) so the pill/ball float ABOVE
+        // full-screen apps too; the collection behavior lets this accessory app
+        // draw over another app's full-screen space. Shared with the pinned
+        // capsules via `OverlayWindow` so every overlay floats above everything.
+        panel.level = OverlayWindow.level
+        panel.collectionBehavior = OverlayWindow.collectionBehavior
         panel.ignoresMouseEvents = clickThrough
         panel.sharingType = .readOnly
         panel.isFloatingPanel = true

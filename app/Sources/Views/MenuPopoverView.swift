@@ -264,16 +264,19 @@ extension LabelStyle where Self == FixedIconLabelStyle {
 private struct FixtureRow: View {
     let fixture: Fixture
     @EnvironmentObject var session: AppSession
+    @ObservedObject private var capsules = PinnedCapsuleManager.shared
     @State private var hovering = false
 
+    private var isPinned: Bool { capsules.isPinned(fixture.fixtureId) }
+
     var body: some View {
-        // The row is hover-only (reveals the celebration tally) — clicking it
-        // no longer navigates anywhere; the FIFA page was rarely what people
-        // wanted and stole focus from the menu.
+        // The row is hover-only (reveals the celebration tally + the pin
+        // affordance) — clicking it no longer navigates anywhere; the FIFA page
+        // was rarely what people wanted and stole focus from the menu.
         Button {
         } label: {
             VStack(alignment: .leading, spacing: 3) {
-                if hovering, let totals = session.celebrationTotals[fixture.fixtureId] {
+                if !isPinned, hovering, let totals = session.celebrationTotals[fixture.fixtureId] {
                     // Hover: the row becomes the celebration tally — both
                     // teams, regardless of who you're a fan of.
                     HStack(spacing: 6) {
@@ -286,6 +289,7 @@ private struct FixtureRow: View {
                         CachedTeamLogo(url: logo(fixture.away.id), size: 16)
                         Spacer()
                         trailing
+                        pinControl
                     }
                     Text("Celebrations 🎉")
                         .font(.system(size: 10))
@@ -302,8 +306,11 @@ private struct FixtureRow: View {
                         CachedTeamLogo(url: logo(fixture.away.id), size: 16)
                         Spacer()
                         trailing
+                        pinControl
                     }
-                    if let stage = fixture.stageLabel {
+                    if isPinned {
+                        Text("Shown in capsule").font(.system(size: 10)).opacity(0.6)
+                    } else if let stage = fixture.stageLabel {
                         Text(stage).font(.system(size: 10)).opacity(0.6)
                     }
                 }
@@ -313,6 +320,34 @@ private struct FixtureRow: View {
         .buttonStyle(.hoverHighlight)
         .onHover { over in
             withAnimation(.easeOut(duration: 0.15)) { hovering = over }
+        }
+    }
+
+    /// Trailing pin/close control: pin the match to a floating capsule on hover,
+    /// or — once pinned — close that capsule and return the row to live scores.
+    @ViewBuilder private var pinControl: some View {
+        if isPinned {
+            Button {
+                capsules.unpin(fixtureId: fixture.fixtureId)
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 13))
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+            .hoverLift()
+            .help("Close capsule")
+        } else if hovering {
+            Button {
+                capsules.pin(fixtureId: fixture.fixtureId)
+            } label: {
+                Image(systemName: "pin.fill")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+            .hoverLift()
+            .help("Pin scores to screen")
         }
     }
 

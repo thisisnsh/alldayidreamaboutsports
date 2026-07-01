@@ -91,6 +91,17 @@ struct SettingsView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                     }
 
+                    SettingsCard("Capsule") {
+                        Picker("Size", selection: capsuleSizeBinding) {
+                            ForEach(CapsuleSize.allCases, id: \.self) { Text($0.label).tag($0) }
+                        }
+                        .pickerStyle(.segmented)
+                        .labelsHidden()
+                        .fixedSize()
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        caption("Pin a match from the menu to float its live score on screen. Size scales the capsule’s text and logos.")
+                    }
+
                     SettingsCard("Behavior") {
                         toggleRow("Open at login", isOn: Binding(
                             get: { launchAtLogin },
@@ -240,6 +251,19 @@ struct SettingsView: View {
         Binding(
             get: { session.prefs.settings[keyPath: keyPath] ?? defaultValue },
             set: { on in session.updateSettings { $0[keyPath: keyPath] = on } }
+        )
+    }
+
+    private var capsuleSizeBinding: Binding<CapsuleSize> {
+        Binding(
+            get: { session.prefs.settings.capsuleSize ?? .medium },
+            set: { choice in
+                // Deferred like `themeBinding` to avoid "Publishing changes from
+                // within view updates" when the segmented control flips.
+                DispatchQueue.main.async {
+                    session.updateSettings { $0.capsuleSize = choice }
+                }
+            }
         )
     }
 

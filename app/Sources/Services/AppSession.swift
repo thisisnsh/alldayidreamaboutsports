@@ -134,6 +134,7 @@ final class AppSession: ObservableObject {
         // teams/settings stay in UserDefaults until app data goes.
         clearMatchCache()
         OverlayManager.shared.dismissAll()
+        PinnedCapsuleManager.shared.closeAll()
         if showLogin {
             // Tear down Settings (or whatever utility window prompted the
             // sign-out) before re-presenting the login window, so the user
@@ -211,6 +212,7 @@ final class AppSession: ObservableObject {
         // app's color scheme — push the theme to them directly.
         if before.theme != prefs.settings.theme {
             OverlayManager.shared.applyOverlayTheme()
+            PinnedCapsuleManager.shared.applyTheme()
         }
         reportSettingsChange(before: before, after: prefs.settings)
     }
