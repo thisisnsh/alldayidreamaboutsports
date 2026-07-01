@@ -14,7 +14,9 @@ export function syntheticPhase(rawStatus: string, minute: number | null): {
     case "ET": return {
       status: "LIVE", period: (minute ?? 0) <= 105 ? "EXTRA_FIRST" : "EXTRA_SECOND", running: true,
     };
-    case "BT": return { status: "LIVE", period: "EXTRA_BREAK", running: false };
+    case "BT": return {
+      status: "LIVE", period: (minute ?? 0) > 105 ? "PENALTIES" : "EXTRA_BREAK", running: false,
+    };
     case "P": return { status: "LIVE", period: "PENALTIES", running: false };
     case "FT": case "AET": case "PEN": return { status: "FINISHED", period: "FINISHED", running: false };
     case "NS": case "TBD": return { status: "SCHEDULED", period: "PRE", running: false };

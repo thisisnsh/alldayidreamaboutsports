@@ -73,7 +73,8 @@ describe("ApiFootballProvider", () => {
   it("derives running=false and the right period for non-playing phases", async () => {
     const phases: Array<[string, number | null, string, boolean, string]> = [
       ["HT", 45, "HALF", false, "HALF_TIME"],
-      ["BT", 90, "EXTRA_BREAK", false, "LIVE"],
+      ["BT", 105, "EXTRA_BREAK", false, "LIVE"], // break between the two ET halves
+      ["BT", 120, "PENALTIES", false, "LIVE"], // break after ET, shootout imminent → "PENS", not "ET HT"
       ["P", 120, "PENALTIES", false, "LIVE"],
       ["FT", 90, "FINISHED", false, "FINISHED"],
       ["NS", null, "PRE", false, "SCHEDULED"],
@@ -149,6 +150,75 @@ describe("ApiFootballProvider", () => {
     });
     // The in-play missed penalty was skipped; Rodrygo is the last real scorer.
     expect(match!.lastGoal).toMatchObject({ teamId: 10, player: "Rodrygo" });
+  });
+
+  it("parses substitutions with player out (`player`) and in (`assist`)", async () => {
+    const fixture = {
+      fixture: { id: 800, date: "2026-06-11T20:00:00+00:00", status: { short: "2H", elapsed: 64 } },
+      league: { id: 1, season: 2026, round: "R16" },
+      teams: { home: { id: 10, name: "Brazil" }, away: { id: 20, name: "USA" } },
+      goals: { home: 0, away: 0 },
+      events: [
+        { time: { elapsed: 46 }, team: { id: 10, name: "Brazil" }, player: { name: "Fred" }, assist: { name: "Paquetá" }, type: "subst", detail: "Substitution 1" },
+        { time: { elapsed: 64 }, team: { id: 20, name: "USA" }, player: { name: "Reyna" }, assist: { name: "Aaronson" }, type: "subst", detail: "Substitution 2" },
+      ],
+    };
+    const { provider } = providerReturning({ response: [fixture] });
+    const [match] = await provider.fixturesForRange("2026-06-10", "2026-06-12");
+    expect(match!.home.subs).toEqual([{ playerOut: "Fred", playerIn: "Paquetá", minute: 46, extra: null }]);
+    expect(match!.away.subs).toEqual([{ playerOut: "Reyna", playerIn: "Aaronson", minute: 64, extra: null }]);
+  });
+
+  it("attributes an own goal to the opponent and tags its kind", async () => {
+    const fixture = {
+      fixture: { id: 801, date: "2026-06-11T20:00:00+00:00", status: { short: "2H", elapsed: 55 } },
+      league: { id: 1, season: 2026, round: "R16" },
+      teams: { home: { id: 10, name: "Brazil" }, away: { id: 20, name: "USA" } },
+      goals: { home: 0, away: 1 }, // the own goal counts for the away side
+      events: [
+        // Brazil (home) put it into their own net → counts for USA (away).
+        { time: { elapsed: 50 }, team: { id: 10, name: "Brazil" }, player: { name: "Marquinhos" }, type: "Goal", detail: "Own Goal" },
+      ],
+    };
+    const { provider } = providerReturning({ response: [fixture] });
+    const [match] = await provider.fixturesForRange("2026-06-10", "2026-06-12");
+    expect(match!.away.goals).toBe(1);
+    expect(match!.away.goalEvents).toEqual([{ player: "Marquinhos", minute: 50, extra: null, kind: "own" }]);
+    expect(match!.home.goalEvents).toEqual([]);
+    expect(match!.lastGoal).toMatchObject({ teamId: 20, player: "Marquinhos" });
+  });
+
+  it("tags an in-play penalty goal with kind 'penalty'", async () => {
+    const fixture = {
+      fixture: { id: 802, date: "2026-06-11T20:00:00+00:00", status: { short: "2H", elapsed: 73 } },
+      league: { id: 1, season: 2026, round: "R16" },
+      teams: { home: { id: 10, name: "Brazil" }, away: { id: 20, name: "USA" } },
+      goals: { home: 1, away: 0 },
+      events: [
+        { time: { elapsed: 73 }, team: { id: 10, name: "Brazil" }, player: { name: "Neymar" }, type: "Goal", detail: "Penalty", comments: null },
+      ],
+    };
+    const { provider } = providerReturning({ response: [fixture] });
+    const [match] = await provider.fixturesForRange("2026-06-10", "2026-06-12");
+    expect(match!.home.goalEvents).toEqual([{ player: "Neymar", minute: 73, extra: null, kind: "penalty" }]);
+  });
+
+  it("keeps non-goal VAR outcomes but excludes goal cancellations (score-drop covers those)", async () => {
+    const fixture = {
+      fixture: { id: 803, date: "2026-06-11T20:00:00+00:00", status: { short: "2H", elapsed: 68 } },
+      league: { id: 1, season: 2026, round: "R16" },
+      teams: { home: { id: 10, name: "Brazil" }, away: { id: 20, name: "USA" } },
+      goals: { home: 0, away: 0 },
+      events: [
+        { time: { elapsed: 67 }, team: { id: 10, name: "Brazil" }, player: { name: "Neymar" }, type: "Var", detail: "Penalty confirmed" },
+        { time: { elapsed: 68 }, team: { id: 20, name: "USA" }, player: { name: null }, type: "Var", detail: "Goal cancelled" },
+      ],
+    };
+    const { provider } = providerReturning({ response: [fixture] });
+    const [match] = await provider.fixturesForRange("2026-06-10", "2026-06-12");
+    expect(match!.varEvents).toEqual([
+      { teamId: 10, detail: "Penalty confirmed", player: "Neymar", minute: 67, extra: null },
+    ]);
   });
 
   it("leaves shootout undefined for a normal in-play fixture", async () => {
