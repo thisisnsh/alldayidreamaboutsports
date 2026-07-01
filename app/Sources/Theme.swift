@@ -38,6 +38,21 @@ enum ThemeChoice: String, CaseIterable, Codable {
     }
 }
 
+/// How big a pinned score capsule draws. Scales every font and logo in the
+/// capsule (see `CapsuleMetrics` in `Overlay/PinnedCapsule.swift`); medium is
+/// the default when the setting is unset.
+enum CapsuleSize: String, CaseIterable, Codable {
+    case small, medium, large
+
+    var label: String {
+        switch self {
+        case .small: "Small"
+        case .medium: "Medium"
+        case .large: "Large"
+        }
+    }
+}
+
 // MARK: Buttons — every clickable thing reacts to hover.
 
 /// Row/list buttons: soft highlight + tiny lift on hover, press squish.

@@ -26,6 +26,8 @@ struct PrefSettings: Codable, Equatable {
     var goalCenter: Bool?
     /// Confetti burst on fan-team goals (with either style).
     var confetti: Bool?
+    /// Size of pinned score capsules (fonts + logos). nil = medium.
+    var capsuleSize: CapsuleSize?
 }
 
 struct SignInResponse: Codable {
