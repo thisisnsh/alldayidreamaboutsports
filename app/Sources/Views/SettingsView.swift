@@ -315,8 +315,9 @@ private struct SettingsCard<Content: View>: View {
 
 extension MatchEventType {
     static let settingsOrder: [MatchEventType] = [
-        .kickoff, .goal, .goalCancelled, .yellowCard, .redCard, .halfTime,
-        .extraTime, .penaltyShootout, .penaltyKick, .fullTime, .celebration,
+        .kickoff, .goal, .goalCancelled, .varDecision, .yellowCard, .redCard,
+        .substitution, .halfTime, .extraTime, .penaltyShootout, .penaltyKick,
+        .fullTime, .celebration,
     ]
 
     var displayName: String {
@@ -324,8 +325,10 @@ extension MatchEventType {
         case .kickoff: "Kickoff"
         case .goal: "Goal"
         case .goalCancelled: "VAR: Goal Disallowed"
+        case .varDecision: "VAR decisions"
         case .yellowCard: "Yellow card"
         case .redCard: "Red card"
+        case .substitution: "Substitution"
         case .halfTime: "Half-time"
         case .fullTime: "Full-time"
         case .extraTime: "Extra time"

@@ -66,6 +66,7 @@ export function toScheduleRow(m: MatchState): MatchState {
     yellowCardEvents: [],
     redCardEvents: [],
     goalEvents: [],
+    subs: [],
   });
   return {
     fixtureId: m.fixtureId,
@@ -82,6 +83,7 @@ export function toScheduleRow(m: MatchState): MatchState {
     running: false,
     home: schedTeam(m.home),
     away: schedTeam(m.away),
+    varEvents: [],
     // lastGoal / shootout intentionally dropped — schedule data only.
   };
 }

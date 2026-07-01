@@ -231,12 +231,13 @@ export function buildApp({ store, poller, dispatcher, catalog, celebrations, r2 
       running: phase.running,
       home: {
         id: d.homeTeamId, name: d.homeName, goals: d.homeGoals,
-        yellowCards: 0, redCards: 0, yellowCardEvents: [], redCardEvents: [], goalEvents: [],
+        yellowCards: 0, redCards: 0, yellowCardEvents: [], redCardEvents: [], goalEvents: [], subs: [],
       },
       away: {
         id: d.awayTeamId, name: d.awayName, goals: d.awayGoals,
-        yellowCards: 0, redCards: 0, yellowCardEvents: [], redCardEvents: [], goalEvents: [],
+        yellowCards: 0, redCards: 0, yellowCardEvents: [], redCardEvents: [], goalEvents: [], subs: [],
       },
+      varEvents: [],
     };
     await r2.putJson(`matches/${d.fixtureId}.json`, state, CACHE_CONTROL_LIVE);
     log.info("test_event_complete", { fixtureId: d.fixtureId, rawStatus: d.rawStatus });

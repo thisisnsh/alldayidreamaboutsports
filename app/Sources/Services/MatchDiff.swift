@@ -25,7 +25,10 @@ enum MatchDiff {
             extra: Int? = nil,
             penHome: Int? = nil,
             penAway: Int? = nil,
-            scored: Bool? = nil
+            scored: Bool? = nil,
+            goalKind: String? = nil,
+            playerOut: String? = nil,
+            varDetail: String? = nil
         ) -> MatchEvent {
             let id = "\(next.fixtureId):\(type.rawValue)" + (idSuffix.map { ":\($0)" } ?? "")
             return MatchEvent(
@@ -45,7 +48,10 @@ enum MatchDiff {
                 awayGoals: next.away.goals,
                 penHome: penHome,
                 penAway: penAway,
-                scored: scored
+                scored: scored,
+                goalKind: goalKind,
+                playerOut: playerOut,
+                varDetail: varDetail
             )
         }
 
@@ -113,7 +119,8 @@ enum MatchDiff {
                         teamId: team.id,
                         player: goalEv?.player ?? team.name,
                         minute: goalEv?.minute ?? next.minute,
-                        extra: goalEv?.extra
+                        extra: goalEv?.extra,
+                        goalKind: goalEv?.kind
                     ))
                     g += 1
                 }
@@ -155,6 +162,44 @@ enum MatchDiff {
                     c += 1
                 }
             }
+        }
+
+        // Substitutions — one event per new sub (ordered list, like cards).
+        for side in [Side.home, Side.away] {
+            let team = side == .home ? next.home : next.away
+            let before = side == .home ? (prev?.home.subs.count ?? 0) : (prev?.away.subs.count ?? 0)
+            var s = before + 1
+            while s <= team.subs.count {
+                let sub = team.subs[s - 1]
+                events.append(make(
+                    .substitution,
+                    idSuffix: "\(team.id):\(s)",
+                    teamId: team.id,
+                    player: sub.playerIn,
+                    minute: sub.minute ?? next.minute,
+                    extra: sub.extra,
+                    playerOut: sub.playerOut
+                ))
+                s += 1
+            }
+        }
+
+        // VAR decisions — one event per new outcome (ordered list). Goal
+        // cancellations aren't here (they surface as the score-drop above).
+        let beforeVar = prev?.varEvents.count ?? 0
+        var v = beforeVar + 1
+        while v <= next.varEvents.count {
+            let decision = next.varEvents[v - 1]
+            events.append(make(
+                .varDecision,
+                idSuffix: String(v),
+                teamId: decision.teamId,
+                player: decision.player,
+                minute: decision.minute ?? next.minute,
+                extra: decision.extra,
+                varDetail: decision.detail
+            ))
+            v += 1
         }
 
         return events

@@ -36,6 +36,29 @@ export interface CardEvent {
   extra: number | null;
 }
 
+/** A scored goal. `kind` distinguishes an own goal / penalty from a normal one. */
+export interface GoalEvent extends CardEvent {
+  kind?: "own" | "penalty" | null;
+}
+
+/** One substitution: `playerOut` leaves, `playerIn` comes on. */
+export interface SubEvent {
+  playerOut: string | null;
+  playerIn: string | null;
+  minute: number | null;
+  extra: number | null;
+}
+
+/** A VAR review outcome (e.g. "Penalty confirmed", "Penalty awarded"). Goal
+ * cancellations are excluded here — they surface via the score-drop diff. */
+export interface VarEvent {
+  teamId: TeamId;
+  detail: string;
+  player: string | null;
+  minute: number | null;
+  extra: number | null;
+}
+
 export interface TeamScore {
   id: TeamId;
   name: string; // display name from the fixture (logo is resolved app-side via the catalog)
@@ -46,7 +69,9 @@ export interface TeamScore {
   yellowCardEvents: CardEvent[];
   redCardEvents: CardEvent[];
   /** Ordered list of goals scored; index 0 = first goal. Used by the diff to attach the scorer. */
-  goalEvents: CardEvent[];
+  goalEvents: GoalEvent[];
+  /** Ordered list of substitutions made by this team; index 0 = first. */
+  subs?: SubEvent[];
 }
 
 /** One penalty-shootout kick, in the order it was taken. */
@@ -79,6 +104,8 @@ export interface MatchState {
   away: TeamScore;
   /** Last scorer per side, when the provider exposes it. */
   lastGoal?: { teamId: TeamId; player: string | null; minute: number | null; extra: number | null };
+  /** VAR review outcomes in order (penalty confirmed/awarded, card upgrade, …). */
+  varEvents?: VarEvent[];
   /** Penalty shootout, present once the match reaches one (P/PEN). */
   shootout?: { home: number; away: number; kicks: PenaltyKick[] };
 }

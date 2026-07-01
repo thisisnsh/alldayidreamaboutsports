@@ -1,4 +1,4 @@
-import type { MatchState, MatchStatus, PenaltyKick, Period } from "../types.js";
+import type { GoalEvent, MatchState, MatchStatus, PenaltyKick, Period, SubEvent, VarEvent } from "../types.js";
 import type { CatalogTeam, LeagueInfo, ScoreProvider } from "./types.js";
 import { log } from "../log.js";
 
@@ -31,7 +31,11 @@ function derivePeriod(short: string, elapsed: number | null): Period {
     case "HT": return "HALF";
     case "2H": return "SECOND";
     case "ET": return (elapsed ?? 0) <= 105 ? "EXTRA_FIRST" : "EXTRA_SECOND";
-    case "BT": return "EXTRA_BREAK";
+    // "BT" (Break Time) covers BOTH the pause between the two ET halves (~105')
+    // and the pause after ET ends while the shootout is set up (~120'). Split on
+    // elapsed so the post-ET break reads as PENALTIES ("PENS") instead of the
+    // mid-ET "ET HT" label.
+    case "BT": return (elapsed ?? 0) > 105 ? "PENALTIES" : "EXTRA_BREAK";
     case "P": return "PENALTIES";
     case "NS":
     case "TBD": return "PRE";
@@ -66,6 +70,8 @@ interface ApiFixture {
     time: { elapsed: number | null; extra: number | null };
     team: { id: number; name: string };
     player: { name: string | null };
+    /** For `subst`: the player coming ON. For a `Goal`: the assist provider. */
+    assist?: { name: string | null };
     type: string;
     detail: string;
     comments?: string | null;
@@ -175,11 +181,13 @@ export class ApiFootballProvider implements ScoreProvider {
       away: { yellow: 0, red: 0, yellowEvents: [] as EventRecord[], redEvents: [] as EventRecord[] },
     };
     const goals = {
-      home: [] as EventRecord[],
-      away: [] as EventRecord[],
+      home: [] as GoalEvent[],
+      away: [] as GoalEvent[],
     };
+    const subs = { home: [] as SubEvent[], away: [] as SubEvent[] };
     let lastGoal: MatchState["lastGoal"];
     const kicks: PenaltyKick[] = [];
+    const varEvents: VarEvent[] = [];
 
     for (const ev of f.events ?? []) {
       const side = ev.team.id === f.teams.home.id ? "home" : "away";
@@ -190,15 +198,42 @@ export class ApiFootballProvider implements ScoreProvider {
         const cardEv = { player: ev.player?.name ?? null, minute: ev.time.elapsed, extra: ev.time.extra ?? null };
         if (ev.detail.startsWith("Yellow")) { cards[side].yellow++; cards[side].yellowEvents.push(cardEv); }
         else if (ev.detail.startsWith("Red")) { cards[side].red++; cards[side].redEvents.push(cardEv); }
+      } else if (ev.type === "subst") {
+        // `player` = leaving the pitch, `assist` = coming on.
+        subs[side].push({
+          playerOut: ev.player?.name ?? null,
+          playerIn: ev.assist?.name ?? null,
+          minute: ev.time.elapsed,
+          extra: ev.time.extra ?? null,
+        });
+      } else if (ev.type === "Var") {
+        // Goal cancellations already surface as a score drop (→ GOAL_CANCELLED);
+        // keep only the VAR outcomes that don't change the score.
+        if (!/goal/i.test(ev.detail)) {
+          varEvents.push({
+            teamId, detail: ev.detail, player: ev.player?.name ?? null,
+            minute: ev.time.elapsed, extra: ev.time.extra ?? null,
+          });
+        }
       } else if (isShootoutKick) {
         // Shootout kicks live in score.penalty (counts) + here (player/result).
         kicks.push({ teamId, player: ev.player?.name ?? null, scored: !/missed/i.test(ev.detail) });
       } else if (ev.type === "Goal" && !/cancell/i.test(ev.detail) && !/missed/i.test(ev.detail)) {
         // Skip "Missed Penalty" — it never increments the score and must not
         // steal scorer attribution from a later real goal.
-        const goalEv = { player: ev.player?.name ?? null, minute: ev.time.elapsed, extra: ev.time.extra ?? null };
-        goals[side].push(goalEv);
-        lastGoal = { teamId, ...goalEv };
+        const kind: GoalEvent["kind"] =
+          /own/i.test(ev.detail) ? "own" : /penalt/i.test(ev.detail) ? "penalty" : null;
+        const goalEv: GoalEvent = {
+          player: ev.player?.name ?? null, minute: ev.time.elapsed, extra: ev.time.extra ?? null,
+        };
+        // Only tag non-normal goals so a plain goal stays `{player,minute,extra}`.
+        if (kind) goalEv.kind = kind;
+        // An own goal is scored by `ev.team` into their own net, so it counts
+        // for the OPPONENT — attribute it to the other side (also keeps the
+        // events-based goal count in sync with the aggregate `f.goals`).
+        const scoringSide = kind === "own" ? (side === "home" ? "away" : "home") : side;
+        goals[scoringSide].push(goalEv);
+        lastGoal = { teamId: scoringSide === "home" ? homeId : awayId, ...goalEv };
       }
     }
 
@@ -269,6 +304,7 @@ export class ApiFootballProvider implements ScoreProvider {
         yellowCardEvents: cards.home.yellowEvents,
         redCardEvents: cards.home.redEvents,
         goalEvents: goals.home,
+        subs: subs.home,
       },
       away: {
         id: awayId,
@@ -279,8 +315,10 @@ export class ApiFootballProvider implements ScoreProvider {
         yellowCardEvents: cards.away.yellowEvents,
         redCardEvents: cards.away.redEvents,
         goalEvents: goals.away,
+        subs: subs.away,
       },
       lastGoal,
+      varEvents,
       shootout,
     };
   }

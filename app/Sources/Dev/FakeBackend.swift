@@ -97,6 +97,9 @@ final class FakeStore {
             case "1H": return .first
             case "HT": return .half
             case "ET": return (s.minute ?? 0) <= 105 ? .extraFirst : .extraSecond
+            // BT (Break Time): "ET HT" between the ET halves (~105'), but the
+            // shootout is imminent once ET is over (~120') → show "PENS".
+            case "BT": return (s.minute ?? 0) > 105 ? .pens : .extraBreak
             case "P": return .pens
             case "PEN", "FT", "AET": return .finished
             default: return .notStarted

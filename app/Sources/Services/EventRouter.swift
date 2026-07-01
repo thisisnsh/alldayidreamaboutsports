@@ -102,6 +102,8 @@ extension MatchEventType {
         case .extraTime: "extra_time"
         case .penaltyShootout: "penalties"
         case .penaltyKick: "penalty_kicks"
+        case .substitution: "substitutions"
+        case .varDecision: "var_decisions"
         case .celebration: "celebrations"
         }
     }
@@ -156,7 +158,13 @@ func pillTitle(for event: MatchEvent) -> [PillSegment] {
         // Backend now always sends a scorer; if it's ever missing, name the
         // scoring team — never the home team (that mislabels away goals).
         let scorer = event.player ?? event.teamId.map(teamName) ?? ""
-        return [.text("\(minute)Goal"), dash, .text("\(scorer) ", bold: true)] + teamChip
+        let label: String
+        switch event.goalKind {
+        case "own": label = "Own goal"
+        case "penalty": label = "Penalty goal"
+        default: label = "Goal"
+        }
+        return [.text("\(minute)\(label)"), dash, .text("\(scorer) ", bold: true)] + teamChip
     case .goalCancelled: return [.text("\(minute)VAR"), dash, .text("Goal disallowed ")] + teamChip
     case .yellowCard: return [.text("\(minute)Yellow card"), dash, .text("\(event.player ?? "") ", bold: true)] + teamChip
     case .redCard: return [.text("\(minute)Red card"), dash, .text("\(event.player ?? "") ", bold: true)] + teamChip
@@ -179,6 +187,13 @@ func pillTitle(for event: MatchEvent) -> [PillSegment] {
     case .penaltyKick:
         let outcome = (event.scored ?? false) ? "scored ✓" : "missed ✗"
         return [.text("\(minute)Penalty"), dash, .text("\(event.player ?? "") ", bold: true), .text("\(outcome) ")] + teamChip
+    case .substitution:
+        // `player` = coming on (bold), `playerOut` = leaving.
+        let onName = event.player ?? ""
+        let offSuffix = event.playerOut.map { "for \($0) " } ?? ""
+        return [.text("\(minute)Sub"), dash, .text("\(onName) ", bold: true), .text(offSuffix)] + teamChip
+    case .varDecision:
+        return [.text("\(minute)VAR"), dash, .text("\(event.varDetail ?? "Review") ")] + teamChip
     case .celebration: return [] // never a backend event; counts build their own text
     }
 }
@@ -198,7 +213,8 @@ func pillSubtitle(for event: MatchEvent) -> [PillSegment]? {
             .text(" \(event.awayName)"),
         ]
     case .goal, .goalCancelled, .yellowCard, .redCard, .halfTime,
-         .fullTime, .extraTime, .penaltyShootout, .penaltyKick:
+         .fullTime, .extraTime, .penaltyShootout, .penaltyKick,
+         .substitution, .varDecision:
         let scoreline = ScorelineFormatter.text(
             homeGoals: event.homeGoals,
             awayGoals: event.awayGoals,
@@ -242,6 +258,8 @@ func pillIcon(for type: MatchEventType) -> String {
     case .fullTime: "flag.fill"
     case .extraTime: "clock.fill"
     case .penaltyShootout, .penaltyKick: "target"
+    case .substitution: "arrow.left.arrow.right"
+    case .varDecision: "video.fill"
     case .celebration: "party.popper"
     }
 }

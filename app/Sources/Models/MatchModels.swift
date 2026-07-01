@@ -11,6 +11,8 @@ enum MatchEventType: String, Codable, CaseIterable {
     case extraTime = "EXTRA_TIME"
     case penaltyShootout = "PENALTY_SHOOTOUT"
     case penaltyKick = "PENALTY_KICK"
+    case substitution = "SUBSTITUTION"
+    case varDecision = "VAR_DECISION"
     // Local-only: the post-goal celebration count pill. Never arrives as a
     // backend match_event; exists so Settings → Events can toggle it.
     case celebration = "CELEBRATION"
@@ -37,6 +39,12 @@ struct MatchEvent: Identifiable {
     let penAway: Int?
     /// Whether a penalty kick was converted (PENALTY_KICK only).
     let scored: Bool?
+    /// Goal manner: "own" / "penalty" (GOAL only; nil for a normal goal).
+    let goalKind: String?
+    /// Player leaving the pitch (SUBSTITUTION only; `player` is the one coming on).
+    let playerOut: String?
+    /// VAR outcome text, e.g. "Penalty confirmed" (VAR_DECISION only).
+    let varDetail: String?
 
     var id: String { eventId }
 
@@ -57,7 +65,10 @@ struct MatchEvent: Identifiable {
         awayGoals: Int,
         penHome: Int? = nil,
         penAway: Int? = nil,
-        scored: Bool? = nil
+        scored: Bool? = nil,
+        goalKind: String? = nil,
+        playerOut: String? = nil,
+        varDetail: String? = nil
     ) {
         self.eventId = eventId
         self.type = type
@@ -76,6 +87,9 @@ struct MatchEvent: Identifiable {
         self.penHome = penHome
         self.penAway = penAway
         self.scored = scored
+        self.goalKind = goalKind
+        self.playerOut = playerOut
+        self.varDetail = varDetail
     }
 }
 
@@ -84,6 +98,32 @@ struct MatchEvent: Identifiable {
 /// One goal/card event on a team, ordered as issued; index 0 = first. Carries
 /// the scorer/carded player, the official minute, and any stoppage `extra`.
 struct MatchTimelineEvent: Codable, Hashable {
+    let player: String?
+    let minute: Int?
+    let extra: Int?
+    /// Goal manner ("own"/"penalty"); only present on goal events, nil for cards.
+    let kind: String?
+
+    init(player: String?, minute: Int?, extra: Int?, kind: String? = nil) {
+        self.player = player
+        self.minute = minute
+        self.extra = extra
+        self.kind = kind
+    }
+}
+
+/// One substitution (backend `SubEvent`): `playerOut` leaves, `playerIn` enters.
+struct SubstitutionRecord: Codable, Hashable {
+    let playerOut: String?
+    let playerIn: String?
+    let minute: Int?
+    let extra: Int?
+}
+
+/// One VAR review outcome (backend `VarEvent`).
+struct VarRecord: Codable, Hashable {
+    let teamId: Int
+    let detail: String
     let player: String?
     let minute: Int?
     let extra: Int?
@@ -98,10 +138,11 @@ struct ScoreboardTeam: Codable, Hashable {
     let goalEvents: [MatchTimelineEvent]
     let yellowCardEvents: [MatchTimelineEvent]
     let redCardEvents: [MatchTimelineEvent]
+    let subs: [SubstitutionRecord]
 
     enum CodingKeys: String, CodingKey {
         case id, name, goals, yellowCards, redCards
-        case goalEvents, yellowCardEvents, redCardEvents
+        case goalEvents, yellowCardEvents, redCardEvents, subs
     }
 
     init(
@@ -112,7 +153,8 @@ struct ScoreboardTeam: Codable, Hashable {
         redCards: Int = 0,
         goalEvents: [MatchTimelineEvent] = [],
         yellowCardEvents: [MatchTimelineEvent] = [],
-        redCardEvents: [MatchTimelineEvent] = []
+        redCardEvents: [MatchTimelineEvent] = [],
+        subs: [SubstitutionRecord] = []
     ) {
         self.id = id
         self.name = name
@@ -122,6 +164,7 @@ struct ScoreboardTeam: Codable, Hashable {
         self.goalEvents = goalEvents
         self.yellowCardEvents = yellowCardEvents
         self.redCardEvents = redCardEvents
+        self.subs = subs
     }
 
     // Older/partial payloads (e.g. the fixtures bootstrap file) may omit the
@@ -136,6 +179,7 @@ struct ScoreboardTeam: Codable, Hashable {
         goalEvents = try c.decodeIfPresent([MatchTimelineEvent].self, forKey: .goalEvents) ?? []
         yellowCardEvents = try c.decodeIfPresent([MatchTimelineEvent].self, forKey: .yellowCardEvents) ?? []
         redCardEvents = try c.decodeIfPresent([MatchTimelineEvent].self, forKey: .redCardEvents) ?? []
+        subs = try c.decodeIfPresent([SubstitutionRecord].self, forKey: .subs) ?? []
     }
 }
 
@@ -210,10 +254,11 @@ struct Fixture: Codable, Identifiable, Hashable {
     let home: ScoreboardTeam
     let away: ScoreboardTeam
     let shootout: Shootout?
+    let varEvents: [VarRecord]
 
     enum CodingKeys: String, CodingKey {
         case fixtureId, leagueId, round, kickoffISO, status, rawStatus
-        case minute, extra, period, running, home, away, shootout
+        case minute, extra, period, running, home, away, shootout, varEvents
     }
 
     init(
@@ -229,7 +274,8 @@ struct Fixture: Codable, Identifiable, Hashable {
         running: Bool? = nil,
         home: ScoreboardTeam,
         away: ScoreboardTeam,
-        shootout: Shootout?
+        shootout: Shootout?,
+        varEvents: [VarRecord] = []
     ) {
         self.fixtureId = fixtureId
         self.leagueId = leagueId
@@ -244,6 +290,7 @@ struct Fixture: Codable, Identifiable, Hashable {
         self.home = home
         self.away = away
         self.shootout = shootout
+        self.varEvents = varEvents
     }
 
     init(from decoder: Decoder) throws {
@@ -261,6 +308,7 @@ struct Fixture: Codable, Identifiable, Hashable {
         home = try c.decode(ScoreboardTeam.self, forKey: .home)
         away = try c.decode(ScoreboardTeam.self, forKey: .away)
         shootout = try c.decodeIfPresent(Shootout.self, forKey: .shootout)
+        varEvents = try c.decodeIfPresent([VarRecord].self, forKey: .varEvents) ?? []
     }
 
     var id: Int { fixtureId }
