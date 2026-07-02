@@ -17,49 +17,87 @@ const TEAMS = {
   FRA: { name: "France", crest: "assets/team-fra.png" },
 };
 
-/* ── event-type → SF-symbol-ish icon + status tone (mirrors EventRouter.swift) */
+/* ── SF-symbol-like icons + status tone, matching EventRouter.swift.
+   "circle.fill" glyphs are a filled disc (currentColor) with the inner mark
+   knocked out in the pill's black background (#000). */
 const ICON = {
-  ball: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polygon points="12,7 16.3,10.1 14.7,15 9.3,15 7.7,10.1" fill="currentColor" stroke="none"/><path d="M12 3v4M4.7 9.3l3.7 .8M19.3 9.3l-3.7 .8M7.7 20l1.6-5M16.3 20l-1.6-5"/></svg>',
-  card: '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="7" y="4" width="10" height="16" rx="2.5"/></svg>',
-  flag: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3v18"/><path d="M5 4h12l-2 3.5L17 11H5"/></svg>',
-  clock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7.5V12l3 2"/></svg>',
-  target: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="3" fill="currentColor" stroke="none"/></svg>',
+  play:  '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10"/><path d="M10 8.2l6 3.8-6 3.8z" fill="#000"/></svg>',
+  ball:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polygon points="12,7 16.3,10.1 14.7,15 9.3,15 7.7,10.1" fill="currentColor" stroke="none"/><path d="M12 3v4M4.7 9.3l3.7 .8M19.3 9.3l-3.7 .8M7.7 20l1.6-5M16.3 20l-1.6-5"/></svg>',
+  card:  '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="7" y="4" width="10" height="16" rx="2.5"/></svg>',
+  pause: '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10"/><rect x="8.4" y="7.8" width="2.4" height="8.4" rx="1" fill="#000"/><rect x="13.2" y="7.8" width="2.4" height="8.4" rx="1" fill="#000"/></svg>',
+  flag:  '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M5.5 3a1 1 0 0 0-1 1v17h1.9v-6.6h8.9l-1.6-3.4 1.6-3.4H6.4V4a1 1 0 0 0-.9-1z"/></svg>',
+  clock: '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10"/><path d="M12 6.4v6l3.8 2.2" fill="none" stroke="#000" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  target:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none"/></svg>',
+  check: '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10"/><path d="M7.4 12.3l3 3 6.2-6.6" fill="none" stroke="#000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  xmark: '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10"/><path d="M8.4 8.4l7.2 7.2M15.6 8.4l-7.2 7.2" fill="none" stroke="#000" stroke-width="2" stroke-linecap="round"/></svg>',
 };
 const TYPE = {
-  kickoff: { ic: "flag", tone: "green" },
-  goal: { ic: "ball", tone: "white" },
-  yellow: { ic: "card", tone: "yellow" },
-  red: { ic: "card", tone: "red" },
-  half: { ic: "clock", tone: "white" },
-  break: { ic: "clock", tone: "white" },
-  pengood: { ic: "target", tone: "green" },
-  penmiss: { ic: "target", tone: "red" },
-  win: { ic: "flag", tone: "green" },
+  kickoff:  { ic: "play",   tone: "green"  },
+  goal:     { ic: "ball",   tone: "white"  },
+  yellow:   { ic: "card",   tone: "yellow" },
+  red:      { ic: "card",   tone: "red"    },
+  half:     { ic: "pause",  tone: "white"  },
+  extra:    { ic: "clock",  tone: "white"  },
+  shootout: { ic: "target", tone: "purple" },
+  pengood:  { ic: "check",  tone: "green"  },
+  penmiss:  { ic: "xmark",  tone: "red"    },
+  full:     { ic: "flag",   tone: "green"  },
 };
 
-/* ── the 2022 Final, event by event (Argentina = home) ─────────────────────*/
+/* ── the 2022 Final, event by event (Argentina = home) ─────────────────────
+   h/a = goals; ph/pa = shootout pens (only set once the shootout starts). */
 const FINAL = [
-  { min: "0'", type: "kickoff", label: "Kick-off", h: 0, a: 0, sub: "Argentina vs France · Final" },
-  { min: "23'", type: "goal", label: "Goal", who: "Messi", team: "ARG", h: 1, a: 0, sub: "Penalty · Argentina 1–0 France", celebrate: true },
-  { min: "36'", type: "goal", label: "Goal", who: "Di María", team: "ARG", h: 2, a: 0, celebrate: true },
-  { min: "45+7", type: "yellow", label: "Yellow card", who: "E. Fernández", team: "ARG", h: 2, a: 0 },
-  { min: "HT", type: "half", label: "Half-time", h: 2, a: 0, fx: "ht" },
-  { min: "55'", type: "yellow", label: "Yellow card", who: "Rabiot", team: "FRA", h: 2, a: 0 },
-  { min: "80'", type: "goal", label: "Goal", who: "Mbappé", team: "FRA", h: 2, a: 1, sub: "Penalty · Argentina 2–1 France", celebrate: true },
-  { min: "81'", type: "goal", label: "Goal", who: "Mbappé", team: "FRA", h: 2, a: 2, celebrate: true },
-  { min: "90+3", type: "break", label: "Full-time · to extra time", h: 2, a: 2, fx: "break" },
-  { min: "108'", type: "goal", label: "Goal", who: "Messi", team: "ARG", h: 3, a: 2, celebrate: true },
-  { min: "116'", type: "yellow", label: "Yellow card", who: "Montiel", team: "ARG", h: 3, a: 2 },
-  { min: "118'", type: "goal", label: "Goal", who: "Mbappé", team: "FRA", h: 3, a: 3, sub: "Penalty · Argentina 3–3 France · hat-trick", celebrate: true },
-  { min: "120+3", type: "break", label: "Extra time ends — penalties", h: 3, a: 3, fx: "break" },
-  { min: "PENS", type: "pengood", label: "Penalty scored", who: "Messi", team: "ARG", h: 3, a: 3, sub: "Shootout · Argentina lead 1–0", fx: "pens" },
-  { min: "PENS", type: "pengood", label: "Penalty scored", who: "Mbappé", team: "FRA", h: 3, a: 3, sub: "Shootout · level 1–1", fx: "pens" },
-  { min: "PENS", type: "pengood", label: "Penalty scored", who: "Dybala", team: "ARG", h: 3, a: 3, sub: "Shootout · Argentina lead 2–1", fx: "pens" },
-  { min: "PENS", type: "penmiss", label: "Penalty saved", who: "Coman", team: "FRA", h: 3, a: 3, sub: "Shootout · Martínez saves · 2–1", fx: "pens" },
-  { min: "PENS", type: "pengood", label: "Penalty scored", who: "Paredes", team: "ARG", h: 3, a: 3, sub: "Shootout · Argentina lead 3–1", fx: "pens" },
-  { min: "PENS", type: "penmiss", label: "Penalty missed", who: "Tchouaméni", team: "FRA", h: 3, a: 3, sub: "Shootout · wide · 3–1", fx: "pens" },
-  { min: "PENS", type: "win", label: "Montiel scores — Argentina win!", team: "ARG", h: 3, a: 3, sub: "Champions · 4–2 on penalties", celebrate: true, fx: "ft" },
+  { type: "kickoff", h: 0, a: 0, fx: "live", fxMin: "1'" },
+  { type: "goal", min: "23", pen: true, player: "Messi", team: "ARG", h: 1, a: 0, celebrate: true, fx: "live", fxMin: "23'" },
+  { type: "goal", min: "36", player: "Di María", team: "ARG", h: 2, a: 0, celebrate: true, fx: "live", fxMin: "36'" },
+  { type: "yellow", min: "45+7", player: "E. Fernández", team: "ARG", h: 2, a: 0, fx: "live", fxMin: "45+7'" },
+  { type: "half", leadName: "Argentina", team: "ARG", h: 2, a: 0, fx: "ht" },
+  { type: "yellow", min: "55", player: "Rabiot", team: "FRA", h: 2, a: 0, fx: "live", fxMin: "55'" },
+  { type: "goal", min: "80", pen: true, player: "Mbappé", team: "FRA", h: 2, a: 1, celebrate: true, fx: "live", fxMin: "80'" },
+  { type: "goal", min: "81", player: "Mbappé", team: "FRA", h: 2, a: 2, celebrate: true, fx: "live", fxMin: "81'" },
+  { type: "extra", h: 2, a: 2, fx: "break", fxMin: "90'" },
+  { type: "goal", min: "108", player: "Messi", team: "ARG", h: 3, a: 2, celebrate: true, fx: "live", fxMin: "108'" },
+  { type: "yellow", min: "116", player: "Montiel", team: "ARG", h: 3, a: 2, fx: "live", fxMin: "116'" },
+  { type: "goal", min: "118", pen: true, player: "Mbappé", team: "FRA", h: 3, a: 3, celebrate: true, fx: "live", fxMin: "118'" },
+  { type: "shootout", h: 3, a: 3, ph: 0, pa: 0, fx: "pens" },
+  { type: "pengood", player: "Mbappé", team: "FRA", h: 3, a: 3, ph: 0, pa: 1, fx: "pens" },
+  { type: "pengood", player: "Messi", team: "ARG", h: 3, a: 3, ph: 1, pa: 1, fx: "pens" },
+  { type: "penmiss", saved: true, player: "Coman", team: "FRA", h: 3, a: 3, ph: 1, pa: 1, fx: "pens" },
+  { type: "pengood", player: "Dybala", team: "ARG", h: 3, a: 3, ph: 2, pa: 1, fx: "pens" },
+  { type: "penmiss", player: "Tchouaméni", team: "FRA", h: 3, a: 3, ph: 2, pa: 1, fx: "pens" },
+  { type: "pengood", player: "Paredes", team: "ARG", h: 3, a: 3, ph: 3, pa: 1, fx: "pens" },
+  { type: "pengood", player: "Kolo Muani", team: "FRA", h: 3, a: 3, ph: 3, pa: 2, fx: "pens" },
+  { type: "pengood", player: "Montiel", team: "ARG", h: 3, a: 3, ph: 4, pa: 2, celebrate: true, fx: "pens" },
+  { type: "full", winner: "Argentina", team: "ARG", h: 3, a: 3, ph: 4, pa: 2, fx: "ft" },
 ];
+
+/* score text mirrors ScorelineFormatter: "3" or "3+P4" once pens exist */
+const scoreText = (goals, pens) => (pens == null ? `${goals}` : `${goals}+P${pens}`);
+const crestTag = (t) => `<img class="pill-crest" src="${TEAMS[t].crest}" alt="${TEAMS[t].name}" />`;
+
+/* pill title — the app grammar: [minute′] Label — <bold noun> [crest] */
+function pillTitle(ev) {
+  const m = ev.min ? `<span class="min">${ev.min}′ </span>` : "";
+  const cr = ev.team ? crestTag(ev.team) : "";
+  switch (ev.type) {
+    case "kickoff":  return "Kickoff";
+    case "goal":     return `${m}${ev.pen ? "Penalty goal" : "Goal"} — <b>${ev.player}</b> ${cr}`;
+    case "yellow":   return `${m}Yellow card — <b>${ev.player}</b> ${cr}`;
+    case "red":      return `${m}Red card — <b>${ev.player}</b> ${cr}`;
+    case "half":     return `Half-time — <b>${ev.leadName}</b> ahead ${cr}`;
+    case "extra":    return "Extra time";
+    case "shootout": return "Penalty shootout!";
+    case "pengood":  return `Penalty — <b>${ev.player}</b> scored ✓ ${cr}`;
+    case "penmiss":  return `Penalty — <b>${ev.player}</b> ${ev.saved ? "saved ✗" : "missed ✗"} ${cr}`;
+    case "full":     return `Full-time — <b>${ev.winner}</b> won on pens ${cr}`;
+    default:         return "";
+  }
+}
+/* pill subtitle — the score row (kickoff reads "vs") */
+function pillSub(ev) {
+  if (ev.type === "kickoff") return `${TEAMS.ARG.name} vs ${TEAMS.FRA.name}`;
+  return `${TEAMS.ARG.name} ${scoreText(ev.h, ev.ph)} - ${scoreText(ev.a, ev.pa)} ${TEAMS.FRA.name}`;
+}
 
 /* ═══════════════════════════════════════════════════════════════════════════
    DOM
@@ -75,6 +113,7 @@ const scoreH = $("scoreH");
 const scoreA = $("scoreA");
 const fxTrail = $("fxTrail");
 const fxMin = $("fxMin");
+const fxSub = $("fxSub");
 const cbOverlay = $("cbOverlay");
 const cbBall = $("cbBall");
 const cbBadge = $("cbBadge");
@@ -96,26 +135,31 @@ if (trayClock) {
 /* ═══════════════════════════════════════════════════════════════════════════
    Notch pills
    ═══════════════════════════════════════════════════════════════════════════ */
-function pillHTML(ev) {
-  const t = TYPE[ev.type] || TYPE.break;
-  const crest = ev.team ? `<img class="pill-crest" src="${TEAMS[ev.team].crest}" alt="${TEAMS[ev.team].name}" />` : "";
-  const who = ev.who ? ` — <b>${ev.who}</b>` : "";
-  const sub = ev.sub || `${TEAMS.ARG.name} ${ev.h} – ${ev.a} ${TEAMS.FRA.name}`;
-  return (
-    `<span class="pill-ic" data-tone="${t.tone}">${ICON[t.ic]}</span>` +
-    `<span class="pill-body">` +
-      `<span class="pill-title"><span class="min">${ev.min}</span> ${ev.label}${who}${crest}</span>` +
-      `<span class="pill-sub">${sub}</span>` +
-    `</span>`
-  );
-}
-function dropPill(ev, animate = true) {
-  if (!pillstack) return;
+// One notch pill at a time: it drops in, holds, then rises back into the notch
+// before the next one appears (mirrors the app's single displayed set).
+let currentPill = null, pillExitTimer = null;
+function buildPill(ev, animate = true) {
+  const t = TYPE[ev.type];
   const el = document.createElement("div");
   el.className = animate ? "pill drop" : "pill";
-  el.innerHTML = pillHTML(ev);
-  pillstack.prepend(el);
-  while (pillstack.children.length > 3) pillstack.lastChild.remove();
+  el.innerHTML =
+    `<div class="pill-head"><span class="pill-ic" data-tone="${t.tone}">${ICON[t.ic]}</span>` +
+    `<span class="pill-title">${pillTitle(ev)}</span></div>` +
+    `<span class="pill-sub">${pillSub(ev)}</span>`;
+  return el;
+}
+function showPill(ev) {
+  if (!pillstack) return;
+  clearTimeout(pillExitTimer);
+  if (currentPill) { currentPill.remove(); currentPill = null; }
+  currentPill = buildPill(ev);
+  pillstack.appendChild(currentPill);
+}
+function exitCurrentPill() {
+  if (!currentPill) return;
+  const el = currentPill; currentPill = null;
+  el.classList.remove("drop"); el.classList.add("exit");
+  pillExitTimer = setTimeout(() => el.remove(), 400);
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -128,9 +172,16 @@ function updateFixture(ev) {
   scoreH.textContent = ev.h;
   scoreA.textContent = ev.a;
   const st = ev.fx || "live";
-  fxTrail.className = "fx-trail" + (st === "ft" ? " ft" : st === "live" || st === "pens" ? " live" : "");
-  fxMin.textContent =
-    st === "ft" ? "FT" : st === "ht" ? "HT" : st === "pens" ? "PENS" : st === "break" ? ev.min : ev.min;
+  fxTrail.className = "fx-trail" + (st === "ft" ? " ft" : (st === "live" || st === "pens" || st === "break") ? " live" : "");
+  fxMin.textContent = st === "ft" ? "FT" : st === "ht" ? "HT" : st === "pens" ? "PENS" : (ev.fxMin || "");
+  // sub line shows the stage — or the live shootout score once penalties start
+  if (ev.ph != null) {
+    fxSub.textContent = st === "ft"
+      ? `Penalties ${ev.ph} – ${ev.pa} · ${ev.winner} win`
+      : `Penalties ${ev.ph} – ${ev.pa}`;
+  } else {
+    fxSub.textContent = "World Cup 2022 · Final";
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -179,7 +230,7 @@ function popBall(r) {
   for (let i = 0; i < 5; i++) {
     const b = document.createElement("span");
     b.className = "cb-pop";
-    b.style.backgroundImage = `url(${TEAMS.ARG.crest})`;
+    b.style.backgroundImage = "url(assets/soccerball.png)";
     b.style.left = r.width / 2 + "px";
     b.style.top = r.height / 2 + "px";
     const ang = rand(0, Math.PI * 2), dist = rand(50, 120);
@@ -202,16 +253,18 @@ if (trayApp && appmenu) {
 /* ═══════════════════════════════════════════════════════════════════════════
    Timeline playback — one clock drives pills + fixture + celebration
    ═══════════════════════════════════════════════════════════════════════════ */
-let idx = 0, playing = false, finished = false, timer = null, autoPlayed = false;
+let idx = 0, playing = false, finished = false, timer = null, gapTimer = null, autoPlayed = false;
 
 function setLabel(text, mode) {
   if (playLabel) playLabel.textContent = text;
   if (playIco) playIco.textContent = mode === "pause" ? "❚❚" : "▶";
 }
+function clearTimers() { clearTimeout(timer); clearTimeout(gapTimer); }
 function resetTimeline() {
-  clearTimeout(timer);
+  clearTimers();
   idx = 0; finished = false;
   if (pillstack) pillstack.innerHTML = "";
+  currentPill = null;
   if (fixtureRow) fixtureRow.hidden = true;
   if (fxEmpty) fxEmpty.hidden = false;
   hideCelebration();
@@ -220,14 +273,17 @@ function step() {
   if (idx >= FINAL.length) {
     playing = false; finished = true;
     setLabel("Replay the 2022 Final", "play");
+    timer = setTimeout(exitCurrentPill, 2400);
     return;
   }
   const ev = FINAL[idx++];
-  dropPill(ev);
+  showPill(ev);
   updateFixture(ev);
   if (ev.celebrate) showCelebration(ev.team);
-  const gap = (reduceMotion ? 3600 : 2200) + (ev.celebrate ? 1000 : 0);
-  timer = setTimeout(step, gap);
+  const isPen = ev.type === "pengood" || ev.type === "penmiss";
+  const dwell = reduceMotion ? 2600 : ev.celebrate ? 2600 : isPen ? 1500 : 2000;
+  // pill leaves, brief empty gap, then the next event drops
+  timer = setTimeout(() => { exitCurrentPill(); gapTimer = setTimeout(step, 440); }, dwell);
 }
 function play() {
   if (reduceMotion) return jumpToFinal();
@@ -237,16 +293,17 @@ function play() {
   step();
 }
 function pause() {
-  clearTimeout(timer);
+  clearTimers();
   playing = false;
   setLabel("Resume", "play");
 }
 /* reduced motion: no animation — just show the finished state */
 function jumpToFinal() {
   resetTimeline();
-  const last = FINAL.slice(-3);
-  last.forEach((ev) => dropPill(ev, false));
-  updateFixture(FINAL[FINAL.length - 1]);
+  const last = FINAL[FINAL.length - 1];
+  showPill(last);
+  if (currentPill) currentPill.classList.remove("drop");
+  updateFixture(last);
   finished = true;
   setLabel("Replay the 2022 Final", "play");
 }

@@ -126,6 +126,35 @@
 
       <!-- faux macOS screen -->
       <div class="macframe reveal d2" id="macframe" aria-label="Interactive preview of the macOS app">
+        <!-- fake desktop windows — the app's alerts float above whatever you're working on -->
+        <div class="desktop-bg" aria-hidden="true">
+          <div class="win" style="--l:3%; --t:14%; --w:47%;">
+            <div class="win-bar"><span class="tl r"></span><span class="tl y"></span><span class="tl g"></span><span class="win-name">Q3 Report — Pages</span></div>
+            <div class="win-body">
+              <span class="ln" style="width:64%"></span>
+              <span class="ln" style="width:92%"></span>
+              <span class="ln" style="width:80%"></span>
+              <span class="ln" style="width:88%"></span>
+              <span class="ln" style="width:54%"></span>
+              <span class="ln" style="width:74%"></span>
+            </div>
+          </div>
+          <div class="win" style="--l:53%; --t:33%; --w:43%;">
+            <div class="win-bar"><span class="tl r"></span><span class="tl y"></span><span class="tl g"></span><span class="win-name">Budget — Numbers</span></div>
+            <div class="win-body sheet-grid"></div>
+          </div>
+          <div class="win" style="--l:22%; --t:55%; --w:42%;">
+            <div class="win-bar"><span class="tl r"></span><span class="tl y"></span><span class="tl g"></span><span class="win-name">main.swift — Xcode</span></div>
+            <div class="win-body code-body">
+              <span class="ln c1" style="width:38%"></span>
+              <span class="ln c2" style="width:64%"></span>
+              <span class="ln c3" style="width:52%"></span>
+              <span class="ln c2" style="width:72%"></span>
+              <span class="ln c1" style="width:30%"></span>
+            </div>
+          </div>
+        </div>
+
         <!-- menu bar -->
         <div class="menubar">
           <div class="menubar-left">
@@ -150,10 +179,10 @@
         <!-- the menu bar dropdown -->
         <div class="appmenu" id="appmenu">
           <div class="am-head">
-            <span class="am-avatar" aria-hidden="true">N</span>
+            <span class="am-avatar" aria-hidden="true">J</span>
             <div class="am-id">
-              <span class="am-name">Nasheed</span>
-              <span class="am-email">you@icloud.com</span>
+              <span class="am-name">John Doe</span>
+              <span class="am-email">john.doe@gmail.com</span>
             </div>
           </div>
           <div class="am-fan">
@@ -164,13 +193,16 @@
 
           <div class="am-divider"></div>
           <div class="am-cap am-section">Today's matches</div>
-          <div class="fixture" id="fixtureRow">
-            <img class="fx-crest" src="assets/team-arg.png" alt="" width="16" height="16" />
-            <span class="fx-name">Argentina</span>
-            <span class="fx-score"><b id="scoreH">0</b><span class="fx-dash">–</span><b id="scoreA">0</b></span>
-            <span class="fx-name fx-away">France</span>
-            <img class="fx-crest" src="assets/team-fra.png" alt="" width="16" height="16" />
-            <span class="fx-trail" id="fxTrail"><span class="fx-live"></span><span id="fxMin">FINAL</span></span>
+          <div class="fixture" id="fixtureRow" hidden>
+            <div class="fx-main">
+              <img class="fx-crest" src="assets/team-arg.png" alt="" width="16" height="16" />
+              <span class="fx-name">Argentina</span>
+              <span class="fx-score"><b id="scoreH">0</b><span class="fx-dash">–</span><b id="scoreA">0</b></span>
+              <span class="fx-name fx-away">France</span>
+              <img class="fx-crest" src="assets/team-fra.png" alt="" width="16" height="16" />
+              <span class="fx-trail" id="fxTrail"><span class="fx-live"></span><span id="fxMin">0'</span></span>
+            </div>
+            <div class="fx-sub" id="fxSub">World Cup 2022 · Final</div>
           </div>
           <div class="fx-empty" id="fxEmpty">Press play to kick off the 2022 Final ⚽</div>
 
@@ -178,14 +210,6 @@
           <button class="am-row" type="button">
             <svg class="am-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 1 0-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 0 0 0-7.78z"/></svg>
             Become a Fan
-          </button>
-          <button class="am-row" type="button">
-            <svg class="am-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-            Request a feature
-          </button>
-          <button class="am-row" type="button">
-            <svg class="am-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20a5 5 0 0 0 5-5v-3a5 5 0 0 0-10 0v3a5 5 0 0 0 5 5z"/><line x1="12" y1="9" x2="12" y2="20"/><line x1="7" y1="12" x2="4" y2="12"/><line x1="17" y1="12" x2="20" y2="12"/><line x1="7" y1="16" x2="4.5" y2="18"/><line x1="17" y1="16" x2="19.5" y2="18"/><line x1="7.5" y1="8" x2="5" y2="6"/><line x1="16.5" y1="8" x2="19" y2="6"/></svg>
-            Report a bug
           </button>
           <button class="am-row" type="button">
             <svg class="am-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
@@ -196,14 +220,7 @@
         <!-- goal-in-center celebration overlay -->
         <div class="cb-overlay" id="cbOverlay" aria-hidden="true">
           <button class="cb-ball" id="cbBall" type="button" aria-label="Tap to celebrate">
-            <svg class="cb-ball-svg" viewBox="0 0 100 100" aria-hidden="true">
-              <circle cx="50" cy="50" r="47" fill="#ffffff"/>
-              <g fill="none" stroke="#12141a" stroke-width="2.4" stroke-linejoin="round">
-                <polygon points="50,32 63,42 58,58 42,58 37,42" fill="#12141a"/>
-                <path d="M50 6 V32 M12 34 L37 42 M88 34 L63 42 M28 84 L42 58 M72 84 L58 58"/>
-                <path d="M50 6 L28 20 M50 6 L72 20 M12 34 L18 60 M88 34 L82 60 M28 84 L50 94 M72 84 L50 94"/>
-              </g>
-            </svg>
+            <img class="cb-ball-img" src="assets/soccerball.png" alt="Soccer ball" />
             <span class="cb-badge" id="cbBadge">
               <img src="assets/team-arg.png" alt="" width="26" height="26" />
             </span>
