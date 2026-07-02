@@ -78,9 +78,6 @@
   </script>
 </head>
 <body>
-  <!-- celebration overlay canvas -->
-  <canvas class="confetti" id="confetti" aria-hidden="true"></canvas>
-
   <!-- Nav -->
   <nav class="nav">
     <a class="brand" href="#top" aria-label="All Day I Dream About Sports — home">
@@ -88,7 +85,7 @@
       <span class="brand-text">All&nbsp;Day&nbsp;I&nbsp;Dream&nbsp;About&nbsp;<b>Sports</b></span>
     </a>
     <div class="nav-links" id="nav-links">
-      <a class="btn btn-primary nav-cta" data-confetti href="https://download.alldayidreamaboutsports.com/latest"><span class="apple" aria-hidden="true"></span>Download for macOS</a>
+      <a class="btn btn-primary nav-cta" href="https://download.alldayidreamaboutsports.com/latest"><span class="apple" aria-hidden="true"></span>Download for macOS</a>
     </div>
   </nav>
 
@@ -99,15 +96,21 @@
       <div class="stage-head">
         <img class="hero-mark reveal" src="assets/app-icon.png" alt="All Day I Dream About Sports app icon" width="84" height="84" />
         <p class="eyebrow reveal d1"><span class="live-dot" aria-hidden="true"></span>World Cup 2026 · Live now</p>
-        <h1 class="display reveal d1">All day I dream<br />about <span class="accent">sports.</span></h1>
+        <h1 class="display hero-title reveal d1">All day I dream about <span class="accent">sports.</span></h1>
         <p class="body reveal d2">Live match updates that live in your Mac's menu bar. Goals, cards and scores drop below the notch — and when your team scores, you celebrate it with fans across the globe.</p>
+        <div class="actions stage-actions reveal d3">
+          <a class="btn btn-primary" href="https://download.alldayidreamaboutsports.com/latest"><span class="apple" aria-hidden="true"></span>Download for macOS</a>
+          <a class="btn btn-ghost" href="mailto:support@alldayidreamaboutsports.com?subject=Waitlist%20for%20Windows">Coming soon: Windows</a>
+        </div>
+        <span class="meta-note stage-meta reveal d3">Free · macOS 14+ · Windows soon</span>
       </div>
 
-      <!-- faux macOS screen -->
+      <!-- faux macOS screen (scrolls horizontally on phones so it stays big) -->
+      <div class="stage-scroll">
       <div class="macframe reveal d2" id="macframe" aria-label="Interactive preview of the macOS app">
         <!-- fake desktop windows — the app's alerts float above whatever you're working on -->
         <div class="desktop-bg" aria-hidden="true">
-          <div class="win" style="--l:3%; --t:14%; --w:47%;">
+          <div class="win" style="--l:3%; --t:12%; --w:47%;">
             <div class="win-bar"><span class="tl r"></span><span class="tl y"></span><span class="tl g"></span><span class="win-name">Q3 Report — Pages</span></div>
             <div class="win-body">
               <span class="ln" style="width:64%"></span>
@@ -116,13 +119,17 @@
               <span class="ln" style="width:88%"></span>
               <span class="ln" style="width:54%"></span>
               <span class="ln" style="width:74%"></span>
+              <span class="ln" style="width:90%"></span>
+              <span class="ln" style="width:66%"></span>
+              <span class="ln" style="width:82%"></span>
+              <span class="ln" style="width:48%"></span>
             </div>
           </div>
-          <div class="win" style="--l:53%; --t:33%; --w:43%;">
+          <div class="win" style="--l:53%; --t:30%; --w:43%;">
             <div class="win-bar"><span class="tl r"></span><span class="tl y"></span><span class="tl g"></span><span class="win-name">Budget — Numbers</span></div>
             <div class="win-body sheet-grid"></div>
           </div>
-          <div class="win" style="--l:22%; --t:55%; --w:42%;">
+          <div class="win" style="--l:22%; --t:52%; --w:42%;">
             <div class="win-bar"><span class="tl r"></span><span class="tl y"></span><span class="tl g"></span><span class="win-name">main.swift — Xcode</span></div>
             <div class="win-body code-body">
               <span class="ln c1" style="width:38%"></span>
@@ -130,6 +137,9 @@
               <span class="ln c3" style="width:52%"></span>
               <span class="ln c2" style="width:72%"></span>
               <span class="ln c1" style="width:30%"></span>
+              <span class="ln c3" style="width:58%"></span>
+              <span class="ln c2" style="width:68%"></span>
+              <span class="ln c1" style="width:44%"></span>
             </div>
           </div>
         </div>
@@ -151,18 +161,12 @@
           </div>
         </div>
 
-        <!-- pinned score capsule — draggable, like the app's floating capsule -->
+        <!-- pinned score capsule — draggable pill, like the app's floating capsule -->
         <div class="capsule" id="capsule" hidden>
-          <span class="cap-grip" aria-hidden="true"></span>
-          <div class="cap-head">
-            <img class="cap-crest" src="assets/team-arg.png" alt="" width="15" height="15" />
-            <span class="cap-name">ARG</span>
-            <span class="cap-score" id="capScore">0 – 0</span>
-            <span class="cap-name">FRA</span>
-            <img class="cap-crest" src="assets/team-fra.png" alt="" width="15" height="15" />
-            <span class="cap-trail" id="capTrail"><span class="cap-live"></span><span id="capMin">0'</span></span>
-          </div>
-          <div class="cap-events" id="capEvents"></div>
+          <img class="cap-crest" src="assets/team-arg.png" alt="Argentina" width="16" height="16" />
+          <span class="cap-score" id="capScore">0 – 0</span>
+          <img class="cap-crest" src="assets/team-fra.png" alt="France" width="16" height="16" />
+          <span class="cap-trail" id="capTrail"><span class="cap-live"></span><span id="capMin">0'</span></span>
         </div>
 
         <!-- the notch + dropping pills -->
@@ -210,37 +214,26 @@
           </button>
         </div>
 
+        <!-- confetti, confined to the demo — bursts from the frame's corners -->
+        <canvas class="cb-confetti" id="cbConfetti" aria-hidden="true"></canvas>
+
         <!-- goal-in-center celebration overlay -->
         <div class="cb-overlay" id="cbOverlay" aria-hidden="true">
+          <p class="cb-prompt">Tap the ball to celebrate with the world</p>
           <button class="cb-ball" id="cbBall" type="button" aria-label="Tap to celebrate">
-            <svg class="cb-ball-svg" viewBox="0 0 24 24" aria-hidden="true">
-              <circle cx="12" cy="12" r="11.4" fill="#fff"/>
-              <g fill="none" stroke="#0b0b0c" stroke-width="0.82" stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="12" cy="12" r="10.7"/>
-                <polygon points="12,7 16.3,10.1 14.7,15 9.3,15 7.7,10.1" fill="#0b0b0c" stroke="none"/>
-                <path d="M12 3v4M4.7 9.3l3.7 .8M19.3 9.3l-3.7 .8M7.7 20l1.6-5M16.3 20l-1.6-5"/>
-              </g>
-            </svg>
+            <img class="cb-ball-img" src="assets/soccerball.png" alt="" width="160" height="160" />
             <span class="cb-badge" id="cbBadge">
               <img src="assets/team-arg.png" alt="" width="30" height="30" />
             </span>
           </button>
-          <p class="cb-prompt">Tap the ball to celebrate with the world</p>
-          <p class="cb-count"><span class="cb-globe" aria-hidden="true">🌍</span><b id="cbCount">2,314,608</b>&nbsp;fans celebrating</p>
         </div>
+      </div>
       </div>
 
       <div class="stage-controls">
-        <button class="btn btn-ghost btn-play" id="playBtn" type="button"><span class="play-ico" aria-hidden="true">▶</span><span id="playLabel">Play the 2022 Final</span></button>
+        <button class="btn btn-play" id="playBtn" type="button"><span class="play-ico" aria-hidden="true">▶</span><span id="playLabel">Play the 2022 Final</span></button>
         <span class="meta-note" id="playHint">Argentina vs France · Final · Dec 18, 2022</span>
       </div>
-
-      <!-- primary call to action, right after the demo -->
-      <div class="actions stage-actions reveal">
-        <a class="btn btn-primary" data-confetti href="https://download.alldayidreamaboutsports.com/latest"><span class="apple" aria-hidden="true"></span>Download for macOS</a>
-        <a class="btn btn-ghost" href="mailto:support@alldayidreamaboutsports.com?subject=Waitlist%20for%20Windows">Coming soon: Windows</a>
-      </div>
-      <span class="meta-note stage-meta reveal">Free · macOS 14+ · Windows soon</span>
     </section>
 
     <!-- ── FEATURES ─────────────────────────────────────────────────────────── -->
@@ -295,7 +288,7 @@
         <h2 class="display reveal d1">Don't just<br />watch it. <em>Live</em> it.</h2>
         <p class="body reveal d2">Follow your teams, catch every moment, and celebrate together. Free for macOS — Windows coming soon.</p>
         <div class="actions reveal d3">
-          <a class="btn btn-primary" data-confetti href="https://download.alldayidreamaboutsports.com/latest"><span class="apple" aria-hidden="true"></span>Download for macOS</a>
+          <a class="btn btn-primary" href="https://download.alldayidreamaboutsports.com/latest"><span class="apple" aria-hidden="true"></span>Download for macOS</a>
           <a class="btn btn-ghost" href="mailto:support@alldayidreamaboutsports.com?subject=Waitlist%20for%20Windows">Coming soon: Windows</a>
         </div>
         <span class="meta-note reveal d3">Free · macOS 14+</span>

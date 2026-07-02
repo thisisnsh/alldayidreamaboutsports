@@ -118,11 +118,15 @@ const capsule = $("capsule");
 const capScore = $("capScore");
 const capTrail = $("capTrail");
 const capMin = $("capMin");
-const capEvents = $("capEvents");
 const cbOverlay = $("cbOverlay");
 const cbBall = $("cbBall");
 const cbBadge = $("cbBadge");
 const cbCount = $("cbCount");
+/* confetti canvas — confined to the demo frame */
+const cbConf = $("cbConfetti");
+const cbctx = cbConf ? cbConf.getContext("2d") : null;
+const CONF_COLORS = ["#ffcc00", "#34c759", "#0a84ff", "#ff6482", "#ff9f0a", "#ffffff", "#ff3b30"];
+let cbBits = [], cbRaf = null, cbLast = 0;
 const playBtn = $("playBtn");
 const playLabel = $("playLabel");
 const playIco = playBtn ? playBtn.querySelector(".play-ico") : null;
@@ -192,6 +196,8 @@ function updateFixture(ev) {
 /* ═══════════════════════════════════════════════════════════════════════════
    Pinned score capsule — the floating, draggable scoreboard
    ═══════════════════════════════════════════════════════════════════════════ */
+// The capsule is a compact score pill — just the crests, scoreline and live
+// minute, no event timeline.
 function updateCapsule(ev) {
   if (!capsule) return;
   capsule.hidden = false;
@@ -199,21 +205,6 @@ function updateCapsule(ev) {
   const st = ev.fx || "live";
   capTrail.className = "cap-trail" + (st === "ft" ? " ft" : (st === "live" || st === "pens" || st === "break") ? " live" : "");
   capMin.textContent = st === "ft" ? "FT" : st === "ht" ? "HT" : st === "pens" ? "PENS" : (ev.fxMin || "");
-  if (["goal", "yellow", "red", "pengood", "penmiss"].includes(ev.type)) addCapEvent(ev);
-}
-function addCapEvent(ev) {
-  if (!capEvents) return;
-  const t = TYPE[ev.type];
-  const min = ev.min ? ev.min + "′" : (ev.type === "pengood" || ev.type === "penmiss" ? "PEN" : "");
-  const row = document.createElement("div");
-  row.className = "cap-ev";
-  row.innerHTML =
-    `<span class="cap-ev-min">${min}</span>` +
-    `<span class="cap-ev-ic" data-tone="${t.tone}">${ICON[t.ic]}</span>` +
-    `<span class="cap-ev-txt">${ev.player || ""}</span>` +
-    (ev.team ? `<img class="cap-ev-crest" src="${TEAMS[ev.team].crest}" alt="" />` : "");
-  capEvents.appendChild(row);
-  while (capEvents.children.length > 4) capEvents.firstChild.remove();
 }
 
 /* drag the capsule anywhere inside the screen (accounts for the mobile zoom) */
@@ -240,16 +231,19 @@ if (capsule && macframe) {
 /* scale the whole demo down on small screens — same layout & aspect, smaller */
 function fitFrame() {
   if (!macframe) return;
-  const design = 900;
-  // measure the naturally fitted width (respecting the section's padding), then
-  // lock the design width and zoom the whole frame down to match it
   macframe.style.width = ""; macframe.style.maxWidth = ""; macframe.style.zoom = "";
+  // phones: CSS keeps the demo big and lets it scroll horizontally — no zoom-fit
+  if (window.innerWidth <= 760) { sizeCbConf(); return; }
+  // otherwise measure the naturally fitted width, then lock the design width and
+  // zoom the whole frame down to match it (preserves the exact layout, smaller)
+  const design = 900;
   const natural = macframe.clientWidth;
   if (natural && natural < design) {
     macframe.style.zoom = (natural / design).toFixed(4);
     macframe.style.width = design + "px";
     macframe.style.maxWidth = "none";
   }
+  sizeCbConf();
 }
 window.addEventListener("resize", fitFrame);
 fitFrame();
@@ -270,11 +264,10 @@ function showCelebration(team) {
   clearTimeout(cbTimer);
   cbTimer = setTimeout(hideCelebration, reduceMotion ? 2600 : 3000);
   if (!reduceMotion) {
-    // confetti erupts from the demo's bottom corners as the goal lands, framing
-    // the ball, with a follow-up burst
-    const r = macframe ? macframe.getBoundingClientRect() : null;
-    burstConfetti(1.3, r ? { rect: r } : undefined);
-    setTimeout(() => burstConfetti(0.9, r ? { rect: macframe.getBoundingClientRect() } : undefined), 480);
+    // confetti erupts from the demo frame's own corners (confined to the demo),
+    // with a follow-up burst — the same corner-burst the app shows on a goal
+    cbBurst(1);
+    setTimeout(() => cbBurst(0.85), 480);
     bumpCelebrations(Math.floor(rand(1400, 4200)));
   }
 }
@@ -294,7 +287,10 @@ if (cbBall) {
     bumpCelebrations(Math.floor(rand(1, 5)));
     const r = cbBall.getBoundingClientRect();
     if (!reduceMotion) {
-      burstConfetti(0.5, { x: r.left + r.width / 2, y: r.top + r.height / 2 });
+      // ball centre in the frame's own coordinate space (undo the mobile zoom)
+      const mfr = macframe.getBoundingClientRect();
+      const k = parseFloat(macframe.style.zoom) || 1;
+      cbPoint((r.left + r.width / 2 - mfr.left) / k, (r.top + r.height / 2 - mfr.top) / k, 1);
       popBall(r);
     }
   });
@@ -341,7 +337,6 @@ function resetTimeline() {
   if (fixtureRow) fixtureRow.hidden = true;
   if (fxEmpty) fxEmpty.hidden = false;
   if (capsule) capsule.hidden = true;
-  if (capEvents) capEvents.innerHTML = "";
   hideCelebration();
 }
 function step() {
@@ -403,52 +398,61 @@ if (macframe) {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   Confetti (2D overlay) — app palette
+   Confetti — confined to the demo frame (canvas lives inside .macframe, which
+   clips it). Mirrors the app's ConfettiView: a steep burst up-and-inward from
+   the two bottom corners, weak gravity so pieces hang before falling back.
    ═══════════════════════════════════════════════════════════════════════════ */
-const conf = document.getElementById("confetti");
-const cc = conf.getContext("2d");
-let bits = [], confRaf = null, confLast = 0, confDpr = Math.min(window.devicePixelRatio || 1, 2);
-const CONF_COLORS = ["#ffcc00", "#34c759", "#0a84ff", "#ff6482", "#ff9f0a", "#ffffff", "#ff3b30"];
-function sizeConf() { confDpr = Math.min(window.devicePixelRatio || 1, 2); conf.width = innerWidth * confDpr; conf.height = innerHeight * confDpr; cc.setTransform(confDpr, 0, 0, confDpr, 0, 0); }
-window.addEventListener("resize", sizeConf); sizeConf();
-function burstConfetti(scale = 1, opts) {
-  if (reduceMotion) return;
-  let sources, isPoint = false;
-  if (opts && opts.rect) {
-    // erupt up-and-inward from the two bottom corners of an element (the demo)
-    const r = opts.rect, pad = 10;
-    sources = [
-      { x: r.left + pad, y: r.bottom - pad, base: -1.05, spread: 0.55 },
-      { x: r.right - pad, y: r.bottom - pad, base: -Math.PI + 1.05, spread: 0.55 },
-    ];
-  } else if (opts && opts.x != null) {
-    sources = [{ x: opts.x, y: opts.y, base: -Math.PI / 2, spread: Math.PI }];
-    isPoint = true;
-  } else {
-    sources = [{ x: -10, y: innerHeight + 10, base: -1.15, spread: 0.5 }, { x: innerWidth + 10, y: innerHeight + 10, base: -Math.PI + 1.15, spread: 0.5 }];
-  }
-  for (const s of sources) {
-    const n = Math.floor((isPoint ? 42 : 80) * scale);
+function sizeCbConf() {
+  if (!cbConf || !cbctx) return;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const w = cbConf.clientWidth, h = cbConf.clientHeight;
+  if (!w || !h) return;
+  cbConf.width = Math.round(w * dpr); cbConf.height = Math.round(h * dpr);
+  cbctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+function cbStart() { if (!cbRaf) { cbLast = performance.now(); cbRaf = requestAnimationFrame(cbTick); } }
+/* goal burst — from the frame's two bottom corners */
+function cbBurst(scale = 1) {
+  if (reduceMotion || !cbConf) return;
+  sizeCbConf();
+  const W = cbConf.clientWidth, H = cbConf.clientHeight;
+  const corners = [{ x: -8, y: H + 8, dir: 1 }, { x: W + 8, y: H + 8, dir: -1 }];
+  for (const c of corners) {
+    const n = Math.floor(72 * scale);
     for (let i = 0; i < n; i++) {
-      const ang = s.base + rand(-s.spread, s.spread), sp = rand(480, 1020) * (isPoint ? 1 : 1.15);
-      bits.push({ x: s.x, y: s.y, vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp, color: pick(CONF_COLORS), size: rand(7, 15), rot: rand(0, Math.PI), spin: rand(-9, 9), life: 0, ttl: rand(2.4, 3.8) });
+      const ang = rand(1.05, 1.5), sp = rand(360, 720); // steep: up, barely inward
+      cbBits.push({ x: c.x, y: c.y, vx: Math.cos(ang) * sp * c.dir, vy: -Math.sin(ang) * sp, color: pick(CONF_COLORS), size: rand(7, 15), rot: rand(0, Math.PI), spin: rand(-6, 6), life: 0, ttl: rand(2.6, 3.8) });
     }
   }
-  if (!confRaf) { confLast = performance.now(); confRaf = requestAnimationFrame(tickConf); }
+  cbStart();
 }
-function tickConf(now) {
-  const dt = Math.min((now - confLast) / 1000, 0.05); confLast = now;
-  cc.clearRect(0, 0, innerWidth, innerHeight);
-  bits = bits.filter((p) => {
+/* tap burst — a small spray from the ball */
+function cbPoint(px, py, scale = 1) {
+  if (reduceMotion || !cbConf) return;
+  sizeCbConf();
+  const n = Math.floor(26 * scale);
+  for (let i = 0; i < n; i++) {
+    const ang = rand(0, Math.PI * 2), sp = rand(120, 360);
+    cbBits.push({ x: px, y: py, vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp - 160, color: pick(CONF_COLORS), size: rand(5, 11), rot: rand(0, Math.PI), spin: rand(-8, 8), life: 0, ttl: rand(1.4, 2.4) });
+  }
+  cbStart();
+}
+function cbTick(now) {
+  const dt = Math.min((now - cbLast) / 1000, 0.05); cbLast = now;
+  const W = cbConf.clientWidth, H = cbConf.clientHeight;
+  cbctx.clearRect(0, 0, W, H);
+  const GRAV = H * 1.35; // gravity scaled to the frame — arc up, then fall back
+  cbBits = cbBits.filter((p) => {
     p.life += dt; if (p.life > p.ttl) return false;
-    p.vy += 1500 * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.rot += p.spin * dt;
+    p.vy += GRAV * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.rot += p.spin * dt;
+    if (p.y > H + 30) return false;
     const fade = p.life > p.ttl - 1 ? Math.max(0, p.ttl - p.life) : 1;
-    cc.save(); cc.globalAlpha = fade; cc.translate(p.x, p.y); cc.rotate(p.rot); cc.fillStyle = p.color; cc.fillRect(-p.size / 2, -p.size / 2, p.size, p.size * 0.62); cc.restore();
+    cbctx.save(); cbctx.globalAlpha = fade; cbctx.translate(p.x, p.y); cbctx.rotate(p.rot); cbctx.fillStyle = p.color; cbctx.fillRect(-p.size / 2, -p.size / 4, p.size, p.size / 2); cbctx.restore();
     return true;
   });
-  if (bits.length) confRaf = requestAnimationFrame(tickConf); else { cc.clearRect(0, 0, innerWidth, innerHeight); confRaf = null; }
+  if (cbBits.length) cbRaf = requestAnimationFrame(cbTick); else { cbctx.clearRect(0, 0, W, H); cbRaf = null; }
 }
-document.querySelectorAll("[data-confetti]").forEach((el) => el.addEventListener("click", () => burstConfetti(0.8)));
+window.addEventListener("resize", sizeCbConf); sizeCbConf();
 
 /* ═══════════════════════════════════════════════════════════════════════════
    Reveal on scroll + nav

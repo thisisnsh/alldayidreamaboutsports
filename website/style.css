@@ -190,9 +190,15 @@ a { color: inherit; text-decoration: none; }
   padding: clamp(104px, 15vh, 172px) var(--gutter) clamp(50px, 9vh, 96px);
   max-width: var(--maxw); margin: 0 auto;
 }
-.stage-head { max-width: 760px; margin: 0 auto clamp(28px, 4.5vh, 48px); text-align: center; display: flex; flex-direction: column; align-items: center; }
+.stage-head { max-width: 860px; margin: 0 auto clamp(28px, 4.5vh, 48px); text-align: center; display: flex; flex-direction: column; align-items: center; }
 .stage-head .hero-mark { margin-bottom: clamp(18px, 2.6vh, 28px); }
 .stage-head .body { margin-left: auto; margin-right: auto; }
+/* the hero title sits on one line on anything but the narrowest phones */
+.hero-title { font-size: clamp(1.95rem, 5.4vw, 3.05rem); line-height: 1.04; }
+@media (min-width: 620px) { .hero-title { white-space: nowrap; } }
+
+/* wrapper that lets the demo scroll horizontally on phones */
+.stage-scroll { width: 100%; }
 
 /* the faux macOS screen */
 .macframe {
@@ -232,7 +238,7 @@ a { color: inherit; text-decoration: none; }
 .code-body .ln.c2 { background: rgba(255,255,255,0.1); }
 .code-body .ln.c3 { background: rgba(255,255,255,0.14); }
 .sheet-grid {
-  height: 118px; padding: 0;
+  height: 188px; padding: 0;
   background-image:
     linear-gradient(rgba(255,255,255,0.09) 1px, transparent 1px),
     linear-gradient(90deg, rgba(255,255,255,0.09) 1px, transparent 1px);
@@ -386,33 +392,38 @@ a { color: inherit; text-decoration: none; }
 .am-ic { width: 17px; height: 17px; flex: none; color: rgba(255,255,255,0.82); }
 
 /* ── goal-in-center celebration overlay ────────────────────────────────────*/
+/* in-frame confetti canvas — sits above the celebration, clipped by .macframe */
+.cb-confetti { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 10; pointer-events: none; }
+
 .cb-overlay {
   position: absolute; inset: 0; z-index: 8;
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
   background: transparent;
   opacity: 0; pointer-events: none; transition: opacity .35s var(--ease);
 }
 .cb-overlay.show { opacity: 1; pointer-events: auto; }
+/* small prompt, above the ball (mirrors the app) */
+.cb-prompt {
+  font-family: var(--display); font-weight: 600; font-size: clamp(11px, 1.3vw, 13px);
+  color: rgba(255,255,255,0.92); text-align: center;
+  text-shadow: 0 2px 10px rgba(0,0,0,0.9), 0 0 2px rgba(0,0,0,0.9);
+}
 .cb-ball {
-  position: relative; width: clamp(120px, 24%, 176px); aspect-ratio: 1;
+  position: relative; width: clamp(128px, 26%, 190px); aspect-ratio: 1;
   border: 0; padding: 0; background: none; cursor: pointer;
   filter: drop-shadow(0 18px 40px rgba(0,0,0,0.55));
   animation: cbpulse 1.6s var(--ease) infinite;
 }
 .cb-ball:active { transform: scale(0.94); }
-.cb-ball-svg { width: 100%; height: 100%; display: block; }
+.cb-ball-img { width: 100%; height: 100%; display: block; object-fit: contain; }
 @keyframes cbpulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.06); } }
 .cb-badge {
   position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%);
   display: inline-flex; align-items: center; justify-content: center;
-  padding: 5px; border-radius: 50%;
-  background: rgba(8,8,10,0.72); box-shadow: 0 0 0 2px rgba(255,255,255,0.9), 0 4px 12px rgba(0,0,0,0.5);
+  padding: 4px; border-radius: 50%;
+  background: rgba(8,8,10,0.72); box-shadow: 0 0 0 2px rgba(255,255,255,0.92), 0 4px 12px rgba(0,0,0,0.5);
 }
-.cb-badge img { width: 30px; height: 30px; border-radius: 50%; display: block; }
-.cb-prompt { font-family: var(--display); font-weight: 800; font-size: clamp(14px, 1.8vw, 18px); color: var(--bone); text-align: center; text-shadow: 0 2px 10px rgba(0,0,0,0.9), 0 0 2px rgba(0,0,0,0.9); }
-.cb-count { font-size: 13px; color: rgba(255,255,255,0.9); display: inline-flex; align-items: center; gap: 6px; text-shadow: 0 2px 10px rgba(0,0,0,0.9), 0 0 2px rgba(0,0,0,0.9); }
-.cb-count b { color: var(--bone); font-weight: 800; font-variant-numeric: tabular-nums; }
-.cb-globe { font-size: 15px; }
+.cb-badge img { width: 28px; height: 28px; border-radius: 50%; display: block; }
 /* mini balls that pop when you tap */
 .cb-pop {
   position: absolute; width: 20px; height: 20px; border-radius: 50%;
@@ -424,7 +435,9 @@ a { color: inherit; text-decoration: none; }
 
 /* stage controls — a low-key play row under the demo, CTA below it */
 .stage-controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 14px; margin-top: clamp(22px, 3.4vh, 34px); }
-.btn-play { font-weight: 700; }
+.btn-play { font-weight: 700; background: transparent; color: var(--bone); border-color: var(--hairline); border-radius: 999px; }
+.btn-play:hover { background: var(--bone); color: #000; border-color: var(--bone); transform: scale(1.03); }
+.btn-play:active { transform: scale(0.98); }
 .btn-play .play-ico { font-size: 11px; }
 .stage-actions { justify-content: center; margin-top: clamp(22px, 3.4vh, 34px); }
 .stage-meta { display: flex; justify-content: center; margin-top: 14px; }
@@ -469,38 +482,25 @@ a { color: inherit; text-decoration: none; }
 .lg-badge { font-size: 9.5px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; color: var(--green); border: 1px solid rgba(52,199,89,0.4); border-radius: 999px; padding: 2px 7px; }
 .league.more { color: var(--smoke); border-style: dashed; padding: 7px 14px; }
 
-/* draggable pinned score capsule (like the app's floating capsule) */
+/* draggable pinned score capsule — a compact pill showing just the scoreline,
+   fully rounded on both ends (like the app's floating capsule) */
 .capsule {
   position: absolute; top: 46px; left: 16px; z-index: 6;
-  min-width: 186px; max-width: 300px;
-  padding: 8px 12px 10px; border-radius: 16px;
-  background: #000; border: 1px solid rgba(255,255,255,0.12);
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 8px 15px; border-radius: 999px;
+  background: #000; border: 1px solid rgba(255,255,255,0.14);
   box-shadow: 0 16px 34px rgba(0,0,0,0.6);
-  cursor: grab; user-select: none; touch-action: none;
+  cursor: grab; user-select: none; touch-action: none; white-space: nowrap;
 }
 .capsule.dragging { cursor: grabbing; }
 .capsule[hidden] { display: none; }
-.cap-grip { display: block; width: 26px; height: 4px; border-radius: 3px; background: rgba(255,255,255,0.22); margin: 0 auto 8px; }
-.cap-head { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--bone); }
-.cap-crest { width: 15px; height: 15px; border-radius: 3px; flex: none; }
-.cap-name { font-weight: 600; color: rgba(255,255,255,0.86); }
-.cap-score { font-weight: 800; font-variant-numeric: tabular-nums; }
-.cap-trail { margin-left: 6px; display: inline-flex; align-items: center; gap: 4px; font-size: 10.5px; font-weight: 700; color: var(--smoke); font-variant-numeric: tabular-nums; }
+.cap-crest { width: 16px; height: 16px; border-radius: 4px; flex: none; }
+.cap-score { font-family: var(--display); font-weight: 800; font-size: 13.5px; color: var(--bone); font-variant-numeric: tabular-nums; }
+.cap-trail { display: inline-flex; align-items: center; gap: 4px; margin-left: 2px; font-size: 11px; font-weight: 700; color: var(--smoke); font-variant-numeric: tabular-nums; }
 .cap-trail.live { color: var(--red); }
 .cap-trail.ft { color: var(--green); }
 .cap-live { display: none; width: 5px; height: 5px; border-radius: 50%; background: var(--red); }
 .cap-trail.live .cap-live { display: inline-block; }
-.cap-events { display: flex; flex-direction: column; gap: 5px; margin-top: 8px; }
-.cap-events:empty { display: none; }
-.cap-ev { display: flex; align-items: center; gap: 6px; font-size: 11px; color: rgba(255,255,255,0.85); white-space: nowrap; }
-.cap-ev-min { color: var(--smoke); font-weight: 700; min-width: 30px; font-variant-numeric: tabular-nums; }
-.cap-ev-ic { width: 13px; height: 13px; flex: none; color: var(--bone); }
-.cap-ev-ic svg { width: 100%; height: 100%; display: block; }
-.cap-ev-ic[data-tone="green"]  { color: var(--green); }
-.cap-ev-ic[data-tone="yellow"] { color: var(--yellow); }
-.cap-ev-ic[data-tone="red"]    { color: var(--red); }
-.cap-ev-ic[data-tone="purple"] { color: var(--purple); }
-.cap-ev-crest { width: 13px; height: 13px; border-radius: 3px; margin-left: auto; flex: none; }
 
 /* ════════════════════════ FINAL CTA ═════════════════════════════════════ */
 .final { padding: clamp(70px, 12vh, 140px) var(--gutter) clamp(80px, 12vh, 150px); }
@@ -529,17 +529,29 @@ a { color: inherit; text-decoration: none; }
 .confetti { position: fixed; inset: 0; z-index: 50; pointer-events: none; }
 
 /* ════════════════════════ RESPONSIVE (stage) ════════════════════════════ */
-/* On small screens the whole demo is scaled down uniformly (JS sets zoom on
-   .macframe) so the layout — menu under the tray, notch, capsule — is preserved
-   exactly, just smaller. No reshaping here. */
+/* On phones the demo stays big and scrolls horizontally (instead of shrinking
+   to a hard-to-read thumbnail). The scroll area bleeds to the screen edges so
+   it's clear there's more to swipe to. JS skips the zoom-fit below 760. */
 @media (max-width: 760px) {
   .brand-text { font-size: 12.5px; }
   .btn { font-size: 14px; padding: 11px 18px; }
+
+  .stage-scroll {
+    overflow-x: auto; overflow-y: visible;
+    -webkit-overflow-scrolling: touch;
+    margin-inline: calc(-1 * var(--gutter));
+    padding: 8px var(--gutter) 16px;
+    scroll-snap-type: x proximity;
+  }
+  .macframe {
+    width: 760px; min-width: 760px; max-width: none; margin: 0;
+    scroll-snap-align: center;
+  }
 }
-/* on very narrow screens the wordmark collides with the download button — keep
-   just the app icon in the nav */
+/* on phones the download button crowds the wordmark — keep just the app icon +
+   title in the nav (the download CTA lives in the hero below) */
 @media (max-width: 560px) {
-  .nav .brand-text { display: none; }
+  .nav .nav-links { display: none; }
 }
 
 /* ════════════════════════ DOC PAGES (privacy) ═══════════════════════════ */
