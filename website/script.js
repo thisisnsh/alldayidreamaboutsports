@@ -228,12 +228,25 @@ if (capsule && macframe) {
   capsule.addEventListener("pointercancel", endDrag);
 }
 
-/* scale the whole demo down on small screens — same layout & aspect, smaller */
+/* Fit the demo to the viewport: zoom it down on narrow desktops/tablets (same
+   layout & aspect, just smaller); on phones leave it big and horizontally
+   scrollable, started centred. */
+let scrollCentred = false;
 function fitFrame() {
   if (!macframe) return;
   macframe.style.width = ""; macframe.style.maxWidth = ""; macframe.style.zoom = "";
-  // phones: CSS keeps the demo big and lets it scroll horizontally — no zoom-fit
-  if (window.innerWidth <= 760) { sizeCbConf(); return; }
+  // phones: CSS keeps the demo big and lets it scroll horizontally — no zoom-fit.
+  // Start the scroll centred (once) so the demo reads as centre-aligned, not
+  // pinned to the left edge.
+  if (window.innerWidth <= 760) {
+    sizeCbConf();
+    const sc = macframe.parentElement;
+    if (sc && !scrollCentred && sc.scrollWidth > sc.clientWidth) {
+      sc.scrollLeft = (sc.scrollWidth - sc.clientWidth) / 2;
+      scrollCentred = true;
+    }
+    return;
+  }
   // otherwise measure the naturally fitted width, then lock the design width and
   // zoom the whole frame down to match it (preserves the exact layout, smaller)
   const design = 900;

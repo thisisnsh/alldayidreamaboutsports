@@ -277,13 +277,6 @@ a { color: inherit; text-decoration: none; }
 .tray-app:hover { background: rgba(255,255,255,0.24); }
 .tray-clock { font-variant-numeric: tabular-nums; white-space: nowrap; }
 
-/* the notch — same height as the menu (title) bar so it reads as part of it */
-.notch {
-  position: absolute; top: 0; left: 50%; transform: translateX(-50%);
-  width: clamp(120px, 16%, 160px); height: 30px;
-  background: #000; border-radius: 0 0 13px 13px; z-index: 6;
-}
-
 /* notch-drop pill — one at a time, dropping just below the notch. Aligned so
    its top matches the open menu, and styled like the app's NotchPillRow:
    centered, SF-symbol icon + title on one line, score subtitle below. */
@@ -507,6 +500,7 @@ a { color: inherit; text-decoration: none; }
 .final-inner { max-width: 720px; margin: 0 auto; text-align: center; display: flex; flex-direction: column; align-items: center; }
 .final .body { margin-left: auto; margin-right: auto; }
 .final .actions { justify-content: center; }
+.final .meta-note { margin-top: 14px; }
 
 /* ════════════════════════ FOOTER ════════════════════════════════════════ */
 .footer {
@@ -539,12 +533,17 @@ a { color: inherit; text-decoration: none; }
   .stage-scroll {
     overflow-x: auto; overflow-y: visible;
     -webkit-overflow-scrolling: touch;
+    /* full-bleed to both phone edges — width:auto lets the negative margins
+       actually widen the box (width:100% would keep it at the section width,
+       leaving a black gap on the right). Inset the start (left) only so the
+       demo can scroll all the way to the right edge. */
+    width: auto;
     margin-inline: calc(-1 * var(--gutter));
-    padding: 8px var(--gutter) 16px;
+    padding: 8px 0 16px var(--gutter);
     scroll-snap-type: x proximity;
   }
   .macframe {
-    width: 760px; min-width: 760px; max-width: none; margin: 0;
+    width: 760px; min-width: 760px; max-width: none; margin: 0 auto;
     scroll-snap-align: center;
   }
 }
