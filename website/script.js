@@ -114,6 +114,11 @@ const scoreA = $("scoreA");
 const fxTrail = $("fxTrail");
 const fxMin = $("fxMin");
 const fxSub = $("fxSub");
+const capsule = $("capsule");
+const capScore = $("capScore");
+const capTrail = $("capTrail");
+const capMin = $("capMin");
+const capEvents = $("capEvents");
 const cbOverlay = $("cbOverlay");
 const cbBall = $("cbBall");
 const cbBadge = $("cbBadge");
@@ -185,6 +190,71 @@ function updateFixture(ev) {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
+   Pinned score capsule — the floating, draggable scoreboard
+   ═══════════════════════════════════════════════════════════════════════════ */
+function updateCapsule(ev) {
+  if (!capsule) return;
+  capsule.hidden = false;
+  capScore.textContent = `${scoreText(ev.h, ev.ph)} – ${scoreText(ev.a, ev.pa)}`;
+  const st = ev.fx || "live";
+  capTrail.className = "cap-trail" + (st === "ft" ? " ft" : (st === "live" || st === "pens" || st === "break") ? " live" : "");
+  capMin.textContent = st === "ft" ? "FT" : st === "ht" ? "HT" : st === "pens" ? "PENS" : (ev.fxMin || "");
+  if (["goal", "yellow", "red", "pengood", "penmiss"].includes(ev.type)) addCapEvent(ev);
+}
+function addCapEvent(ev) {
+  if (!capEvents) return;
+  const t = TYPE[ev.type];
+  const min = ev.min ? ev.min + "′" : (ev.type === "pengood" || ev.type === "penmiss" ? "PEN" : "");
+  const row = document.createElement("div");
+  row.className = "cap-ev";
+  row.innerHTML =
+    `<span class="cap-ev-min">${min}</span>` +
+    `<span class="cap-ev-ic" data-tone="${t.tone}">${ICON[t.ic]}</span>` +
+    `<span class="cap-ev-txt">${ev.player || ""}</span>` +
+    (ev.team ? `<img class="cap-ev-crest" src="${TEAMS[ev.team].crest}" alt="" />` : "");
+  capEvents.appendChild(row);
+  while (capEvents.children.length > 4) capEvents.firstChild.remove();
+}
+
+/* drag the capsule anywhere inside the screen (accounts for the mobile zoom) */
+if (capsule && macframe) {
+  let dragging = false, sx = 0, sy = 0, ox = 0, oy = 0;
+  const zoom = () => parseFloat(macframe.style.zoom) || 1;
+  capsule.addEventListener("pointerdown", (e) => {
+    dragging = true; capsule.classList.add("dragging"); capsule.setPointerCapture(e.pointerId);
+    sx = e.clientX; sy = e.clientY; ox = capsule.offsetLeft; oy = capsule.offsetTop; e.preventDefault();
+  });
+  capsule.addEventListener("pointermove", (e) => {
+    if (!dragging) return;
+    const k = zoom();
+    let nx = ox + (e.clientX - sx) / k, ny = oy + (e.clientY - sy) / k;
+    nx = Math.max(4, Math.min(macframe.clientWidth - capsule.offsetWidth - 4, nx));
+    ny = Math.max(4, Math.min(macframe.clientHeight - capsule.offsetHeight - 4, ny));
+    capsule.style.left = nx + "px"; capsule.style.top = ny + "px"; capsule.style.right = "auto";
+  });
+  const endDrag = () => { dragging = false; capsule.classList.remove("dragging"); };
+  capsule.addEventListener("pointerup", endDrag);
+  capsule.addEventListener("pointercancel", endDrag);
+}
+
+/* scale the whole demo down on small screens — same layout & aspect, smaller */
+function fitFrame() {
+  if (!macframe) return;
+  const design = 900;
+  // measure the naturally fitted width (respecting the section's padding), then
+  // lock the design width and zoom the whole frame down to match it
+  macframe.style.width = ""; macframe.style.maxWidth = ""; macframe.style.zoom = "";
+  const natural = macframe.clientWidth;
+  if (natural && natural < design) {
+    macframe.style.zoom = (natural / design).toFixed(4);
+    macframe.style.width = design + "px";
+    macframe.style.maxWidth = "none";
+  }
+}
+window.addEventListener("resize", fitFrame);
+fitFrame();
+
+/* ═══════════════════════════════════════════════════════════════════════════
    Goal-in-center celebration
    ═══════════════════════════════════════════════════════════════════════════ */
 let celebrations = 2314608;
@@ -230,7 +300,6 @@ function popBall(r) {
   for (let i = 0; i < 5; i++) {
     const b = document.createElement("span");
     b.className = "cb-pop";
-    b.style.backgroundImage = "url(assets/soccerball.png)";
     b.style.left = r.width / 2 + "px";
     b.style.top = r.height / 2 + "px";
     const ang = rand(0, Math.PI * 2), dist = rand(50, 120);
@@ -267,6 +336,8 @@ function resetTimeline() {
   currentPill = null;
   if (fixtureRow) fixtureRow.hidden = true;
   if (fxEmpty) fxEmpty.hidden = false;
+  if (capsule) capsule.hidden = true;
+  if (capEvents) capEvents.innerHTML = "";
   hideCelebration();
 }
 function step() {
@@ -279,6 +350,7 @@ function step() {
   const ev = FINAL[idx++];
   showPill(ev);
   updateFixture(ev);
+  updateCapsule(ev);
   if (ev.celebrate) showCelebration(ev.team);
   const isPen = ev.type === "pengood" || ev.type === "penmiss";
   const dwell = reduceMotion ? 2600 : ev.celebrate ? 2600 : isPen ? 1500 : 2000;
@@ -304,6 +376,7 @@ function jumpToFinal() {
   showPill(last);
   if (currentPill) currentPill.classList.remove("drop");
   updateFixture(last);
+  updateCapsule(last);
   finished = true;
   setLabel("Replay the 2022 Final", "play");
 }
@@ -373,13 +446,3 @@ const nav = document.querySelector(".nav");
 const onScroll = () => nav.classList.toggle("scrolled", window.scrollY > 30);
 window.addEventListener("scroll", onScroll, { passive: true });
 onScroll();
-
-const navToggle = document.querySelector(".nav-toggle");
-if (navToggle) {
-  const setMenu = (open) => {
-    nav.classList.toggle("menu-open", open);
-    navToggle.setAttribute("aria-expanded", open ? "true" : "false");
-  };
-  navToggle.addEventListener("click", () => setMenu(!nav.classList.contains("menu-open")));
-  nav.querySelectorAll(".nav-links a").forEach((a) => a.addEventListener("click", () => setMenu(false)));
-}
