@@ -94,27 +94,13 @@
 
   <main class="content" id="top">
 
-    <!-- ── HERO ─────────────────────────────────────────────────────────────── -->
-    <section class="hero">
-      <div class="hero-inner">
+    <!-- ── HERO + INTERACTIVE APP PREVIEW (the product is the hero) ─────────── -->
+    <section class="stage-section" id="preview">
+      <div class="stage-head">
         <img class="hero-mark reveal" src="assets/app-icon.png" alt="All Day I Dream About Sports app icon" width="84" height="84" />
         <p class="eyebrow reveal d1"><span class="live-dot" aria-hidden="true"></span>World Cup 2026 · Live now</p>
         <h1 class="display reveal d1">All day I dream<br />about <span class="accent">sports.</span></h1>
         <p class="body reveal d2">Live match updates that live in your Mac's menu bar. Goals, cards and scores drop below the notch — and when your team scores, you celebrate it with fans across the globe.</p>
-        <div class="actions reveal d3">
-          <a class="btn btn-primary" data-confetti href="https://download.alldayidreamaboutsports.com/latest"><span class="apple" aria-hidden="true"></span>Download for macOS</a>
-          <a class="btn btn-ghost" href="#preview">Try it below ↓</a>
-        </div>
-        <span class="meta-note reveal d3">Free · macOS 14+ · Windows soon</span>
-      </div>
-    </section>
-
-    <!-- ── INTERACTIVE APP PREVIEW ──────────────────────────────────────────── -->
-    <section class="stage-section" id="preview">
-      <div class="stage-head">
-        <p class="eyebrow reveal"><span class="live-dot" aria-hidden="true"></span>See it live — no download needed</p>
-        <h2 class="headline reveal d1">The whole app, right here.</h2>
-        <p class="body reveal d2">This is the real thing — the menu bar dropdown, the notch drops, and the goal-in-center celebration. Press play and watch the <strong>2022 World Cup Final</strong> unfold, or tap the ball to celebrate with the world.</p>
       </div>
 
       <!-- faux macOS screen -->
@@ -227,9 +213,16 @@
         <!-- goal-in-center celebration overlay -->
         <div class="cb-overlay" id="cbOverlay" aria-hidden="true">
           <button class="cb-ball" id="cbBall" type="button" aria-label="Tap to celebrate">
-            <svg class="cb-ball-svg" viewBox="0 0 100 100" aria-hidden="true"><defs><clipPath id="ballclip"><circle cx="50" cy="50" r="47"/></clipPath></defs><circle cx="50" cy="50" r="47" fill="#fff"/><g clip-path="url(#ballclip)" fill="#111"><path d="M50,35 L64.27,45.36 L58.82,62.14 L41.18,62.14 L35.73,45.36 Z"/><path d="M82.33,5.5 L87.05,20.04 L74.69,29.02 L62.32,20.04 L67.05,5.5 Z M102.31,67 L89.94,75.98 L77.58,67 L82.3,52.46 L97.59,52.46 Z M50,105 L37.64,96.02 L42.36,81.48 L57.64,81.48 L62.36,96.02 Z M-2.31,67 L2.41,52.46 L17.7,52.46 L22.42,67 L10.06,75.98 Z M17.67,5.5 L32.95,5.5 L37.68,20.04 L25.31,29.02 L12.95,20.04 Z"/></g><g clip-path="url(#ballclip)" fill="none" stroke="#111" stroke-width="2.4" stroke-linecap="round"><path d="M57.13,40.18 L74.69,16.02 M61.54,53.75 L89.94,62.98 M50,62.14 L50,92 M38.46,53.75 L10.06,62.98 M42.87,40.18 L25.31,16.02"/></g><circle cx="50" cy="50" r="47" fill="none" stroke="#111" stroke-width="2.6"/></svg>
+            <svg class="cb-ball-svg" viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="12" cy="12" r="11.4" fill="#fff"/>
+              <g fill="none" stroke="#0b0b0c" stroke-width="0.82" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10.7"/>
+                <polygon points="12,7 16.3,10.1 14.7,15 9.3,15 7.7,10.1" fill="#0b0b0c" stroke="none"/>
+                <path d="M12 3v4M4.7 9.3l3.7 .8M19.3 9.3l-3.7 .8M7.7 20l1.6-5M16.3 20l-1.6-5"/>
+              </g>
+            </svg>
             <span class="cb-badge" id="cbBadge">
-              <img src="assets/team-arg.png" alt="" width="26" height="26" />
+              <img src="assets/team-arg.png" alt="" width="30" height="30" />
             </span>
           </button>
           <p class="cb-prompt">Tap the ball to celebrate with the world</p>
@@ -238,13 +231,21 @@
       </div>
 
       <div class="stage-controls">
-        <button class="btn btn-primary" id="playBtn" type="button"><span class="play-ico" aria-hidden="true">▶</span><span id="playLabel">Play the 2022 Final</span></button>
+        <button class="btn btn-ghost btn-play" id="playBtn" type="button"><span class="play-ico" aria-hidden="true">▶</span><span id="playLabel">Play the 2022 Final</span></button>
         <span class="meta-note" id="playHint">Argentina vs France · Final · Dec 18, 2022</span>
       </div>
+
+      <!-- primary call to action, right after the demo -->
+      <div class="actions stage-actions reveal">
+        <a class="btn btn-primary" data-confetti href="https://download.alldayidreamaboutsports.com/latest"><span class="apple" aria-hidden="true"></span>Download for macOS</a>
+        <a class="btn btn-ghost" href="mailto:support@alldayidreamaboutsports.com?subject=Waitlist%20for%20Windows">Coming soon: Windows</a>
+      </div>
+      <span class="meta-note stage-meta reveal">Free · macOS 14+ · Windows soon</span>
     </section>
 
     <!-- ── FEATURES ─────────────────────────────────────────────────────────── -->
     <section class="features" id="features">
+     <div class="features-inner">
       <div class="features-grid">
         <article class="feature reveal" id="live">
           <span class="feature-ic" data-tone="green" aria-hidden="true">
@@ -284,6 +285,7 @@
           <span class="league more">+ more soon</span>
         </div>
       </div>
+     </div>
     </section>
 
     <!-- ── FINAL CTA ────────────────────────────────────────────────────────── -->

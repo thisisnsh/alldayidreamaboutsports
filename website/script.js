@@ -268,9 +268,13 @@ function showCelebration(team) {
   cbOverlay.setAttribute("aria-hidden", "false");
   // the goal takes over the screen, then fades so the menu returns
   clearTimeout(cbTimer);
-  cbTimer = setTimeout(hideCelebration, reduceMotion ? 2600 : 2800);
+  cbTimer = setTimeout(hideCelebration, reduceMotion ? 2600 : 3000);
   if (!reduceMotion) {
-    burstConfetti(1);
+    // confetti erupts from the demo's bottom corners as the goal lands, framing
+    // the ball, with a follow-up burst
+    const r = macframe ? macframe.getBoundingClientRect() : null;
+    burstConfetti(1.3, r ? { rect: r } : undefined);
+    setTimeout(() => burstConfetti(0.9, r ? { rect: macframe.getBoundingClientRect() } : undefined), 480);
     bumpCelebrations(Math.floor(rand(1400, 4200)));
   }
 }
@@ -353,9 +357,9 @@ function step() {
   updateCapsule(ev);
   if (ev.celebrate) showCelebration(ev.team);
   const isPen = ev.type === "pengood" || ev.type === "penmiss";
-  const dwell = reduceMotion ? 2600 : ev.celebrate ? 2600 : isPen ? 1500 : 2000;
-  // pill leaves, brief empty gap, then the next event drops
-  timer = setTimeout(() => { exitCurrentPill(); gapTimer = setTimeout(step, 440); }, dwell);
+  const dwell = reduceMotion ? 2600 : ev.celebrate ? 2800 : isPen ? 1700 : 2100;
+  // pill leaves, then a clear empty beat (notch alone) before the next drops
+  timer = setTimeout(() => { exitCurrentPill(); gapTimer = setTimeout(step, 820); }, dwell);
 }
 function play() {
   if (reduceMotion) return jumpToFinal();
@@ -407,15 +411,27 @@ let bits = [], confRaf = null, confLast = 0, confDpr = Math.min(window.devicePix
 const CONF_COLORS = ["#ffcc00", "#34c759", "#0a84ff", "#ff6482", "#ff9f0a", "#ffffff", "#ff3b30"];
 function sizeConf() { confDpr = Math.min(window.devicePixelRatio || 1, 2); conf.width = innerWidth * confDpr; conf.height = innerHeight * confDpr; cc.setTransform(confDpr, 0, 0, confDpr, 0, 0); }
 window.addEventListener("resize", sizeConf); sizeConf();
-function burstConfetti(scale = 1, origin) {
+function burstConfetti(scale = 1, opts) {
   if (reduceMotion) return;
-  const sources = origin ? [{ x: origin.x, y: origin.y, base: -Math.PI / 2, spread: Math.PI }]
-    : [{ x: -10, y: innerHeight + 10, base: -1.15, spread: 0.5 }, { x: innerWidth + 10, y: innerHeight + 10, base: -Math.PI + 1.15, spread: 0.5 }];
+  let sources, isPoint = false;
+  if (opts && opts.rect) {
+    // erupt up-and-inward from the two bottom corners of an element (the demo)
+    const r = opts.rect, pad = 10;
+    sources = [
+      { x: r.left + pad, y: r.bottom - pad, base: -1.05, spread: 0.55 },
+      { x: r.right - pad, y: r.bottom - pad, base: -Math.PI + 1.05, spread: 0.55 },
+    ];
+  } else if (opts && opts.x != null) {
+    sources = [{ x: opts.x, y: opts.y, base: -Math.PI / 2, spread: Math.PI }];
+    isPoint = true;
+  } else {
+    sources = [{ x: -10, y: innerHeight + 10, base: -1.15, spread: 0.5 }, { x: innerWidth + 10, y: innerHeight + 10, base: -Math.PI + 1.15, spread: 0.5 }];
+  }
   for (const s of sources) {
-    const n = Math.floor((origin ? 40 : 60) * scale);
+    const n = Math.floor((isPoint ? 42 : 80) * scale);
     for (let i = 0; i < n; i++) {
-      const ang = s.base + rand(-s.spread, s.spread), sp = rand(420, 900) * (origin ? 1 : 1.1);
-      bits.push({ x: s.x, y: s.y, vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp, color: pick(CONF_COLORS), size: rand(5, 11), rot: rand(0, Math.PI), spin: rand(-9, 9), life: 0, ttl: rand(2.2, 3.6) });
+      const ang = s.base + rand(-s.spread, s.spread), sp = rand(480, 1020) * (isPoint ? 1 : 1.15);
+      bits.push({ x: s.x, y: s.y, vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp, color: pick(CONF_COLORS), size: rand(7, 15), rot: rand(0, Math.PI), spin: rand(-9, 9), life: 0, ttl: rand(2.4, 3.8) });
     }
   }
   if (!confRaf) { confLast = performance.now(); confRaf = requestAnimationFrame(tickConf); }
