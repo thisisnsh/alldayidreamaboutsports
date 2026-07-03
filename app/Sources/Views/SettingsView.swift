@@ -82,23 +82,8 @@ struct SettingsView: View {
                     }
 
                     SettingsCard("Appearance") {
-                        Picker("Theme", selection: themeBinding) {
-                            ForEach(ThemeChoice.allCases, id: \.self) { Text($0.label).tag($0) }
-                        }
-                        .pickerStyle(.segmented)
-                        .labelsHidden()
-                        .fixedSize()
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-
-                    SettingsCard("Capsule") {
-                        Picker("Size", selection: capsuleSizeBinding) {
-                            ForEach(CapsuleSize.allCases, id: \.self) { Text($0.label).tag($0) }
-                        }
-                        .pickerStyle(.segmented)
-                        .labelsHidden()
-                        .fixedSize()
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                        pickerRow("Theme", selection: themeBinding, cases: ThemeChoice.allCases) { $0.label }
+                        pickerRow("Capsule size", selection: capsuleSizeBinding, cases: CapsuleSize.allCases) { $0.label }
                         caption("Pin a match from the menu to float its live score on screen. Size scales the capsule’s text and logos.")
                     }
 
@@ -213,6 +198,23 @@ struct SettingsView: View {
         }
     }
 
+    /// A labeled segmented picker — the Appearance card stacks two of these,
+    /// so each needs its own visible label and a shared control width so the
+    /// segments line up as one column.
+    private func pickerRow<Choice: Hashable>(_ label: String, selection: Binding<Choice>,
+                                             cases: [Choice], caseLabel: @escaping (Choice) -> String) -> some View {
+        HStack {
+            Text(label).font(.system(size: 13))
+            Spacer()
+            Picker(label, selection: selection) {
+                ForEach(cases, id: \.self) { Text(caseLabel($0)).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .frame(width: 220)
+        }
+    }
+
     private func toggleRow(_ label: String, isOn: Binding<Bool>) -> some View {
         HStack {
             Text(label).font(.system(size: 13))
@@ -239,10 +241,11 @@ struct SettingsView: View {
             set: { on in
                 session.updateSettings {
                     $0.notifications = ($0.notifications ?? [:]).merging([type.settingsKey: on]) { _, new in new }
-                    // Muting goals mutes the celebration with it.
-                    if type == .goal && !on {
-                        $0.goalCenter = false
-                        $0.confetti = false
+                    // Muting goals mutes the celebration with it; unmuting
+                    // restores both so the section never reappears all-off.
+                    if type == .goal {
+                        $0.goalCenter = on
+                        $0.confetti = on
                     }
                 }
             }
