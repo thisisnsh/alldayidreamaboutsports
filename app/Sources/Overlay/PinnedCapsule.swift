@@ -21,29 +21,31 @@ let capsuleCorner: CGFloat = 18
 
 // MARK: - Snap zones
 
-/// Where a capsule lives: the top-left or top-right corner. Capsules never
-/// move freely — a stack per side, reordered/switched via the context menu.
+/// Where a capsule lives. Only the top-right corner is offered. The panel is
+/// pre-sized to the HOVERED width (an invisible twin in the view reserves it),
+/// so hovering never moves or resizes the panel — the right edge stays glued
+/// and the visible capsule's leftward growth is pure SwiftUI animation.
+/// Capsules never move freely — one stack, reordered via the context menu.
 /// Origins are computed in AppKit screen coordinates (origin bottom-left) from
 /// the screen's `visibleFrame` (which already excludes the menu bar and Dock).
 enum SnapZone {
     case topLeading, topTrailing
 
-    var opposite: SnapZone { self == .topLeading ? .topTrailing : .topLeading }
-
     /// Bottom-left origin for a capsule panel of `size` in this zone on
     /// `screen`. `inset` is the transparent chrome padding around the visible
     /// capsule (shadow room), subtracted so the VISIBLE edge sits `margin`
-    /// from the screen edge; `topMargin` is the (larger) top distance so
-    /// capsules clear the traffic-light controls of maximized windows below.
-    /// `stackOffset` pushes later capsules down so several pins on the same
-    /// side stack instead of overlapping.
+    /// from the screen edge; `topMargin` is measured from the screen's
+    /// ABSOLUTE top edge (`frame`, not `visibleFrame`) so the capsules' top
+    /// lines up with the notch pills' drop position. `stackOffset` pushes
+    /// later capsules down so several pins on the same side stack instead of
+    /// overlapping.
     func origin(size: CGSize, on screen: NSScreen, margin: CGFloat, topMargin: CGFloat, inset: CGFloat, stackOffset: CGFloat) -> CGPoint {
         let vf = screen.visibleFrame
         let x: CGFloat = switch self {
         case .topLeading: vf.minX + margin - inset
         case .topTrailing: vf.maxX - margin - size.width + inset
         }
-        let y = vf.maxY - topMargin - size.height + inset - stackOffset
+        let y = screen.frame.maxY - topMargin - size.height + inset - stackOffset
         return CGPoint(x: x, y: y)
     }
 }
@@ -87,8 +89,8 @@ struct CapsuleMetrics {
 
 /// Owns the floating score capsules — one `NSPanel` per pinned fixture. Mirrors
 /// `OverlayManager`'s panel handling but the panels are interactive (clicks are
-/// absorbed, not passed through). Capsules live in the top-left or top-right
-/// corner only, stacked per side; the context menu reorders or switches sides.
+/// absorbed, not passed through). Capsules live in the top-right corner only,
+/// stacked; the context menu reorders them.
 /// All panels float above every app, including full screen (`OverlayWindow`).
 @MainActor
 final class PinnedCapsuleManager: ObservableObject {
@@ -105,9 +107,13 @@ final class PinnedCapsuleManager: ObservableObject {
     @Published private(set) var order: [Int] = []
 
     private static let margin: CGFloat = 16
-    /// Larger than the side margin so capsules sit below the traffic-light
-    /// window controls of a maximized/fullscreen window underneath.
-    private static let topMargin: CGFloat = 48
+    /// Distance of the capsules' visible top edge from the screen's absolute
+    /// top, matching the notch pills (`NotchStackView`: the safe-area inset —
+    /// or 26 below a notch-less menu bar — plus 6).
+    private static var topMargin: CGFloat {
+        let inset = NSScreen.main?.safeAreaInsets.top ?? 0
+        return (inset > 0 ? inset : 26) + 6
+    }
     private static let stackGap: CGFloat = 12
     /// Transparent padding around the visible capsule inside its borderless
     /// panel. The panel draws NO window shadow (a rectangular halo would betray
@@ -206,44 +212,40 @@ final class PinnedCapsuleManager: ObservableObject {
         order.swapAt(ia, ib)
     }
 
-    /// Switch sides — the capsule joins the destination stack at the bottom.
-    func move(_ fixtureId: Int, to zone: SnapZone) {
-        guard let previous = zones[fixtureId], previous != zone else { return }
-        zones[fixtureId] = zone
-        order.removeAll { $0 == fixtureId }
-        order.append(fixtureId)
-        relayout(zone: previous)
-        relayout(zone: zone)
-    }
-
     // MARK: Sizing — the SwiftUI content reports its natural size
 
     /// The capsule content measured a new size (setting change, hover expanded
-    /// the event list, …). Resize the panel, then reflow its whole zone so
-    /// stacking stays tight and the capsule stays glued to its corner.
+    /// the event list, …). Reflow its whole zone with the new size so stacking
+    /// stays tight and the capsule stays glued to its corner.
     func reposition(fixtureId: Int, contentSize: CGSize) {
         guard let panel = panels[fixtureId] else { return }
         let size = CGSize(width: ceil(contentSize.width), height: ceil(contentSize.height))
         guard size.width > 1, size.height > 1 else { return }
-        panel.setContentSize(size)
-        if let zone = zones[fixtureId] { relayout(zone: zone) }
+        guard let zone = zones[fixtureId] else {
+            panel.setContentSize(size)
+            return
+        }
+        relayout(zone: zone, sizeOverride: [fixtureId: size])
     }
 
     /// Re-place every capsule assigned to `zone`, stacking them in `order`.
     /// The gap math subtracts the transparent chrome inset on both sides so
-    /// VISIBLE capsules sit `stackGap` apart.
-    private func relayout(zone: SnapZone) {
+    /// VISIBLE capsules sit `stackGap` apart. `sizeOverride` carries a freshly
+    /// measured content size so origin and size land in ONE `setFrame` — a
+    /// resize-then-move pair lets a right-side capsule overshoot the screen
+    /// edge for a frame, which reads as jitter during hover growth.
+    private func relayout(zone: SnapZone, sizeOverride: [Int: CGSize] = [:]) {
         guard let screen else { return }
         var offset: CGFloat = 0
         for fixtureId in order where zones[fixtureId] == zone {
             guard let panel = panels[fixtureId] else { continue }
-            let size = panel.frame.size
+            let size = sizeOverride[fixtureId] ?? panel.frame.size
             let origin = zone.origin(
                 size: size, on: screen,
                 margin: Self.margin, topMargin: Self.topMargin,
                 inset: Self.chromeInset, stackOffset: offset
             )
-            panel.setFrameOrigin(origin)
+            panel.setFrame(NSRect(origin: origin, size: size), display: true)
             offset += size.height - 2 * Self.chromeInset + Self.stackGap
         }
     }
@@ -417,11 +419,11 @@ private func eventLabel(for type: MatchEventType) -> String {
 // MARK: - View
 
 /// The capsule content. At rest it's the tightest possible scoreline —
-/// `logo score logo time` — in the notch pill's exact chrome. Hovering slides
-/// the team names in (the panel is corner-anchored, so a right-side capsule
-/// grows leftward and a left-side one rightward); clicking toggles the event
-/// timeline open below the header (and closed again). Reads live from
-/// `AppSession`, so it updates as `LiveStore` polls.
+/// `logo score logo time` — in the notch pill's exact chrome. Hovering fades
+/// and slides the team names in (the panel is anchored to the top-right
+/// corner and the content is pinned top-trailing, so growth reads leftward);
+/// clicking toggles the event timeline open below the header (and closed
+/// again). Reads live from `AppSession`, so it updates as `LiveStore` polls.
 struct PinnedCapsuleView: View {
     let fixtureId: Int
     @EnvironmentObject var session: AppSession
@@ -429,6 +431,10 @@ struct PinnedCapsuleView: View {
     @Environment(\.colorScheme) private var scheme
     @State private var hovering = false
     @State private var expanded = false
+    /// Pending debounced hover flip — cancelled on every fresh enter/exit so
+    /// edge flicker (the resize moves the boundary under the cursor) settles
+    /// before the state actually changes.
+    @State private var hoverTask: Task<Void, Never>?
 
     private var metrics: CapsuleMetrics { CapsuleMetrics(session.prefs.settings.capsuleSize ?? .medium) }
     private var fixture: Fixture? { session.fixtures.first { $0.fixtureId == fixtureId } }
@@ -455,22 +461,88 @@ struct PinnedCapsuleView: View {
         .onPreferenceChange(CapsuleSizeKey.self) { size in
             DispatchQueue.main.async { manager.reposition(fixtureId: fixtureId, contentSize: size) }
         }
+        // NO flexible root frame here: a maxWidth/maxHeight .infinity root
+        // inside an NSPanel's NSHostingView loops AppKit's constraint passes
+        // until it faults. Right-edge stability comes from the width-reserving
+        // twin in `capsule` instead — hover never changes the measured size.
     }
 
     @ViewBuilder private func capsule(_ fixture: Fixture) -> some View {
         // One persistent hierarchy for every state, so hover (names slide in
         // horizontally) and click (event rows open vertically) animate the
-        // capsule's size instead of swapping views. The panel is re-anchored
-        // to its corner on every measured size, so the growth reads as
-        // leftward on the right side, rightward on the left, downward for
-        // the timeline.
-        VStack(alignment: .leading, spacing: metrics.rowSpacing) {
-            header(fixture, showNames: hovering || expanded)
-            if expanded {
-                ForEach(capsuleTimeline(for: fixture)) { row in
-                    eventRow(row)
+        // capsule's size instead of swapping views. An invisible twin lays
+        // out the capsule's MAXIMUM width up front (hovered header + event
+        // list), so neither hover nor click-expand ever changes the measured
+        // width — the panel only grows downward and the right edge never
+        // moves. The reserved strip is fully transparent, so clicks there
+        // fall through to apps below, same as the chrome inset.
+        ZStack(alignment: .topTrailing) {
+            widthReservingTwin(fixture)
+                .opacity(0)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+            capsuleBody(fixture, showNames: hovering || expanded, showTimeline: expanded)
+                // Click to open the timeline, click again to close it.
+                .onTapGesture {
+                    withAnimation(.easeInOut(duration: 0.25)) { expanded.toggle() }
                 }
-                .transition(.opacity)
+                .contextMenu {
+                    if manager.canMoveUp(fixtureId) {
+                        Button("Move up") { manager.moveUp(fixtureId) }
+                    }
+                    if manager.canMoveDown(fixtureId) {
+                        Button("Move down") { manager.moveDown(fixtureId) }
+                    }
+                    Divider()
+                    Button("Close") { manager.unpin(fixtureId: fixtureId) }
+                }
+                .onHover { over in
+                    hoverTask?.cancel()
+                    // Entering waits a beat so a cursor skimming past doesn't
+                    // expand the capsule; leaving waits longer so the shrink
+                    // moving the edge back under the cursor can't re-trigger
+                    // a hover (edge flicker).
+                    hoverTask = Task {
+                        try? await Task.sleep(for: .milliseconds(over ? 80 : 200))
+                        guard !Task.isCancelled else { return }
+                        withAnimation(.easeInOut(duration: 0.2)) { hovering = over }
+                    }
+                }
+        }
+        // Transparent room for the shadow inside the borderless panel — the
+        // manager's layout math cancels this out at the edges.
+        .padding(PinnedCapsuleManager.chromeInset)
+    }
+
+    /// Invisible sizing twin: the hovered header (names shown) plus the event
+    /// list forced to ZERO height, so the list contributes width only. Same
+    /// padding as the real capsule so widths line up exactly.
+    private func widthReservingTwin(_ fixture: Fixture) -> some View {
+        ZStack(alignment: .topTrailing) {
+            header(fixture, showNames: true)
+            timelineList(fixture).fixedSize().frame(height: 0)
+        }
+        .padding(.horizontal, metrics.hPad)
+        .padding(.vertical, metrics.vPad)
+    }
+
+    private func timelineList(_ fixture: Fixture) -> some View {
+        VStack(alignment: .leading, spacing: metrics.rowSpacing) {
+            ForEach(capsuleTimeline(for: fixture)) { row in
+                eventRow(row)
+            }
+        }
+    }
+
+    /// The visible capsule chrome + content for one state.
+    private func capsuleBody(_ fixture: Fixture, showNames: Bool, showTimeline: Bool) -> some View {
+        VStack(alignment: .trailing, spacing: metrics.rowSpacing) {
+            header(fixture, showNames: showNames)
+            if showTimeline {
+                timelineList(fixture)
+                    // Breathing room between the scoreline and the event list.
+                    .padding(.top, metrics.rowSpacing)
+                    .transition(.opacity)
             }
         }
         .padding(.horizontal, metrics.hPad)
@@ -485,31 +557,17 @@ struct PinnedCapsuleView: View {
                 .shadow(color: .black.opacity(0.4), radius: 10, y: 4)
         )
         .contentShape(RoundedRectangle(cornerRadius: capsuleCorner, style: .continuous))
-        // Click to open the timeline, click again to close it.
-        .onTapGesture {
-            withAnimation(.easeInOut(duration: 0.25)) { expanded.toggle() }
-        }
-        .contextMenu {
-            if manager.canMoveUp(fixtureId) {
-                Button("Move up") { manager.moveUp(fixtureId) }
-            }
-            if manager.canMoveDown(fixtureId) {
-                Button("Move down") { manager.moveDown(fixtureId) }
-            }
-            if manager.zone(of: fixtureId) == .topLeading {
-                Button("Move right") { manager.move(fixtureId, to: .topTrailing) }
-            } else {
-                Button("Move left") { manager.move(fixtureId, to: .topLeading) }
-            }
-            Divider()
-            Button("Close") { manager.unpin(fixtureId: fixtureId) }
-        }
-        .onHover { over in
-            withAnimation(.easeInOut(duration: 0.2)) { hovering = over }
-        }
-        // Transparent room for the shadow inside the borderless panel — the
-        // manager's layout math cancels this out at the edges.
-        .padding(PinnedCapsuleManager.chromeInset)
+    }
+
+    /// Names fade 0→1 while the width slide reveals them; on the way out the
+    /// fade finishes FIRST (quick ease-out), so the shrinking capsule never
+    /// shows visibly truncating text. The explicit animations are needed —
+    /// a bare .opacity transition pops in at full alpha here.
+    private var nameTransition: AnyTransition {
+        .asymmetric(
+            insertion: .opacity.animation(.easeInOut(duration: 0.2)),
+            removal: .opacity.animation(.easeOut(duration: 0.1))
+        )
     }
 
     /// The scoreline row. At rest it's `logo score logo time`; with
@@ -520,7 +578,7 @@ struct PinnedCapsuleView: View {
             if showNames {
                 Text(fixture.home.name)
                     .font(.system(size: metrics.nameFont, design: .rounded)).lineLimit(1)
-                    .transition(.opacity)
+                    .transition(nameTransition)
             }
             Text(scoreText(fixture))
                 .font(.system(size: metrics.scoreFont, weight: .bold, design: .rounded))
@@ -528,7 +586,7 @@ struct PinnedCapsuleView: View {
             if showNames {
                 Text(fixture.away.name)
                     .font(.system(size: metrics.nameFont, design: .rounded)).lineLimit(1)
-                    .transition(.opacity)
+                    .transition(nameTransition)
             }
             CachedTeamLogo(url: logo(fixture.away.id), size: metrics.headerLogo)
             if showNames {
@@ -556,7 +614,7 @@ struct PinnedCapsuleView: View {
         }
     }
 
-    /// One past event: `minute · icon · label · player? · team logo`, a step
+    /// One past event: `minute · team logo · icon · label · player?`, a step
     /// smaller than the header so the scoreline stays the loudest line.
     private func eventRow(_ row: CapsuleTimelineRow) -> some View {
         HStack(spacing: 6) {
@@ -564,6 +622,12 @@ struct PinnedCapsuleView: View {
                 .font(.system(size: metrics.eventFont, weight: .semibold, design: .rounded))
                 .foregroundStyle(.secondary)
                 .frame(minWidth: metrics.eventFont * 2.6, alignment: .trailing)
+            if let teamId = row.teamId {
+                CachedTeamLogo(url: logo(teamId), size: metrics.eventLogo)
+            } else {
+                // Keep the icon column aligned for team-less rows.
+                Color.clear.frame(width: metrics.eventLogo, height: metrics.eventLogo)
+            }
             Image(systemName: row.icon)
                 .font(.system(size: metrics.eventIcon, weight: .semibold))
                 .foregroundStyle(row.color)
@@ -577,9 +641,6 @@ struct PinnedCapsuleView: View {
                     .lineLimit(1)
             }
             Spacer(minLength: 6)
-            if let teamId = row.teamId {
-                CachedTeamLogo(url: logo(teamId), size: metrics.eventLogo)
-            }
         }
         .padding(.leading, metrics.rowSpacing)
     }
