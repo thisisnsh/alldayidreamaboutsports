@@ -28,6 +28,8 @@ struct PrefSettings: Codable, Equatable {
     var confetti: Bool?
     /// Size of pinned score capsules (fonts + logos). nil = medium.
     var capsuleSize: CapsuleSize?
+    /// Vertical screen edge for pinned capsules. nil = top.
+    var capsulePosition: CapsulePosition?
 }
 
 struct SignInResponse: Codable {

@@ -15,40 +15,29 @@ enum OverlayWindow {
         [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
 }
 
+/// Geometry shared by the passive notch notifications and pinned
+/// capsules. Callers pass the display they actually occupy; using
+/// `NSScreen.main` for pinned content makes windows jump when focus changes.
+enum OverlayLayout {
+    static let fallbackMenuBarHeight: CGFloat = 26
+    static let topGap: CGFloat = 6
+    static let shadowInset: CGFloat = 6
+    static let expandedShadowInset: CGFloat = 16
+    static let stackSpacing: CGFloat = 8
+
+    static func topInset(on screen: NSScreen?) -> CGFloat {
+        let inset = screen?.safeAreaInsets.top ?? 0
+        return inset > 0 ? inset : fallbackMenuBarHeight
+    }
+
+    static func topMargin(on screen: NSScreen?) -> CGFloat {
+        topInset(on: screen) + topGap
+    }
+}
+
 /// Capsules share the notch pill's exact chrome (NotchPillView): this corner
 /// radius, a solid black/white fill, and a soft drop shadow.
 let capsuleCorner: CGFloat = 18
-
-// MARK: - Snap zones
-
-/// Where a capsule lives. Only the top-right corner is offered. The panel is
-/// pre-sized to the HOVERED width (an invisible twin in the view reserves it),
-/// so hovering never moves or resizes the panel — the right edge stays glued
-/// and the visible capsule's leftward growth is pure SwiftUI animation.
-/// Capsules never move freely — one stack, reordered via the context menu.
-/// Origins are computed in AppKit screen coordinates (origin bottom-left) from
-/// the screen's `visibleFrame` (which already excludes the menu bar and Dock).
-enum SnapZone {
-    case topLeading, topTrailing
-
-    /// Bottom-left origin for a capsule panel of `size` in this zone on
-    /// `screen`. `inset` is the transparent chrome padding around the visible
-    /// capsule (shadow room), subtracted so the VISIBLE edge sits `margin`
-    /// from the screen edge; `topMargin` is measured from the screen's
-    /// ABSOLUTE top edge (`frame`, not `visibleFrame`) so the capsules' top
-    /// lines up with the notch pills' drop position. `stackOffset` pushes
-    /// later capsules down so several pins on the same side stack instead of
-    /// overlapping.
-    func origin(size: CGSize, on screen: NSScreen, margin: CGFloat, topMargin: CGFloat, inset: CGFloat, stackOffset: CGFloat) -> CGPoint {
-        let vf = screen.visibleFrame
-        let x: CGFloat = switch self {
-        case .topLeading: vf.minX + margin - inset
-        case .topTrailing: vf.maxX - margin - size.width + inset
-        }
-        let y = screen.frame.maxY - topMargin - size.height + inset - stackOffset
-        return CGPoint(x: x, y: y)
-    }
-}
 
 // MARK: - Size metrics
 
@@ -87,10 +76,8 @@ struct CapsuleMetrics {
 
 // MARK: - Manager
 
-/// Owns the floating score capsules — one `NSPanel` per pinned fixture. Mirrors
-/// `OverlayManager`'s panel handling but the panels are interactive (clicks are
-/// absorbed, not passed through). Capsules live in the top-right corner only,
-/// stacked; the context menu reorders them.
+/// Owns one click-through capsule-stack panel per display. A SwiftUI `VStack`
+/// performs the vertical layout; AppKit only sizes and anchors each whole stack.
 /// All panels float above every app, including full screen (`OverlayWindow`).
 @MainActor
 final class PinnedCapsuleManager: ObservableObject {
@@ -99,29 +86,18 @@ final class PinnedCapsuleManager: ObservableObject {
     /// Which matches are pinned — the menu observes this to swap a fixture row
     /// into its "shown in capsule" state.
     @Published private(set) var pinnedFixtureIds: Set<Int> = []
-    /// Which side each capsule sits on. Published so context-menu items
-    /// (Move left/right) reflect a move immediately.
-    @Published private(set) var zones: [Int: SnapZone] = [:]
-    /// Stack order (top to bottom within a zone). Published so Move up/down
-    /// availability refreshes after a reorder.
+    /// Display captured at pin time. It deliberately does not follow
+    /// `NSScreen.main`, which changes as the user focuses other displays.
+    @Published private(set) var displayAssignments: [Int: CGDirectDisplayID] = [:]
+    /// Global insertion order; each display filters this into its own stack.
     @Published private(set) var order: [Int] = []
+    /// Hover is derived from the global pointer because the panels themselves
+    /// intentionally ignore every mouse event.
+    @Published private(set) var hoveredFixtureId: Int?
 
-    private static let margin: CGFloat = 16
-    /// Distance of the capsules' visible top edge from the screen's absolute
-    /// top, matching the notch pills (`NotchStackView`: the safe-area inset —
-    /// or 26 below a notch-less menu bar — plus 6).
-    private static var topMargin: CGFloat {
-        let inset = NSScreen.main?.safeAreaInsets.top ?? 0
-        return (inset > 0 ? inset : 26) + 6
-    }
-    private static let stackGap: CGFloat = 12
-    /// Transparent padding around the visible capsule inside its borderless
-    /// panel. The panel draws NO window shadow (a rectangular halo would betray
-    /// the window boundary), so the SwiftUI shadow needs room inside the frame
-    /// to avoid being clipped.
-    static let chromeInset: CGFloat = 24
-
-    private var panels: [Int: NSPanel] = [:]
+    private var panels: [CGDirectDisplayID: NSPanel] = [:]
+    private var capsuleFrames: [CGDirectDisplayID: [Int: CGRect]] = [:]
+    private var hoverTimer: Timer?
 
     func isPinned(_ fixtureId: Int) -> Bool { pinnedFixtureIds.contains(fixtureId) }
 
@@ -130,33 +106,29 @@ final class PinnedCapsuleManager: ObservableObject {
     }
 
     func pin(fixtureId: Int) {
-        guard panels[fixtureId] == nil, let screen else { return }
-        // A small placeholder size; the first geometry callback resizes+places it.
-        let initial = NSRect(x: 0, y: 0, width: 260, height: 96)
-        let panel = Self.makePanel(frame: initial)
-        panel.contentView = Self.makeHostingView(
-            PinnedCapsuleView(fixtureId: fixtureId)
-                .environmentObject(AppSession.shared)
-                .environmentObject(self)
-        )
-        panel.appearance = overlayAppearance
-        panels[fixtureId] = panel
-        zones[fixtureId] = .topTrailing
+        guard !isPinned(fixtureId), let screen = screenAtPointer,
+              let displayID = displayID(for: screen) else { return }
+        let panel = ensurePanel(for: displayID)
+        displayAssignments[fixtureId] = displayID
         order.append(fixtureId)
         pinnedFixtureIds.insert(fixtureId)
         panel.orderFrontRegardless()
-        AppLog.info(.app, "capsule_pinned fixture_id=\(fixtureId)")
+        startHoverTracking()
+        AppLog.info(.app, "capsule_pinned fixture_id=\(fixtureId) display_id=\(displayID)")
     }
 
     func unpin(fixtureId: Int) {
-        guard let panel = panels[fixtureId] else { return }
-        let zone = zones[fixtureId]
-        panel.orderOut(nil)
-        panels[fixtureId] = nil
-        zones[fixtureId] = nil
+        guard let displayID = displayAssignments[fixtureId] else { return }
+        displayAssignments[fixtureId] = nil
         order.removeAll { $0 == fixtureId }
         pinnedFixtureIds.remove(fixtureId)
-        if let zone { relayout(zone: zone) }
+        if fixtureIds(on: displayID).isEmpty {
+            panels[displayID]?.orderOut(nil)
+            panels[displayID] = nil
+            capsuleFrames[displayID] = nil
+        }
+        if hoveredFixtureId == fixtureId { hoveredFixtureId = nil }
+        stopHoverTrackingIfIdle()
         AppLog.info(.app, "capsule_unpinned fixture_id=\(fixtureId)")
     }
 
@@ -164,90 +136,57 @@ final class PinnedCapsuleManager: ObservableObject {
     func closeAll() {
         for panel in panels.values { panel.orderOut(nil) }
         panels.removeAll()
-        zones.removeAll()
+        capsuleFrames.removeAll()
+        displayAssignments.removeAll()
         order.removeAll()
         pinnedFixtureIds.removeAll()
+        hoveredFixtureId = nil
+        hoverTimer?.invalidate()
+        hoverTimer = nil
     }
 
-    // MARK: Reordering — the context menu's Move up/down/left/right
+    // MARK: Stack membership
 
-    func zone(of fixtureId: Int) -> SnapZone? { zones[fixtureId] }
-
-    /// Top-to-bottom capsule ids on one side.
-    private func stack(in zone: SnapZone) -> [Int] {
-        order.filter { zones[$0] == zone }
+    func fixtureIds(on displayID: CGDirectDisplayID) -> [Int] {
+        order.filter { displayAssignments[$0] == displayID }
     }
 
-    func canMoveUp(_ fixtureId: Int) -> Bool {
-        guard let zone = zones[fixtureId] else { return false }
-        return stack(in: zone).firstIndex(of: fixtureId).map { $0 > 0 } ?? false
-    }
+    // MARK: Click-through hover tracking
 
-    func canMoveDown(_ fixtureId: Int) -> Bool {
-        guard let zone = zones[fixtureId] else { return false }
-        let stack = stack(in: zone)
-        return stack.firstIndex(of: fixtureId).map { $0 < stack.count - 1 } ?? false
-    }
-
-    func moveUp(_ fixtureId: Int) {
-        guard let zone = zones[fixtureId] else { return }
-        let stack = stack(in: zone)
-        guard let index = stack.firstIndex(of: fixtureId), index > 0 else { return }
-        swapInOrder(fixtureId, stack[index - 1])
-        relayout(zone: zone)
-    }
-
-    func moveDown(_ fixtureId: Int) {
-        guard let zone = zones[fixtureId] else { return }
-        let stack = stack(in: zone)
-        guard let index = stack.firstIndex(of: fixtureId), index < stack.count - 1 else { return }
-        swapInOrder(fixtureId, stack[index + 1])
-        relayout(zone: zone)
-    }
-
-    /// Both ids share a zone, so swapping their global positions in `order`
-    /// swaps only their relative stack position.
-    private func swapInOrder(_ a: Int, _ b: Int) {
-        guard let ia = order.firstIndex(of: a), let ib = order.firstIndex(of: b) else { return }
-        order.swapAt(ia, ib)
-    }
-
-    // MARK: Sizing — the SwiftUI content reports its natural size
-
-    /// The capsule content measured a new size (setting change, hover expanded
-    /// the event list, …). Reflow its whole zone with the new size so stacking
-    /// stays tight and the capsule stays glued to its corner.
-    func reposition(fixtureId: Int, contentSize: CGSize) {
-        guard let panel = panels[fixtureId] else { return }
-        let size = CGSize(width: ceil(contentSize.width), height: ceil(contentSize.height))
-        guard size.width > 1, size.height > 1 else { return }
-        guard let zone = zones[fixtureId] else {
-            panel.setContentSize(size)
-            return
-        }
-        relayout(zone: zone, sizeOverride: [fixtureId: size])
-    }
-
-    /// Re-place every capsule assigned to `zone`, stacking them in `order`.
-    /// The gap math subtracts the transparent chrome inset on both sides so
-    /// VISIBLE capsules sit `stackGap` apart. `sizeOverride` carries a freshly
-    /// measured content size so origin and size land in ONE `setFrame` — a
-    /// resize-then-move pair lets a right-side capsule overshoot the screen
-    /// edge for a frame, which reads as jitter during hover growth.
-    private func relayout(zone: SnapZone, sizeOverride: [Int: CGSize] = [:]) {
-        guard let screen else { return }
-        var offset: CGFloat = 0
-        for fixtureId in order where zones[fixtureId] == zone {
-            guard let panel = panels[fixtureId] else { continue }
-            let size = sizeOverride[fixtureId] ?? panel.frame.size
-            let origin = zone.origin(
-                size: size, on: screen,
-                margin: Self.margin, topMargin: Self.topMargin,
-                inset: Self.chromeInset, stackOffset: offset
+    func updateCapsuleFrames(displayID: CGDirectDisplayID, frames: [Int: CGRect]) {
+        guard let panel = panels[displayID] else { return }
+        capsuleFrames[displayID] = frames.mapValues { frame in
+            CGRect(
+                x: panel.frame.minX + frame.minX,
+                y: panel.frame.maxY - frame.maxY,
+                width: frame.width,
+                height: frame.height
             )
-            panel.setFrame(NSRect(origin: origin, size: size), display: true)
-            offset += size.height - 2 * Self.chromeInset + Self.stackGap
         }
+        refreshHover()
+    }
+
+    private func startHoverTracking() {
+        guard hoverTimer == nil else { return }
+        let timer = Timer(timeInterval: 0.05, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.refreshHover() }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        hoverTimer = timer
+    }
+
+    private func stopHoverTrackingIfIdle() {
+        guard pinnedFixtureIds.isEmpty else { return }
+        hoverTimer?.invalidate()
+        hoverTimer = nil
+    }
+
+    private func refreshHover() {
+        let pointer = NSEvent.mouseLocation
+        let hovered = capsuleFrames.values.lazy
+            .compactMap { frames in frames.first { $0.value.contains(pointer) }?.key }
+            .first
+        if hoveredFixtureId != hovered { hoveredFixtureId = hovered }
     }
 
     // MARK: Theme
@@ -261,7 +200,40 @@ final class PinnedCapsuleManager: ObservableObject {
 
     // MARK: Panels
 
-    private var screen: NSScreen? { NSScreen.main ?? NSScreen.screens.first }
+    private var screenAtPointer: NSScreen? {
+        let point = NSEvent.mouseLocation
+        return NSScreen.screens.first { NSMouseInRect(point, $0.frame, false) }
+            ?? NSScreen.main ?? NSScreen.screens.first
+    }
+
+    private func displayID(for screen: NSScreen) -> CGDirectDisplayID? {
+        (screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value
+    }
+
+    private func screen(for displayID: CGDirectDisplayID) -> NSScreen? {
+        NSScreen.screens.first { self.displayID(for: $0) == displayID }
+    }
+
+    private func ensurePanel(for displayID: CGDirectDisplayID) -> NSPanel {
+        if let panel = panels[displayID] { return panel }
+        guard let screen = screen(for: displayID) else {
+            preconditionFailure("A capsule panel requires its captured display")
+        }
+        let panel = Self.makePanel(frame: screen.frame)
+        let bottomInset = max(0, screen.visibleFrame.minY - screen.frame.minY)
+        panel.contentView = Self.makeHostingView(
+            PinnedCapsuleStackView(
+                displayID: displayID,
+                topInset: OverlayLayout.topInset(on: screen),
+                bottomInset: bottomInset
+            )
+                .environmentObject(AppSession.shared)
+                .environmentObject(self)
+        )
+        panel.appearance = overlayAppearance
+        panels[displayID] = panel
+        return panel
+    }
 
     private var overlayAppearance: NSAppearance? {
         switch AppSession.shared.prefs.settings.theme ?? .system {
@@ -282,20 +254,20 @@ final class PinnedCapsuleManager: ObservableObject {
         panel.backgroundColor = .clear
         // No AppKit shadow: it hugs the rectangular FRAME, not the rounded
         // capsule, and reads as a visible window boundary. The SwiftUI shadow
-        // (inside the chrome inset) is the only shadow — same as the pills.
+        // (inside the asymmetric stack inset) is the only shadow.
         panel.hasShadow = false
         panel.level = OverlayWindow.level
         panel.collectionBehavior = OverlayWindow.collectionBehavior
-        panel.ignoresMouseEvents = false // interactive — hover + context menu
+        panel.ignoresMouseEvents = true
         panel.sharingType = .readOnly
         panel.isFloatingPanel = true
-        panel.becomesKeyOnlyIfNeeded = true // context menu on a nonactivating panel
+        panel.becomesKeyOnlyIfNeeded = true
         panel.isMovableByWindowBackground = false
         return panel
     }
 
-    /// Fixed-size hosting so the SwiftUI content doesn't drive window
-    /// constraints; the panel frame is set from the measured content size.
+    /// Disable hosting-view-driven window constraints. Every capsule panel has
+    /// a static display-sized frame; only its SwiftUI stack changes shape.
     private static func makeHostingView<Content: View>(_ rootView: Content) -> NSHostingView<Content> {
         let hostingView = NSHostingView(rootView: rootView)
         hostingView.sizingOptions = []
@@ -418,26 +390,65 @@ private func eventLabel(for type: MatchEventType) -> String {
 
 // MARK: - View
 
+/// One trailing-aligned stack inside a fixed, screen-sized click-through panel.
+private struct PinnedCapsuleStackView: View {
+    let displayID: CGDirectDisplayID
+    let topInset: CGFloat
+    let bottomInset: CGFloat
+    @EnvironmentObject private var manager: PinnedCapsuleManager
+    @EnvironmentObject private var session: AppSession
+
+    private var alignment: Alignment {
+        (session.prefs.settings.capsulePosition ?? .top) == .top ? .topTrailing : .bottomTrailing
+    }
+
+    var body: some View {
+        GeometryReader { proxy in
+            VStack(alignment: .trailing, spacing: OverlayLayout.stackSpacing) {
+                ForEach(manager.fixtureIds(on: displayID), id: \.self) { fixtureId in
+                    PinnedCapsuleView(fixtureId: fixtureId)
+                        .background(
+                            GeometryReader { geometry in
+                                Color.clear.preference(
+                                    key: CapsuleFramesKey.self,
+                                    value: [fixtureId: geometry.frame(in: .named("capsule-stack"))]
+                                )
+                            }
+                        )
+                }
+            }
+            .fixedSize()
+            .padding(EdgeInsets(
+                top: topInset + OverlayLayout.topGap,
+                leading: OverlayLayout.expandedShadowInset,
+                bottom: bottomInset + OverlayLayout.expandedShadowInset,
+                trailing: OverlayLayout.shadowInset
+            ))
+            .frame(width: proxy.size.width, height: proxy.size.height, alignment: alignment)
+        }
+        .coordinateSpace(name: "capsule-stack")
+        .onPreferenceChange(CapsuleFramesKey.self) { frames in
+            DispatchQueue.main.async {
+                manager.updateCapsuleFrames(displayID: displayID, frames: frames)
+            }
+        }
+    }
+}
+
 /// The capsule content. At rest it's the tightest possible scoreline —
 /// `logo score logo time` — in the notch pill's exact chrome. Hovering fades
-/// and slides the team names in (the panel is anchored to the top-right
-/// corner and the content is pinned top-trailing, so growth reads leftward);
-/// clicking toggles the event timeline open below the header (and closed
-/// again). Reads live from `AppSession`, so it updates as `LiveStore` polls.
+/// and slides the team names and event timeline in. The screen-sized parent
+/// panel is static and click-through; hover comes from the manager's global
+/// pointer tracking. Reads live from `AppSession` as `LiveStore` polls.
 struct PinnedCapsuleView: View {
     let fixtureId: Int
     @EnvironmentObject var session: AppSession
     @EnvironmentObject var manager: PinnedCapsuleManager
     @Environment(\.colorScheme) private var scheme
-    @State private var hovering = false
-    @State private var expanded = false
-    /// Pending debounced hover flip — cancelled on every fresh enter/exit so
-    /// edge flicker (the resize moves the boundary under the cursor) settles
-    /// before the state actually changes.
-    @State private var hoverTask: Task<Void, Never>?
 
     private var metrics: CapsuleMetrics { CapsuleMetrics(session.prefs.settings.capsuleSize ?? .medium) }
     private var fixture: Fixture? { session.fixtures.first { $0.fixtureId == fixtureId } }
+    private var hovering: Bool { manager.hoveredFixtureId == fixtureId }
 
     var body: some View {
         Group {
@@ -451,79 +462,11 @@ struct PinnedCapsuleView: View {
             }
         }
         .fixedSize()
-        // Measure the natural size (macOS 14 has no onGeometryChange) and hand
-        // it to the manager, which resizes + re-anchors the panel.
-        .background(
-            GeometryReader { geo in
-                Color.clear.preference(key: CapsuleSizeKey.self, value: geo.size)
-            }
-        )
-        .onPreferenceChange(CapsuleSizeKey.self) { size in
-            DispatchQueue.main.async { manager.reposition(fixtureId: fixtureId, contentSize: size) }
-        }
-        // NO flexible root frame here: a maxWidth/maxHeight .infinity root
-        // inside an NSPanel's NSHostingView loops AppKit's constraint passes
-        // until it faults. Right-edge stability comes from the width-reserving
-        // twin in `capsule` instead — hover never changes the measured size.
     }
 
     @ViewBuilder private func capsule(_ fixture: Fixture) -> some View {
-        // One persistent hierarchy for every state, so hover (names slide in
-        // horizontally) and click (event rows open vertically) animate the
-        // capsule's size instead of swapping views. An invisible twin lays
-        // out the capsule's MAXIMUM width up front (hovered header + event
-        // list), so neither hover nor click-expand ever changes the measured
-        // width — the panel only grows downward and the right edge never
-        // moves. The reserved strip is fully transparent, so clicks there
-        // fall through to apps below, same as the chrome inset.
-        ZStack(alignment: .topTrailing) {
-            widthReservingTwin(fixture)
-                .opacity(0)
-                .allowsHitTesting(false)
-                .accessibilityHidden(true)
-            capsuleBody(fixture, showNames: hovering || expanded, showTimeline: expanded)
-                // Click to open the timeline, click again to close it.
-                .onTapGesture {
-                    withAnimation(.easeInOut(duration: 0.25)) { expanded.toggle() }
-                }
-                .contextMenu {
-                    if manager.canMoveUp(fixtureId) {
-                        Button("Move up") { manager.moveUp(fixtureId) }
-                    }
-                    if manager.canMoveDown(fixtureId) {
-                        Button("Move down") { manager.moveDown(fixtureId) }
-                    }
-                    Divider()
-                    Button("Close") { manager.unpin(fixtureId: fixtureId) }
-                }
-                .onHover { over in
-                    hoverTask?.cancel()
-                    // Entering waits a beat so a cursor skimming past doesn't
-                    // expand the capsule; leaving waits longer so the shrink
-                    // moving the edge back under the cursor can't re-trigger
-                    // a hover (edge flicker).
-                    hoverTask = Task {
-                        try? await Task.sleep(for: .milliseconds(over ? 80 : 200))
-                        guard !Task.isCancelled else { return }
-                        withAnimation(.easeInOut(duration: 0.2)) { hovering = over }
-                    }
-                }
-        }
-        // Transparent room for the shadow inside the borderless panel — the
-        // manager's layout math cancels this out at the edges.
-        .padding(PinnedCapsuleManager.chromeInset)
-    }
-
-    /// Invisible sizing twin: the hovered header (names shown) plus the event
-    /// list forced to ZERO height, so the list contributes width only. Same
-    /// padding as the real capsule so widths line up exactly.
-    private func widthReservingTwin(_ fixture: Fixture) -> some View {
-        ZStack(alignment: .topTrailing) {
-            header(fixture, showNames: true)
-            timelineList(fixture).fixedSize().frame(height: 0)
-        }
-        .padding(.horizontal, metrics.hPad)
-        .padding(.vertical, metrics.vPad)
+        capsuleBody(fixture, showNames: hovering, showTimeline: hovering)
+            .animation(.easeInOut(duration: 0.25), value: hovering)
     }
 
     private func timelineList(_ fixture: Fixture) -> some View {
@@ -654,11 +597,10 @@ struct PinnedCapsuleView: View {
     }
 }
 
-/// Reports the capsule's natural size up to the manager for panel sizing.
-private struct CapsuleSizeKey: PreferenceKey {
-    static var defaultValue: CGSize = .zero
-    static func reduce(value: inout CGSize, nextValue: () -> CGSize) {
-        let next = nextValue()
-        if next != .zero { value = next }
+/// Capsule bounds in the fixed panel's top-left SwiftUI coordinate space.
+private struct CapsuleFramesKey: PreferenceKey {
+    static var defaultValue: [Int: CGRect] = [:]
+    static func reduce(value: inout [Int: CGRect], nextValue: () -> [Int: CGRect]) {
+        value.merge(nextValue()) { _, new in new }
     }
 }

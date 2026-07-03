@@ -7,14 +7,9 @@ import SwiftUI
 struct NotchStackView: View {
     let items: [NotchItem]
 
-    private var topInset: CGFloat {
-        let inset = NSScreen.main?.safeAreaInsets.top ?? 0
-        return inset > 0 ? inset : 26 // just below the menu bar when no notch
-    }
-
     var body: some View {
         VStack(spacing: 0) {
-            VStack(spacing: 8) {
+            VStack(spacing: OverlayLayout.stackSpacing) {
                 ForEach(items) { item in
                     NotchPillRow(item: item)
                         // Drop down out of the notch; rise back into it.
@@ -25,7 +20,7 @@ struct NotchStackView: View {
             }
             Spacer()
         }
-        .padding(.top, topInset + 6)
+        .padding(.top, OverlayLayout.topMargin(on: NSScreen.main))
         .frame(maxWidth: .infinity)
         .allowsHitTesting(false)
     }
