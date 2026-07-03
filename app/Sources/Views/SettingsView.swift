@@ -9,10 +9,8 @@ struct SettingsView: View {
     // Sparkle persists both flags in UserDefaults itself; we just mirror them.
     @State private var autoCheck = true
     @State private var autoInstall = true
-    // Local mirror of the theme so `.appTheme()` reacts synchronously when the
-    // user clicks a segment — `preferredColorScheme(nil)` (System) needs an extra
-    // render pass to resolve the system appearance, making it feel slower than
-    // Light/Dark if we wait for the deferred session write.
+    // Local mirror so the SwiftUI content reacts synchronously while the
+    // deferred session write updates the application-level AppKit appearance.
     @State private var activeTheme: ThemeChoice = .system
     @ObservedObject private var displayTarget = OverlayDisplayTarget.shared
 
