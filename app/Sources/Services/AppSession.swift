@@ -60,6 +60,7 @@ final class AppSession: ObservableObject {
         }
         #endif
         loadLocalPrefs()
+        applyApplicationTheme()
         AppAnalytics.syncSettingProperties(prefs.settings)
         if let data = defaults.data(forKey: CacheKey.fixtures),
            let stored = try? JSONDecoder().decode([Fixture].self, from: data) {
@@ -208,13 +209,22 @@ final class AppSession: ObservableObject {
         let before = prefs.settings
         mutate(&prefs.settings)
         persistSettings()
-        // The overlay panels are separate windows, so they don't inherit the
-        // app's color scheme — push the theme to them directly.
         if before.theme != prefs.settings.theme {
+            // SwiftUI's preferredColorScheme(nil) alone does not immediately
+            // clear an existing AppKit window/popover override. Apply the
+            // preference at the application level so open window chrome and
+            // the menu update when switching back to System.
+            applyApplicationTheme()
+            // Overlay panels carry their own appearance overrides, so keep
+            // them synchronized separately.
             OverlayManager.shared.applyOverlayTheme()
             PinnedCapsuleManager.shared.applyTheme()
         }
         reportSettingsChange(before: before, after: prefs.settings)
+    }
+
+    private func applyApplicationTheme() {
+        NSApp.appearance = (prefs.settings.theme ?? .system).appKitAppearance
     }
 
     /// Emit one `setting_changed` per field that actually changed.
