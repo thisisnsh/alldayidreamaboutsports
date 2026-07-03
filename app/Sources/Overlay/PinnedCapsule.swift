@@ -19,9 +19,6 @@ enum OverlayWindow {
 /// radius, a solid black/white fill, and a soft drop shadow.
 let capsuleCorner: CGFloat = 18
 
-/// How long the event icon takes to wipe across the capsule.
-let capsuleSweepDuration: Double = 1.0
-
 // MARK: - Snap zones
 
 /// Where a capsule lives: the top-left or top-right corner. Capsules never
@@ -35,16 +32,18 @@ enum SnapZone {
 
     /// Bottom-left origin for a capsule panel of `size` in this zone on
     /// `screen`. `inset` is the transparent chrome padding around the visible
-    /// capsule (shadow + wiggle room), subtracted so the VISIBLE edge sits
-    /// `margin` from the screen edge. `stackOffset` pushes later capsules down
-    /// so several pins on the same side stack instead of overlapping.
-    func origin(size: CGSize, on screen: NSScreen, margin: CGFloat, inset: CGFloat, stackOffset: CGFloat) -> CGPoint {
+    /// capsule (shadow room), subtracted so the VISIBLE edge sits `margin`
+    /// from the screen edge; `topMargin` is the (larger) top distance so
+    /// capsules clear the traffic-light controls of maximized windows below.
+    /// `stackOffset` pushes later capsules down so several pins on the same
+    /// side stack instead of overlapping.
+    func origin(size: CGSize, on screen: NSScreen, margin: CGFloat, topMargin: CGFloat, inset: CGFloat, stackOffset: CGFloat) -> CGPoint {
         let vf = screen.visibleFrame
         let x: CGFloat = switch self {
         case .topLeading: vf.minX + margin - inset
         case .topTrailing: vf.maxX - margin - size.width + inset
         }
-        let y = vf.maxY - margin - size.height + inset - stackOffset
+        let y = vf.maxY - topMargin - size.height + inset - stackOffset
         return CGPoint(x: x, y: y)
     }
 }
@@ -84,17 +83,6 @@ struct CapsuleMetrics {
     }
 }
 
-// MARK: - Event notice
-
-/// A just-routed event for a pinned match — drives the capsule's wiggle and
-/// the icon that wipes across the score. `id` makes every notice fresh so
-/// `onChange` fires even when two identical events arrive back to back.
-struct CapsuleNotice: Equatable {
-    let id: UUID
-    let icon: String
-    let color: Color
-}
-
 // MARK: - Manager
 
 /// Owns the floating score capsules — one `NSPanel` per pinned fixture. Mirrors
@@ -115,15 +103,16 @@ final class PinnedCapsuleManager: ObservableObject {
     /// Stack order (top to bottom within a zone). Published so Move up/down
     /// availability refreshes after a reorder.
     @Published private(set) var order: [Int] = []
-    /// Latest event per pinned fixture — the capsule view watches its entry.
-    @Published private(set) var notices: [Int: CapsuleNotice] = [:]
 
     private static let margin: CGFloat = 16
+    /// Larger than the side margin so capsules sit below the traffic-light
+    /// window controls of a maximized/fullscreen window underneath.
+    private static let topMargin: CGFloat = 48
     private static let stackGap: CGFloat = 12
     /// Transparent padding around the visible capsule inside its borderless
     /// panel. The panel draws NO window shadow (a rectangular halo would betray
-    /// the window boundary), so the SwiftUI shadow — and the wiggle offset —
-    /// need room inside the frame to avoid being clipped.
+    /// the window boundary), so the SwiftUI shadow needs room inside the frame
+    /// to avoid being clipped.
     static let chromeInset: CGFloat = 24
 
     private var panels: [Int: NSPanel] = [:]
@@ -160,7 +149,6 @@ final class PinnedCapsuleManager: ObservableObject {
         panels[fixtureId] = nil
         zones[fixtureId] = nil
         order.removeAll { $0 == fixtureId }
-        notices[fixtureId] = nil
         pinnedFixtureIds.remove(fixtureId)
         if let zone { relayout(zone: zone) }
         AppLog.info(.app, "capsule_unpinned fixture_id=\(fixtureId)")
@@ -172,22 +160,7 @@ final class PinnedCapsuleManager: ObservableObject {
         panels.removeAll()
         zones.removeAll()
         order.removeAll()
-        notices.removeAll()
         pinnedFixtureIds.removeAll()
-    }
-
-    // MARK: Events
-
-    /// An event was routed for a match; if that match is pinned, hand the
-    /// event's icon to its capsule so it wiggles and wipes the icon across.
-    /// Pills/celebrations are untouched — this is purely additive.
-    func notify(_ event: MatchEvent) {
-        guard isPinned(event.fixtureId) else { return }
-        notices[event.fixtureId] = CapsuleNotice(
-            id: UUID(),
-            icon: pillIcon(for: event),
-            color: pillIconColor(for: event)
-        )
     }
 
     // MARK: Reordering — the context menu's Move up/down/left/right
@@ -267,7 +240,8 @@ final class PinnedCapsuleManager: ObservableObject {
             let size = panel.frame.size
             let origin = zone.origin(
                 size: size, on: screen,
-                margin: Self.margin, inset: Self.chromeInset, stackOffset: offset
+                margin: Self.margin, topMargin: Self.topMargin,
+                inset: Self.chromeInset, stackOffset: offset
             )
             panel.setFrameOrigin(origin)
             offset += size.height - 2 * Self.chromeInset + Self.stackGap
@@ -443,19 +417,18 @@ private func eventLabel(for type: MatchEventType) -> String {
 // MARK: - View
 
 /// The capsule content. At rest it's the tightest possible scoreline —
-/// `logo score logo time` — in the notch pill's exact chrome. Hover expands it
-/// with team names and every event so far. A routed event wiggles the capsule
-/// and wipes the event's icon across the score like a windshield wiper. Reads
-/// live from `AppSession`, so it updates as `LiveStore` polls.
+/// `logo score logo time` — in the notch pill's exact chrome. Hovering slides
+/// the team names in (the panel is corner-anchored, so a right-side capsule
+/// grows leftward and a left-side one rightward); clicking toggles the event
+/// timeline open below the header (and closed again). Reads live from
+/// `AppSession`, so it updates as `LiveStore` polls.
 struct PinnedCapsuleView: View {
     let fixtureId: Int
     @EnvironmentObject var session: AppSession
     @EnvironmentObject var manager: PinnedCapsuleManager
     @Environment(\.colorScheme) private var scheme
     @State private var hovering = false
-    @State private var sweep: CapsuleNotice?
-    @State private var sweepProgress: CGFloat = 0
-    @State private var wiggle: CGFloat = 0
+    @State private var expanded = false
 
     private var metrics: CapsuleMetrics { CapsuleMetrics(session.prefs.settings.capsuleSize ?? .medium) }
     private var fixture: Fixture? { session.fixtures.first { $0.fixtureId == fixtureId } }
@@ -485,29 +458,37 @@ struct PinnedCapsuleView: View {
     }
 
     @ViewBuilder private func capsule(_ fixture: Fixture) -> some View {
-        Group {
-            if hovering {
-                VStack(alignment: .leading, spacing: metrics.rowSpacing) {
-                    header(fixture)
-                    ForEach(capsuleTimeline(for: fixture)) { row in
-                        eventRow(row)
-                    }
+        // One persistent hierarchy for every state, so hover (names slide in
+        // horizontally) and click (event rows open vertically) animate the
+        // capsule's size instead of swapping views. The panel is re-anchored
+        // to its corner on every measured size, so the growth reads as
+        // leftward on the right side, rightward on the left, downward for
+        // the timeline.
+        VStack(alignment: .leading, spacing: metrics.rowSpacing) {
+            header(fixture, showNames: hovering || expanded)
+            if expanded {
+                ForEach(capsuleTimeline(for: fixture)) { row in
+                    eventRow(row)
                 }
-            } else {
-                compactHeader(fixture)
+                .transition(.opacity)
             }
         }
         .padding(.horizontal, metrics.hPad)
         .padding(.vertical, metrics.vPad)
-        .overlay { wiper }
-        // Clip content + wiper to the capsule shape (the wiper enters/exits
-        // through the rounded edges); the shadowed fill below is NOT clipped.
+        // Clip to the animated bounds so event rows don't paint past the
+        // background while the expand/collapse animation is in flight; the
+        // shadowed fill sits outside the clip so it stays soft.
         .clipShape(RoundedRectangle(cornerRadius: capsuleCorner, style: .continuous))
         .background(
             RoundedRectangle(cornerRadius: capsuleCorner, style: .continuous)
                 .fill(scheme == .dark ? Color.black : Color.white)
                 .shadow(color: .black.opacity(0.4), radius: 10, y: 4)
         )
+        .contentShape(RoundedRectangle(cornerRadius: capsuleCorner, style: .continuous))
+        // Click to open the timeline, click again to close it.
+        .onTapGesture {
+            withAnimation(.easeInOut(duration: 0.25)) { expanded.toggle() }
+        }
         .contextMenu {
             if manager.canMoveUp(fixtureId) {
                 Button("Move up") { manager.moveUp(fixtureId) }
@@ -524,42 +505,35 @@ struct PinnedCapsuleView: View {
             Button("Close") { manager.unpin(fixtureId: fixtureId) }
         }
         .onHover { over in
-            withAnimation(.easeOut(duration: 0.15)) { hovering = over }
+            withAnimation(.easeInOut(duration: 0.2)) { hovering = over }
         }
-        .offset(x: wiggle)
-        // Transparent room for the shadow and the wiggle inside the borderless
-        // panel — the manager's layout math cancels this out at the edges.
+        // Transparent room for the shadow inside the borderless panel — the
+        // manager's layout math cancels this out at the edges.
         .padding(PinnedCapsuleManager.chromeInset)
-        .onChange(of: manager.notices[fixtureId]) { _, notice in
-            if let notice { run(notice) }
-        }
     }
 
-    /// At rest: `logo score logo time`.
-    private func compactHeader(_ fixture: Fixture) -> some View {
+    /// The scoreline row. At rest it's `logo score logo time`; with
+    /// `showNames` the team names slide in around the score.
+    private func header(_ fixture: Fixture, showNames: Bool) -> some View {
         HStack(spacing: 6) {
             CachedTeamLogo(url: logo(fixture.home.id), size: metrics.headerLogo)
-            Text(scoreText(fixture))
-                .font(.system(size: metrics.scoreFont, weight: .bold, design: .rounded))
-                .fixedSize()
-            CachedTeamLogo(url: logo(fixture.away.id), size: metrics.headerLogo)
-            trailing(fixture)
-        }
-    }
-
-    /// On hover: the full matchup — `logo name score name logo time`.
-    private func header(_ fixture: Fixture) -> some View {
-        HStack(spacing: 6) {
-            CachedTeamLogo(url: logo(fixture.home.id), size: metrics.headerLogo)
-            Text(fixture.home.name)
-                .font(.system(size: metrics.nameFont, design: .rounded)).lineLimit(1)
+            if showNames {
+                Text(fixture.home.name)
+                    .font(.system(size: metrics.nameFont, design: .rounded)).lineLimit(1)
+                    .transition(.opacity)
+            }
             Text(scoreText(fixture))
                 .font(.system(size: metrics.scoreFont, weight: .bold, design: .rounded))
                 .fixedSize().layoutPriority(1)
-            Text(fixture.away.name)
-                .font(.system(size: metrics.nameFont, design: .rounded)).lineLimit(1)
+            if showNames {
+                Text(fixture.away.name)
+                    .font(.system(size: metrics.nameFont, design: .rounded)).lineLimit(1)
+                    .transition(.opacity)
+            }
             CachedTeamLogo(url: logo(fixture.away.id), size: metrics.headerLogo)
-            Spacer(minLength: 8)
+            if showNames {
+                Spacer(minLength: 8)
+            }
             trailing(fixture)
         }
     }
@@ -608,39 +582,6 @@ struct PinnedCapsuleView: View {
             }
         }
         .padding(.leading, metrics.rowSpacing)
-    }
-
-    // MARK: Event reaction — wiggle + windshield-wiper icon
-
-    /// The event icon passing over the score. Always present (hidden when
-    /// idle) so the sweep animation never targets a freshly inserted view.
-    private var wiper: some View {
-        GeometryReader { geo in
-            Image(systemName: sweep?.icon ?? "circle")
-                .font(.system(size: metrics.scoreFont + 4, weight: .semibold))
-                .foregroundStyle(sweep?.color ?? .primary)
-                .opacity(sweep == nil ? 0 : 1)
-                .position(
-                    x: -24 + (geo.size.width + 48) * sweepProgress,
-                    y: geo.size.height / 2
-                )
-        }
-        .allowsHitTesting(false)
-    }
-
-    private func run(_ notice: CapsuleNotice) {
-        withAnimation(nil) {
-            sweep = notice
-            sweepProgress = 0
-        }
-        withAnimation(.easeInOut(duration: capsuleSweepDuration)) { sweepProgress = 1 }
-        // One left-right shake: jump off-center, spring back under-damped so it
-        // overshoots once and settles.
-        wiggle = 8
-        withAnimation(.spring(response: 0.35, dampingFraction: 0.3)) { wiggle = 0 }
-        DispatchQueue.main.asyncAfter(deadline: .now() + capsuleSweepDuration) {
-            if sweep?.id == notice.id { sweep = nil }
-        }
     }
 
     private func logo(_ id: Int) -> String {
