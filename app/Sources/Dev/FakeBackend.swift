@@ -9,7 +9,10 @@ import Foundation
 // score is walked through DevConfig.timeline by DemoEngine, so what the popover
 // shows always matches the events that have fired.
 
-/// Per-match live state the demo timeline mutates.
+/// Per-match live state the demo timeline mutates. The per-side event arrays
+/// mirror what the backend stores on a real fixture — the capsule's hover
+/// timeline is rebuilt from them, so without them the demo would show scores
+/// but an empty event history.
 struct LiveMatchState {
     var homeGoals = 0
     var awayGoals = 0
@@ -19,6 +22,16 @@ struct LiveMatchState {
     // Set once a shootout starts so the scoreboard can show the pen tally.
     var penHome: Int?
     var penAway: Int?
+    var homeGoalEvents: [MatchTimelineEvent] = []
+    var awayGoalEvents: [MatchTimelineEvent] = []
+    var homeYellows: [MatchTimelineEvent] = []
+    var awayYellows: [MatchTimelineEvent] = []
+    var homeReds: [MatchTimelineEvent] = []
+    var awayReds: [MatchTimelineEvent] = []
+    var homeSubs: [SubstitutionRecord] = []
+    var awaySubs: [SubstitutionRecord] = []
+    var varEvents: [VarRecord] = []
+    var kicks: [PenaltyKickRecord] = []
 }
 
 /// Shared mutable state behind all the fakes.
@@ -54,15 +67,54 @@ final class FakeStore {
         celebrations = [:]
     }
 
-    func addGoal(_ side: DemoSide, in id: Int) {
-        if side == .home { states[id]?.homeGoals += 1 } else { states[id]?.awayGoals += 1 }
+    func addGoal(_ side: DemoSide, in id: Int, player: String?, minute: Int?, kind: String? = nil) {
+        guard var state = states[id] else { return }
+        let event = MatchTimelineEvent(player: player, minute: minute, extra: nil, kind: kind)
+        if side == .home {
+            state.homeGoals += 1
+            state.homeGoalEvents.append(event)
+        } else {
+            state.awayGoals += 1
+            state.awayGoalEvents.append(event)
+        }
+        states[id] = state
     }
 
     func removeGoal(_ side: DemoSide, in id: Int) {
         guard var state = states[id] else { return }
-        if side == .home { state.homeGoals = max(state.homeGoals - 1, 0) }
-        else { state.awayGoals = max(state.awayGoals - 1, 0) }
+        if side == .home {
+            state.homeGoals = max(state.homeGoals - 1, 0)
+            if !state.homeGoalEvents.isEmpty { state.homeGoalEvents.removeLast() }
+        } else {
+            state.awayGoals = max(state.awayGoals - 1, 0)
+            if !state.awayGoalEvents.isEmpty { state.awayGoalEvents.removeLast() }
+        }
         states[id] = state
+    }
+
+    func addCard(_ side: DemoSide, red: Bool, in id: Int, player: String?, minute: Int?) {
+        guard var state = states[id] else { return }
+        let event = MatchTimelineEvent(player: player, minute: minute, extra: nil)
+        switch (side, red) {
+        case (.home, false): state.homeYellows.append(event)
+        case (.home, true): state.homeReds.append(event)
+        case (.away, false): state.awayYellows.append(event)
+        case (.away, true): state.awayReds.append(event)
+        }
+        states[id] = state
+    }
+
+    func addSub(_ side: DemoSide, in id: Int, playerIn: String, playerOut: String, minute: Int?) {
+        guard var state = states[id] else { return }
+        let record = SubstitutionRecord(playerOut: playerOut, playerIn: playerIn, minute: minute, extra: nil)
+        if side == .home { state.homeSubs.append(record) } else { state.awaySubs.append(record) }
+        states[id] = state
+    }
+
+    func addVar(in id: Int, teamId: Int, detail: String, minute: Int?) {
+        states[id]?.varEvents.append(
+            VarRecord(teamId: teamId, detail: detail, player: nil, minute: minute, extra: nil)
+        )
     }
 
     /// Record a shootout kick: a scored kick bumps that side's pen tally; the
@@ -74,13 +126,14 @@ final class FakeStore {
         states[id] = state
     }
 
-    func addPenalty(_ side: DemoSide, scored: Bool, in id: Int) {
+    func addPenalty(_ side: DemoSide, scored: Bool, in id: Int, teamId: Int, player: String?) {
         guard var state = states[id] else { return }
         state.penHome = state.penHome ?? 0
         state.penAway = state.penAway ?? 0
         if scored {
             if side == .home { state.penHome! += 1 } else { state.penAway! += 1 }
         }
+        state.kicks.append(PenaltyKickRecord(teamId: teamId, player: player, scored: scored))
         states[id] = state
     }
 
@@ -90,7 +143,7 @@ final class FakeStore {
         let s = states[def.id] ?? LiveMatchState()
         let kickoff = Date().addingTimeInterval(-Double(s.minute ?? 0) * 60)
         let shootout = (s.penHome != nil || s.penAway != nil)
-            ? Shootout(home: s.penHome ?? 0, away: s.penAway ?? 0) : nil
+            ? Shootout(home: s.penHome ?? 0, away: s.penAway ?? 0, kicks: s.kicks) : nil
         let running = s.rawStatus == "1H" || s.rawStatus == "2H" || s.rawStatus == "ET"
         let period: MatchPeriod = {
             switch s.rawStatus {
@@ -110,9 +163,20 @@ final class FakeStore {
             kickoffISO: ISO8601DateFormatter().string(from: kickoff),
             status: s.status, rawStatus: s.rawStatus, minute: s.minute,
             extra: nil, period: period, running: running,
-            home: ScoreboardTeam(id: def.home.id, name: def.home.name, goals: s.homeGoals),
-            away: ScoreboardTeam(id: def.away.id, name: def.away.name, goals: s.awayGoals),
-            shootout: shootout
+            home: ScoreboardTeam(
+                id: def.home.id, name: def.home.name, goals: s.homeGoals,
+                yellowCards: s.homeYellows.count, redCards: s.homeReds.count,
+                goalEvents: s.homeGoalEvents, yellowCardEvents: s.homeYellows,
+                redCardEvents: s.homeReds, subs: s.homeSubs
+            ),
+            away: ScoreboardTeam(
+                id: def.away.id, name: def.away.name, goals: s.awayGoals,
+                yellowCards: s.awayYellows.count, redCards: s.awayReds.count,
+                goalEvents: s.awayGoalEvents, yellowCardEvents: s.awayYellows,
+                redCardEvents: s.awayReds, subs: s.awaySubs
+            ),
+            shootout: shootout,
+            varEvents: s.varEvents
         )
     }
 
@@ -313,22 +377,34 @@ final class DemoEngine: ObservableObject {
             store.states[id]?.rawStatus = "1H"
             store.states[id]?.minute = moment.minute
             push(.kickoff, def, minute: moment.minute)
-        case let .goal(side, player):
+        case let .goal(side, player, kind):
             store.states[id]?.status = "LIVE"
             store.states[id]?.rawStatus = "1H"
             store.states[id]?.minute = moment.minute
-            store.addGoal(side, in: id)
-            push(.goal, def, side: side, player: player, minute: moment.minute)
+            store.addGoal(side, in: id, player: player, minute: moment.minute, kind: kind)
+            push(.goal, def, side: side, player: player, minute: moment.minute, goalKind: kind)
         case let .goalDisallowed(side):
             store.states[id]?.minute = moment.minute
             store.removeGoal(side, in: id)
             push(.goalCancelled, def, side: side, minute: moment.minute)
         case let .yellowCard(side, player):
             store.states[id]?.minute = moment.minute
+            store.addCard(side, red: false, in: id, player: player, minute: moment.minute)
             push(.yellowCard, def, side: side, player: player, minute: moment.minute)
         case let .redCard(side, player):
             store.states[id]?.minute = moment.minute
+            store.addCard(side, red: true, in: id, player: player, minute: moment.minute)
             push(.redCard, def, side: side, player: player, minute: moment.minute)
+        case let .substitution(side, playerIn, playerOut):
+            store.states[id]?.minute = moment.minute
+            store.addSub(side, in: id, playerIn: playerIn, playerOut: playerOut, minute: moment.minute)
+            push(.substitution, def, side: side, player: playerIn, minute: moment.minute,
+                 playerOut: playerOut)
+        case let .varDecision(side, detail):
+            store.states[id]?.minute = moment.minute
+            let teamId = side == .home ? def.home.id : def.away.id
+            store.addVar(in: id, teamId: teamId, detail: detail, minute: moment.minute)
+            push(.varDecision, def, side: side, minute: moment.minute, varDetail: detail)
         case .halfTime:
             store.states[id]?.status = "HALF_TIME"
             store.states[id]?.rawStatus = "HT"
@@ -355,7 +431,8 @@ final class DemoEngine: ObservableObject {
             store.states[id]?.status = "LIVE"
             store.states[id]?.rawStatus = "P"
             store.states[id]?.minute = moment.minute
-            store.addPenalty(side, scored: scored, in: id)
+            store.addPenalty(side, scored: scored, in: id,
+                             teamId: side == .home ? def.home.id : def.away.id, player: player)
             push(.penaltyKick, def, side: side, player: player, minute: moment.minute, scored: scored)
         case let .celebrationSurge(totals):
             store.celebrations[id] = totals
@@ -370,7 +447,8 @@ final class DemoEngine: ObservableObject {
     /// updated.
     private func push(_ type: MatchEventType, _ def: DemoFixture,
                       side: DemoSide? = nil, player: String? = nil, minute: Int,
-                      scored: Bool? = nil) {
+                      scored: Bool? = nil, goalKind: String? = nil,
+                      playerOut: String? = nil, varDetail: String? = nil) {
         let store = FakeStore.shared
         let s = store.states[def.id] ?? LiveMatchState()
         let teamId = side.map { $0 == .home ? def.home.id : def.away.id }
@@ -392,7 +470,10 @@ final class DemoEngine: ObservableObject {
             // (it rides on full-time and every shootout event).
             penHome: s.penHome,
             penAway: s.penAway,
-            scored: scored
+            scored: scored,
+            goalKind: goalKind,
+            playerOut: playerOut,
+            varDetail: varDetail
         )
         store.eventSeq += 1
         EventRouter.shared.route(event)

@@ -194,6 +194,9 @@ struct SettingsView: View {
                 Image(systemName: pillIcon(for: type))
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(pillIconColor(for: type))
+                    // Symbols vary in width (arrow.left.arrow.right vs the
+                    // card rectangle) — a fixed column keeps the names aligned.
+                    .frame(width: 16)
                 Text(type.displayName)
                     .font(.system(size: 11, weight: .semibold, design: .rounded))
                     .foregroundStyle(.primary)

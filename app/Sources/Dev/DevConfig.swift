@@ -184,8 +184,11 @@ enum DevConfig {
 
         // ── England 4-2 Croatia (live, 8 PM UTC / 4 PM ET) ─────────────
         DemoMoment(at: 70,  .engCro, minute: 1,  .kickoff),
-    
-        DemoMoment(at: 80, .engCro, minute: 12, .goal(.home, player: "Harry Kane")),    // pen → 1-0
+
+        // VAR confirms the spot kick, then Kane converts — exercises the
+        // varDecision pill and the "Penalty goal" label.
+        DemoMoment(at: 76, .engCro, minute: 11, .varDecision(.home, detail: "Penalty confirmed")),
+        DemoMoment(at: 80, .engCro, minute: 12, .goal(.home, player: "Harry Kane", kind: "penalty")), // pen → 1-0
 //        DemoMoment(at: 90, .engCro, minute: 12, .celebrationSurge(["10": 2_400_000, "3": 0])),
 
         DemoMoment(at: 90, .engCro, minute: 36, .goal(.away, player: "Baturina")),      // 1-1
@@ -195,10 +198,14 @@ enum DevConfig {
         DemoMoment(at: 120, .engCro, minute: 45, .halfTime),
 
         DemoMoment(at: 130, .engCro, minute: 47, .goal(.home, player: "Bellingham")),    // 3-2
-//        DemoMoment(at: 130, .engCro, minute: 47, .celebrationSurge(["10": 5_200_000, "3": 140_000])),
 
-        DemoMoment(at: 140, .engCro, minute: 85, .goal(.home, player: "Rashford")),      // 4-2
-//        DemoMoment(at: 150, .engCro, minute: 85, .celebrationSurge(["10": 6_800_000, "3": 140_000])),
+        // A sub each way — exercises the substitution pill + timeline rows.
+        DemoMoment(at: 134, .engCro, minute: 63, .substitution(.home, playerIn: "Foden", playerOut: "Saka")),
+        DemoMoment(at: 137, .engCro, minute: 64, .substitution(.away, playerIn: "Ivanović", playerOut: "Petar Musa")),
+
+        // Gvardiol turns it into his own net — the own goal credits ENGLAND
+        // (the benefiting side), matching the backend's attribution.
+        DemoMoment(at: 140, .engCro, minute: 85, .goal(.home, player: "Gvardiol", kind: "own")), // OG → 4-2
 
         DemoMoment(at: 150, .engCro, minute: 90, .fullTime),
     ]
@@ -292,7 +299,7 @@ enum DemoSide { case home, away }
 /// push the backend would send, and keeps that match's scoreboard in step.
 enum DemoAction {
     case kickoff
-    case goal(DemoSide, player: String)
+    case goal(DemoSide, player: String, kind: String?) // kind: nil | "own" | "penalty"
     case goalDisallowed(DemoSide)          // VAR — undoes that side's last goal
     case yellowCard(DemoSide, player: String)
     case redCard(DemoSide, player: String)
@@ -301,7 +308,17 @@ enum DemoAction {
     case extraTime                         // "Extra time begins"
     case penaltyShootout
     case penaltyKick(DemoSide, player: String, scored: Bool) // one shootout kick
+    case substitution(DemoSide, playerIn: String, playerOut: String)
+    case varDecision(DemoSide, detail: String) // a VAR outcome, e.g. "Penalty confirmed"
     case celebrationSurge([String: Int])   // a celebration_count push (taps by team)
+}
+
+extension DemoAction {
+    /// A regular goal — keeps the many `.goal(side, player:)` timeline entries
+    /// short (enum cases can't default their associated values).
+    static func goal(_ side: DemoSide, player: String) -> DemoAction {
+        .goal(side, player: player, kind: nil)
+    }
 }
 
 /// One scripted beat: fire `action` in `fixture` at `at` seconds after start.
