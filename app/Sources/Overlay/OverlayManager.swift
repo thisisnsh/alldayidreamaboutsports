@@ -411,8 +411,13 @@ final class OverlayManager: ObservableObject {
     }
 
     /// The display panel stays while anything is on screen in either form.
+    /// `queueBusy` covers the set-start race: a just-started set flips it
+    /// synchronously but appends its pills to `activeSet` a tick later, so
+    /// without it the endSet continuation (startNextSetIfIdle → hide) would
+    /// order the panel out under a set whose pills haven't landed yet.
     private func hidePanelsIfDone() {
-        guard activeSet.isEmpty, goalQueue.isEmpty, otherQueue.isEmpty, ballPhase == .hidden, confettiBursts.isEmpty else { return }
+        guard !queueBusy, activeSet.isEmpty, goalQueue.isEmpty, otherQueue.isEmpty,
+              ballPhase == .hidden, confettiBursts.isEmpty else { return }
         displayPanel?.orderOut(nil)
     }
 

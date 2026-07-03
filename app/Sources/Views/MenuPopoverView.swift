@@ -275,43 +275,44 @@ private struct FixtureRow: View {
         // was rarely what people wanted and stole focus from the menu.
         Button {
         } label: {
-            VStack(alignment: .leading, spacing: 3) {
-                if !isPinned, hovering, let totals = session.celebrationTotals[fixture.fixtureId] {
-                    // Hover: the row becomes the celebration tally — both
-                    // teams, regardless of who you're a fan of.
-                    HStack(spacing: 6) {
-                        CachedTeamLogo(url: logo(fixture.home.id), size: 16)
-                        Text((totals[String(fixture.home.id)] ?? 0).formattedCompact)
-                            .font(.system(size: 12, weight: .bold))
-                        Text("–").font(.system(size: 12, weight: .bold))
-                        Text((totals[String(fixture.away.id)] ?? 0).formattedCompact)
-                            .font(.system(size: 12, weight: .bold))
-                        CachedTeamLogo(url: logo(fixture.away.id), size: 16)
-                        Spacer()
-                        trailing
-                        pinControl
-                    }
-                    Text("Celebrations 🎉")
-                        .font(.system(size: 10))
-                        .opacity(0.7)
-                } else {
-                    HStack(spacing: 6) {
-                        CachedTeamLogo(url: logo(fixture.home.id), size: 16)
-                        // Long names truncate with … — score, logos and the
-                        // time on the right never get squeezed.
-                        Text(fixture.home.name).font(.system(size: 12)).lineLimit(1)
-                        Text(score).font(.system(size: 12, weight: .bold))
-                            .fixedSize().layoutPriority(1)
-                        Text(fixture.away.name).font(.system(size: 12)).lineLimit(1)
-                        CachedTeamLogo(url: logo(fixture.away.id), size: 16)
-                        Spacer()
-                        trailing
-                        pinControl
-                    }
-                    if isPinned {
-                        Text("Shown in capsule").font(.system(size: 10)).opacity(0.6)
-                    } else if let stage = fixture.stageLabel {
-                        Text(stage).font(.system(size: 10)).opacity(0.6)
+            HStack(alignment: .center, spacing: 6) {
+                pinSlot
+                VStack(alignment: .leading, spacing: 3) {
+                    if !isPinned, hovering, let totals = session.celebrationTotals[fixture.fixtureId] {
+                        // Hover: the row becomes the celebration tally — both
+                        // teams, regardless of who you're a fan of.
+                        HStack(spacing: 6) {
+                            CachedTeamLogo(url: logo(fixture.home.id), size: 16)
+                            Text((totals[String(fixture.home.id)] ?? 0).formattedCompact)
+                                .font(.system(size: 12, weight: .bold))
+                            Text("–").font(.system(size: 12, weight: .bold))
+                            Text((totals[String(fixture.away.id)] ?? 0).formattedCompact)
+                                .font(.system(size: 12, weight: .bold))
+                            CachedTeamLogo(url: logo(fixture.away.id), size: 16)
+                            Spacer()
+                            trailing
+                        }
+                        Text("Celebrations 🎉")
+                            .font(.system(size: 10))
+                            .opacity(0.7)
+                    } else {
+                        HStack(spacing: 6) {
+                            CachedTeamLogo(url: logo(fixture.home.id), size: 16)
+                            // Long names truncate with … — score, logos and the
+                            // time on the right never get squeezed.
+                            Text(fixture.home.name).font(.system(size: 12)).lineLimit(1)
+                            Text(score).font(.system(size: 12, weight: .bold))
+                                .fixedSize().layoutPriority(1)
+                            Text(fixture.away.name).font(.system(size: 12)).lineLimit(1)
+                            CachedTeamLogo(url: logo(fixture.away.id), size: 16)
+                            Spacer()
+                            trailing
+                        }
+                        if isPinned {
+                            Text("Shown in capsule").font(.system(size: 10)).opacity(0.6)
+                        } else if let stage = fixture.stageLabel {
+                            Text(stage).font(.system(size: 10)).opacity(0.6)
+                        }
                     }
                 }
             }
@@ -323,32 +324,21 @@ private struct FixtureRow: View {
         }
     }
 
-    /// Trailing pin/close control: pin the match to a floating capsule on hover,
-    /// or — once pinned — close that capsule and return the row to live scores.
-    @ViewBuilder private var pinControl: some View {
-        if isPinned {
-            Button {
-                capsules.unpin(fixtureId: fixture.fixtureId)
-            } label: {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 13))
-                    .foregroundStyle(.secondary)
-            }
-            .buttonStyle(.plain)
-            .hoverLift()
-            .help("Close capsule")
-        } else if hovering {
-            Button {
-                capsules.pin(fixtureId: fixture.fixtureId)
-            } label: {
-                Image(systemName: "pin.fill")
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
-            }
-            .buttonStyle(.plain)
-            .hoverLift()
-            .help("Pin scores to screen")
+    /// Leading pin toggle, centered on the row. A fixed-width slot that fades
+    /// in on hover (and stays while pinned) so the row text never shifts.
+    private var pinSlot: some View {
+        Button {
+            capsules.toggle(fixtureId: fixture.fixtureId)
+        } label: {
+            Image(systemName: "pin.fill")
+                .font(.system(size: 11))
+                .foregroundStyle(isPinned ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.secondary))
         }
+        .buttonStyle(.plain)
+        .hoverLift()
+        .opacity(isPinned || hovering ? 1 : 0)
+        .frame(width: 16)
+        .help(isPinned ? "Unpin capsule" : "Pin scores to screen")
     }
 
     private var score: String {

@@ -75,6 +75,9 @@ final class EventRouter {
         // only once their goal pill reaches that set.
         OverlayManager.shared.submit(event, isFanGoal: isFanGoal)
 
+        // A pinned capsule reacts too (wiggle + icon sweep); pills are unchanged.
+        PinnedCapsuleManager.shared.notify(event)
+
         // VAR took the goal back — stop celebrating it.
         if event.type == .goalCancelled {
             OverlayManager.shared.cancelGoal(fixtureId: event.fixtureId, teamId: event.teamId)
