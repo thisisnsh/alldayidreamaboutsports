@@ -84,7 +84,8 @@ struct SettingsView: View {
                     SettingsCard("Appearance") {
                         pickerRow("Theme", selection: themeBinding, cases: ThemeChoice.allCases) { $0.label }
                         pickerRow("Capsule size", selection: capsuleSizeBinding, cases: CapsuleSize.allCases) { $0.label }
-                        caption("Pin a match from the menu to float its live score on screen. Size scales the capsule’s text and logos.")
+                        pickerRow("Capsule position", selection: capsulePositionBinding, cases: CapsulePosition.allCases) { $0.label }
+                        caption("Pin a match from the menu to float its live score on screen. Hover a capsule to see its event timeline.")
                     }
 
                     SettingsCard("Behavior") {
@@ -268,6 +269,17 @@ struct SettingsView: View {
                 // within view updates" when the segmented control flips.
                 DispatchQueue.main.async {
                     session.updateSettings { $0.capsuleSize = choice }
+                }
+            }
+        )
+    }
+
+    private var capsulePositionBinding: Binding<CapsulePosition> {
+        Binding(
+            get: { session.prefs.settings.capsulePosition ?? .top },
+            set: { choice in
+                DispatchQueue.main.async {
+                    session.updateSettings { $0.capsulePosition = choice }
                 }
             }
         )
