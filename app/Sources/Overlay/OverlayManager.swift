@@ -54,6 +54,17 @@ final class OverlayManager: ObservableObject {
     private var queueBusy = false  // set synchronously so rapid-fire pushes can't race startNextSetIfIdle
     private var displayPanel: NSPanel?
     private var interactPanel: NSPanel?
+    private var displayObserver: NSObjectProtocol?
+
+    private init() {
+        displayObserver = NotificationCenter.default.addObserver(
+            forName: .overlayDisplayTargetDidChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.displayTargetDidChange() }
+        }
+    }
 
     private var params: AnimationParams { ControlPlane.shared.animationParams }
     private var setSize: Int { max(1, params.notchStackMax) }
@@ -372,11 +383,9 @@ final class OverlayManager: ObservableObject {
         return hostingView
     }
 
-    // nil when no display is active (e.g. a Mac mini with its screen asleep or
-    // detached). Every panel show guards on it — the event is still recorded
-    // and the system's time-sensitive notification still fires; we just don't
-    // draw the overlay. Indexing NSScreen.screens here used to crash.
-    private var screen: NSScreen? { NSScreen.main ?? NSScreen.screens.first }
+    // nil when no display is connected (e.g. a headless Mac mini). The event is
+    // still recorded; there is simply nowhere to draw it.
+    private var screen: NSScreen? { OverlayDisplayTarget.shared.selectedScreen }
 
     // The overlay lives in its own NSPanels, so SwiftUI's `preferredColorScheme`
     // (which only affects the app's own windows) never reaches it. Drive each
@@ -410,6 +419,22 @@ final class OverlayManager: ObservableObject {
         displayPanel?.orderFrontRegardless()
     }
 
+    private func displayTargetDidChange() {
+        guard let screen else {
+            displayPanel?.orderOut(nil)
+            interactPanel?.orderOut(nil)
+            return
+        }
+        if let displayPanel, displayPanel.isVisible {
+            displayPanel.setFrame(screen.frame, display: true)
+        }
+        if let interactPanel, interactPanel.isVisible {
+            interactPanel.setFrame(interactionFrame(on: screen), display: true)
+        }
+        // Re-evaluate selected-screen safe-area geometry in NotchStackView.
+        objectWillChange.send()
+    }
+
     /// The display panel stays while anything is on screen in either form.
     /// `queueBusy` covers the set-start race: a just-started set flips it
     /// synchronously but appends its pills to `activeSet` a tick later, so
@@ -433,13 +458,7 @@ final class OverlayManager: ObservableObject {
 
     private func showInteractPanel() {
         guard let screen else { return }
-        let size: CGFloat = 320
-        let rect = NSRect(
-            x: screen.frame.midX - size / 2,
-            y: screen.frame.midY - size / 2,
-            width: size,
-            height: size
-        )
+        let rect = interactionFrame(on: screen)
         if interactPanel == nil {
             let panel = Self.makePanel(frame: rect, clickThrough: false)
             panel.contentView = Self.makeHostingView(InteractiveBallView().environmentObject(self))
@@ -448,6 +467,16 @@ final class OverlayManager: ObservableObject {
         interactPanel?.appearance = overlayAppearance
         interactPanel?.setFrame(rect, display: true)
         interactPanel?.orderFrontRegardless()
+    }
+
+    private func interactionFrame(on screen: NSScreen) -> NSRect {
+        let size: CGFloat = 320
+        return NSRect(
+            x: screen.frame.midX - size / 2,
+            y: screen.frame.midY - size / 2,
+            width: size,
+            height: size
+        )
     }
 
     private func hideInteractPanel() {

@@ -6,6 +6,7 @@ import SwiftUI
 /// bottom. Styled to read as an extension of the notch hardware.
 struct NotchStackView: View {
     let items: [NotchItem]
+    @ObservedObject private var displayTarget = OverlayDisplayTarget.shared
 
     var body: some View {
         VStack(spacing: 0) {
@@ -20,7 +21,7 @@ struct NotchStackView: View {
             }
             Spacer()
         }
-        .padding(.top, OverlayLayout.topMargin(on: NSScreen.main))
+        .padding(.top, OverlayLayout.topMargin(on: displayTarget.selectedScreen))
         .frame(maxWidth: .infinity)
         .allowsHitTesting(false)
     }

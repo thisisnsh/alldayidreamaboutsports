@@ -86,8 +86,7 @@ final class PinnedCapsuleManager: ObservableObject {
     /// Which matches are pinned — the menu observes this to swap a fixture row
     /// into its "shown in capsule" state.
     @Published private(set) var pinnedFixtureIds: Set<Int> = []
-    /// Display captured at pin time. It deliberately does not follow
-    /// `NSScreen.main`, which changes as the user focuses other displays.
+    /// All assignments point at the process-local display selected in Settings.
     @Published private(set) var displayAssignments: [Int: CGDirectDisplayID] = [:]
     /// Global insertion order; each display filters this into its own stack.
     @Published private(set) var order: [Int] = []
@@ -98,6 +97,17 @@ final class PinnedCapsuleManager: ObservableObject {
     private var panels: [CGDirectDisplayID: NSPanel] = [:]
     private var capsuleFrames: [CGDirectDisplayID: [Int: CGRect]] = [:]
     private var hoverTimer: Timer?
+    private var displayObserver: NSObjectProtocol?
+
+    private init() {
+        displayObserver = NotificationCenter.default.addObserver(
+            forName: .overlayDisplayTargetDidChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.moveCapsulesToSelectedDisplay() }
+        }
+    }
 
     func isPinned(_ fixtureId: Int) -> Bool { pinnedFixtureIds.contains(fixtureId) }
 
@@ -106,8 +116,8 @@ final class PinnedCapsuleManager: ObservableObject {
     }
 
     func pin(fixtureId: Int) {
-        guard !isPinned(fixtureId), let screen = screenAtPointer,
-              let displayID = displayID(for: screen) else { return }
+        guard !isPinned(fixtureId),
+              let displayID = OverlayDisplayTarget.shared.selectedDisplayID else { return }
         let panel = ensurePanel(for: displayID)
         displayAssignments[fixtureId] = displayID
         order.append(fixtureId)
@@ -200,18 +210,31 @@ final class PinnedCapsuleManager: ObservableObject {
 
     // MARK: Panels
 
-    private var screenAtPointer: NSScreen? {
-        let point = NSEvent.mouseLocation
-        return NSScreen.screens.first { NSMouseInRect(point, $0.frame, false) }
-            ?? NSScreen.main ?? NSScreen.screens.first
-    }
-
     private func displayID(for screen: NSScreen) -> CGDirectDisplayID? {
         (screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value
     }
 
     private func screen(for displayID: CGDirectDisplayID) -> NSScreen? {
         NSScreen.screens.first { self.displayID(for: $0) == displayID }
+    }
+
+    /// Migrate the complete stack when the user changes the setting or macOS
+    /// removes the selected display. Hover still uses the pointer only to decide
+    /// whether a capsule is expanded; it never chooses a target display.
+    private func moveCapsulesToSelectedDisplay() {
+        guard let displayID = OverlayDisplayTarget.shared.selectedDisplayID else {
+            for panel in panels.values { panel.orderOut(nil) }
+            panels.removeAll()
+            capsuleFrames.removeAll()
+            return
+        }
+
+        for panel in panels.values { panel.orderOut(nil) }
+        panels.removeAll()
+        capsuleFrames.removeAll()
+        for fixtureId in pinnedFixtureIds { displayAssignments[fixtureId] = displayID }
+        guard !pinnedFixtureIds.isEmpty else { return }
+        ensurePanel(for: displayID).orderFrontRegardless()
     }
 
     private func ensurePanel(for displayID: CGDirectDisplayID) -> NSPanel {
@@ -465,7 +488,8 @@ struct PinnedCapsuleView: View {
     }
 
     @ViewBuilder private func capsule(_ fixture: Fixture) -> some View {
-        capsuleBody(fixture, showNames: hovering, showTimeline: hovering)
+        let hasEvents = !capsuleTimeline(for: fixture).isEmpty
+        capsuleBody(fixture, showNames: hovering, showTimeline: hovering && hasEvents)
             .animation(.easeInOut(duration: 0.25), value: hovering)
     }
 
@@ -520,7 +544,7 @@ struct PinnedCapsuleView: View {
             CachedTeamLogo(url: logo(fixture.home.id), size: metrics.headerLogo)
             if showNames {
                 Text(fixture.home.name)
-                    .font(.system(size: metrics.nameFont, design: .rounded)).lineLimit(1)
+                    .font(.system(size: metrics.nameFont, design: .rounded))
                     .transition(nameTransition)
             }
             Text(scoreText(fixture))
@@ -528,7 +552,7 @@ struct PinnedCapsuleView: View {
                 .fixedSize().layoutPriority(1)
             if showNames {
                 Text(fixture.away.name)
-                    .font(.system(size: metrics.nameFont, design: .rounded)).lineLimit(1)
+                    .font(.system(size: metrics.nameFont, design: .rounded))
                     .transition(nameTransition)
             }
             CachedTeamLogo(url: logo(fixture.away.id), size: metrics.headerLogo)
@@ -581,7 +605,6 @@ struct PinnedCapsuleView: View {
                 Text(text)
                     .font(.system(size: metrics.eventFont, design: .rounded))
                     .foregroundStyle(.secondary)
-                    .lineLimit(1)
             }
             Spacer(minLength: 6)
         }
