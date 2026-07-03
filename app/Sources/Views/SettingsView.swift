@@ -14,6 +14,7 @@ struct SettingsView: View {
     // render pass to resolve the system appearance, making it feel slower than
     // Light/Dark if we wait for the deferred session write.
     @State private var activeTheme: ThemeChoice = .system
+    @ObservedObject private var displayTarget = OverlayDisplayTarget.shared
 
     var body: some View {
         ZStack {
@@ -85,7 +86,10 @@ struct SettingsView: View {
                         pickerRow("Theme", selection: themeBinding, cases: ThemeChoice.allCases) { $0.label }
                         pickerRow("Capsule size", selection: capsuleSizeBinding, cases: CapsuleSize.allCases) { $0.label }
                         pickerRow("Capsule position", selection: capsulePositionBinding, cases: CapsulePosition.allCases) { $0.label }
-                        caption("Pin a match from the menu to float its live score on screen. Hover a capsule to see its event timeline.")
+                        if displayTarget.displays.count > 1 {
+                            screenPickerRow
+                        }
+                        caption("Capsules and notifications appear on the selected screen. Pin a match from the menu to float its live score; hover it to see the event timeline.")
                     }
 
                     SettingsCard("Behavior") {
@@ -212,7 +216,24 @@ struct SettingsView: View {
             }
             .pickerStyle(.segmented)
             .labelsHidden()
-            .frame(width: 220)
+            .fixedSize()
+            .frame(width: 220, alignment: .trailing)
+        }
+    }
+
+    private var screenPickerRow: some View {
+        HStack {
+            Text("Screen").font(.system(size: 13))
+            Spacer()
+            Picker("Screen", selection: displayBinding) {
+                ForEach(displayTarget.displays) { display in
+                    Text(display.name).tag(Optional(display.id))
+                }
+            }
+            .labelsHidden()
+            .pickerStyle(.menu)
+            .fixedSize()
+            .frame(width: 220, alignment: .trailing)
         }
     }
 
@@ -296,6 +317,15 @@ struct SettingsView: View {
                 DispatchQueue.main.async {
                     session.updateSettings { $0.theme = choice }
                 }
+            }
+        )
+    }
+
+    private var displayBinding: Binding<CGDirectDisplayID?> {
+        Binding(
+            get: { displayTarget.selectedDisplayID },
+            set: { displayID in
+                if let displayID { displayTarget.select(displayID) }
             }
         )
     }
