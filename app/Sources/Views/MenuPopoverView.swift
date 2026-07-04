@@ -305,12 +305,14 @@ private struct FixtureRow: View {
 
     /// The description line under the scoreline. Once a match has kicked off
     /// (live or finished) it's the celebration tally, with the stage label on
-    /// hover; before kickoff there's nothing to celebrate, so it's the stage
-    /// label always.
+    /// hover; before kickoff — or while neither team has any celebrations yet —
+    /// there's nothing to celebrate, so it's the stage label always.
     @ViewBuilder private var subtitle: some View {
-        if !hovering, fixture.status != "SCHEDULED",
-           let totals = session.celebrationTotals[fixture.fixtureId] {
-            Text("\((totals[String(fixture.home.id)] ?? 0).formattedCompact) vs \((totals[String(fixture.away.id)] ?? 0).formattedCompact) celebrations")
+        let totals = session.celebrationTotals[fixture.fixtureId]
+        let home = totals?[String(fixture.home.id)] ?? 0
+        let away = totals?[String(fixture.away.id)] ?? 0
+        if !hovering, fixture.status != "SCHEDULED", home > 0 || away > 0 {
+            Text("\(home.formattedCompact) vs \(away.formattedCompact) celebrations")
                 .font(.system(size: 10))
                 .opacity(0.7)
         } else if let stage = fixture.stageLabel {
