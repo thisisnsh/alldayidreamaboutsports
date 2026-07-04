@@ -88,6 +88,19 @@ export function toScheduleRow(m: MatchState): MatchState {
   };
 }
 
+/** Compact one-line-ish summary of a published state for `match_state_published`. */
+function summarizeState(s: MatchState) {
+  return {
+    score: `${s.home.goals}-${s.away.goals}`,
+    minute: s.minute, extra: s.extra, rawStatus: s.rawStatus, period: s.period,
+    eventCounts: {
+      homeGoals: s.home.goalEvents.length, awayGoals: s.away.goalEvents.length,
+      homeSubs: s.home.subs?.length ?? 0, awaySubs: s.away.subs?.length ?? 0,
+    },
+    lastGoal: s.lastGoal ? { teamId: s.lastGoal.teamId, player: s.lastGoal.player } : null,
+  };
+}
+
 export class Poller {
   constructor(
     private readonly provider: ScoreProvider,
@@ -128,8 +141,16 @@ export class Poller {
 
     log.info("poll_eligible_fixtures", {
       count: eligible.length,
+      // Per-fixture snapshot rich enough to debug clock/score/event staggering
+      // next time (extra, period, per-side goals, event & sub counts).
       fixtures: eligible.map((m) => ({
-        fixtureId: m.fixtureId, status: m.status, rawStatus: m.rawStatus, minute: m.minute,
+        fixtureId: m.fixtureId, status: m.status, rawStatus: m.rawStatus,
+        minute: m.minute, extra: m.extra, period: m.period,
+        homeGoals: m.home.goals, awayGoals: m.away.goals,
+        homeGoalEvents: m.home.goalEvents.length, awayGoalEvents: m.away.goalEvents.length,
+        homeSubs: m.home.subs?.length ?? 0, awaySubs: m.away.subs?.length ?? 0,
+        homeCards: m.home.yellowCards + m.home.redCards,
+        awayCards: m.away.yellowCards + m.away.redCards,
       })),
     });
     for (const match of eligible) {
@@ -146,6 +167,23 @@ export class Poller {
       }
       // Unchanged vs the loaded R2 state — skip the write.
       if (JSON.stringify(previous.state) === JSON.stringify(match)) continue;
+      // The state file is actually changing — record before→after so a bad
+      // publish (wrong score, stuck clock, missing scorer) is auditable, and
+      // flag any per-side goal DROP (real VAR disallow vs a transient glitch).
+      log.info("match_state_published", {
+        fixtureId: match.fixtureId,
+        before: previous.state ? summarizeState(previous.state) : null,
+        after: summarizeState(match),
+      });
+      for (const side of ["home", "away"] as const) {
+        const before = previous.state?.[side].goals ?? 0;
+        if (match[side].goals < before) {
+          log.warning("score_decreased", {
+            fixtureId: match.fixtureId, side, before, after: match[side].goals,
+            rawStatus: match.rawStatus, minute: match.minute,
+          });
+        }
+      }
       try {
         await this.state.save(match, previous.etag);
       } catch (error) {

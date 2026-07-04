@@ -73,7 +73,9 @@ describe("ApiFootballProvider", () => {
   it("derives running=false and the right period for non-playing phases", async () => {
     const phases: Array<[string, number | null, string, boolean, string]> = [
       ["HT", 45, "HALF", false, "HALF_TIME"],
-      ["BT", 105, "EXTRA_BREAK", false, "LIVE"], // break between the two ET halves
+      ["BT", null, "BREAK", false, "LIVE"], // pre-ET break, API sends elapsed=null → "BT", NOT "ET HT"
+      ["BT", 90, "BREAK", false, "LIVE"], // FT→ET setup break at 90' → "BT"
+      ["BT", 105, "EXTRA_BREAK", false, "LIVE"], // break between the two ET halves → "ET HT"
       ["BT", 120, "PENALTIES", false, "LIVE"], // break after ET, shootout imminent → "PENS", not "ET HT"
       ["P", 120, "PENALTIES", false, "LIVE"],
       ["FT", 90, "FINISHED", false, "FINISHED"],
@@ -169,23 +171,26 @@ describe("ApiFootballProvider", () => {
     expect(match!.away.subs).toEqual([{ playerOut: "Reyna", playerIn: "Aaronson", minute: 64, extra: null }]);
   });
 
-  it("attributes an own goal to the opponent and tags its kind", async () => {
+  it("credits an own goal to the benefiting team (API's convention) and tags its kind", async () => {
     const fixture = {
       fixture: { id: 801, date: "2026-06-11T20:00:00+00:00", status: { short: "2H", elapsed: 55 } },
       league: { id: 1, season: 2026, round: "R16" },
       teams: { home: { id: 10, name: "Brazil" }, away: { id: 20, name: "USA" } },
-      goals: { home: 0, away: 1 }, // the own goal counts for the away side
+      goals: { home: 1, away: 0 }, // aggregate credits the benefiting side (home)
       events: [
-        // Brazil (home) put it into their own net → counts for USA (away).
-        { time: { elapsed: 50 }, team: { id: 10, name: "Brazil" }, player: { name: "Marquinhos" }, type: "Goal", detail: "Own Goal" },
+        // API-Football attributes the own goal to the BENEFITING team (Brazil,
+        // home) and names the OPPONENT player (a USA defender) who put it in.
+        // We credit `ev.team` directly — no flip — so it stays in sync with the
+        // aggregate above.
+        { time: { elapsed: 50 }, team: { id: 10, name: "Brazil" }, player: { name: "Robinson" }, type: "Goal", detail: "Own Goal" },
       ],
     };
     const { provider } = providerReturning({ response: [fixture] });
     const [match] = await provider.fixturesForRange("2026-06-10", "2026-06-12");
-    expect(match!.away.goals).toBe(1);
-    expect(match!.away.goalEvents).toEqual([{ player: "Marquinhos", minute: 50, extra: null, kind: "own" }]);
-    expect(match!.home.goalEvents).toEqual([]);
-    expect(match!.lastGoal).toMatchObject({ teamId: 20, player: "Marquinhos" });
+    expect(match!.home.goals).toBe(1);
+    expect(match!.home.goalEvents).toEqual([{ player: "Robinson", minute: 50, extra: null, kind: "own" }]);
+    expect(match!.away.goalEvents).toEqual([]);
+    expect(match!.lastGoal).toMatchObject({ teamId: 10, player: "Robinson" });
   });
 
   it("tags an in-play penalty goal with kind 'penalty'", async () => {
@@ -267,7 +272,7 @@ describe("ApiFootballProvider", () => {
     });
   });
 
-  it("holds a live goal back until its scorer event lands (counter races events)", async () => {
+  it("publishes the aggregate score immediately, before the scorer event lands", async () => {
     // API bumped the aggregate to 1-0 but the goal isn't in events[] yet.
     const racing = {
       ...liveFixture,
@@ -276,10 +281,54 @@ describe("ApiFootballProvider", () => {
     };
     const { provider } = providerReturning({ response: [racing] });
     const [match] = await provider.fixturesForRange("2026-06-10", "2026-06-12");
-    // Goal count stays at 0 (no scorer yet) and carries no goalEvents — so the
-    // diff won't emit a nameless GOAL this poll.
-    expect(match!.home.goals).toBe(0);
+    // Score follows the authoritative aggregate the instant it moves — the diff
+    // emits GOAL now; the scorer name fills in on a later poll via goalEvents.
+    expect(match!.home.goals).toBe(1);
     expect(match!.home.goalEvents).toEqual([]);
+  });
+
+  it("clamps an overrunning ET clock (elapsed 124) to minute:120, extra:4", async () => {
+    const fixture = {
+      fixture: { id: 810, date: "2026-06-11T20:00:00+00:00", status: { short: "ET", elapsed: 124, extra: null } },
+      league: { id: 1, season: 2026, round: "R16" },
+      teams: { home: { id: 10, name: "Brazil" }, away: { id: 20, name: "USA" } },
+      goals: { home: 0, away: 0 },
+      events: [],
+    };
+    const { provider } = providerReturning({ response: [fixture] });
+    const [match] = await provider.fixturesForRange("2026-06-10", "2026-06-12");
+    expect(match).toMatchObject({ minute: 120, extra: 4, period: "EXTRA_SECOND", running: true });
+  });
+
+  it("folds 2H stoppage overrun (elapsed 93) into 90+3", async () => {
+    const fixture = {
+      fixture: { id: 811, date: "2026-06-11T20:00:00+00:00", status: { short: "2H", elapsed: 93, extra: null } },
+      league: { id: 1, season: 2026, round: "R16" },
+      teams: { home: { id: 10, name: "Brazil" }, away: { id: 20, name: "USA" } },
+      goals: { home: 0, away: 0 },
+      events: [],
+    };
+    const { provider } = providerReturning({ response: [fixture] });
+    const [match] = await provider.fixturesForRange("2026-06-10", "2026-06-12");
+    expect(match).toMatchObject({ minute: 90, extra: 3, period: "SECOND" });
+  });
+
+  it("normalizes empty/whitespace player names to null", async () => {
+    const fixture = {
+      fixture: { id: 812, date: "2026-06-11T20:00:00+00:00", status: { short: "2H", elapsed: 66 } },
+      league: { id: 1, season: 2026, round: "R16" },
+      teams: { home: { id: 10, name: "Brazil" }, away: { id: 20, name: "USA" } },
+      goals: { home: 1, away: 0 },
+      events: [
+        { time: { elapsed: 66 }, team: { id: 10, name: "Brazil" }, player: { name: "   " }, type: "Goal", detail: "Normal Goal" },
+        { time: { elapsed: 60 }, team: { id: 20, name: "USA" }, player: { name: "" }, type: "Card", detail: "Yellow Card" },
+      ],
+    };
+    const { provider } = providerReturning({ response: [fixture] });
+    const [match] = await provider.fixturesForRange("2026-06-10", "2026-06-12");
+    expect(match!.home.goalEvents).toEqual([{ player: null, minute: 66, extra: null }]);
+    expect(match!.away.yellowCardEvents).toEqual([{ player: null, minute: 60, extra: null }]);
+    expect(match!.lastGoal).toMatchObject({ teamId: 10, player: null });
   });
 
   it("exposes goalEvents in scoring order and keeps the count once scorers land", async () => {

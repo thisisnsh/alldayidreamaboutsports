@@ -207,6 +207,30 @@ describe("Poller", () => {
     expect(stateStore.save).not.toHaveBeenCalled();
   });
 
+  it("still publishes when a per-side goal count drops (real VAR disallow)", async () => {
+    const now = new Date();
+    const prev = state(1, now.toISOString(), "LIVE", {
+      minute: 74, period: "SECOND", running: true,
+      home: { id: 1, name: "A", goals: 1, yellowCards: 0, redCards: 0, yellowCardEvents: [], redCardEvents: [], goalEvents: [{ player: "X", minute: 40, extra: null }] },
+    });
+    const disallowed = state(1, now.toISOString(), "LIVE", {
+      minute: 75, period: "SECOND", running: true,
+      home: { id: 1, name: "A", goals: 0, yellowCards: 0, redCards: 0, yellowCardEvents: [], redCardEvents: [], goalEvents: [] },
+    });
+    const provider = { fixturesForRange: vi.fn().mockResolvedValue([disallowed]) };
+    const stateStore = {
+      load: vi.fn().mockResolvedValue({ state: prev, etag: "e1" }),
+      save: vi.fn().mockResolvedValue(undefined),
+    };
+    const r2 = { putJsonIfChanged: vi.fn().mockResolvedValue(undefined) };
+    const poller = new Poller(provider as never, stateStore as never, r2 as never);
+
+    await poller.fetchOnce();
+
+    // Aggregate-first: the drop publishes instantly (no hold).
+    expect(stateStore.save).toHaveBeenCalledWith(disallowed, "e1");
+  });
+
   it("ignores a stale scheduled snapshot after a match is live", async () => {
     const previous = state(1, new Date(Date.now() - 5 * 60_000).toISOString(), "LIVE");
     const stale = state(1, previous.kickoffISO, "SCHEDULED");

@@ -40,6 +40,12 @@ final class LiveStore {
     /// Last-seen state per fixture — the diff baseline. A fixture not in here is
     /// being observed for the first time: it seeds the baseline and emits nothing.
     private var baseline: [Int: Fixture] = [:]
+    /// When each fixture's clock (`minute`/`extra`) last actually moved. Drives
+    /// the staleness-aware `<cap>+′` rendering: if the clock parks at a period
+    /// cap for >90s (API stopped ticking / never sent `extra`), the label drops
+    /// the frozen number and reads e.g. `90+′` / `ET 120+′`.
+    private var lastClockChangeAt: [Int: Date] = [:]
+    private static let clockStaleAfter: TimeInterval = 90
     /// Fixtures whose match file has reported FINISHED (stop polling them).
     private var finished: Set<Int> = []
     /// One-shot launch reconciliation guard — see `reconcileFanMatches`. Reset on
@@ -92,9 +98,18 @@ final class LiveStore {
     /// fresh and never replays events across an account switch.
     func resetBaseline() {
         baseline = [:]
+        lastClockChangeAt = [:]
         finished = []
         didReconcileThisLaunch = false
         cancelCelebrationRefresh()
+    }
+
+    /// True once a fixture's clock has been parked (same `minute`/`extra`) for
+    /// longer than `clockStaleAfter`. Views pass this into `liveMinuteText` so a
+    /// stuck stoppage clock reads `<cap>+′` rather than a frozen minute.
+    func isClockStale(_ fixtureId: Int, now: Date = Date()) -> Bool {
+        guard let last = lastClockChangeAt[fixtureId] else { return false }
+        return now.timeIntervalSince(last) > Self.clockStaleAfter
     }
 
     /// Manual refresh (the menu's ↻ button): run one poll pass right now — fetch
@@ -267,6 +282,23 @@ final class LiveStore {
     @discardableResult
     private func ingest(_ current: Fixture) -> [Int] {
         let prev = baseline[current.fixtureId]
+
+        // Cheap stale-snapshot guard: a CDN edge can momentarily serve a
+        // SCHEDULED snapshot for a match we've already seen LIVE/HALF_TIME —
+        // ignore it (don't wipe the live baseline or replay a kickoff later).
+        // Minute regressions are NOT guarded: the feed legitimately recalibrates
+        // the clock backward (e.g. ET snapping 114→109).
+        if let prev, prev.isLive, current.status == "SCHEDULED" {
+            AppLog.info(.fixtures, "stale_snapshot_ignored fixture_id=\(current.fixtureId) prev=\(prev.status) next=\(current.status)")
+            return []
+        }
+
+        // Stamp when the clock actually moves (or on first sight) — powers the
+        // staleness-aware `<cap>+′` rendering.
+        if prev == nil || prev?.minute != current.minute || prev?.extra != current.extra {
+            lastClockChangeAt[current.fixtureId] = Date()
+        }
+
         session.applyLiveFixture(current)
 
         var fanGoalTeams: [Int] = []

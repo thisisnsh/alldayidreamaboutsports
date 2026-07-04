@@ -1,5 +1,16 @@
 import Foundation
 
+extension String {
+    /// The string trimmed of surrounding whitespace/newlines, or nil if it's
+    /// empty afterwards. The live feed sometimes sends `""`/`"  "` player names
+    /// before the scorer/carded player is filled in — normalize them to nil at
+    /// decode time so `??` fallbacks (pill titles, timeline, MatchDiff) engage.
+    var trimmedNonEmpty: String? {
+        let trimmed = trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+}
+
 enum MatchEventType: String, Codable, CaseIterable {
     case kickoff = "KICKOFF"
     case goal = "GOAL"
@@ -110,6 +121,16 @@ struct MatchTimelineEvent: Codable, Hashable {
         self.extra = extra
         self.kind = kind
     }
+
+    enum CodingKeys: String, CodingKey { case player, minute, extra, kind }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        player = try c.decodeIfPresent(String.self, forKey: .player)?.trimmedNonEmpty
+        minute = try c.decodeIfPresent(Int.self, forKey: .minute)
+        extra = try c.decodeIfPresent(Int.self, forKey: .extra)
+        kind = try c.decodeIfPresent(String.self, forKey: .kind)
+    }
 }
 
 /// One substitution (backend `SubEvent`): `playerOut` leaves, `playerIn` enters.
@@ -118,6 +139,23 @@ struct SubstitutionRecord: Codable, Hashable {
     let playerIn: String?
     let minute: Int?
     let extra: Int?
+
+    init(playerOut: String?, playerIn: String?, minute: Int?, extra: Int?) {
+        self.playerOut = playerOut
+        self.playerIn = playerIn
+        self.minute = minute
+        self.extra = extra
+    }
+
+    enum CodingKeys: String, CodingKey { case playerOut, playerIn, minute, extra }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        playerOut = try c.decodeIfPresent(String.self, forKey: .playerOut)?.trimmedNonEmpty
+        playerIn = try c.decodeIfPresent(String.self, forKey: .playerIn)?.trimmedNonEmpty
+        minute = try c.decodeIfPresent(Int.self, forKey: .minute)
+        extra = try c.decodeIfPresent(Int.self, forKey: .extra)
+    }
 }
 
 /// One VAR review outcome (backend `VarEvent`).
@@ -127,6 +165,25 @@ struct VarRecord: Codable, Hashable {
     let player: String?
     let minute: Int?
     let extra: Int?
+
+    init(teamId: Int, detail: String, player: String?, minute: Int?, extra: Int?) {
+        self.teamId = teamId
+        self.detail = detail
+        self.player = player
+        self.minute = minute
+        self.extra = extra
+    }
+
+    enum CodingKeys: String, CodingKey { case teamId, detail, player, minute, extra }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        teamId = try c.decode(Int.self, forKey: .teamId)
+        detail = try c.decode(String.self, forKey: .detail)
+        player = try c.decodeIfPresent(String.self, forKey: .player)?.trimmedNonEmpty
+        minute = try c.decodeIfPresent(Int.self, forKey: .minute)
+        extra = try c.decodeIfPresent(Int.self, forKey: .extra)
+    }
 }
 
 struct ScoreboardTeam: Codable, Hashable {
@@ -188,6 +245,21 @@ struct PenaltyKickRecord: Codable, Hashable {
     let teamId: Int
     let player: String?
     let scored: Bool
+
+    init(teamId: Int, player: String?, scored: Bool) {
+        self.teamId = teamId
+        self.player = player
+        self.scored = scored
+    }
+
+    enum CodingKeys: String, CodingKey { case teamId, player, scored }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        teamId = try c.decode(Int.self, forKey: .teamId)
+        player = try c.decodeIfPresent(String.self, forKey: .player)?.trimmedNonEmpty
+        scored = try c.decode(Bool.self, forKey: .scored)
+    }
 }
 
 /// Penalty-shootout result on a fixture (backend MatchState.shootout). The
@@ -224,6 +296,7 @@ enum MatchPeriod: String, Codable {
     case second = "SECOND"
     case extraFirst = "EXTRA_FIRST"
     case extraSecond = "EXTRA_SECOND"
+    case breakInPlay = "BREAK"
     case extraBreak = "EXTRA_BREAK"
     case pens = "PENALTIES"
     case finished = "FINISHED"
@@ -316,11 +389,29 @@ struct Fixture: Codable, Identifiable, Hashable {
     var kickoff: Date? { ISO8601DateFormatter().date(from: kickoffISO) }
     var score: Score { Score(home: home.goals, away: away.goals) }
 
+    /// Minute at which stoppage begins for a running period (the clock caps
+    /// here and the overflow rides in `extra`): 45 / 90 / 105 / 120. nil for a
+    /// non-playing period.
+    private var periodCap: Int? {
+        switch period {
+        case .first: return 45
+        case .second: return 90
+        case .extraFirst: return 105
+        case .extraSecond: return 120
+        default: return nil
+        }
+    }
+
     /// The right-edge clock label. Stoppage/extra-time/VAR aware — rendered
     /// straight from the polled file's `minute`/`extra`/`period`/`running`.
-    /// `running:false` → a status label (HT / ET HT / PENS / FT / kickoff time).
-    /// `running:true`  → `"73′"`, or `"45+2′"` when `extra` is set.
-    var liveMinuteText: String {
+    /// Sequence it must produce, in order:
+    /// `10′ → HT → 59′ → 90+1′ → BT → ET 92′ → ET HT → ET 116′ → ET 120+′ → FT`.
+    /// `running:false` → a status label (HT / BT / ET HT / PENS / FT / kickoff).
+    /// `running:true`  → `"73′"`, `"45+2′"`, or `ET`-prefixed in extra time.
+    /// `clockStale` (or a missing `extra` at a cap) renders `<cap>+′` — an
+    /// honest "in stoppage, amount unknown" — instead of a frozen minute; it
+    /// self-corrects to `+X` the moment a fresh `extra` arrives.
+    func liveMinuteText(clockStale: Bool = false) -> String {
         let timeFormatter: () -> String = {
             guard let kickoff else { return "" }
             let f = DateFormatter()
@@ -328,23 +419,31 @@ struct Fixture: Codable, Identifiable, Hashable {
             f.dateStyle = .none
             return f.string(from: kickoff)
         }
+        // A ticking minute, ET-prefixed in extra time. At the period cap with an
+        // unknown/stale stoppage, render `<cap>+′` (no number).
+        func runningLabel(_ minute: Int) -> String {
+            let etPrefix = (period == .extraFirst || period == .extraSecond) ? "ET " : ""
+            if let cap = periodCap, minute == cap, extra == nil || clockStale {
+                return "\(etPrefix)\(cap)+′"
+            }
+            if let extra { return "\(etPrefix)\(minute)+\(extra)′" }
+            return "\(etPrefix)\(minute)′"
+        }
         if running == true {
             guard let minute else { return "LIVE" }
-            if let extra { return "\(minute)+\(extra)′" }
-            return "\(minute)′"
+            return runningLabel(minute)
         }
         // running == false (or unknown): derive a label from the period/status.
         switch period {
         case .half: return "HT"
+        case .breakInPlay: return "BT"
         case .extraBreak: return "ET HT"
         case .pens: return "PENS"
         case .finished: return "FT"
         case .notStarted: return timeFormatter()
         case .first, .second, .extraFirst, .extraSecond:
             // running flag missing but mid-half: best effort on the raw minute.
-            if let minute {
-                return extra.map { "\(minute)+\($0)′" } ?? "\(minute)′"
-            }
+            if let minute { return runningLabel(minute) }
             return "LIVE"
         case .other, .none:
             // Fall back to the coarse status when period is absent (e.g. the
@@ -353,7 +452,7 @@ struct Fixture: Codable, Identifiable, Hashable {
             case "HALF_TIME": return "HT"
             case "FINISHED": return "FT"
             case "LIVE":
-                if let minute { return extra.map { "\(minute)+\($0)′" } ?? "\(minute)′" }
+                if let minute { return runningLabel(minute) }
                 return "LIVE"
             default: return timeFormatter()
             }

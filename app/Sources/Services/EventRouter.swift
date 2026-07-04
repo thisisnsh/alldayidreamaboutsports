@@ -75,9 +75,19 @@ final class EventRouter {
         // only once their goal pill reaches that set.
         OverlayManager.shared.submit(event, isFanGoal: isFanGoal)
 
-        // VAR took the goal back — stop celebrating it.
+        // A goal was taken back — stop celebrating it.
         if event.type == .goalCancelled {
             OverlayManager.shared.cancelGoal(fixtureId: event.fixtureId, teamId: event.teamId)
+            // Un-dedupe the matching GOAL id (ids are deterministic). If the goal
+            // is re-awarded — a real VAR reversal, or the feed self-correcting a
+            // transient drop on the next poll — MatchDiff re-emits GOAL and the
+            // pill actually shows, instead of the dedupe silently swallowing it.
+            let goalId = event.eventId.replacingOccurrences(of: ":GOAL_CANCELLED:", with: ":GOAL:")
+            if goalId != event.eventId, let idx = seenEventIds.firstIndex(of: goalId) {
+                var ids = seenEventIds
+                ids.remove(at: idx)
+                seenEventIds = ids
+            }
         }
     }
 }
@@ -165,7 +175,9 @@ func pillTitle(for event: MatchEvent) -> [PillSegment] {
         default: label = "Goal"
         }
         return [.text("\(minute)\(label)"), dash, .text("\(scorer) ", bold: true)] + teamChip
-    case .goalCancelled: return [.text("\(minute)VAR"), dash, .text("Goal disallowed ")] + teamChip
+    // Neutral label + red xmark (icon set by NotchPillRow): a score drop can be
+    // a feed correction, not only a VAR call — don't assert "VAR".
+    case .goalCancelled: return [.text("\(minute)Goal disallowed ")] + teamChip
     case .yellowCard: return [.text("\(minute)Yellow card"), dash, .text("\(event.player ?? "") ", bold: true)] + teamChip
     case .redCard: return [.text("\(minute)Red card"), dash, .text("\(event.player ?? "") ", bold: true)] + teamChip
     case .halfTime:

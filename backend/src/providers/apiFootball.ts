@@ -20,6 +20,15 @@ const STATUS_MAP: Record<string, MatchStatus> = {
   PEN: "FINISHED",
 };
 
+/** Trimmed player name, or null when the feed sends empty/whitespace/absent —
+ * API-Football sometimes emits `""`/`null` names on live events before the
+ * scorer/carded player is filled in. Normalizing here keeps a nameless GOAL
+ * from rendering a blank subject downstream. */
+function playerName(name: string | null | undefined): string | null {
+  const trimmed = name?.trim();
+  return trimmed ? trimmed : null;
+}
+
 /**
  * Map the API-Football short code (+ elapsed for the two ET halves) to a
  * fine-grained `Period`. ET is cumulative (91→105 first half, 106→120 second),
@@ -31,11 +40,15 @@ function derivePeriod(short: string, elapsed: number | null): Period {
     case "HT": return "HALF";
     case "2H": return "SECOND";
     case "ET": return (elapsed ?? 0) <= 105 ? "EXTRA_FIRST" : "EXTRA_SECOND";
-    // "BT" (Break Time) covers BOTH the pause between the two ET halves (~105')
-    // and the pause after ET ends while the shootout is set up (~120'). Split on
-    // elapsed so the post-ET break reads as PENALTIES ("PENS") instead of the
-    // mid-ET "ET HT" label.
-    case "BT": return (elapsed ?? 0) > 105 ? "PENALTIES" : "EXTRA_BREAK";
+    // "BT" (Break Time) shows up at THREE distinct pauses, split by elapsed:
+    //  • FT→ET setup break (or a null-elapsed blip) at ≤90' → BREAK ("BT")
+    //  • the pause between the two ET halves (~91–105') → EXTRA_BREAK ("ET HT")
+    //  • the pause after ET while the shootout is set up (>105') → PENALTIES.
+    // Verified live: the API sent BT with elapsed=null before ET began, which
+    // must NOT read as "ET HT".
+    case "BT":
+      if (elapsed == null || elapsed <= 90) return "BREAK";
+      return elapsed <= 105 ? "EXTRA_BREAK" : "PENALTIES";
     case "P": return "PENALTIES";
     case "NS":
     case "TBD": return "PRE";
@@ -195,14 +208,14 @@ export class ApiFootballProvider implements ScoreProvider {
       const isShootoutKick =
         ev.type === "Goal" && /penalt/i.test(ev.detail) && /shootout/i.test(ev.comments ?? "");
       if (ev.type === "Card") {
-        const cardEv = { player: ev.player?.name ?? null, minute: ev.time.elapsed, extra: ev.time.extra ?? null };
+        const cardEv = { player: playerName(ev.player?.name), minute: ev.time.elapsed, extra: ev.time.extra ?? null };
         if (ev.detail.startsWith("Yellow")) { cards[side].yellow++; cards[side].yellowEvents.push(cardEv); }
         else if (ev.detail.startsWith("Red")) { cards[side].red++; cards[side].redEvents.push(cardEv); }
       } else if (ev.type === "subst") {
         // `player` = leaving the pitch, `assist` = coming on.
         subs[side].push({
-          playerOut: ev.player?.name ?? null,
-          playerIn: ev.assist?.name ?? null,
+          playerOut: playerName(ev.player?.name),
+          playerIn: playerName(ev.assist?.name),
           minute: ev.time.elapsed,
           extra: ev.time.extra ?? null,
         });
@@ -211,29 +224,31 @@ export class ApiFootballProvider implements ScoreProvider {
         // keep only the VAR outcomes that don't change the score.
         if (!/goal/i.test(ev.detail)) {
           varEvents.push({
-            teamId, detail: ev.detail, player: ev.player?.name ?? null,
+            teamId, detail: ev.detail, player: playerName(ev.player?.name),
             minute: ev.time.elapsed, extra: ev.time.extra ?? null,
           });
         }
       } else if (isShootoutKick) {
         // Shootout kicks live in score.penalty (counts) + here (player/result).
-        kicks.push({ teamId, player: ev.player?.name ?? null, scored: !/missed/i.test(ev.detail) });
+        kicks.push({ teamId, player: playerName(ev.player?.name), scored: !/missed/i.test(ev.detail) });
       } else if (ev.type === "Goal" && !/cancell/i.test(ev.detail) && !/missed/i.test(ev.detail)) {
         // Skip "Missed Penalty" — it never increments the score and must not
         // steal scorer attribution from a later real goal.
         const kind: GoalEvent["kind"] =
           /own/i.test(ev.detail) ? "own" : /penalt/i.test(ev.detail) ? "penalty" : null;
         const goalEv: GoalEvent = {
-          player: ev.player?.name ?? null, minute: ev.time.elapsed, extra: ev.time.extra ?? null,
+          player: playerName(ev.player?.name), minute: ev.time.elapsed, extra: ev.time.extra ?? null,
         };
         // Only tag non-normal goals so a plain goal stays `{player,minute,extra}`.
         if (kind) goalEv.kind = kind;
-        // An own goal is scored by `ev.team` into their own net, so it counts
-        // for the OPPONENT — attribute it to the other side (also keeps the
-        // events-based goal count in sync with the aggregate `f.goals`).
-        const scoringSide = kind === "own" ? (side === "home" ? "away" : "home") : side;
-        goals[scoringSide].push(goalEv);
-        lastGoal = { teamId: scoringSide === "home" ? homeId : awayId, ...goalEv };
+        // API-Football attributes an event (own goals included) to the team that
+        // BENEFITS: `ev.team` is the scoring side and `player` is whoever put it
+        // in (for an own goal, an opponent's player). So credit `side` directly
+        // — do NOT flip. Verified live on fixture 1565179: the 111' own goal's
+        // event team was the benefiting side, and flipping it desynced the goal
+        // count from the aggregate `f.goals`, sticking the score a goal behind.
+        goals[side].push(goalEv);
+        lastGoal = { teamId, ...goalEv };
       }
     }
 
@@ -247,37 +262,56 @@ export class ApiFootballProvider implements ScoreProvider {
 
     const status = STATUS_MAP[f.fixture.status.short] ?? "OTHER";
     const short = f.fixture.status.short;
-    const elapsed = f.fixture.status.elapsed;
-    const extra = f.fixture.status.extra ?? null;
-    const period = derivePeriod(short, elapsed);
+    const rawElapsed = f.fixture.status.elapsed;
+    // Derive the fine-grained period from the RAW elapsed, before the clamp
+    // below — the ET first/second-half split keys off the true minute (105).
+    const period = derivePeriod(short, rawElapsed);
     // The clock only ticks during the three playing halves.
     const running = short === "1H" || short === "2H" || short === "ET";
-    // While a match is in play, API-Football bumps the aggregate `goals`
-    // counter a poll or two BEFORE the matching event (with the scorer) lands
-    // in `events[]`. Counting from the events list instead means a GOAL is only
-    // emitted once its scorer is known — never with an empty/guessed name.
-    // Finished matches aren't enriched with events, so fall back to the
-    // authoritative aggregate (the scorers were already attributed while live).
+    // API-Football normally caps `elapsed` at each period boundary and carries
+    // stoppage in `extra`, but it sometimes lets `elapsed` OVERRUN the cap
+    // (verified live: ET ran to 124'). Fold any overrun back into `extra` so the
+    // clock reads `90+3` / `120+4` instead of an impossible `93'` / `124'`.
+    const CAP: Record<string, number> = { "1H": 45, "2H": 90, "ET": 120 };
+    const cap = CAP[short];
+    let minute = rawElapsed;
+    let extra = f.fixture.status.extra ?? null;
+    if (cap != null && rawElapsed != null && rawElapsed > cap) {
+      extra = (extra ?? 0) + (rawElapsed - cap);
+      minute = cap;
+    }
+    // Aggregate-first scoring: publish the score straight from API-Football's
+    // authoritative `goals` counter, the instant it moves, BOTH directions. The
+    // scorer-attributed `events[]` lags the counter and transiently empties, so
+    // deriving the count from it caused false 0-0 / stuck-score drops — events
+    // are attribution metadata only, never the score. A real VAR disallow (the
+    // aggregate genuinely drops and stays) thus also publishes instantly.
     const live = status === "LIVE" || status === "HALF_TIME";
-    const goalCount = (side: "home" | "away") =>
-      live ? Math.min(f.goals[side] ?? 0, goals[side].length) : (f.goals[side] ?? 0);
+    const goalCount = (side: "home" | "away") => f.goals[side] ?? 0;
 
-    // Diagnostic for goal LATENESS: log whenever API-Football's aggregate count
-    // leads the scorer-attributed events[] — i.e. exactly when the Math.min above
-    // is WITHHOLDING a goal until the scorer lands. If this fires for several
-    // consecutive polls before a goal surfaces, our suppression (not upstream/VAR)
-    // is the delay → revisit counting from `f.goals` directly. Quiet in the common
-    // case (aggregate and events advance together).
+    // Diagnostic for scorer-name LATENESS: fires whenever the aggregate leads
+    // the scorer-attributed events[]. Now that the score no longer waits on the
+    // scorer, this measures how long a published goal shows without a name (the
+    // 10–20s the events pipeline lags), not a withheld goal.
     if (live) {
       for (const side of ["home", "away"] as const) {
         const aggregate = f.goals[side] ?? 0;
         if (aggregate > goals[side].length) {
           log.info("goal_attribution_pending", {
             fixtureId: f.fixture.id, side, aggregate, attributed: goals[side].length,
-            minute: elapsed, extra,
+            minute, extra,
           });
         }
       }
+    }
+    // The 75' glitch signature: live, a non-zero aggregate, but events[] empty
+    // (their events pipeline dropped out). Now harmless to the score (aggregate-
+    // first), but worth flagging so it stays auditable.
+    if (live && (f.events?.length ?? 0) === 0 && ((f.goals.home ?? 0) + (f.goals.away ?? 0)) > 0) {
+      log.warning("live_events_missing", {
+        fixtureId: f.fixture.id,
+        homeGoals: f.goals.home ?? 0, awayGoals: f.goals.away ?? 0, minute,
+      });
     }
 
     return {
@@ -291,7 +325,7 @@ export class ApiFootballProvider implements ScoreProvider {
         : null,
       status,
       rawStatus: short,
-      minute: elapsed,
+      minute,
       extra,
       period,
       running,
