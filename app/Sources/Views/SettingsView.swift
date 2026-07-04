@@ -370,7 +370,7 @@ extension MatchEventType {
         switch self {
         case .kickoff: "Kickoff"
         case .goal: "Goal"
-        case .goalCancelled: "VAR: Goal Disallowed"
+        case .goalCancelled: "Goal disallowed"
         case .varDecision: "VAR decisions"
         case .yellowCard: "Yellow card"
         case .redCard: "Red card"
