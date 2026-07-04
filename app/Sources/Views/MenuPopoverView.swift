@@ -346,7 +346,7 @@ private struct FixtureRow: View {
         if fixture.isLive {
             HStack(spacing: 4) {
                 Circle().fill(.red).frame(width: 6, height: 6)
-                Text(fixture.liveMinuteText)
+                Text(fixture.liveMinuteText(clockStale: LiveStore.shared.isClockStale(fixture.fixtureId)))
                     .font(.system(size: 10, weight: .bold))
                     .foregroundStyle(.red)
             }

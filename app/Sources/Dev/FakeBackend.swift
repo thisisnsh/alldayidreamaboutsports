@@ -17,6 +17,8 @@ struct LiveMatchState {
     var homeGoals = 0
     var awayGoals = 0
     var minute: Int?
+    /// Stoppage minutes (the `+3` in `90+3`); nil outside added time.
+    var extra: Int?
     var status = "SCHEDULED"
     var rawStatus = "NS"
     // Set once a shootout starts so the scoreboard can show the pen tally.
@@ -150,9 +152,11 @@ final class FakeStore {
             case "1H": return .first
             case "HT": return .half
             case "ET": return (s.minute ?? 0) <= 105 ? .extraFirst : .extraSecond
-            // BT (Break Time): "ET HT" between the ET halves (~105'), but the
-            // shootout is imminent once ET is over (~120') → show "PENS".
-            case "BT": return (s.minute ?? 0) > 105 ? .pens : .extraBreak
+            // BT (Break Time): "BT" for the FT→ET setup break (≤90'), "ET HT"
+            // between the ET halves (91–105'), "PENS" once ET is over (>105').
+            case "BT":
+                if (s.minute ?? 0) <= 90 { return .breakInPlay }
+                return (s.minute ?? 0) > 105 ? .pens : .extraBreak
             case "P": return .pens
             case "PEN", "FT", "AET": return .finished
             default: return .notStarted
@@ -162,7 +166,7 @@ final class FakeStore {
             fixtureId: def.id, leagueId: def.leagueId, round: def.round,
             kickoffISO: ISO8601DateFormatter().string(from: kickoff),
             status: s.status, rawStatus: s.rawStatus, minute: s.minute,
-            extra: nil, period: period, running: running,
+            extra: s.extra, period: period, running: running,
             home: ScoreboardTeam(
                 id: def.home.id, name: def.home.name, goals: s.homeGoals,
                 yellowCards: s.homeYellows.count, redCards: s.homeReds.count,
@@ -291,6 +295,9 @@ final class DemoEngine: ObservableObject {
         guard !isPlaying else { return }
         isPlaying = true
         task = Task { @MainActor in
+            if DevConfig.clockWalkAtStart && !Task.isCancelled {
+                await runClockLabelWalk()
+            }
             if DevConfig.showcaseAtStart && !Task.isCancelled {
                 await runShowcase()
             }
@@ -351,6 +358,86 @@ final class DemoEngine: ObservableObject {
             fire(beat)
             try? await Task.sleep(for: .seconds(DevConfig.showcaseSpacing))
         }
+    }
+
+    /// Steps ONE fixture through every right-edge clock label so the whole
+    /// sequence can be eyeballed in the menu + capsule:
+    ///   10′ → 45+′ → HT → 59′ → 90+1′ → 90+′ → BT → ET 92′ → ET HT → ET 116′ → ET 120+′ → FT
+    /// then fires an empty-name goal (subject falls back to the team, not a
+    /// blank) and a disallow→re-award cycle (the "Goal disallowed" pill, then
+    /// the re-awarded GOAL pill must actually show).
+    private func runClockLabelWalk() async {
+        let f = DemoFixture.engCro
+        let id = f.id
+        FakeStore.shared.resetMatches()
+
+        func statusFor(_ raw: String) -> String {
+            switch raw {
+            case "HT": return "HALF_TIME"
+            case "FT", "AET", "PEN": return "FINISHED"
+            case "NS", "TBD": return "SCHEDULED"
+            default: return "LIVE"
+            }
+        }
+        func show(_ raw: String, _ minute: Int?, extra: Int? = nil) async {
+            guard var st = FakeStore.shared.states[id] else { return }
+            st.rawStatus = raw
+            st.minute = minute
+            st.extra = extra
+            st.status = statusFor(raw)
+            FakeStore.shared.states[id] = st
+            publishFixture(f)
+            NSLog("🧪 clock-walk: raw=%@ minute=%@ extra=%@", raw,
+                  minute.map(String.init) ?? "-", extra.map(String.init) ?? "-")
+            try? await Task.sleep(for: .seconds(DevConfig.showcaseSpacing))
+        }
+
+        // (rawStatus, minute, extra) → the label each row should produce.
+        let steps: [(String, Int?, Int?)] = [
+            ("1H", 10, nil),   // 10′
+            ("1H", 45, nil),   // 45+′   (at the cap, no extra → unknown stoppage)
+            ("HT", 45, nil),   // HT
+            ("2H", 59, nil),   // 59′
+            ("2H", 90, 1),     // 90+1′  (known stoppage)
+            ("2H", 90, nil),   // 90+′   (extra cleared → unknown stoppage)
+            ("BT", 90, nil),   // BT     (FT→ET setup break)
+            ("ET", 92, nil),   // ET 92′
+            ("BT", 105, nil),  // ET HT  (between the two ET halves)
+            ("ET", 116, nil),  // ET 116′
+            ("ET", 120, nil),  // ET 120+′ (at the cap, no extra)
+            ("FT", 120, nil),  // FT
+        ]
+        for (raw, minute, extra) in steps {
+            if Task.isCancelled { return }
+            await show(raw, minute, extra: extra)
+        }
+
+        // Empty-name goal: the pill's subject should be the TEAM, not a blank.
+        if Task.isCancelled { return }
+        FakeStore.shared.states[id]?.status = "LIVE"
+        FakeStore.shared.states[id]?.rawStatus = "2H"
+        FakeStore.shared.states[id]?.minute = 70
+        FakeStore.shared.states[id]?.extra = nil
+        FakeStore.shared.addGoal(.home, in: id, player: nil, minute: 70)
+        push(.goal, f, side: .home, player: nil, minute: 70)
+        publishFixture(f)
+        try? await Task.sleep(for: .seconds(DevConfig.showcaseSpacing))
+
+        // Disallow → re-award: the drop shows "Goal disallowed", then the
+        // re-awarded GOAL pill must actually appear (not be swallowed by dedupe).
+        if Task.isCancelled { return }
+        FakeStore.shared.states[id]?.minute = 72
+        FakeStore.shared.removeGoal(.home, in: id)
+        push(.goalCancelled, f, side: .home, minute: 72)
+        publishFixture(f)
+        try? await Task.sleep(for: .seconds(DevConfig.showcaseSpacing))
+
+        if Task.isCancelled { return }
+        FakeStore.shared.states[id]?.minute = 74
+        FakeStore.shared.addGoal(.home, in: id, player: "Harry Kane", minute: 74)
+        push(.goal, f, side: .home, player: "Harry Kane", minute: 74)
+        publishFixture(f)
+        try? await Task.sleep(for: .seconds(DevConfig.showcaseSpacing))
     }
 
     private func playThrough() async {

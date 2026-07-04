@@ -24,7 +24,8 @@ export type Period =
   | "SECOND" // 2H
   | "EXTRA_FIRST" // ET, elapsed <= 105
   | "EXTRA_SECOND" // ET, elapsed > 105
-  | "EXTRA_BREAK" // BT (break between ET halves)
+  | "BREAK" // BT (FT→ET setup break, or a null-elapsed blip): elapsed <= 90
+  | "EXTRA_BREAK" // BT (break between ET halves), elapsed 91..105
   | "PENALTIES" // P (shootout)
   | "FINISHED" // FT, AET, PEN
   | "OTHER"; // INT, postponed, cancelled, ...

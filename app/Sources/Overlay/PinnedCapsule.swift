@@ -567,7 +567,7 @@ struct PinnedCapsuleView: View {
         if fixture.isLive {
             HStack(spacing: 4) {
                 Circle().fill(.red).frame(width: 6, height: 6)
-                Text(fixture.liveMinuteText)
+                Text(fixture.liveMinuteText(clockStale: LiveStore.shared.isClockStale(fixture.fixtureId)))
                     .font(.system(size: metrics.timeFont, weight: .bold, design: .rounded))
                     .foregroundStyle(.red)
             }

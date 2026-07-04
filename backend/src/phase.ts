@@ -15,7 +15,10 @@ export function syntheticPhase(rawStatus: string, minute: number | null): {
       status: "LIVE", period: (minute ?? 0) <= 105 ? "EXTRA_FIRST" : "EXTRA_SECOND", running: true,
     };
     case "BT": return {
-      status: "LIVE", period: (minute ?? 0) > 105 ? "PENALTIES" : "EXTRA_BREAK", running: false,
+      status: "LIVE",
+      // ≤90 (or null) = FT→ET setup break; 91..105 = between ET halves; >105 = pre-shootout.
+      period: minute == null || minute <= 90 ? "BREAK" : minute <= 105 ? "EXTRA_BREAK" : "PENALTIES",
+      running: false,
     };
     case "P": return { status: "LIVE", period: "PENALTIES", running: false };
     case "FT": case "AET": case "PEN": return { status: "FINISHED", period: "FINISHED", running: false };
