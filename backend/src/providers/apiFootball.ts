@@ -33,6 +33,10 @@ function playerName(name: string | null | undefined): string | null {
  * Map the API-Football short code (+ elapsed for the two ET halves) to a
  * fine-grained `Period`. ET is cumulative (91→105 first half, 106→120 second),
  * so the split is on `elapsed <= 105` per §1.
+ * "BT" (Break Time) shows up at THREE distinct pauses, split by elapsed:
+ * • ET setup break (or a null-elapsed blip) at ≤90' → BREAK ("BT")
+ * • the pause between the two ET halves (~91–105') → EXTRA_BREAK ("ET HT")
+ * • the pause after ET while the shootout is set up (>105') → PENALTIES.
  */
 function derivePeriod(short: string, elapsed: number | null): Period {
   switch (short) {
@@ -40,12 +44,6 @@ function derivePeriod(short: string, elapsed: number | null): Period {
     case "HT": return "HALF";
     case "2H": return "SECOND";
     case "ET": return (elapsed ?? 0) <= 105 ? "EXTRA_FIRST" : "EXTRA_SECOND";
-    // "BT" (Break Time) shows up at THREE distinct pauses, split by elapsed:
-    //  • FT→ET setup break (or a null-elapsed blip) at ≤90' → BREAK ("BT")
-    //  • the pause between the two ET halves (~91–105') → EXTRA_BREAK ("ET HT")
-    //  • the pause after ET while the shootout is set up (>105') → PENALTIES.
-    // Verified live: the API sent BT with elapsed=null before ET began, which
-    // must NOT read as "ET HT".
     case "BT":
       if (elapsed == null || elapsed <= 90) return "BREAK";
       return elapsed <= 105 ? "EXTRA_BREAK" : "PENALTIES";
@@ -304,7 +302,7 @@ export class ApiFootballProvider implements ScoreProvider {
         }
       }
     }
-    // The 75' glitch signature: live, a non-zero aggregate, but events[] empty
+    // Goals glitch: live, a non-zero aggregate, but events[] empty
     // (their events pipeline dropped out). Now harmless to the score (aggregate-
     // first), but worth flagging so it stays auditable.
     if (live && (f.events?.length ?? 0) === 0 && ((f.goals.home ?? 0) + (f.goals.away ?? 0)) > 0) {

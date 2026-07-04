@@ -74,7 +74,7 @@ describe("ApiFootballProvider", () => {
     const phases: Array<[string, number | null, string, boolean, string]> = [
       ["HT", 45, "HALF", false, "HALF_TIME"],
       ["BT", null, "BREAK", false, "LIVE"], // pre-ET break, API sends elapsed=null → "BT", NOT "ET HT"
-      ["BT", 90, "BREAK", false, "LIVE"], // FT→ET setup break at 90' → "BT"
+      ["BT", 90, "BREAK", false, "LIVE"], // ET setup break at 90' → "BT"
       ["BT", 105, "EXTRA_BREAK", false, "LIVE"], // break between the two ET halves → "ET HT"
       ["BT", 120, "PENALTIES", false, "LIVE"], // break after ET, shootout imminent → "PENS", not "ET HT"
       ["P", 120, "PENALTIES", false, "LIVE"],

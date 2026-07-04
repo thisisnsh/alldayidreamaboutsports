@@ -152,7 +152,7 @@ final class FakeStore {
             case "1H": return .first
             case "HT": return .half
             case "ET": return (s.minute ?? 0) <= 105 ? .extraFirst : .extraSecond
-            // BT (Break Time): "BT" for the FT→ET setup break (≤90'), "ET HT"
+            // BT (Break Time): "BT" for the ET setup break (≤90'), "ET HT"
             // between the ET halves (91–105'), "PENS" once ET is over (>105').
             case "BT":
                 if (s.minute ?? 0) <= 90 { return .breakInPlay }
@@ -400,7 +400,7 @@ final class DemoEngine: ObservableObject {
             ("2H", 59, nil),   // 59′
             ("2H", 90, 1),     // 90+1′  (known stoppage)
             ("2H", 90, nil),   // 90+′   (extra cleared → unknown stoppage)
-            ("BT", 90, nil),   // BT     (FT→ET setup break)
+            ("BT", 90, nil),   // BT     (ET setup break)
             ("ET", 92, nil),   // ET 92′
             ("BT", 105, nil),  // ET HT  (between the two ET halves)
             ("ET", 116, nil),  // ET 116′
