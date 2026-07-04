@@ -20,7 +20,10 @@ env:
 
 jobs:
   release:
-    runs-on: macos-15
+    # macos-26 ships Xcode 26 → links against the macOS 26 SDK so the shipped
+    # build adopts the same (accent-tinted) control appearance as local dev
+    # builds. Deployment target stays 14.0, so it still runs on macOS 14/15+.
+    runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
 
