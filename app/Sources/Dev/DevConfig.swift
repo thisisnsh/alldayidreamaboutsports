@@ -166,53 +166,58 @@ enum DevConfig {
         // already finished. Their pills appear as a brief burst up front.
 
         // Austria 3-1 Jordan (kicked off 4 AM UTC; finished hours before ENG-CRO)
-//        DemoMoment(at: 0, .autJor, minute: 1,  .kickoff),
-//        DemoMoment(at: 0, .autJor, minute: 21, .goal(.home, player: "Schmid")),         // 1-0
-//        DemoMoment(at: 0, .autJor, minute: 45, .halfTime),
-//        DemoMoment(at: 0, .autJor, minute: 50, .goal(.away, player: "Olwan")),           // 1-1
-//        DemoMoment(at: 0, .autJor, minute: 76, .goal(.home, player: "Al Arab (OG)")),    // 2-1
-//        DemoMoment(at: 0, .autJor, minute: 77, .yellowCard(.home, player: "Sabitzer")),
-//        DemoMoment(at: 0, .autJor, minute: 90, .goal(.home, player: "Arnautovic")),      // 3-1 (pen)
-//        DemoMoment(at: 0, .autJor, minute: 90, .fullTime),
-//
-//        // Portugal 1-1 Congo DR (kicked off 5 PM UTC; finished before ENG-CRO)
+        // DemoMoment(at: 0, .autJor, minute: 1,  .kickoff),
+        // DemoMoment(at: 0, .autJor, minute: 21, .goal(.home, player: "Schmid")),         // 1-0
+        // DemoMoment(at: 0, .autJor, minute: 45, .halfTime),
+        // DemoMoment(at: 0, .autJor, minute: 50, .goal(.away, player: "Olwan")),           // 1-1
+        // DemoMoment(at: 0, .autJor, minute: 76, .goal(.home, player: "Al Arab (OG)")),    // 2-1
+        // DemoMoment(at: 0, .autJor, minute: 77, .yellowCard(.home, player: "Sabitzer")),
+        // DemoMoment(at: 0, .autJor, minute: 90, .goal(.home, player: "Arnautovic")),      // 3-1 (pen)
+        // DemoMoment(at: 0, .autJor, minute: 90, .fullTime),
+
+        // Portugal 1-1 Congo DR (kicked off 5 PM UTC; finished before ENG-CRO)
         DemoMoment(at: 0, .porCon, minute: 1,  .kickoff),
-        DemoMoment(at: 20, .porCon, minute: 6,  .goal(.home, player: "João Neves")),      // 1-0
+        DemoMoment(at: 10, .porCon, minute: 6,  .goal(.home, player: "João Neves")),      // 1-0
+        // DISALLOWED-OFFSIDE PHANTOM: VAR chalks off the 6' goal for offside. The
+        // aggregate drops back to 0-0, but the goal event lingers in the list
+        // (goalEvents.count > goals) — pin Portugal and hover: the 6' goal shows
+        // STRUCK THROUGH while the scoreline stays correct.
+        DemoMoment(at: 12, .porCon, minute: 7,  .goalDisallowedOffside(.home)),           // → 0-0, 6' struck
         DemoMoment(at: 20, .porCon, minute: 13, .yellowCard(.home, player: "Bernardo Silva")),
-        DemoMoment(at: 30, .porCon, minute: 32, .yellowCard(.away, player: "Mbemba")),
-        DemoMoment(at: 40, .porCon, minute: 45, extra: 7, .goal(.away, player: "Yoane Wissa")), // 1-1 (45+7')
-        DemoMoment(at: 50, .porCon, minute: 45, .halfTime),
-        DemoMoment(at: 60, .porCon, minute: 90, .fullTime),
+        DemoMoment(at: 23, .porCon, minute: 32, .yellowCard(.away, player: "Mbemba")),
+        DemoMoment(at: 30, .porCon, minute: 45, extra: 7, .goal(.away, player: "Yoane Wissa")), // 1-1 (45+7')
+        DemoMoment(at: 35, .porCon, minute: 45, .halfTime),
+        DemoMoment(at: 36, .porCon, minute: 90, .fullTime),
 
         // Ghana vs Panama and Uzbekistan vs Colombia have no events →
         // they stay SCHEDULED, appearing as upcoming in the scoreboard.
 
         // ── England 4-2 Croatia (live, 8 PM UTC / 4 PM ET) ─────────────
-        DemoMoment(at: 70,  .engCro, minute: 1,  .kickoff),
+        DemoMoment(at: 40,  .engCro, minute: 1,  .kickoff),
 
         // VAR confirms the spot kick, then Kane converts — exercises the
         // varDecision pill and the "Penalty goal" label.
-        DemoMoment(at: 76, .engCro, minute: 11, .varDecision(.home, detail: "Penalty confirmed")),
-        DemoMoment(at: 80, .engCro, minute: 12, .goal(.home, player: "Harry Kane", kind: "penalty")), // pen → 1-0
-//        DemoMoment(at: 90, .engCro, minute: 12, .celebrationSurge(["10": 2_400_000, "3": 0])),
+        DemoMoment(at: 46, .engCro, minute: 11, .varDecision(.home, detail: "Penalty confirmed")),
+        DemoMoment(at: 50, .engCro, minute: 12, .goal(.home, player: "Harry Kane", kind: "penalty")), // pen → 1-0
+        // DemoMoment(at: 90, .engCro, minute: 12, .celebrationSurge(["10": 2_400_000, "3": 0])),
 
-        DemoMoment(at: 90, .engCro, minute: 36, .goal(.away, player: "Baturina")),      // 1-1
-        DemoMoment(at: 100, .engCro, minute: 42, .goal(.home, player: "Harry Kane")),    // 2-1
-//        DemoMoment(at: 47, .engCro, minute: 42, .celebrationSurge(["10": 3_800_000, "3": 120_000])),
-        DemoMoment(at: 110, .engCro, minute: 45, extra: 7, .goal(.away, player: "Petar Musa")), // 2-2 (45+7')
-        DemoMoment(at: 120, .engCro, minute: 45, .halfTime),
+        DemoMoment(at: 60, .engCro, minute: 36, .goal(.away, player: "Baturina")),      // 1-1
+        DemoMoment(at: 61, .engCro, minute: 42, .goal(.home, player: "Harry Kane")),    // 2-1
+        // DemoMoment(at: 47, .engCro, minute: 42, .celebrationSurge(["10": 3_800_000, "3": 120_000])),
+        DemoMoment(at: 70, .engCro, minute: 45, extra: 7, .goal(.away, player: "Petar Musa")), // 2-2 (45+7')
+        DemoMoment(at: 72, .engCro, minute: 45, .halfTime),
 
-        DemoMoment(at: 130, .engCro, minute: 47, .goal(.home, player: "Bellingham")),    // 3-2
+        DemoMoment(at: 83, .engCro, minute: 47, .goal(.home, player: "Bellingham")),    // 3-2
 
         // A sub each way — exercises the substitution pill + timeline rows.
-        DemoMoment(at: 134, .engCro, minute: 63, .substitution(.home, playerIn: "Foden", playerOut: "Saka")),
-        DemoMoment(at: 137, .engCro, minute: 64, .substitution(.away, playerIn: "Ivanović", playerOut: "Petar Musa")),
+        DemoMoment(at: 94, .engCro, minute: 63, .substitution(.home, playerIn: "Foden", playerOut: "Saka")),
+        DemoMoment(at: 97, .engCro, minute: 64, .substitution(.away, playerIn: "Ivanović", playerOut: "Petar Musa")),
 
         // Gvardiol turns it into his own net — the own goal credits ENGLAND
         // (the benefiting side), matching the backend's attribution.
-        DemoMoment(at: 140, .engCro, minute: 85, .goal(.home, player: "Gvardiol", kind: "own")), // OG → 4-2
+        DemoMoment(at: 100, .engCro, minute: 85, .goal(.home, player: "Gvardiol", kind: "own")), // OG → 4-2
 
-        DemoMoment(at: 150, .engCro, minute: 90, .fullTime),
+        DemoMoment(at: 110, .engCro, minute: 90, .fullTime),
     ]
 }
 
@@ -305,7 +310,8 @@ enum DemoSide { case home, away }
 enum DemoAction {
     case kickoff
     case goal(DemoSide, player: String, kind: String?) // kind: nil | "own" | "penalty"
-    case goalDisallowed(DemoSide)          // VAR — undoes that side's last goal
+    case goalDisallowed(DemoSide)          // VAR — undoes that side's last goal (aggregate + event both drop)
+    case goalDisallowedOffside(DemoSide)   // VAR/offside — aggregate drops but the goal event lingers (phantom → struck through)
     case yellowCard(DemoSide, player: String)
     case redCard(DemoSide, player: String)
     case halfTime

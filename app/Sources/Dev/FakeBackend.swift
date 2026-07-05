@@ -94,6 +94,20 @@ final class FakeStore {
         states[id] = state
     }
 
+    /// Models the window right after a VAR/offside disallow: API-Football drops
+    /// the authoritative aggregate `goals` immediately but leaves the reversed
+    /// goal lingering in `events[]` for minutes, so `goalEvents.count > goals`.
+    /// The capsule timeline strikes that surplus (most-recent) goal through.
+    func disallowGoalKeepingEvent(_ side: DemoSide, in id: Int) {
+        guard var state = states[id] else { return }
+        if side == .home {
+            state.homeGoals = max(state.homeGoals - 1, 0)
+        } else {
+            state.awayGoals = max(state.awayGoals - 1, 0)
+        }
+        states[id] = state
+    }
+
     func addCard(_ side: DemoSide, red: Bool, in id: Int, player: String?, minute: Int?, extra: Int? = nil) {
         guard var state = states[id] else { return }
         let event = MatchTimelineEvent(player: player, minute: minute, extra: extra)
@@ -480,6 +494,10 @@ final class DemoEngine: ObservableObject {
         case let .goalDisallowed(side):
             store.states[id]?.minute = moment.minute
             store.removeGoal(side, in: id)
+            push(.goalCancelled, def, side: side, minute: moment.minute)
+        case let .goalDisallowedOffside(side):
+            store.states[id]?.minute = moment.minute
+            store.disallowGoalKeepingEvent(side, in: id)
             push(.goalCancelled, def, side: side, minute: moment.minute)
         case let .yellowCard(side, player):
             store.states[id]?.minute = moment.minute
