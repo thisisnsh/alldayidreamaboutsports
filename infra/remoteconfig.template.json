@@ -12,6 +12,10 @@
       "defaultValue": { "value": "1" },
       "description": "Builds below this are blocked behind a forced Sparkle update."
     },
+    "latest_build": {
+      "defaultValue": { "value": "0" },
+      "description": "Newest published build. Builds below this get a soft 'Update available' banner atop the menu (not blocked). 0 = no banner."
+    },
     "celebration_enabled": {
       "defaultValue": { "value": "true" },
       "description": "false = hide tap-to-support and stop sending /celebrate (cost kill switch)."

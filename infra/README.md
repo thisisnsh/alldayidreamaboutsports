@@ -292,4 +292,7 @@ backend reads its R2 creds from GCP Secret Manager (`r2-*`, via
   from the R2 `config.json` (or set it to `false`) if the backup was used.
   The app stays killed until every source that enabled the switch clears it.
 - **Force update**: set `min_build` to the new build number after a bad release.
+- **Offer update**: set `latest_build` to the newest published build. Older
+  installs show a soft "Update available" banner atop the menu (still usable);
+  leave at `0` to hide the banner.
 - **Celebration cost spike**: `celebration_enabled=false`.

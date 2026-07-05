@@ -8,6 +8,8 @@ import SwiftUI
 /// activated window fixes that.
 struct UpdateView: View {
     @EnvironmentObject var session: AppSession
+    @ObservedObject private var control = ControlPlane.shared
+    @Environment(\.dismiss) private var dismiss
     let updater: SPUUpdater
 
     var body: some View {
@@ -27,9 +29,11 @@ struct UpdateView: View {
                 .font(.system(size: 56))
                 .foregroundStyle(.primary)
                 .shadow(radius: 8)
-            Text("Update required")
+            Text(control.updateRequired ? "Update required" : "Update available")
                 .font(.system(size: 24, weight: .heavy, design: .rounded))
-            Text("This version is too old to keep up with the matches. Update to keep celebrating.")
+            Text(control.updateRequired
+                 ? "This version is too old to keep up with the matches. Update to keep celebrating."
+                 : "A newer version is ready. Update now to get the latest.")
                 .font(.system(size: 14))
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
@@ -41,9 +45,17 @@ struct UpdateView: View {
                 Label("Update now", systemImage: "arrow.down.circle")
             }
             .buttonStyle(.primaryPill)
-            Button("Quit") { NSApp.terminate(nil) }
-                .buttonStyle(.hoverHighlight)
-                .font(.caption)
+            // A forced update can only be resolved or quit; an optional one can
+            // be dismissed for later.
+            if control.updateRequired {
+                Button("Quit") { NSApp.terminate(nil) }
+                    .buttonStyle(.hoverHighlight)
+                    .font(.caption)
+            } else {
+                Button("Later") { dismiss() }
+                    .buttonStyle(.hoverHighlight)
+                    .font(.caption)
+            }
             Spacer()
         }
         .padding(28)
