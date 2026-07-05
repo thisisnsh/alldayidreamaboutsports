@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	  `codesign --entitlements` REPLACES the whole entitlement set on the main
+	  executable, it does not merge. So we must restate every entitlement the
+	  exported app already carries, or the re-sign silently drops it. Today the
+	  only one is app-sandbox=false (a no-op — the sandbox is opt-in — but kept
+	  explicit so this stays an exact mirror if a real entitlement is added).
+	-->
+	<key>com.apple.security.app-sandbox</key>
+	<false/>
+	<!--
+	  Applied to the exported .app via a post-export `codesign --force` step in
+	  app-release.yml (NOT via CODE_SIGN_ENTITLEMENTS). Firebase Installations
+	  writes its token to the macOS data-protection keychain, which needs an
+	  explicit access group or SecItemAdd fails -34018 (errSecMissingEntitlement)
+	  on stricter macOS versions — which silently breaks Remote Config fetches.
+	  A team-prefixed group is self-authorized by our Developer ID signature, so
+	  no provisioning profile is required; keeping this out of the .entitlements
+	  used by `xcodebuild archive` preserves the profile-free build.
+	-->
+	<key>keychain-access-groups</key>
+	<array>
+		<string>983LBM5U6B.com.alldayidreamaboutsports.mac</string>
+	</array>
+</dict>
+</plist>
