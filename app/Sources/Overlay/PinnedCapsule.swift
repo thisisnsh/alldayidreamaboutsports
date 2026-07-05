@@ -314,6 +314,11 @@ struct CapsuleTimelineRow: Identifiable {
     /// Who/what it happened to — player name(s) or VAR detail. Optional.
     let text: String?
     let teamId: Int?
+    /// A goal the aggregate no longer counts (disallowed by VAR/offside): the
+    /// authoritative `goals` count dropped but the scorer-attributed event still
+    /// lingers in `goalEvents`. Rendered struck-through. Always false for
+    /// non-goal rows.
+    var disallowed: Bool = false
 
     /// Sort key: match minute (+ stoppage) ascending; shootout kicks (no minute)
     /// sort after everything in taken order.
@@ -329,7 +334,11 @@ struct CapsuleTimelineRow: Identifiable {
 func capsuleTimeline(for fixture: Fixture) -> [CapsuleTimelineRow] {
     var rows: [CapsuleTimelineRow] = []
 
-    func add(_ events: [MatchTimelineEvent], type: MatchEventType, team: ScoreboardTeam, prefix: String) {
+    // `validCount` bounds how many of these events the aggregate still counts.
+    // For goals, the authoritative `team.goals` can drop below `goalEvents.count`
+    // on a VAR disallow while the reversed goal lingers in the event list — those
+    // trailing (most-recent) entries are marked disallowed so they render struck.
+    func add(_ events: [MatchTimelineEvent], type: MatchEventType, team: ScoreboardTeam, prefix: String, validCount: Int = .max) {
         for (index, event) in events.enumerated() {
             let label: String = switch (type, event.kind) {
             case (.goal, "own"): "Own goal"
@@ -344,13 +353,14 @@ func capsuleTimeline(for fixture: Fixture) -> [CapsuleTimelineRow] {
                 color: pillIconColor(for: type),
                 label: label,
                 text: event.player,
-                teamId: team.id
+                teamId: team.id,
+                disallowed: index >= validCount
             ))
         }
     }
 
     for team in [fixture.home, fixture.away] {
-        add(team.goalEvents, type: .goal, team: team, prefix: "g")
+        add(team.goalEvents, type: .goal, team: team, prefix: "g", validCount: team.goals)
         add(team.yellowCardEvents, type: .yellowCard, team: team, prefix: "y")
         add(team.redCardEvents, type: .redCard, team: team, prefix: "r")
 
@@ -545,6 +555,7 @@ struct PinnedCapsuleView: View {
             if showNames {
                 Text(fixture.home.name)
                     .font(.system(size: metrics.nameFont, design: .rounded))
+                    .lineLimit(1)
                     .transition(nameTransition)
             }
             Text(scoreText(fixture))
@@ -553,6 +564,7 @@ struct PinnedCapsuleView: View {
             if showNames {
                 Text(fixture.away.name)
                     .font(.system(size: metrics.nameFont, design: .rounded))
+                    .lineLimit(1)
                     .transition(nameTransition)
             }
             CachedTeamLogo(url: logo(fixture.away.id), size: metrics.headerLogo)
@@ -561,6 +573,11 @@ struct PinnedCapsuleView: View {
             }
             trailing(fixture)
         }
+        // Keep the scoreline on ONE line: at `45+x′` the wider clock skews the
+        // HStack's ideal-size negotiation (the score's layoutPriority + Spacer)
+        // and would otherwise wrap a team name to a second row. The capsule is
+        // free to grow wider instead — on hover it already does, to fit names.
+        .fixedSize(horizontal: true, vertical: false)
     }
 
     @ViewBuilder private func trailing(_ fixture: Fixture) -> some View {
@@ -597,14 +614,18 @@ struct PinnedCapsuleView: View {
             }
             Image(systemName: row.icon)
                 .font(.system(size: metrics.eventIcon, weight: .semibold))
-                .foregroundStyle(row.color)
+                // Dim a disallowed goal's icon so it reads as "not counted".
+                .foregroundStyle(row.disallowed ? Color.secondary : row.color)
                 .frame(width: metrics.eventIcon + 6)
             Text(row.label)
                 .font(.system(size: metrics.eventFont, weight: .semibold, design: .rounded))
+                .strikethrough(row.disallowed)
+                .foregroundStyle(row.disallowed ? Color.secondary : .primary)
             if let text = row.text {
                 Text(text)
                     .font(.system(size: metrics.eventFont, design: .rounded))
                     .foregroundStyle(.secondary)
+                    .strikethrough(row.disallowed)
             }
             Spacer(minLength: 6)
         }

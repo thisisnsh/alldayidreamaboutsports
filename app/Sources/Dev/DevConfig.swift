@@ -177,10 +177,10 @@ enum DevConfig {
 //
 //        // Portugal 1-1 Congo DR (kicked off 5 PM UTC; finished before ENG-CRO)
         DemoMoment(at: 0, .porCon, minute: 1,  .kickoff),
-        DemoMoment(at: 10, .porCon, minute: 6,  .goal(.home, player: "João Neves")),      // 1-0
+        DemoMoment(at: 20, .porCon, minute: 6,  .goal(.home, player: "João Neves")),      // 1-0
         DemoMoment(at: 20, .porCon, minute: 13, .yellowCard(.home, player: "Bernardo Silva")),
         DemoMoment(at: 30, .porCon, minute: 32, .yellowCard(.away, player: "Mbemba")),
-        DemoMoment(at: 40, .porCon, minute: 45, .goal(.away, player: "Yoane Wissa")),     // 1-1 (45+5')
+        DemoMoment(at: 40, .porCon, minute: 45, extra: 7, .goal(.away, player: "Yoane Wissa")), // 1-1 (45+7')
         DemoMoment(at: 50, .porCon, minute: 45, .halfTime),
         DemoMoment(at: 60, .porCon, minute: 90, .fullTime),
 
@@ -199,7 +199,7 @@ enum DevConfig {
         DemoMoment(at: 90, .engCro, minute: 36, .goal(.away, player: "Baturina")),      // 1-1
         DemoMoment(at: 100, .engCro, minute: 42, .goal(.home, player: "Harry Kane")),    // 2-1
 //        DemoMoment(at: 47, .engCro, minute: 42, .celebrationSurge(["10": 3_800_000, "3": 120_000])),
-        DemoMoment(at: 110, .engCro, minute: 45, .goal(.away, player: "Petar Musa")),    // 2-2 (45+5')
+        DemoMoment(at: 110, .engCro, minute: 45, extra: 7, .goal(.away, player: "Petar Musa")), // 2-2 (45+7')
         DemoMoment(at: 120, .engCro, minute: 45, .halfTime),
 
         DemoMoment(at: 130, .engCro, minute: 47, .goal(.home, player: "Bellingham")),    // 3-2
@@ -331,12 +331,16 @@ struct DemoMoment {
     let at: Double
     let fixture: DemoFixture
     let minute: Int
+    /// Stoppage minute (the `+7` in `45+7`); nil for a whole-minute beat. Rides
+    /// onto the live clock, the drop pill, and the capsule timeline row.
+    let extra: Int?
     let action: DemoAction
 
-    init(at: Double, _ fixture: DemoFixture, minute: Int, _ action: DemoAction) {
+    init(at: Double, _ fixture: DemoFixture, minute: Int, extra: Int? = nil, _ action: DemoAction) {
         self.at = at
         self.fixture = fixture
         self.minute = minute
+        self.extra = extra
         self.action = action
     }
 }
