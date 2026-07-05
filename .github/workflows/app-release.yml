@@ -94,6 +94,21 @@ jobs:
             -exportPath build/export \
             -exportOptionsPlist ExportOptions.plist
 
+      - name: Add keychain-access-groups entitlement
+        working-directory: app
+        # Firebase Installations writes to the data-protection keychain, which
+        # needs an explicit access group or SecItemAdd fails -34018 and Remote
+        # Config never fetches. Applied here (not via CODE_SIGN_ENTITLEMENTS) so
+        # `xcodebuild archive` stays profile-free; a team-prefixed group is
+        # self-authorized by our Developer ID cert. Must run before notarization.
+        run: |
+          APP="build/export/${APP_NAME}.app"
+          codesign --force --sign "Developer ID Application" --timestamp \
+            --options runtime --entitlements Resign.entitlements "$APP"
+          codesign -d --entitlements - "$APP" 2>&1 \
+            | grep -q "983LBM5U6B.com.alldayidreamaboutsports.mac" \
+            || { echo "::error::keychain-access-groups entitlement did not seal in"; exit 1; }
+
       - name: Notarize and staple
         working-directory: app
         env:
