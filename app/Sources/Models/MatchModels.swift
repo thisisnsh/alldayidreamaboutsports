@@ -487,8 +487,7 @@ struct Fixture: Codable, Identifiable, Hashable {
             homeGoals: home.goals,
             awayGoals: away.goals,
             penHome: shootout?.home,
-            penAway: shootout?.away,
-            separator: shootout == nil ? "–" : " - "
+            penAway: shootout?.away
         )
     }
 }
@@ -504,7 +503,7 @@ enum ScorelineFormatter {
         awayGoals: Int,
         penHome: Int?,
         penAway: Int?,
-        separator: String = "–"
+        separator: String = " – "
     ) -> String {
         let hasPens = penHome != nil || penAway != nil
         let home = scoreText(goals: homeGoals, pens: hasPens ? (penHome ?? 0) : nil)

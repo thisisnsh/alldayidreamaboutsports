@@ -175,7 +175,7 @@ enum DevConfig {
         // DemoMoment(at: 0, .autJor, minute: 90, .goal(.home, player: "Arnautovic")),      // 3-1 (pen)
         // DemoMoment(at: 0, .autJor, minute: 90, .fullTime),
 
-        // Portugal 1-1 Congo DR (kicked off 5 PM UTC; finished before ENG-CRO)
+        // Portugal 1-1 Congo DR, decided on PENALTIES (kicked off 5 PM UTC).
         DemoMoment(at: 0, .porCon, minute: 1,  .kickoff),
         DemoMoment(at: 10, .porCon, minute: 6,  .goal(.home, player: "João Neves")),      // 1-0
         // DISALLOWED-OFFSIDE PHANTOM: VAR chalks off the 6' goal for offside. The
@@ -187,7 +187,21 @@ enum DevConfig {
         DemoMoment(at: 23, .porCon, minute: 32, .yellowCard(.away, player: "Mbemba")),
         DemoMoment(at: 30, .porCon, minute: 45, extra: 7, .goal(.away, player: "Yoane Wissa")), // 1-1 (45+7')
         DemoMoment(at: 35, .porCon, minute: 45, .halfTime),
-        DemoMoment(at: 36, .porCon, minute: 90, .fullTime),
+        // Still level after 90 and extra time — Portugal go to a SHOOTOUT.
+        // Pin Portugal and the capsule scoreline switches to the pen tally
+        // (`1+P3 – 1+P2`), using the same spaced en-dash separator as a
+        // regular result — the exact case to eyeball for consistent spacing.
+        DemoMoment(at: 37, .porCon, minute: 91,  .extraTime),
+        DemoMoment(at: 40, .porCon, minute: 120, .penaltyShootout),
+        DemoMoment(at: 41, .porCon, minute: 120, .penaltyKick(.home, player: "Ronaldo",         scored: true)),  // 1-0
+        DemoMoment(at: 42, .porCon, minute: 120, .penaltyKick(.away, player: "Wissa",           scored: true)),  // 1-1
+        DemoMoment(at: 43, .porCon, minute: 120, .penaltyKick(.home, player: "Bruno Fernandes", scored: true)),  // 2-1
+        DemoMoment(at: 44, .porCon, minute: 120, .penaltyKick(.away, player: "Bakambu",         scored: false)), // 2-1
+        DemoMoment(at: 45, .porCon, minute: 120, .penaltyKick(.home, player: "Bernardo Silva",  scored: true)),  // 3-1
+        DemoMoment(at: 46, .porCon, minute: 120, .penaltyKick(.away, player: "Mbemba",          scored: true)),  // 3-2
+        DemoMoment(at: 47, .porCon, minute: 120, .penaltyKick(.home, player: "Leão",            scored: false)), // 3-2
+        DemoMoment(at: 48, .porCon, minute: 120, .penaltyKick(.away, player: "Masuaku",         scored: false)), // 3-2
+        DemoMoment(at: 49, .porCon, minute: 120, .fullTime),  // Portugal win 3-2 on penalties
 
         // Ghana vs Panama and Uzbekistan vs Colombia have no events →
         // they stay SCHEDULED, appearing as upcoming in the scoreboard.
