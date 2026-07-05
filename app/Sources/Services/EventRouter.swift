@@ -231,8 +231,7 @@ func pillSubtitle(for event: MatchEvent) -> [PillSegment]? {
             homeGoals: event.homeGoals,
             awayGoals: event.awayGoals,
             penHome: event.penHome,
-            penAway: event.penAway,
-            separator: " - "
+            penAway: event.penAway
         )
         return [
             .text("\(event.homeName) "),
