@@ -504,9 +504,14 @@ struct PinnedCapsuleView: View {
     }
 
     private func timelineList(_ fixture: Fixture) -> some View {
-        VStack(alignment: .leading, spacing: metrics.rowSpacing) {
-            ForEach(capsuleTimeline(for: fixture)) { row in
-                eventRow(row)
+        let rows = capsuleTimeline(for: fixture)
+        // Reserve ONE minute-column width for the whole list, sized to the
+        // widest minute (e.g. `45+7′`), so every logo/icon/label lines up in a
+        // column instead of a stoppage-time row shoving itself rightward.
+        let minuteColumn = rows.map(\.minuteText).max { $0.count < $1.count } ?? ""
+        return VStack(alignment: .leading, spacing: metrics.rowSpacing) {
+            ForEach(rows) { row in
+                eventRow(row, minuteColumn: minuteColumn)
             }
         }
     }
@@ -600,12 +605,19 @@ struct PinnedCapsuleView: View {
 
     /// One past event: `minute · team logo · icon · label · player?`, a step
     /// smaller than the header so the scoreline stays the loudest line.
-    private func eventRow(_ row: CapsuleTimelineRow) -> some View {
+    private func eventRow(_ row: CapsuleTimelineRow, minuteColumn: String) -> some View {
         HStack(spacing: 6) {
-            Text(row.minuteText)
+            // An invisible twin of the widest minute fixes the column width;
+            // the real minute is trailing-aligned inside it.
+            Text(minuteColumn)
                 .font(.system(size: metrics.eventFont, weight: .semibold, design: .rounded))
-                .foregroundStyle(.secondary)
                 .frame(minWidth: metrics.eventFont * 2.6, alignment: .trailing)
+                .hidden()
+                .overlay(alignment: .trailing) {
+                    Text(row.minuteText)
+                        .font(.system(size: metrics.eventFont, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.secondary)
+                }
             if let teamId = row.teamId {
                 CachedTeamLogo(url: logo(teamId), size: metrics.eventLogo)
             } else {
