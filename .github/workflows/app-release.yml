@@ -101,6 +101,12 @@ jobs:
         # Config never fetches. Applied here (not via CODE_SIGN_ENTITLEMENTS) so
         # `xcodebuild archive` stays profile-free; a team-prefixed group is
         # self-authorized by our Developer ID cert. Must run before notarization.
+        #
+        # Resign.entitlements restates app-sandbox=false because codesign
+        # REPLACES the whole entitlement set (it does not merge) — any existing
+        # entitlement omitted here would be dropped from the shipped binary.
+        # Keep that file comment-free: codesign's AMFI plist parser rejects XML
+        # comments (and `--` within them), unlike the lenient `plutil -lint`.
         run: |
           APP="build/export/${APP_NAME}.app"
           codesign --force --sign "Developer ID Application" --timestamp \
