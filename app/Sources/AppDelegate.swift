@@ -189,11 +189,14 @@ final class MenuPopoverController: NSObject, NSPopoverDelegate {
         guard let button = statusItem.button, button.window != nil, !popover.isShown else { return }
         NSApp.activate(ignoringOtherApps: true)
         ControlPlane.shared.refreshRemoteConfig(ignoreCache: true)
+        // The soft "Update available" banner adds a row atop the compact
+        // signed-out menu; give it the headroom so it isn't clipped.
+        let updateBannerPad = ControlPlane.shared.updateAvailable ? 64 : 0
         popover.contentSize = NSSize(
             width: 320,
             height: AppSession.shared.isSignedIn
                 ? 520
-                : (ControlPlane.shared.killSwitch || ControlPlane.shared.updateRequired ? 300 : 200)
+                : (ControlPlane.shared.killSwitch || ControlPlane.shared.updateRequired ? 300 : 200 + updateBannerPad)
         )
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
         button.highlight(true)

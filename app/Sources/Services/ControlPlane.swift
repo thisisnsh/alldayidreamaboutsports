@@ -23,6 +23,10 @@ final class ControlPlane: ObservableObject {
     @Published var killSwitch = false
     @Published var killMessage = ""
     @Published var updateRequired = false
+    /// A newer build exists (below `latest_build`) but this one still works —
+    /// a soft nudge, not the forced `updateRequired` block. Drives the
+    /// "Update available" banner atop the menu.
+    @Published var updateAvailable = false
     @Published var celebrationEnabled = true
     @Published var animationParams = AnimationParams()
     /// Live poll interval in seconds (≈5). Drives LiveStore's loop.
@@ -37,6 +41,7 @@ final class ControlPlane: ObservableObject {
     private var remoteConfig: RemoteConfig?
     private var firebaseKillSwitch = false
     private var firebaseUpdateRequired = false
+    private var firebaseUpdateAvailable = false
     private var firebaseKillMessage = ""
     private var firebasePollSeconds = defaultPollSeconds
     private var firebaseCelebrationSamplePercent = defaultCelebrationSamplePercent
@@ -56,6 +61,7 @@ final class ControlPlane: ObservableObject {
                 "kill_switch": false as NSNumber,
                 "kill_message": "" as NSString,
                 "min_build": 1 as NSNumber,
+                "latest_build": 0 as NSNumber,
                 "celebration_enabled": true as NSNumber,
                 "animation_params": #"{"pillHoldSeconds":7,"notchStackMax":5}"# as NSString,
                 "poll_seconds": 5 as NSNumber,
@@ -96,6 +102,8 @@ final class ControlPlane: ObservableObject {
         firebaseMaxFanTeams = maxFans >= 1 ? maxFans : defaultMaxFanTeams
         let minBuild = rc["min_build"].numberValue.intValue
         firebaseUpdateRequired = minBuild > 0 && AppEnvironment.buildNumber < minBuild
+        let latestBuild = rc["latest_build"].numberValue.intValue
+        firebaseUpdateAvailable = latestBuild > 0 && AppEnvironment.buildNumber < latestBuild
         if let data = rc["animation_params"].stringValue.data(using: .utf8),
            let params = try? JSONDecoder().decode(AnimationParams.self, from: data) {
             animationParams = params
@@ -103,7 +111,7 @@ final class ControlPlane: ObservableObject {
             animationParams = defaultAnimationParams
         }
         applyEffectiveState()
-        AppLog.info(.remoteConfig, "firebase_state_applied kill_switch=\(firebaseKillSwitch) update_required=\(firebaseUpdateRequired) celebration_enabled=\(celebrationEnabled) poll_seconds=\(firebasePollSeconds) celebration_sample=\(firebaseCelebrationSamplePercent) max_fan_teams=\(firebaseMaxFanTeams)")
+        AppLog.info(.remoteConfig, "firebase_state_applied kill_switch=\(firebaseKillSwitch) update_required=\(firebaseUpdateRequired) update_available=\(firebaseUpdateAvailable) celebration_enabled=\(celebrationEnabled) poll_seconds=\(firebasePollSeconds) celebration_sample=\(firebaseCelebrationSamplePercent) max_fan_teams=\(firebaseMaxFanTeams)")
     }
 
     private func applyEffectiveState() {
@@ -111,6 +119,7 @@ final class ControlPlane: ObservableObject {
         let wasUpdateRequired = updateRequired
         killSwitch = firebaseKillSwitch
         updateRequired = firebaseUpdateRequired
+        updateAvailable = firebaseUpdateAvailable
         killMessage = firebaseKillMessage
         pollSeconds = firebasePollSeconds
         celebrationSamplePercent = firebaseCelebrationSamplePercent

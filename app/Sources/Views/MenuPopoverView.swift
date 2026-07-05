@@ -13,17 +13,25 @@ struct MenuPopoverView: View {
                 maintenance
             } else if control.updateRequired {
                 forcedUpdate
-            } else if let profile = session.profile {
-                header(profile)
-                if !session.fanTeams.isEmpty {
-                    fanOfRow
-                }
-                Divider()
-                fixturesSection
-                Divider()
-                actions
             } else {
-                signedOut
+                // A soft "Update available" nudge sits atop the normal menu —
+                // the app still works, so unlike `updateRequired` it doesn't
+                // replace the content.
+                if control.updateAvailable {
+                    updateBanner
+                }
+                if let profile = session.profile {
+                    header(profile)
+                    if !session.fanTeams.isEmpty {
+                        fanOfRow
+                    }
+                    Divider()
+                    fixturesSection
+                    Divider()
+                    actions
+                } else {
+                    signedOut
+                }
             }
         }
         .padding(16)
@@ -213,6 +221,43 @@ struct MenuPopoverView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 12)
+    }
+
+    /// Top-of-menu nudge when a newer build exists. The button opens the same
+    /// Update window the forced path uses — Sparkle needs an activated key
+    /// window (the transient popover has none), so the check runs from there,
+    /// exactly like the "Check for Updates" button in Settings.
+    private var updateBanner: some View {
+        Button {
+            dismissMenu()
+            openWindow(id: WindowID.update)
+            NSApp.activate(ignoringOtherApps: true)
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "arrow.down.circle.fill")
+                    .font(.system(size: 15))
+                    .foregroundStyle(Color.accentColor)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Update available")
+                        .font(.system(size: 13, weight: .semibold))
+                    Text("A newer version is ready to install.")
+                        .font(.system(size: 11))
+                        .opacity(0.7)
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 11, weight: .semibold))
+                    .opacity(0.5)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.hoverHighlight)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(Color.accentColor.opacity(0.12))
+        )
     }
 
     private var forcedUpdate: some View {
