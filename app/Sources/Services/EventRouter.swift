@@ -17,6 +17,12 @@ final class EventRouter {
         set { UserDefaults.standard.set(newValue, forKey: "handledEventIds") }
     }
 
+    /// Greatest incident minute we've already surfaced per fixture — the
+    /// high-water mark for the out-of-order staleness guard. In-memory is enough:
+    /// a restart reseeds LiveStore's baseline (which emits nothing), so there's
+    /// no pre-launch event to replay against a lost mark.
+    private var maxNotifiedMinute: [Int: Int] = [:]
+
     /// Drop every stored id for a fixture once its match is over. Event ids are
     /// `"<fixtureId>:<type>:…"`, so a finished match's ids share that prefix. A
     /// finished fixture is never polled again (LiveStore.finished) and a re-seen
@@ -28,6 +34,7 @@ final class EventRouter {
         let remaining = before.filter { !$0.hasPrefix(prefix) }
         guard remaining.count != before.count else { return }
         seenEventIds = remaining
+        maxNotifiedMinute[fixtureId] = nil
         AppLog.info(.fixtures, "event_storage_purged fixture_id=\(fixtureId) removed=\(before.count - remaining.count) remaining=\(remaining.count)")
     }
 
@@ -67,6 +74,26 @@ final class EventRouter {
             return
         }
 
+        // Out-of-order staleness guard. An event's minute is API-Football's
+        // incident minute, and the feed can inject a VAR outcome minutes after
+        // the fact — surfacing a "67′" pill while play is at 79′. Suppress a
+        // guarded event (VAR only) whose minute falls more than the configured
+        // tolerance behind the greatest minute we've ALREADY notified for this
+        // fixture. Non-guarded / minute-less events pass through, and every
+        // minute-bearing event (goals, cards, subs) raises the mark.
+        if let absMin = event.absoluteMinute {
+            // Only a fixture we've already notified an event for has a mark; the
+            // first event for a fixture can never be "out of order" (and this
+            // avoids an Int.min underflow when a guarded event lands first).
+            if event.type.isStalenessGuarded,
+               let mark = maxNotifiedMinute[event.fixtureId],
+               mark - absMin > ControlPlane.shared.eventStaleMinutes {
+                AppLog.info(.fixtures, "event_rejected event_id=\(event.eventId) reason=stale_out_of_order event_min=\(absMin) max_notified=\(mark)")
+                return
+            }
+            maxNotifiedMinute[event.fixtureId] = maxNotifiedMinute[event.fixtureId].map { Swift.max($0, absMin) } ?? absMin
+        }
+
         let isFanGoal = event.type == .goal && event.teamId.map(fans.contains) == true
         AppLog.info(.fixtures, "event_routed event_id=\(event.eventId) type=\(event.type.rawValue) fixture_id=\(event.fixtureId) fan_goal=\(isFanGoal)")
 
@@ -96,6 +123,24 @@ extension PrefSettings {
     /// Every event type is on by default; Settings → Events can switch any off.
     func eventEnabled(_ type: MatchEventType) -> Bool {
         (notifications ?? [:])[type.settingsKey, default: true]
+    }
+}
+
+extension MatchEvent {
+    /// The incident minute folded with stoppage `extra` for ordering comparisons,
+    /// or nil for whole-match events (kickoff/HT/FT/…) that carry no minute.
+    var absoluteMinute: Int? {
+        minute.map { $0 + (extra ?? 0) }
+    }
+}
+
+extension MatchEventType {
+    /// Event types subject to the out-of-order staleness guard. Only VAR: it's
+    /// the one the feed backfills long after the fact (a decision api-football
+    /// injects minutes late), and a stale VAR pill is pure noise. Everything else
+    /// — goals, cards, subs, status — always shows.
+    var isStalenessGuarded: Bool {
+        self == .varDecision
     }
 }
 
