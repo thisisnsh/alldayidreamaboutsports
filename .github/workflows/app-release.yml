@@ -63,6 +63,50 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
           rm cert.p12
 
+      - name: Install and validate Developer ID provisioning profile
+        env:
+          PROFILE_B64: ${{ secrets.MACOS_PROVISIONING_PROFILE_B64 }}
+        run: |
+          set -euo pipefail
+          test -n "$PROFILE_B64"
+
+          PROFILE_DIR="$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles"
+          PROFILE_PATH="$PROFILE_DIR/1b1e1690-0cf1-4173-ba32-259af8429a4d.provisionprofile"
+          PROFILE_PLIST=$(mktemp)
+          PROFILE_CERT=$(mktemp)
+          mkdir -p "$PROFILE_DIR"
+          printf '%s' "$PROFILE_B64" | base64 --decode > "$PROFILE_PATH"
+          security cms -D -i "$PROFILE_PATH" > "$PROFILE_PLIST"
+
+          test "$(plutil -extract Name raw "$PROFILE_PLIST")" = \
+            "983LBM5U6B.com.alldayidreamaboutsports.mac.3"
+          test "$(plutil -extract UUID raw "$PROFILE_PLIST")" = \
+            "1b1e1690-0cf1-4173-ba32-259af8429a4d"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :TeamIdentifier:0' "$PROFILE_PLIST")" = \
+            "983LBM5U6B"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:com.apple.application-identifier' "$PROFILE_PLIST")" = \
+            "983LBM5U6B.com.alldayidreamaboutsports.mac"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:keychain-access-groups:0' "$PROFILE_PLIST")" = \
+            "983LBM5U6B.*"
+
+          EXPIRY=$(plutil -extract ExpirationDate raw "$PROFILE_PLIST")
+          EXPIRY_EPOCH=$(date -j -u -f '%Y-%m-%dT%H:%M:%SZ' "$EXPIRY" '+%s')
+          MIN_EXPIRY_EPOCH=$(date -j -u -v+30d '+%s')
+          if (( EXPIRY_EPOCH <= MIN_EXPIRY_EPOCH )); then
+            echo "::error::Developer ID provisioning profile expires within 30 days ($EXPIRY)"
+            exit 1
+          fi
+
+          /usr/libexec/PlistBuddy -c 'Print :DeveloperCertificates:0' \
+            "$PROFILE_PLIST" > "$PROFILE_CERT"
+          PROFILE_SHA=$(openssl x509 -inform DER -in "$PROFILE_CERT" \
+            -noout -fingerprint -sha1 | cut -d= -f2 | tr -d ':')
+          if ! security find-identity -v -p codesigning | tr -d ' ' | grep -qi "$PROFILE_SHA"; then
+            echo "::error::Provisioning profile certificate $PROFILE_SHA does not match the imported P12"
+            exit 1
+          fi
+          rm "$PROFILE_PLIST" "$PROFILE_CERT"
+
       - name: Build and archive
         working-directory: app
         run: |
@@ -84,7 +128,8 @@ jobs:
             GOOGLE_REVERSED_CLIENT_ID="${{ secrets.GOOGLE_OAUTH_PRODUCTION_REVERSED_CLIENT_ID }}" \
             DEVELOPMENT_TEAM="${{ secrets.APPLE_TEAM_ID }}" \
             CODE_SIGN_STYLE="Manual" \
-            CODE_SIGN_IDENTITY="Developer ID Application"
+            CODE_SIGN_IDENTITY="Developer ID Application" \
+            PROVISIONING_PROFILE_SPECIFIER="983LBM5U6B.com.alldayidreamaboutsports.mac.3"
 
       - name: Export app
         working-directory: app
@@ -94,26 +139,16 @@ jobs:
             -exportPath build/export \
             -exportOptionsPlist ExportOptions.plist
 
-      - name: Add keychain-access-groups entitlement
+      - name: Verify exported app signing
         working-directory: app
-        # Firebase Installations writes to the data-protection keychain, which
-        # needs an explicit access group or SecItemAdd fails -34018 and Remote
-        # Config never fetches. Applied here (not via CODE_SIGN_ENTITLEMENTS) so
-        # `xcodebuild archive` stays profile-free; a team-prefixed group is
-        # self-authorized by our Developer ID cert. Must run before notarization.
-        #
-        # Resign.entitlements restates app-sandbox=false because codesign
-        # REPLACES the whole entitlement set (it does not merge) — any existing
-        # entitlement omitted here would be dropped from the shipped binary.
-        # Keep that file comment-free: codesign's AMFI plist parser rejects XML
-        # comments (and `--` within them), unlike the lenient `plutil -lint`.
         run: |
+          set -euo pipefail
           APP="build/export/${APP_NAME}.app"
-          codesign --force --sign "Developer ID Application" --timestamp \
-            --options runtime --entitlements Resign.entitlements "$APP"
+          test -f "$APP/Contents/embedded.provisionprofile"
+          codesign --verify --deep --strict --verbose=2 "$APP"
           codesign -d --entitlements - "$APP" 2>&1 \
             | grep -q "983LBM5U6B.com.alldayidreamaboutsports.mac" \
-            || { echo "::error::keychain-access-groups entitlement did not seal in"; exit 1; }
+            || { echo "::error::keychain-access-groups entitlement is missing"; exit 1; }
 
       - name: Notarize and staple
         working-directory: app

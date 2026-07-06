@@ -187,17 +187,54 @@ Key invariants:
 
 ## Code signing & notarization (one-time setup)
 
-1. **Certificate**: Xcode → Settings → Accounts → team 983LBM5U6B → download
-   "Developer ID Application". Verify: `security find-identity -v -p codesigning`.
-2. **Notary profile**:
+1. **Certificate**: Xcode → Settings → Accounts → team 983LBM5U6B → manage
+   certificates → create "Developer ID Application". The certificate must appear
+   under **My Certificates** in Keychain Access with an expandable private key.
+   Export that complete identity as a password-protected `.p12`; never export or
+   commit the private key separately. Verify the active identity with:
+   ```sh
+   security find-identity -v -p codesigning
+   ```
+2. **Developer ID provisioning profile**: developer.apple.com → Certificates,
+   Identifiers & Profiles → Profiles. Create a Developer ID profile for
+   `com.alldayidreamaboutsports.mac`, selecting the same certificate exported in
+   step 1. The profile must authorize Keychain Sharing. The current profile is
+   named `983LBM5U6B.com.alldayidreamaboutsports.mac.3`, UUID
+   `1b1e1690-0cf1-4173-ba32-259af8429a4d`, and is valid until 2044-07-01.
+3. **GitHub Actions secrets**: encode the P12 and profile without committing
+   either file, then set:
+   - `MACOS_CERT_P12_B64`: base64-encoded P12
+   - `MACOS_CERT_PASSWORD`: P12 export password
+   - `MACOS_PROVISIONING_PROFILE_B64`: base64-encoded `.provisionprofile`
+
+   The release workflow verifies that the profile's certificate fingerprint
+   matches the imported P12 before it builds.
+4. **Notary profile**:
    ```sh
    xcrun notarytool store-credentials notary-alldayidreamaboutsports \
      --apple-id <your-apple-id> --team-id 983LBM5U6B \
      --password <app-specific-password>   # appleid.apple.com → App-Specific Passwords
    ```
-3. **Push capability**: developer.apple.com → Identifiers →
+5. **Push capability**: developer.apple.com → Identifiers →
    `com.alldayidreamaboutsports.mac` → enable Push Notifications; create an
    APNs auth key (.p8) and upload it in Firebase → Cloud Messaging.
+
+### Rotating the Developer ID certificate
+
+The current CI certificate (`0C64AFF32A40DEF952C231B8721C81E89518D4C0`)
+expires 2027-02-01. Before then:
+
+1. Create a new Developer ID Application certificate in Xcode and export its
+   certificate/private-key identity as a P12.
+2. Regenerate the Developer ID profile using that exact new certificate.
+3. Replace `MACOS_CERT_P12_B64` and `MACOS_PROVISIONING_PROFILE_B64` in GitHub;
+   replace `MACOS_CERT_PASSWORD` too if the P12 password changed.
+4. Update the profile name/UUID in `project.yml`, `ExportOptions.plist`, and the
+   release workflow, then run a release build to exercise all signing checks.
+
+Do **not** revoke an old Developer ID certificate during routine rotation.
+Timestamped releases keep working after certificate expiration, while revocation
+can prevent existing signed releases from installing or launching.
 
 ## Sparkle updates
 
@@ -223,7 +260,7 @@ CI builds the DMG; the Sparkle appcast + delta generation and the R2 upload are
 `$SPARKLE_HOME/bin/generate_appcast`; it does not download Sparkle.
 
 **Normal flow:**
-1. Tag `v1.0.0` → `.github/workflows/app-release.yml` builds the code-signed,
+1. Tag `v1.0.0.1` → `.github/workflows/app-release.yml` builds the code-signed,
    notarized, stapled, styled DMG on a macOS runner and uploads it as a
    **workflow artifact** (no appcast, no R2, no GitHub Release).
 2. Download the artifact, install the DMG, test it.
