@@ -231,6 +231,14 @@ enum DevConfig {
         // (the benefiting side), matching the backend's attribution.
         DemoMoment(at: 100, .engCro, minute: 85, .goal(.home, player: "Gvardiol", kind: "own")), // OG → 4-2
 
+        // OUT-OF-ORDER VAR (must be IGNORED): API-Football backfills a 67'
+        // "Penalty confirmed" long after the fact. By now the 85' own goal is the
+        // latest event we've notified, so EventRouter's staleness guard drops this
+        // (85-67 > event_stale_minutes) — NO pill should appear. Contrast with the
+        // in-order 11' VAR above, which shows normally. This is the exact
+        // real-world case (a 67' VAR that surfaced at 79') the guard fixes.
+        DemoMoment(at: 105, .engCro, minute: 67, .varDecision(.home, detail: "Penalty confirmed")),
+
         DemoMoment(at: 110, .engCro, minute: 90, .fullTime),
     ]
 }
