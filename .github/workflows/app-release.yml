@@ -128,8 +128,7 @@ jobs:
             GOOGLE_REVERSED_CLIENT_ID="${{ secrets.GOOGLE_OAUTH_PRODUCTION_REVERSED_CLIENT_ID }}" \
             DEVELOPMENT_TEAM="${{ secrets.APPLE_TEAM_ID }}" \
             CODE_SIGN_STYLE="Manual" \
-            CODE_SIGN_IDENTITY="Developer ID Application" \
-            PROVISIONING_PROFILE_SPECIFIER="983LBM5U6B.com.alldayidreamaboutsports.mac.3"
+            CODE_SIGN_IDENTITY="Developer ID Application"
 
       - name: Export app
         working-directory: app
