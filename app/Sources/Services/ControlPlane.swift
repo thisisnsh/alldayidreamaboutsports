@@ -13,6 +13,7 @@ private let defaultAnimationParams = AnimationParams()
 private let defaultPollSeconds: Double = 5
 private let defaultCelebrationSamplePercent: Double = 1.0
 private let defaultMaxFanTeams = 10
+private let defaultEventStaleMinutes = 3
 
 /// Kill switch + forced updates + remote tunables, via Firebase Remote Config
 /// with real-time listeners (seconds to propagate).
@@ -37,6 +38,12 @@ final class ControlPlane: ObservableObject {
     /// Max number of teams a user can be a fan of. Config-driven so we can raise
     /// it without shipping a build; starts at 10.
     @Published var maxFanTeams: Int = 10
+    /// Out-of-order staleness tolerance (minutes). A VAR event whose incident
+    /// minute is more than this behind the greatest minute we've ALREADY notified
+    /// for a fixture is a late/backfilled "past" decision (api-football injects it
+    /// minutes after the fact) and is suppressed. Config-driven so we can tune it
+    /// without shipping a build. See EventRouter's staleness guard.
+    @Published var eventStaleMinutes: Int = 3
 
     private var remoteConfig: RemoteConfig?
     private var firebaseKillSwitch = false
@@ -46,6 +53,7 @@ final class ControlPlane: ObservableObject {
     private var firebasePollSeconds = defaultPollSeconds
     private var firebaseCelebrationSamplePercent = defaultCelebrationSamplePercent
     private var firebaseMaxFanTeams = defaultMaxFanTeams
+    private var firebaseEventStaleMinutes = defaultEventStaleMinutes
 
     func start() {
         if FirebaseConfigured.isConfigured {
@@ -67,6 +75,7 @@ final class ControlPlane: ObservableObject {
                 "poll_seconds": 5 as NSNumber,
                 "celebration_sample_percent": 1.0 as NSNumber,
                 "max_fan_teams": defaultMaxFanTeams as NSNumber,
+                "event_stale_minutes": defaultEventStaleMinutes as NSNumber,
             ])
             // Apply the last activated values before session bootstrap can let
             // a previously-killed install make authenticated requests.
@@ -100,6 +109,8 @@ final class ControlPlane: ObservableObject {
         firebaseCelebrationSamplePercent = (sample > 0 && sample <= 1) ? sample : defaultCelebrationSamplePercent
         let maxFans = rc["max_fan_teams"].numberValue.intValue
         firebaseMaxFanTeams = maxFans >= 1 ? maxFans : defaultMaxFanTeams
+        let staleMins = rc["event_stale_minutes"].numberValue.intValue
+        firebaseEventStaleMinutes = staleMins >= 0 ? staleMins : defaultEventStaleMinutes
         let minBuild = rc["min_build"].numberValue.intValue
         firebaseUpdateRequired = minBuild > 0 && AppEnvironment.buildNumber < minBuild
         let latestBuild = rc["latest_build"].numberValue.intValue
@@ -111,7 +122,7 @@ final class ControlPlane: ObservableObject {
             animationParams = defaultAnimationParams
         }
         applyEffectiveState()
-        AppLog.info(.remoteConfig, "firebase_state_applied kill_switch=\(firebaseKillSwitch) update_required=\(firebaseUpdateRequired) update_available=\(firebaseUpdateAvailable) celebration_enabled=\(celebrationEnabled) poll_seconds=\(firebasePollSeconds) celebration_sample=\(firebaseCelebrationSamplePercent) max_fan_teams=\(firebaseMaxFanTeams)")
+        AppLog.info(.remoteConfig, "firebase_state_applied kill_switch=\(firebaseKillSwitch) update_required=\(firebaseUpdateRequired) update_available=\(firebaseUpdateAvailable) celebration_enabled=\(celebrationEnabled) poll_seconds=\(firebasePollSeconds) celebration_sample=\(firebaseCelebrationSamplePercent) max_fan_teams=\(firebaseMaxFanTeams) event_stale_minutes=\(firebaseEventStaleMinutes)")
     }
 
     private func applyEffectiveState() {
@@ -124,6 +135,7 @@ final class ControlPlane: ObservableObject {
         pollSeconds = firebasePollSeconds
         celebrationSamplePercent = firebaseCelebrationSamplePercent
         maxFanTeams = firebaseMaxFanTeams
+        eventStaleMinutes = firebaseEventStaleMinutes
 
         if killSwitch {
             OverlayManager.shared.dismissAll()

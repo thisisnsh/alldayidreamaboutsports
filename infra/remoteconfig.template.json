@@ -35,6 +35,10 @@
     "max_fan_teams": {
       "defaultValue": { "value": "10" },
       "description": "Max teams a user can be a fan of. Raise without shipping a build. Starts at 10."
+    },
+    "event_stale_minutes": {
+      "defaultValue": { "value": "3" },
+      "description": "Out-of-order staleness tolerance (minutes). A VAR decision whose incident minute is more than this behind an event already notified for the match is suppressed as a late/backfilled 'past' event (api-football injects VAR minutes after the fact). Only VAR is guarded; goals, cards, subs always show."
     }
   }
 }
