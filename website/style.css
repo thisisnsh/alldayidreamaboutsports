@@ -148,6 +148,25 @@ a { color: inherit; text-decoration: none; }
 }
 .body strong { color: var(--bone); font-weight: 600; }
 
+/* "Watch demo on YouTube" pill — red capsule, sits above the hero title */
+.yt-pill {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 6px 15px 6px 12px; margin-bottom: 18px;
+  border: 1px solid rgba(255,59,48,0.55); border-radius: 999px;
+  background: rgba(255,59,48,0.08);
+  color: var(--bone); font: 600 13px/1 var(--ui); letter-spacing: .01em;
+  text-decoration: none;
+  transition: transform .2s var(--ease), background .2s var(--ease), border-color .2s var(--ease), box-shadow .2s var(--ease);
+}
+.yt-pill-ico { flex: none; transition: transform .2s var(--ease); }
+.yt-pill:hover {
+  transform: translateY(-2px);
+  background: rgba(255,59,48,0.16); border-color: rgba(255,59,48,0.9);
+  box-shadow: 0 6px 20px rgba(255,59,48,0.25);
+}
+.yt-pill:hover .yt-pill-ico { transform: scale(1.12); }
+.yt-pill:active { transform: translateY(0); }
+
 .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: clamp(24px, 3.4vh, 34px); }
 .meta-note { display: inline-flex; align-items: center; font-size: 13px; color: var(--smoke); }
 
