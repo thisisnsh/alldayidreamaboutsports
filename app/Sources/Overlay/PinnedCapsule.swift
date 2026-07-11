@@ -450,7 +450,8 @@ private struct PinnedCapsuleStackView: View {
                         )
                 }
             }
-            .fixedSize()
+            .fixedSize()            
+            .animation(.easeInOut(duration: 0.25), value: manager.hoveredFixtureId)
             .padding(EdgeInsets(
                 top: topInset + OverlayLayout.topGap,
                 leading: OverlayLayout.expandedShadowInset,
