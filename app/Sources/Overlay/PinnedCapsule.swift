@@ -518,7 +518,7 @@ struct PinnedCapsuleView: View {
 
     /// The visible capsule chrome + content for one state.
     private func capsuleBody(_ fixture: Fixture, showNames: Bool, showTimeline: Bool) -> some View {
-        VStack(alignment: .trailing, spacing: metrics.rowSpacing) {
+        VStack(alignment: .leading, spacing: metrics.rowSpacing) {
             header(fixture, showNames: showNames)
             if showTimeline {
                 timelineList(fixture)
@@ -556,33 +556,39 @@ struct PinnedCapsuleView: View {
     /// `showNames` the team names slide in around the score.
     private func header(_ fixture: Fixture, showNames: Bool) -> some View {
         HStack(spacing: 6) {
-            CachedTeamLogo(url: logo(fixture.home.id), size: metrics.headerLogo)
-            if showNames {
-                Text(fixture.home.name)
-                    .font(.system(size: metrics.nameFont, design: .rounded))
-                    .lineLimit(1)
-                    .transition(nameTransition)
+            // The scoreline itself hugs its content on ONE line (the inner
+            // `.fixedSize`). Keeping it as its own group lets it sit flush-left
+            // while the clock is pushed to the trailing edge by the Spacer — so
+            // when the capsule expands to the timeline's width the clock stays
+            // pinned right instead of drifting in beside the score.
+            HStack(spacing: 6) {
+                CachedTeamLogo(url: logo(fixture.home.id), size: metrics.headerLogo)
+                if showNames {
+                    Text(fixture.home.name)
+                        .font(.system(size: metrics.nameFont, design: .rounded))
+                        .lineLimit(1)
+                        .transition(nameTransition)
+                }
+                Text(scoreText(fixture))
+                    .font(.system(size: metrics.scoreFont, weight: .bold, design: .rounded))
+                    .fixedSize().layoutPriority(1)
+                if showNames {
+                    Text(fixture.away.name)
+                        .font(.system(size: metrics.nameFont, design: .rounded))
+                        .lineLimit(1)
+                        .transition(nameTransition)
+                }
+                CachedTeamLogo(url: logo(fixture.away.id), size: metrics.headerLogo)
             }
-            Text(scoreText(fixture))
-                .font(.system(size: metrics.scoreFont, weight: .bold, design: .rounded))
-                .fixedSize().layoutPriority(1)
-            if showNames {
-                Text(fixture.away.name)
-                    .font(.system(size: metrics.nameFont, design: .rounded))
-                    .lineLimit(1)
-                    .transition(nameTransition)
-            }
-            CachedTeamLogo(url: logo(fixture.away.id), size: metrics.headerLogo)
+            // Keep the scoreline on ONE line: at `45+x′` the wider clock would
+            // otherwise skew the HStack's ideal-size negotiation and truncate a
+            // team name. The capsule is free to grow wider instead.
+            .fixedSize()
             if showNames {
                 Spacer(minLength: 8)
             }
             trailing(fixture)
         }
-        // Keep the scoreline on ONE line: at `45+x′` the wider clock skews the
-        // HStack's ideal-size negotiation (the score's layoutPriority + Spacer)
-        // and would otherwise wrap a team name to a second row. The capsule is
-        // free to grow wider instead — on hover it already does, to fit names.
-        .fixedSize(horizontal: true, vertical: false)
     }
 
     @ViewBuilder private func trailing(_ fixture: Fixture) -> some View {
