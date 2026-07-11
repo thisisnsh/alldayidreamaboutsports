@@ -405,10 +405,10 @@ struct Fixture: Codable, Identifiable, Hashable {
     /// The right-edge clock label. Stoppage/extra-time/VAR aware — rendered
     /// straight from the polled file's `minute`/`extra`/`period`/`running`.
     /// Sequence it must produce, in order:
-    /// `10′ → HT → 59′ → 90+1′ → BT → ET 92′ → ET HT → ET 116′ → ET 120+′ → FT`.
+    /// `10′ → HT → 59′ → 90+1′ → BT → ET 92′ → ET HT → ET 116′ → ET 120+ → FT`.
     /// `running:false` → a status label (HT / BT / ET HT / PENS / FT / kickoff).
     /// `running:true`  → `"73′"`, `"45+2′"`, or `ET`-prefixed in extra time.
-    /// `clockStale` (or a missing `extra` at a cap) renders `<cap>+′` — an
+    /// `clockStale` (or a missing `extra` at a cap) renders `<cap>+` — an
     /// honest "in stoppage, amount unknown" — instead of a frozen minute; it
     /// self-corrects to `+X` the moment a fresh `extra` arrives.
     func liveMinuteText(clockStale: Bool = false) -> String {
@@ -420,11 +420,11 @@ struct Fixture: Codable, Identifiable, Hashable {
             return f.string(from: kickoff)
         }
         // A ticking minute, ET-prefixed in extra time. At the period cap with an
-        // unknown/stale stoppage, render `<cap>+′` (no number).
+        // unknown/stale stoppage, render `<cap>+` (no number, no `′`).
         func runningLabel(_ minute: Int) -> String {
             let etPrefix = (period == .extraFirst || period == .extraSecond) ? "ET " : ""
             if let cap = periodCap, minute == cap, extra == nil || clockStale {
-                return "\(etPrefix)\(cap)+′"
+                return "\(etPrefix)\(cap)+"
             }
             if let extra { return "\(etPrefix)\(minute)+\(extra)′" }
             return "\(etPrefix)\(minute)′"
