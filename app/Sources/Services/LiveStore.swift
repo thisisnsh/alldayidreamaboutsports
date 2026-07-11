@@ -41,9 +41,9 @@ final class LiveStore {
     /// being observed for the first time: it seeds the baseline and emits nothing.
     private var baseline: [Int: Fixture] = [:]
     /// When each fixture's clock (`minute`/`extra`) last actually moved. Drives
-    /// the staleness-aware `<cap>+′` rendering: if the clock parks at a period
+    /// the staleness-aware `<cap>+` rendering: if the clock parks at a period
     /// cap for >90s (API stopped ticking / never sent `extra`), the label drops
-    /// the frozen number and reads e.g. `90+′` / `ET 120+′`.
+    /// the frozen number and reads e.g. `90+` / `ET 120+`.
     private var lastClockChangeAt: [Int: Date] = [:]
     private static let clockStaleAfter: TimeInterval = 90
     /// Fixtures whose match file has reported FINISHED (stop polling them).
@@ -106,7 +106,7 @@ final class LiveStore {
 
     /// True once a fixture's clock has been parked (same `minute`/`extra`) for
     /// longer than `clockStaleAfter`. Views pass this into `liveMinuteText` so a
-    /// stuck stoppage clock reads `<cap>+′` rather than a frozen minute.
+    /// stuck stoppage clock reads `<cap>+` rather than a frozen minute.
     func isClockStale(_ fixtureId: Int, now: Date = Date()) -> Bool {
         guard let last = lastClockChangeAt[fixtureId] else { return false }
         return now.timeIntervalSince(last) > Self.clockStaleAfter
@@ -294,7 +294,7 @@ final class LiveStore {
         }
 
         // Stamp when the clock actually moves (or on first sight) — powers the
-        // staleness-aware `<cap>+′` rendering.
+        // staleness-aware `<cap>+` rendering.
         if prev == nil || prev?.minute != current.minute || prev?.extra != current.extra {
             lastClockChangeAt[current.fixtureId] = Date()
         }

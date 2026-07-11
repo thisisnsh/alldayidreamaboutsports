@@ -376,7 +376,7 @@ final class DemoEngine: ObservableObject {
 
     /// Steps ONE fixture through every right-edge clock label so the whole
     /// sequence can be eyeballed in the menu + capsule:
-    ///   10′ → 45+′ → HT → 59′ → 90+1′ → 90+′ → BT → ET 92′ → ET HT → ET 116′ → ET 120+′ → FT
+    ///   10′ → 45+ → HT → 59′ → 90+1′ → 90+ → BT → ET 92′ → ET HT → ET 116′ → ET 120+ → FT
     /// then fires an empty-name goal (subject falls back to the team, not a
     /// blank) and a disallow→re-award cycle (the "Goal disallowed" pill, then
     /// the re-awarded GOAL pill must actually show).
@@ -409,16 +409,16 @@ final class DemoEngine: ObservableObject {
         // (rawStatus, minute, extra) → the label each row should produce.
         let steps: [(String, Int?, Int?)] = [
             ("1H", 10, nil),   // 10′
-            ("1H", 45, nil),   // 45+′   (at the cap, no extra → unknown stoppage)
+            ("1H", 45, nil),   // 45+    (at the cap, no extra → unknown stoppage)
             ("HT", 45, nil),   // HT
             ("2H", 59, nil),   // 59′
             ("2H", 90, 1),     // 90+1′  (known stoppage)
-            ("2H", 90, nil),   // 90+′   (extra cleared → unknown stoppage)
+            ("2H", 90, nil),   // 90+    (extra cleared → unknown stoppage)
             ("BT", 90, nil),   // BT     (ET setup break)
             ("ET", 92, nil),   // ET 92′
             ("BT", 105, nil),  // ET HT  (between the two ET halves)
             ("ET", 116, nil),  // ET 116′
-            ("ET", 120, nil),  // ET 120+′ (at the cap, no extra)
+            ("ET", 120, nil),  // ET 120+ (at the cap, no extra)
             ("FT", 120, nil),  // FT
         ]
         for (raw, minute, extra) in steps {
