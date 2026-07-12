@@ -57,21 +57,13 @@ enum AppAnalytics {
         setUserProperty(value, forName: "pref_theme")
     }
 
-    /// A non-boolean setting changed to a new value (e.g. which goal sound).
-    /// Mirrored to a user property so current state is segmentable.
-    static func settingValueChanged(key: String, value: String) {
-        log("setting_changed", ["key": key, "value": value])
-        setUserProperty(value, forName: "pref_\(key)")
-    }
-
     /// Push the current settings up as user properties (called at launch) so an
     /// install that never opens Settings is still counted in "% with confetti on".
     static func syncSettingProperties(_ s: PrefSettings) {
         setUserProperty((s.launchAtLogin ?? true) ? "on" : "off", forName: "pref_launch_at_login")
         setUserProperty((s.goalCenter ?? true) ? "on" : "off", forName: "pref_goal_center")
         setUserProperty((s.confetti ?? true) ? "on" : "off", forName: "pref_confetti")
-        setUserProperty((s.goalSound ?? true) ? "on" : "off", forName: "pref_goal_sound")
-        setUserProperty((s.goalSoundChoice ?? .default).rawValue, forName: "pref_goal_sound_choice")
+        setUserProperty((s.confettiSound ?? true) ? "on" : "off", forName: "pref_confetti_sound")
         setUserProperty((s.theme ?? .system).rawValue, forName: "pref_theme")
     }
 

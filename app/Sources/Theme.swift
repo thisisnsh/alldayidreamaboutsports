@@ -1,4 +1,5 @@
 import AppKit
+import AVFoundation
 import SwiftUI
 
 /// Monochrome surfaces: pure white app in light mode, pure black in dark.
@@ -77,55 +78,30 @@ enum CapsulePosition: String, CaseIterable, Codable {
     }
 }
 
-/// Built-in macOS system sound played when a followed team scores. These all
-/// ship in `/System/Library/Sounds`, so nothing needs bundling; `NSSound(named:)`
-/// resolves each by its filename. `.hero` is the celebratory default.
-enum GoalSound: String, CaseIterable, Codable {
-    case hero, glass, ping, submarine, funk, sosumi, blow
-
-    static let `default`: GoalSound = .hero
-
-    /// Filename of the system sound in `/System/Library/Sounds`.
-    var systemName: String {
-        switch self {
-        case .hero: "Hero"
-        case .glass: "Glass"
-        case .ping: "Ping"
-        case .submarine: "Submarine"
-        case .funk: "Funk"
-        case .sosumi: "Sosumi"
-        case .blow: "Blow"
-        }
-    }
-
-    var label: String {
-        switch self {
-        case .hero: "Hero"
-        case .glass: "Glass"
-        case .ping: "Ping"
-        case .submarine: "Sub"
-        case .funk: "Funk"
-        case .sosumi: "Sosumi"
-        case .blow: "Blow"
-        }
-    }
-}
-
-/// Plays the goal notification sound. Holds the current `NSSound` so it isn't
-/// deallocated mid-play, and restarts a fresh instance each time so rapid
-/// back-to-back goals (or repeated Settings previews) each ring cleanly.
+/// Plays the confetti pop bundled at `Resources/confetti-pop.mp3`. Each call
+/// spins up fresh `AVAudioPlayer` instances so pops overlap freely — one per
+/// goal in the set — exactly like the confetti bursts they ride along with.
+/// Finished players are pruned on the next call so the pool never grows.
 @MainActor
-enum GoalSoundPlayer {
-    private static var current: NSSound?
+enum ConfettiSoundPlayer {
+    private static var players: [AVAudioPlayer] = []
+    private static let soundURL = Bundle.main.url(forResource: "confetti-pop", withExtension: "mp3")
 
-    static func play(_ choice: GoalSound) {
-        guard let sound = NSSound(named: choice.systemName) else {
-            AppLog.error(.celebrations, "goal_sound_missing name=\(choice.systemName)")
+    /// Fire `times` pops in parallel (default one). No-op when muted upstream.
+    static func play(times: Int = 1) {
+        guard times > 0 else { return }
+        guard let url = soundURL else {
+            AppLog.error(.celebrations, "confetti_sound_missing name=confetti-pop.mp3")
             return
         }
-        current?.stop()
-        current = sound
-        sound.play()
+        // Drop players that have finished so the array stays bounded.
+        players.removeAll { !$0.isPlaying }
+        for _ in 0 ..< times {
+            guard let player = try? AVAudioPlayer(contentsOf: url) else { continue }
+            player.prepareToPlay()
+            players.append(player)
+            player.play()
+        }
     }
 }
 
