@@ -1,25 +1,22 @@
 import SwiftUI
 
 /// A team or league logo from the API CDN, for static SwiftUI surfaces (picker,
-/// menu, Fan-of strip, pills). Disk caching is free: `AsyncImage` goes through
-/// `URLSession.shared`, which consults the `URLCache.shared` configured at
-/// launch — so each URL downloads once and is reused app-wide. Falls back to an
-/// SF Symbol when the URL is empty or still loading.
+/// menu, Fan-of strip, pills). Reads `TeamLogoStore`'s shared in-memory cache
+/// (disk-backed by `URLCache.shared`) rather than `AsyncImage`, which drops its
+/// image on view teardown and — inside a `ScrollView` — can have its reload
+/// cancelled and never retried, blanking the flags. Falls back to an SF Symbol
+/// when the URL is empty or still loading.
 struct CachedTeamLogo: View {
     let url: String
     var size: CGFloat = 28
     var fallbackSymbol: String = "shield.lefthalf.filled"
 
+    @ObservedObject private var store = TeamLogoStore.shared
+
     var body: some View {
         Group {
-            if let u = URL(string: url), !url.isEmpty {
-                AsyncImage(url: u) { phase in
-                    if let image = phase.image {
-                        image.resizable().scaledToFit()
-                    } else {
-                        placeholder
-                    }
-                }
+            if let image = store.image(for: url) {
+                Image(nsImage: image).resizable().scaledToFit()
             } else {
                 placeholder
             }

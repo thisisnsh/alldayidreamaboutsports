@@ -16,6 +16,8 @@ struct TeamPickerView: View {
         .frame(width: 560, height: 600)
         .installsWindowOpener()
         .appTheme(session.prefs.settings.theme ?? .system)
+        // Fetch+cache all logos when the window opens; re-fetch if >24h old.
+        .task { TeamLogoStore.shared.warm(session.leagues.map(\.logo) + session.allTeams.map(\.logo)) }
     }
 
     private func teams(for league: League) -> [Team] {
