@@ -415,6 +415,7 @@ extension MatchEventType {
         case .redCard: "Red card"
         case .substitution: "Substitution"
         case .halfTime: "Half-time"
+        case .secondHalf: "Second half"
         case .fullTime: "Full-time"
         case .extraTime: "Extra time"
         case .penaltyShootout: "Penalty shootout"

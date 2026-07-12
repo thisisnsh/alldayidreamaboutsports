@@ -66,6 +66,9 @@ enum MatchDiff {
         if nextRaw == "HT", wasRaw != "HT" {
             events.append(make(.halfTime))
         }
+        if nextRaw == "2H", wasRaw == "HT" {
+            events.append(make(.secondHalf))
+        }
 
         // Shootout tally, attached to the score-bearing end-of-match events.
         let pensHome = next.shootout?.home
