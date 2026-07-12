@@ -57,6 +57,17 @@ enum AppAnalytics {
         setUserProperty(value, forName: "pref_theme")
     }
 
+    // MARK: Dev clock-walk verification
+
+    /// Fired only by the Debug demo's `runClockLabelWalk` when the rendered
+    /// clock label doesn't match that step's expectation. No-ops against real
+    /// Firebase like every other event in a Debug (`DEV_BACKEND`) build — see
+    /// the type doc — but still surfaces via the `AppLog.debug` fallback in
+    /// `log(_:_:)` so a mismatch is visible without a separate log call.
+    static func clockWalkMismatch(raw: String, shown: String, expect: String) {
+        log("clock_walk_mismatch", ["raw": raw, "shown": shown, "expect": expect])
+    }
+
     /// Push the current settings up as user properties (called at launch) so an
     /// install that never opens Settings is still counted in "% with confetti on".
     static func syncSettingProperties(_ s: PrefSettings) {
