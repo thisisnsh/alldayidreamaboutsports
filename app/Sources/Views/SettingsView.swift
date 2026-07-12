@@ -70,12 +70,12 @@ struct SettingsView: View {
                         SettingsCard("Goal celebration") {
                             toggleRow("Show goal in center", isOn: settingsBinding(\.goalCenter, default: true))
                             toggleRow("Show confetti in corners", isOn: settingsBinding(\.confetti, default: true))
-                            toggleRow("Play goal sound", isOn: goalSoundBinding)
-                            // The sound picker only matters when the sound is on;
-                            // hide it when muted so the card doesn't carry a dead
-                            // control. Picking a sound plays it as a preview.
-                            if session.prefs.settings.goalSound ?? true {
-                                goalSoundPickerRow
+                            // The pop rides along with the confetti, so it only
+                            // makes sense while confetti is on; hide it otherwise.
+                            // Its value is preserved so re-enabling confetti brings
+                            // back whatever the user last set (default on).
+                            if session.prefs.settings.confetti ?? true {
+                                toggleRow("Play confetti sound", isOn: confettiSoundBinding)
                             }
                             Button {
                                 OverlayManager.shared.preview()
@@ -242,24 +242,6 @@ struct SettingsView: View {
         }
     }
 
-    /// Sound choice as a menu picker (segmented can't fit seven names). The
-    /// binding plays the picked sound so the user hears it as they choose.
-    private var goalSoundPickerRow: some View {
-        HStack {
-            Text("Sound").font(.system(size: 13))
-            Spacer()
-            Picker("Sound", selection: goalSoundChoiceBinding) {
-                ForEach(GoalSound.allCases, id: \.self) { sound in
-                    Text(sound.label).tag(sound)
-                }
-            }
-            .labelsHidden()
-            .pickerStyle(.menu)
-            .fixedSize()
-            .frame(width: 220, alignment: .trailing)
-        }
-    }
-
     private func toggleRow(_ label: String, isOn: Binding<Bool>) -> some View {
         HStack {
             Text(label).font(.system(size: 13))
@@ -291,33 +273,25 @@ struct SettingsView: View {
                     if type == .goal {
                         $0.goalCenter = on
                         $0.confetti = on
-                        $0.goalSound = on
+                        // confettiSound is intentionally left untouched — it
+                        // rides on confetti's visibility and keeps its value so
+                        // re-enabling brings back the user's last choice.
                     }
                 }
             }
         )
     }
 
-    private var goalSoundBinding: Binding<Bool> {
+    private var confettiSoundBinding: Binding<Bool> {
         Binding(
-            get: { session.prefs.settings.goalSound ?? true },
+            get: { session.prefs.settings.confettiSound ?? true },
             set: { on in
-                session.updateSettings { $0.goalSound = on }
-                // Play the chosen sound when switching it on so the user hears
-                // what they enabled — a built-in preview.
+                session.updateSettings { $0.confettiSound = on }
+                // Pop once when switching it on so the user hears what they
+                // enabled — a preview of the confetti sound.
                 if on {
-                    GoalSoundPlayer.play(session.prefs.settings.goalSoundChoice ?? .default)
+                    ConfettiSoundPlayer.play()
                 }
-            }
-        )
-    }
-
-    private var goalSoundChoiceBinding: Binding<GoalSound> {
-        Binding(
-            get: { session.prefs.settings.goalSoundChoice ?? .default },
-            set: { choice in
-                session.updateSettings { $0.goalSoundChoice = choice }
-                GoalSoundPlayer.play(choice)
             }
         )
     }
