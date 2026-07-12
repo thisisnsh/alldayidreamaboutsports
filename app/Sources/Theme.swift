@@ -77,6 +77,58 @@ enum CapsulePosition: String, CaseIterable, Codable {
     }
 }
 
+/// Built-in macOS system sound played when a followed team scores. These all
+/// ship in `/System/Library/Sounds`, so nothing needs bundling; `NSSound(named:)`
+/// resolves each by its filename. `.hero` is the celebratory default.
+enum GoalSound: String, CaseIterable, Codable {
+    case hero, glass, ping, submarine, funk, sosumi, blow
+
+    static let `default`: GoalSound = .hero
+
+    /// Filename of the system sound in `/System/Library/Sounds`.
+    var systemName: String {
+        switch self {
+        case .hero: "Hero"
+        case .glass: "Glass"
+        case .ping: "Ping"
+        case .submarine: "Submarine"
+        case .funk: "Funk"
+        case .sosumi: "Sosumi"
+        case .blow: "Blow"
+        }
+    }
+
+    var label: String {
+        switch self {
+        case .hero: "Hero"
+        case .glass: "Glass"
+        case .ping: "Ping"
+        case .submarine: "Sub"
+        case .funk: "Funk"
+        case .sosumi: "Sosumi"
+        case .blow: "Blow"
+        }
+    }
+}
+
+/// Plays the goal notification sound. Holds the current `NSSound` so it isn't
+/// deallocated mid-play, and restarts a fresh instance each time so rapid
+/// back-to-back goals (or repeated Settings previews) each ring cleanly.
+@MainActor
+enum GoalSoundPlayer {
+    private static var current: NSSound?
+
+    static func play(_ choice: GoalSound) {
+        guard let sound = NSSound(named: choice.systemName) else {
+            AppLog.error(.celebrations, "goal_sound_missing name=\(choice.systemName)")
+            return
+        }
+        current?.stop()
+        current = sound
+        sound.play()
+    }
+}
+
 // MARK: Buttons — every clickable thing reacts to hover.
 
 /// Row/list buttons: soft highlight + tiny lift on hover, press squish.

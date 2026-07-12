@@ -159,6 +159,9 @@ final class OverlayManager: ObservableObject {
 
         let fanGoals = set.compactMap(\.fanGoal)
         let settings = AppSession.shared.prefs.settings
+        if settings.goalSound ?? true, !fanGoals.isEmpty {
+            GoalSoundPlayer.play(settings.goalSoundChoice ?? .default)
+        }
         if settings.confetti ?? true {
             fireConfetti(count: fanGoals.count)
         }

@@ -70,13 +70,20 @@ struct SettingsView: View {
                         SettingsCard("Goal celebration") {
                             toggleRow("Show goal in center", isOn: settingsBinding(\.goalCenter, default: true))
                             toggleRow("Show confetti in corners", isOn: settingsBinding(\.confetti, default: true))
+                            toggleRow("Play goal sound", isOn: goalSoundBinding)
+                            // The sound picker only matters when the sound is on;
+                            // hide it when muted so the card doesn't carry a dead
+                            // control. Picking a sound plays it as a preview.
+                            if session.prefs.settings.goalSound ?? true {
+                                goalSoundPickerRow
+                            }
                             Button {
                                 OverlayManager.shared.preview()
                             } label: {
                                 Text("Preview animation").frame(maxWidth: .infinity)
                             }
                             .buttonStyle(.cardButton)
-                            caption("Choose how your team’s goals are celebrated with animations. You’ll always see the notch drop on goal like every other event. Preview shows exactly what you picked.")
+                            caption("Choose how your team’s goals are celebrated with animations and sound. You’ll always see the notch drop on goal like every other event. Preview shows exactly what you picked.")
                         }
                     }
 
@@ -235,6 +242,24 @@ struct SettingsView: View {
         }
     }
 
+    /// Sound choice as a menu picker (segmented can't fit seven names). The
+    /// binding plays the picked sound so the user hears it as they choose.
+    private var goalSoundPickerRow: some View {
+        HStack {
+            Text("Sound").font(.system(size: 13))
+            Spacer()
+            Picker("Sound", selection: goalSoundChoiceBinding) {
+                ForEach(GoalSound.allCases, id: \.self) { sound in
+                    Text(sound.label).tag(sound)
+                }
+            }
+            .labelsHidden()
+            .pickerStyle(.menu)
+            .fixedSize()
+            .frame(width: 220, alignment: .trailing)
+        }
+    }
+
     private func toggleRow(_ label: String, isOn: Binding<Bool>) -> some View {
         HStack {
             Text(label).font(.system(size: 13))
@@ -262,12 +287,37 @@ struct SettingsView: View {
                 session.updateSettings {
                     $0.notifications = ($0.notifications ?? [:]).merging([type.settingsKey: on]) { _, new in new }
                     // Muting goals mutes the celebration with it; unmuting
-                    // restores both so the section never reappears all-off.
+                    // restores all of them so the section never reappears all-off.
                     if type == .goal {
                         $0.goalCenter = on
                         $0.confetti = on
+                        $0.goalSound = on
                     }
                 }
+            }
+        )
+    }
+
+    private var goalSoundBinding: Binding<Bool> {
+        Binding(
+            get: { session.prefs.settings.goalSound ?? true },
+            set: { on in
+                session.updateSettings { $0.goalSound = on }
+                // Play the chosen sound when switching it on so the user hears
+                // what they enabled — a built-in preview.
+                if on {
+                    GoalSoundPlayer.play(session.prefs.settings.goalSoundChoice ?? .default)
+                }
+            }
+        )
+    }
+
+    private var goalSoundChoiceBinding: Binding<GoalSound> {
+        Binding(
+            get: { session.prefs.settings.goalSoundChoice ?? .default },
+            set: { choice in
+                session.updateSettings { $0.goalSoundChoice = choice }
+                GoalSoundPlayer.play(choice)
             }
         )
     }
