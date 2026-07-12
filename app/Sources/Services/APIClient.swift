@@ -34,6 +34,8 @@ struct PrefSettings: Codable, Equatable {
     var capsuleSize: CapsuleSize?
     /// Vertical screen edge for pinned capsules. nil = top.
     var capsulePosition: CapsulePosition?
+    /// Size of the notch-drop event pills (fonts + padding). nil = medium.
+    var notchDropSize: CapsuleSize?
 }
 
 struct SignInResponse: Codable {

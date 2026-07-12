@@ -91,6 +91,7 @@ struct SettingsView: View {
                         pickerRow("Theme", selection: themeBinding, cases: ThemeChoice.allCases) { $0.label }
                         pickerRow("Capsule size", selection: capsuleSizeBinding, cases: CapsuleSize.allCases) { $0.label }
                         pickerRow("Capsule position", selection: capsulePositionBinding, cases: CapsulePosition.allCases) { $0.label }
+                        pickerRow("Notch drop size", selection: notchDropSizeBinding, cases: CapsuleSize.allCases) { $0.label }
                         if displayTarget.displays.count > 1 {
                             screenPickerRow
                         }
@@ -312,6 +313,20 @@ struct SettingsView: View {
                 // within view updates" when the segmented control flips.
                 DispatchQueue.main.async {
                     session.updateSettings { $0.capsuleSize = choice }
+                }
+            }
+        )
+    }
+
+    private var notchDropSizeBinding: Binding<CapsuleSize> {
+        Binding(
+            get: { session.prefs.settings.notchDropSize ?? .medium },
+            set: { choice in
+                // Deferred like `capsuleSizeBinding` to avoid "Publishing
+                // changes from within view updates" when the segmented
+                // control flips.
+                DispatchQueue.main.async {
+                    session.updateSettings { $0.notchDropSize = choice }
                 }
             }
         )
