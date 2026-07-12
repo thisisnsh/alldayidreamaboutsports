@@ -153,6 +153,9 @@ extension MatchEventType {
         case .yellowCard: "yellow_cards"
         case .redCard: "red_cards"
         case .halfTime: "half_time"
+        // Shares half-time's toggle: one setting gates both the break's start
+        // and end, so there's no separate "Second half" row in Settings.
+        case .secondHalf: "half_time"
         case .fullTime: "full_time"
         case .extraTime: "extra_time"
         case .penaltyShootout: "penalties"
@@ -230,6 +233,7 @@ func pillTitle(for event: MatchEvent) -> [PillSegment] {
             return [.text("Half-time"), dash, .text(leader.name, bold: true), .text(" ahead "), .logo(url: teamLogo(leader.teamId))]
         }
         return [.text("Half-time"), dash, .text("Tight match")]
+    case .secondHalf: return [.text("Second half starts")]
     case .fullTime:
         // After a shootout the winner is whoever has more pens, not goals.
         if let winner = shootoutWinnerInfo(for: event) {
@@ -270,7 +274,7 @@ func pillSubtitle(for event: MatchEvent) -> [PillSegment]? {
             .text(" \(event.awayName)"),
         ]
     case .goal, .goalCancelled, .yellowCard, .redCard, .halfTime,
-         .fullTime, .extraTime, .penaltyShootout, .penaltyKick,
+         .secondHalf, .fullTime, .extraTime, .penaltyShootout, .penaltyKick,
          .substitution, .varDecision:
         let scoreline = ScorelineFormatter.text(
             homeGoals: event.homeGoals,
@@ -311,6 +315,7 @@ func pillIcon(for type: MatchEventType) -> String {
     case .goalCancelled: "xmark.circle.fill"
     case .yellowCard, .redCard: "rectangle.portrait.fill"
     case .halfTime: "pause.circle.fill"
+    case .secondHalf: "play.circle.fill"
     case .fullTime: "flag.fill"
     case .extraTime: "clock.fill"
     case .penaltyShootout, .penaltyKick: "target"

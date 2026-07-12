@@ -18,6 +18,7 @@ enum MatchEventType: String, Codable, CaseIterable {
     case yellowCard = "YELLOW_CARD"
     case redCard = "RED_CARD"
     case halfTime = "HALF_TIME"
+    case secondHalf = "SECOND_HALF"
     case fullTime = "FULL_TIME"
     case extraTime = "EXTRA_TIME"
     case penaltyShootout = "PENALTY_SHOOTOUT"
