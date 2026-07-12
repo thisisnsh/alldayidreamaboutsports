@@ -596,9 +596,12 @@ struct PinnedCapsuleView: View {
         if fixture.isLive {
             HStack(spacing: 4) {
                 Circle().fill(.red).frame(width: 6, height: 6)
-                Text(fixture.liveMinuteText(clockStale: LiveStore.shared.isClockStale(fixture.fixtureId)))
-                    .font(.system(size: metrics.timeFont, weight: .bold, design: .rounded))
-                    .foregroundStyle(.red)
+                TimelineView(.periodic(from: .now, by: 1)) { ctx in
+                    Text(fixture.liveMinuteText(
+                        localElapsed: LiveStore.shared.localElapsedSeconds(fixture.fixtureId, at: ctx.date)))
+                        .font(.system(size: metrics.timeFont, weight: .bold, design: .rounded))
+                        .foregroundStyle(.red)
+                }
             }
         } else if fixture.status == "FINISHED" {
             Text("FT")

@@ -402,16 +402,30 @@ struct Fixture: Codable, Identifiable, Hashable {
         }
     }
 
-    /// The right-edge clock label. Stoppage/extra-time/VAR aware — rendered
-    /// straight from the polled file's `minute`/`extra`/`period`/`running`.
+    /// Base clock seconds for the start of a running half — the anchor
+    /// `LiveStore`'s local clock resets to on every half change (never taken
+    /// from the backend's running-clock field).
+    static func fixedBaseSeconds(for period: MatchPeriod) -> Double {
+        switch period {
+        case .first: return 0
+        case .second: return 45 * 60
+        case .extraFirst: return 90 * 60
+        case .extraSecond: return 105 * 60
+        default: return 0
+        }
+    }
+
+    /// The right-edge clock label. `localElapsed` is our own free-running
+    /// clock (seconds since the last half change — see `LiveStore`), NOT the
+    /// backend's running-clock field, which is ignored here by construction.
     /// Sequence it must produce, in order:
-    /// `10′ → HT → 59′ → 90+1′ → BT → ET 92′ → ET HT → ET 116′ → ET 120+ → FT`.
-    /// `running:false` → a status label (HT / BT / ET HT / PENS / FT / kickoff).
-    /// `running:true`  → `"73′"`, `"45+2′"`, or `ET`-prefixed in extra time.
-    /// `clockStale` (or a missing `extra` at a cap) renders `<cap>+` — an
-    /// honest "in stoppage, amount unknown" — instead of a frozen minute; it
-    /// self-corrects to `+X` the moment a fresh `extra` arrives.
-    func liveMinuteText(clockStale: Bool = false) -> String {
+    /// `0′ → 45′ → 45+1′ → HT → 45′ → 90′ → 90+1′ → ET → 90′ → 105′ → 105+1′
+    /// → ET HT → 105′ → 120′ → 120+1′ → FT`.
+    /// `running:false` → a status label (HT / ET / ET HT / PENS / FT / kickoff).
+    /// `running:true`  → a plain ticking minute, folded at the half's cap
+    /// (`"73′"`, `"45+2′"`) — no `ET ` prefix; extra time is distinguished by
+    /// its value alone.
+    func liveMinuteText(localElapsed: Double?) -> String {
         let timeFormatter: () -> String = {
             guard let kickoff else { return "" }
             let f = DateFormatter()
@@ -419,31 +433,27 @@ struct Fixture: Codable, Identifiable, Hashable {
             f.dateStyle = .none
             return f.string(from: kickoff)
         }
-        // A ticking minute, ET-prefixed in extra time. At the period cap with an
-        // unknown/stale stoppage, render `<cap>+` (no number, no `′`).
-        func runningLabel(_ minute: Int) -> String {
-            let etPrefix = (period == .extraFirst || period == .extraSecond) ? "ET " : ""
-            if let cap = periodCap, minute == cap, extra == nil || clockStale {
-                return "\(etPrefix)\(cap)+"
-            }
-            if let extra { return "\(etPrefix)\(minute)+\(extra)′" }
-            return "\(etPrefix)\(minute)′"
+        func foldedLabel(_ minute: Int) -> String {
+            if let cap = periodCap, minute > cap { return "\(cap)+\(minute - cap)′" }
+            return "\(minute)′"
         }
-        if running == true {
-            guard let minute else { return "LIVE" }
-            return runningLabel(minute)
+        if running == true, let localElapsed {
+            let minute = localElapsed <= 0 ? 0 : Int(ceil(localElapsed / 60))
+            return foldedLabel(minute)
         }
-        // running == false (or unknown): derive a label from the period/status.
+        // running == false (or unknown, or no local anchor yet): derive a
+        // label from the period/status.
         switch period {
         case .half: return "HT"
-        case .breakInPlay: return "BT"
+        case .breakInPlay: return "ET"
         case .extraBreak: return "ET HT"
         case .pens: return "PENS"
         case .finished: return "FT"
         case .notStarted: return timeFormatter()
         case .first, .second, .extraFirst, .extraSecond:
-            // running flag missing but mid-half: best effort on the raw minute.
-            if let minute { return runningLabel(minute) }
+            // running flag missing / no anchor yet but mid-half: best effort
+            // on the raw minute.
+            if let minute { return foldedLabel(minute) }
             return "LIVE"
         case .other, .none:
             // Fall back to the coarse status when period is absent (e.g. the
@@ -452,7 +462,7 @@ struct Fixture: Codable, Identifiable, Hashable {
             case "HALF_TIME": return "HT"
             case "FINISHED": return "FT"
             case "LIVE":
-                if let minute { return runningLabel(minute) }
+                if let minute { return foldedLabel(minute) }
                 return "LIVE"
             default: return timeFormatter()
             }

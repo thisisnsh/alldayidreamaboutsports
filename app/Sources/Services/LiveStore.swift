@@ -40,12 +40,17 @@ final class LiveStore {
     /// Last-seen state per fixture — the diff baseline. A fixture not in here is
     /// being observed for the first time: it seeds the baseline and emits nothing.
     private var baseline: [Int: Fixture] = [:]
-    /// When each fixture's clock (`minute`/`extra`) last actually moved. Drives
-    /// the staleness-aware `<cap>+` rendering: if the clock parks at a period
-    /// cap for >90s (API stopped ticking / never sent `extra`), the label drops
-    /// the frozen number and reads e.g. `90+` / `ET 120+`.
-    private var lastClockChangeAt: [Int: Date] = [:]
-    private static let clockStaleAfter: TimeInterval = 90
+
+    /// Our own free-running clock anchor for a fixture: `baseSeconds` at
+    /// `anchorDate`, ticking forward at 1x thereafter. Reset only at a half
+    /// change (or seeded once on a mid-match join) — never corrected from the
+    /// backend's noisy running-clock field. See `ingest` for anchor rules.
+    struct ClockAnchor {
+        var baseSeconds: Double
+        var anchorDate: Date
+        var period: MatchPeriod
+    }
+    private var clockAnchor: [Int: ClockAnchor] = [:]
     /// Fixtures whose match file has reported FINISHED (stop polling them).
     private var finished: Set<Int> = []
     /// One-shot launch reconciliation guard — see `reconcileFanMatches`. Reset on
@@ -98,18 +103,18 @@ final class LiveStore {
     /// fresh and never replays events across an account switch.
     func resetBaseline() {
         baseline = [:]
-        lastClockChangeAt = [:]
+        clockAnchor = [:]
         finished = []
         didReconcileThisLaunch = false
         cancelCelebrationRefresh()
     }
 
-    /// True once a fixture's clock has been parked (same `minute`/`extra`) for
-    /// longer than `clockStaleAfter`. Views pass this into `liveMinuteText` so a
-    /// stuck stoppage clock reads `<cap>+` rather than a frozen minute.
-    func isClockStale(_ fixtureId: Int, now: Date = Date()) -> Bool {
-        guard let last = lastClockChangeAt[fixtureId] else { return false }
-        return now.timeIntervalSince(last) > Self.clockStaleAfter
+    /// Our local clock's current elapsed seconds for a fixture, or `nil` if no
+    /// anchor has been established yet (not yet observed running). `at` lets a
+    /// `TimelineView` tick re-evaluate this every second without re-polling.
+    func localElapsedSeconds(_ fixtureId: Int, at now: Date = Date()) -> Double? {
+        guard let anchor = clockAnchor[fixtureId] else { return nil }
+        return anchor.baseSeconds + now.timeIntervalSince(anchor.anchorDate)
     }
 
     /// Manual refresh (the menu's ↻ button): run one poll pass right now — fetch
@@ -274,6 +279,51 @@ final class LiveStore {
         celebrationNotify.removeAll()
     }
 
+    /// Fixture ids the Debug demo backend (`FakeBackend`) has published at
+    /// least once — lets `noteClockObservation` tell a genuine mid-match join
+    /// from an ordinary kickoff without needing a real diff baseline, since
+    /// the demo never runs the poll loop that populates `baseline`.
+    private var demoObserved: Set<Int> = []
+
+    /// The only two places our local clock's base is touched — never from the
+    /// snapshot's running-clock field (`minute`/`extra`), which is the buggy,
+    /// jittery source we're deliberately avoiding.
+    ///   1. Half change (incl. kickoff): the half dictates the base (0/45/90/105).
+    ///   2. Mid-match join: the very first observation of an already-running
+    ///      fixture (app opened mid-match) seeds once from the snapshot's minute.
+    /// Same half continuing → anchor untouched; the clock free-runs.
+    private func establishClockAnchor(isFirstObservation: Bool, current: Fixture) {
+        guard current.running == true, let period = current.period,
+              [.first, .second, .extraFirst, .extraSecond].contains(period)
+        else { return }
+
+        if let anchor = clockAnchor[current.fixtureId] {
+            guard anchor.period != period else { return } // same half: free-run
+            clockAnchor[current.fixtureId] = ClockAnchor(
+                baseSeconds: Fixture.fixedBaseSeconds(for: period), anchorDate: Date(), period: period
+            )
+        } else if isFirstObservation {
+            // Mid-match join: seed once from the snapshot's minute.
+            let seedSeconds = current.minute.map { Double($0) * 60 } ?? Fixture.fixedBaseSeconds(for: period)
+            clockAnchor[current.fixtureId] = ClockAnchor(baseSeconds: seedSeconds, anchorDate: Date(), period: period)
+        } else {
+            // First time this (already-tracked) fixture is seen running — e.g.
+            // the ordinary kickoff transition out of SCHEDULED.
+            clockAnchor[current.fixtureId] = ClockAnchor(
+                baseSeconds: Fixture.fixedBaseSeconds(for: period), anchorDate: Date(), period: period
+            )
+        }
+    }
+
+    /// Mirrors the anchor half of `ingest` for the Debug demo backend, which
+    /// publishes scripted fixtures directly (`AppSession.applyLiveFixture`)
+    /// without the real poll loop — so its timeline drives the same local
+    /// clock rules the live app uses.
+    func noteClockObservation(_ current: Fixture) {
+        establishClockAnchor(isFirstObservation: !demoObserved.contains(current.fixtureId), current: current)
+        demoObserved.insert(current.fixtureId)
+    }
+
     /// Merge one freshly-read fixture into state, diffing against the baseline,
     /// and return the fan teams that scored in this delta (drives the post-goal
     /// celebration notification).
@@ -293,11 +343,7 @@ final class LiveStore {
             return []
         }
 
-        // Stamp when the clock actually moves (or on first sight) — powers the
-        // staleness-aware `<cap>+` rendering.
-        if prev == nil || prev?.minute != current.minute || prev?.extra != current.extra {
-            lastClockChangeAt[current.fixtureId] = Date()
-        }
+        establishClockAnchor(isFirstObservation: prev == nil, current: current)
 
         session.applyLiveFixture(current)
 

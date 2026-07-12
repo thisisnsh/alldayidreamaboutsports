@@ -40,9 +40,9 @@ enum DevConfig {
     /// so you can eyeball every pill layout the moment the show starts. Runs
     /// once per Play/Restart, then the normal timeline takes over from 0–0.
     static let showcaseAtStart = false
-    /// Before anything else, step ONE fixture through every right-edge clock
-    /// label (10′ → 45+ → HT → 90+1′ → 90+ → BT → ET 92′ → ET HT → ET 120+ →
-    /// FT), then an empty-name goal and a disallow→re-award cycle. Eyeball the
+    /// Before anything else, step ONE fixture through every half change on
+    /// the local clock (0′ → HT → 45′ → ET → 90′ → ET HT → 105′ → FT), then
+    /// an empty-name goal and a disallow→re-award cycle. Eyeball the
     /// menu/capsule time label at each step. Runs once per Play/Restart.
     static let clockWalkAtStart = false
     /// Seconds between showcase pills — enough to read each as it stacks.

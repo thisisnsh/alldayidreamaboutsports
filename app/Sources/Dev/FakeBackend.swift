@@ -164,6 +164,7 @@ final class FakeStore {
         let period: MatchPeriod = {
             switch s.rawStatus {
             case "1H": return .first
+            case "2H": return .second
             case "HT": return .half
             case "ET": return (s.minute ?? 0) <= 105 ? .extraFirst : .extraSecond
             // BT (Break Time): "BT" for the ET setup break (≤90'), "ET HT"
@@ -374,12 +375,15 @@ final class DemoEngine: ObservableObject {
         }
     }
 
-    /// Steps ONE fixture through every right-edge clock label so the whole
-    /// sequence can be eyeballed in the menu + capsule:
-    ///   10′ → 45+ → HT → 59′ → 90+1′ → 90+ → BT → ET 92′ → ET HT → ET 116′ → ET 120+ → FT
-    /// then fires an empty-name goal (subject falls back to the team, not a
-    /// blank) and a disallow→re-award cycle (the "Goal disallowed" pill, then
-    /// the re-awarded GOAL pill must actually show).
+    /// Steps ONE fixture through every half change so the local clock's
+    /// resets + labels can be eyeballed in the menu + capsule:
+    ///   0′ (kickoff) → HT → 45′ (2nd half) → ET (pre-ET break) →
+    ///   90′ (ET 1st half) → ET HT → 105′ (ET 2nd half) → FT
+    /// Each reset snaps the clock to its half's base and the label ticks
+    /// locally from there — no `cap+` unknown-stoppage path and no `ET `
+    /// prefix; the walk then fires an empty-name goal (subject falls back to
+    /// the team, not a blank) and a disallow→re-award cycle (the "Goal
+    /// disallowed" pill, then the re-awarded GOAL pill must actually show).
     private func runClockLabelWalk() async {
         let f = DemoFixture.engCro
         let id = f.id
@@ -393,7 +397,7 @@ final class DemoEngine: ObservableObject {
             default: return "LIVE"
             }
         }
-        func show(_ raw: String, _ minute: Int?, extra: Int? = nil) async {
+        func show(_ raw: String, _ minute: Int?, extra: Int? = nil, expect: String) async {
             guard var st = FakeStore.shared.states[id] else { return }
             st.rawStatus = raw
             st.minute = minute
@@ -401,29 +405,31 @@ final class DemoEngine: ObservableObject {
             st.status = statusFor(raw)
             FakeStore.shared.states[id] = st
             publishFixture(f)
-            NSLog("🧪 clock-walk: raw=%@ minute=%@ extra=%@", raw,
-                  minute.map(String.init) ?? "-", extra.map(String.init) ?? "-")
+            let fixture = FakeStore.shared.fixture(f)
+            let shown = fixture.liveMinuteText(localElapsed: LiveStore.shared.localElapsedSeconds(id))
+            AppLog.info(.fixtures, "clock_walk_step raw=\(raw) minute=\(minute.map(String.init) ?? "-") shown=\(shown) expect=\(expect)")
+            if shown != expect {
+                AppAnalytics.clockWalkMismatch(raw: raw, shown: shown, expect: expect)
+            }
             try? await Task.sleep(for: .seconds(DevConfig.showcaseSpacing))
         }
 
-        // (rawStatus, minute, extra) → the label each row should produce.
-        let steps: [(String, Int?, Int?)] = [
-            ("1H", 10, nil),   // 10′
-            ("1H", 45, nil),   // 45+    (at the cap, no extra → unknown stoppage)
-            ("HT", 45, nil),   // HT
-            ("2H", 59, nil),   // 59′
-            ("2H", 90, 1),     // 90+1′  (known stoppage)
-            ("2H", 90, nil),   // 90+    (extra cleared → unknown stoppage)
-            ("BT", 90, nil),   // BT     (ET setup break)
-            ("ET", 92, nil),   // ET 92′
-            ("BT", 105, nil),  // ET HT  (between the two ET halves)
-            ("ET", 116, nil),  // ET 116′
-            ("ET", 120, nil),  // ET 120+ (at the cap, no extra)
-            ("FT", 120, nil),  // FT
+        // (rawStatus, minute, extra, expected label right after the reset).
+        // `minute` only disambiguates BT/ET into their sub-periods now — the
+        // displayed label comes from the local clock, not this value.
+        let steps: [(String, Int?, Int?, String)] = [
+            ("1H", 1, nil, "0′"),      // kickoff → base 0:00
+            ("HT", 45, nil, "HT"),
+            ("2H", 46, nil, "45′"),    // half reset → base 45:00
+            ("BT", 90, nil, "ET"),     // pre-ET break (was "BT")
+            ("ET", 91, nil, "90′"),    // ET 1st half reset → base 90:00
+            ("BT", 100, nil, "ET HT"), // between the ET halves
+            ("ET", 106, nil, "105′"),  // ET 2nd half reset → base 105:00
+            ("FT", 120, nil, "FT"),
         ]
-        for (raw, minute, extra) in steps {
+        for (raw, minute, extra, expect) in steps {
             if Task.isCancelled { return }
-            await show(raw, minute, extra: extra)
+            await show(raw, minute, extra: extra, expect: expect)
         }
 
         // Empty-name goal: the pill's subject should be the TEAM, not a blank.
@@ -593,12 +599,15 @@ final class DemoEngine: ObservableObject {
     }
 
     private func publishFixture(_ def: DemoFixture) {
-        AppSession.shared.applyLiveFixture(FakeStore.shared.fixture(def))
+        let fixture = FakeStore.shared.fixture(def)
+        LiveStore.shared.noteClockObservation(fixture)
+        AppSession.shared.applyLiveFixture(fixture)
         AppSession.shared.publishFixtures()
     }
 
     private func publishAllFixtures() {
         for fixture in FakeStore.shared.allFixtures {
+            LiveStore.shared.noteClockObservation(fixture)
             AppSession.shared.applyLiveFixture(fixture)
         }
         AppSession.shared.publishFixtures()
