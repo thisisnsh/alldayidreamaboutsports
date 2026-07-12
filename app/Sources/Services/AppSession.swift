@@ -238,6 +238,13 @@ final class AppSession: ObservableObject {
         if before.confetti != after.confetti {
             AppAnalytics.settingChanged(key: "confetti", enabled: after.confetti ?? true)
         }
+        if before.goalSound != after.goalSound {
+            AppAnalytics.settingChanged(key: "goal_sound", enabled: after.goalSound ?? true)
+        }
+        if before.goalSoundChoice != after.goalSoundChoice {
+            AppAnalytics.settingValueChanged(key: "goal_sound_choice",
+                                             value: (after.goalSoundChoice ?? .default).rawValue)
+        }
         if before.theme != after.theme {
             AppAnalytics.themeChanged((after.theme ?? .system).rawValue)
         }
