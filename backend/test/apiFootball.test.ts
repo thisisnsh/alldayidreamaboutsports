@@ -267,25 +267,38 @@ describe("ApiFootballProvider", () => {
     );
   });
 
-  it("fetches events via ids endpoint for live fixtures (range endpoint omits them)", async () => {
-    // Range call returns the fixture WITHOUT events (as the real API does).
-    const rangeFixture = { ...liveFixture, events: undefined };
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce({ ok: true, status: 200, json: () => Promise.resolve({ response: [rangeFixture] }) })
-      .mockResolvedValueOnce({ ok: true, status: 200, json: () => Promise.resolve({ response: [liveFixture] }) });
-    const provider = new ApiFootballProvider("key", fetchMock as never);
+  it("leaves live enrichment to the caller — a range call is exactly one request", async () => {
+    // Range call returns the fixture WITHOUT events (as the real API does). The
+    // ids call that fills them in is made across ALL leagues by the poller.
+    const { provider, fetchMock } = providerReturning({ response: [{ ...liveFixture, events: undefined }] });
 
-    const [match] = await provider.fixturesForRange(39, 2026, "2026-06-10", "2026-06-12");
+    await provider.fixturesForRange(39, 2026, "2026-06-10", "2026-06-12");
 
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(fetchMock).toHaveBeenNthCalledWith(2,
-      "https://v3.football.api-sports.io/fixtures?ids=555",
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("fetchesByIds reads the ids endpoint once and normalizes the events", async () => {
+    const { provider, fetchMock } = providerReturning({ response: [liveFixture] });
+
+    const [match] = await provider.fixturesByIds([555, 556, 557]);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://v3.football.api-sports.io/fixtures?ids=555-556-557",
       { headers: { "x-apisports-key": "key" } },
     );
     expect(match).toMatchObject({
+      fixtureId: 555,
       away: { yellowCards: 1 },
       home: { redCards: 1 },
     });
+  });
+
+  it("fetchesByIds makes no request for an empty id list", async () => {
+    const { provider, fetchMock } = providerReturning({ response: [] });
+
+    expect(await provider.fixturesByIds([])).toEqual([]);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("publishes the aggregate score immediately, before the scorer event lands", async () => {

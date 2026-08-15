@@ -108,10 +108,18 @@ function summarizeState(s: MatchState) {
   };
 }
 
+/** API-Football's `ids` parameter accepts at most 20 fixture ids per request. */
+const ENRICH_BATCH_SIZE = 20;
+
 /**
  * One range call per league, run concurrently, concatenated. API-Football's
  * `league` parameter takes a single integer, so this is N calls however it is
  * dressed up; the tick's wall time is still one call.
+ *
+ * The range endpoint omits events, so live fixtures are re-read through the
+ * `ids` endpoint — but ACROSS leagues, once the five ranges are back. Live
+ * fixtures rarely exceed 20 in total, so a normal night spends one enrichment
+ * call instead of one per league with a live match.
  */
 export async function fetchLeagueFixtures(
   provider: ScoreProvider,
@@ -122,8 +130,27 @@ export async function fetchLeagueFixtures(
     leagues.map(({ leagueId, season }) =>
       provider.fixturesForRange(leagueId, season, range.from, range.to)),
   );
+  const fixtures = perLeague.flat();
+
+  const liveIds = [...new Set(fixtures.filter(isLive).map((m) => m.fixtureId))];
+  if (liveIds.length > 0) {
+    const batches: number[][] = [];
+    for (let i = 0; i < liveIds.length; i += ENRICH_BATCH_SIZE) {
+      batches.push(liveIds.slice(i, i + ENRICH_BATCH_SIZE));
+    }
+    log.info("poll_enrich_live", { liveFixtureIds: liveIds, batches: batches.length });
+    const enriched = (await Promise.all(batches.map((ids) => provider.fixturesByIds(ids)))).flat();
+    const byId = new Map(enriched.map((m) => [m.fixtureId, m]));
+    for (const [i, fixture] of fixtures.entries()) {
+      // A requested id the API omits keeps its base fixture — worse (no events)
+      // beats dropping a live match out of the pass entirely.
+      const replacement = byId.get(fixture.fixtureId);
+      if (replacement) fixtures[i] = replacement;
+    }
+  }
+
   return {
-    fixtures: perLeague.flat(),
+    fixtures,
     byLeague: leagues.map(({ leagueId }, i) => ({ leagueId, fixtures: perLeague[i]!.length })),
   };
 }

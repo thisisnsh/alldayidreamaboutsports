@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
-  isLive, isRecentlyFinished, isRegressiveSnapshot, isStartingSoon, partitionFixtures, Poller, toScheduleRow, utcPollRange,
+  fetchLeagueFixtures, isLive, isRecentlyFinished, isRegressiveSnapshot, isStartingSoon,
+  partitionFixtures, Poller, toScheduleRow, utcPollRange,
 } from "../src/poller.js";
 import type { LeagueSeasons } from "../src/catalog.js";
 import { CACHE_CONTROL_LONG } from "../src/r2.js";
@@ -73,6 +74,7 @@ describe("Poller multi-league pass", () => {
       fixturesForRange: vi.fn(async (leagueId: number) => [
         state(leagueId, `${today}T01:00:00Z`, "LIVE", { leagueId }),
       ]),
+      fixturesByIds: vi.fn().mockResolvedValue([]),
     };
     const stateStore = {
       load: vi.fn().mockResolvedValue({ state: null, etag: null }),
@@ -89,6 +91,9 @@ describe("Poller multi-league pass", () => {
     for (const leagueId of TOP_FIVE) {
       expect(provider.fixturesForRange).toHaveBeenCalledWith(leagueId, 2026, range.from, range.to);
     }
+    // ...and their five live fixtures are enriched by ONE ids call.
+    expect(provider.fixturesByIds).toHaveBeenCalledTimes(1);
+    expect(provider.fixturesByIds).toHaveBeenCalledWith(TOP_FIVE);
     // All five fixtures flow into the one pipeline.
     expect(result).toEqual({ live: 5 });
     expect(stateStore.save).toHaveBeenCalledTimes(5);
@@ -158,11 +163,128 @@ describe("Poller multi-league pass", () => {
   });
 });
 
+describe("fetchLeagueFixtures live enrichment", () => {
+  const RANGE = { from: "2026-06-13", to: "2026-06-15" };
+
+  /** Provider whose range calls serve a per-league map, and whose ids call is
+   * driven by `enrich` (returning nothing by default — the "API omitted it" case). */
+  function providerOf(
+    perLeague: Record<number, MatchState[]>,
+    enrich: (ids: number[]) => MatchState[] = () => [],
+  ) {
+    return {
+      fixturesForRange: vi.fn(async (leagueId: number) => perLeague[leagueId] ?? []),
+      fixturesByIds: vi.fn(async (ids: number[]) => enrich(ids)),
+    };
+  }
+
+  it("enriches live fixtures from different leagues in ONE ids request", async () => {
+    const provider = providerOf({
+      39: [state(1, "2026-06-14T18:00:00Z", "LIVE", { leagueId: 39 })],
+      140: [state(2, "2026-06-14T19:00:00Z", "HALF_TIME", { leagueId: 140 })],
+      135: [state(3, "2026-06-14T20:00:00Z", "LIVE", { leagueId: 135 })],
+    });
+
+    await fetchLeagueFixtures(provider as never, [
+      { leagueId: 39, season: 2026 }, { leagueId: 140, season: 2026 }, { leagueId: 135, season: 2026 },
+    ], RANGE);
+
+    // Three range calls, but the live ids of all three leagues go up together.
+    expect(provider.fixturesForRange).toHaveBeenCalledTimes(3);
+    expect(provider.fixturesByIds).toHaveBeenCalledTimes(1);
+    expect(provider.fixturesByIds).toHaveBeenCalledWith([1, 2, 3]);
+  });
+
+  it("makes no ids request when nothing is live", async () => {
+    const provider = providerOf({
+      39: [state(1, "2026-06-14T18:00:00Z", "SCHEDULED")],
+      140: [state(2, "2026-06-13T18:00:00Z", "FINISHED")],
+    });
+
+    await fetchLeagueFixtures(provider as never, [
+      { leagueId: 39, season: 2026 }, { leagueId: 140, season: 2026 },
+    ], RANGE);
+
+    expect(provider.fixturesByIds).not.toHaveBeenCalled();
+  });
+
+  it("requests a duplicated fixture id once", async () => {
+    // The same fixture surfacing under two leagues must not be paid for twice.
+    const provider = providerOf({
+      39: [state(1, "2026-06-14T18:00:00Z", "LIVE", { leagueId: 39 })],
+      140: [state(1, "2026-06-14T18:00:00Z", "LIVE", { leagueId: 140 })],
+    });
+
+    await fetchLeagueFixtures(provider as never, [
+      { leagueId: 39, season: 2026 }, { leagueId: 140, season: 2026 },
+    ], RANGE);
+
+    expect(provider.fixturesByIds).toHaveBeenCalledTimes(1);
+    expect(provider.fixturesByIds).toHaveBeenCalledWith([1]);
+  });
+
+  it("splits more than 20 live fixtures into the fewest 20-id batches", async () => {
+    const live = Array.from({ length: 45 }, (_, i) =>
+      state(i + 1, "2026-06-14T18:00:00Z", "LIVE"));
+    const provider = providerOf({ 39: live });
+
+    await fetchLeagueFixtures(provider as never, [{ leagueId: 39, season: 2026 }], RANGE);
+
+    expect(provider.fixturesByIds).toHaveBeenCalledTimes(3); // 20 + 20 + 5
+    const batches = provider.fixturesByIds.mock.calls.map(([ids]) => ids as number[]);
+    expect(batches.map((b) => b.length)).toEqual([20, 20, 5]);
+    expect(batches.flat()).toEqual(live.map((m) => m.fixtureId));
+  });
+
+  it("matches enriched results back to their own fixture by id", async () => {
+    const enrichedTwo = state(2, "2026-06-14T19:00:00Z", "LIVE", {
+      leagueId: 140, minute: 61,
+      home: { id: 1, name: "A", goals: 3, yellowCards: 0, redCards: 0, yellowCardEvents: [], redCardEvents: [], goalEvents: [] },
+    });
+    const provider = providerOf(
+      {
+        39: [state(1, "2026-06-14T18:00:00Z", "LIVE", { leagueId: 39 })],
+        140: [state(2, "2026-06-14T19:00:00Z", "LIVE", { leagueId: 140 })],
+      },
+      // Deliberately out of order: the match is by id, not by position.
+      () => [enrichedTwo, state(1, "2026-06-14T18:00:00Z", "LIVE", { leagueId: 39, minute: 12 })],
+    );
+
+    const { fixtures, byLeague } = await fetchLeagueFixtures(provider as never, [
+      { leagueId: 39, season: 2026 }, { leagueId: 140, season: 2026 },
+    ], RANGE);
+
+    expect(fixtures.map((m) => [m.fixtureId, m.minute])).toEqual([[1, 12], [2, 61]]);
+    expect(fixtures.find((m) => m.fixtureId === 2)!.home.goals).toBe(3);
+    // Per-league counts still come from the range calls, not the enrichment.
+    expect(byLeague).toEqual([{ leagueId: 39, fixtures: 1 }, { leagueId: 140, fixtures: 1 }]);
+  });
+
+  it("keeps the base fixture when the ids endpoint omits it", async () => {
+    const base = state(1, "2026-06-14T18:00:00Z", "LIVE", { leagueId: 39, minute: 30 });
+    const provider = providerOf(
+      { 39: [base, state(2, "2026-06-14T19:00:00Z", "LIVE", { leagueId: 39 })] },
+      () => [state(2, "2026-06-14T19:00:00Z", "LIVE", { leagueId: 39, minute: 55 })],
+    );
+
+    const { fixtures } = await fetchLeagueFixtures(
+      provider as never, [{ leagueId: 39, season: 2026 }], RANGE,
+    );
+
+    expect(fixtures).toHaveLength(2);
+    expect(fixtures[0]).toBe(base); // untouched, not dropped
+    expect(fixtures[1]!.minute).toBe(55);
+  });
+});
+
 describe("Poller", () => {
   it("publishes per-match state for a live fixture (no FCM, no purge)", async () => {
     const today = new Date().toISOString().slice(0, 10);
     const match = state(1, `${today}T01:00:00Z`, "LIVE");
-    const provider = { fixturesForRange: vi.fn().mockResolvedValue([match]) };
+    const provider = {
+      fixturesForRange: vi.fn().mockResolvedValue([match]),
+      fixturesByIds: vi.fn().mockResolvedValue([match]),
+    };
     const stateStore = {
       load: vi.fn().mockResolvedValue({ state: null, etag: null }),
       save: vi.fn().mockResolvedValue(undefined),
@@ -188,7 +310,10 @@ describe("Poller", () => {
       minute: 86, period: "SECOND", running: true,
       home: { id: 1, name: "A", goals: 2, yellowCards: 0, redCards: 0, yellowCardEvents: [], redCardEvents: [], goalEvents: [{ player: "X", minute: 20, extra: null }] },
     });
-    const provider = { fixturesForRange: vi.fn().mockResolvedValue([live]) };
+    const provider = {
+      fixturesForRange: vi.fn().mockResolvedValue([live]),
+      fixturesByIds: vi.fn().mockResolvedValue([live]),
+    };
     const stateStore = {
       load: vi.fn().mockResolvedValue({ state: null, etag: null }),
       save: vi.fn().mockResolvedValue(undefined),
@@ -320,7 +445,10 @@ describe("Poller", () => {
       minute: 75, period: "SECOND", running: true,
       home: { id: 1, name: "A", goals: 0, yellowCards: 0, redCards: 0, yellowCardEvents: [], redCardEvents: [], goalEvents: [] },
     });
-    const provider = { fixturesForRange: vi.fn().mockResolvedValue([disallowed]) };
+    const provider = {
+      fixturesForRange: vi.fn().mockResolvedValue([disallowed]),
+      fixturesByIds: vi.fn().mockResolvedValue([disallowed]),
+    };
     const stateStore = {
       load: vi.fn().mockResolvedValue({ state: prev, etag: "e1" }),
       save: vi.fn().mockResolvedValue(undefined),
