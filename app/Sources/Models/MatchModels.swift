@@ -478,13 +478,17 @@ struct Fixture: Codable, Identifiable, Hashable {
     }
 
     /// Competition stage from API-Football's `league.round`.
+    /// League play sends "Regular Season - 3" → "Matchday 3"; group stages send
     /// "Group A - 1" → "Group A · MD1"; knockout rounds ("Round of 16",
     /// "Final", …) pass through unchanged. nil when the round is absent.
+    /// The group and knockout cases stay for the archived World Cup rows, and
+    /// for whatever cup competition comes next.
     var stageLabel: String? {
         guard let round, !round.isEmpty else { return nil }
         let parts = round.components(separatedBy: " - ")
-        if parts.count == 2, parts[0].hasPrefix("Group"), Int(parts[1]) != nil {
-            return "\(parts[0]) · MD\(parts[1])"
+        if parts.count == 2, let matchday = Int(parts[1]) {
+            if parts[0] == "Regular Season" { return "Matchday \(matchday)" }
+            if parts[0].hasPrefix("Group") { return "\(parts[0]) · MD\(matchday)" }
         }
         return round
     }
