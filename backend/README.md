@@ -28,7 +28,7 @@ npm run dev         # tsx watch (needs env below)
 
 | Var | Source | Notes |
 |---|---|---|
-| `GCP_PROJECT_ID` | deploy flag | Firestore/FCM project |
+| `GCP_PROJECT_ID` | deploy flag | Firestore + Cloud Tasks project |
 | `API_FOOTBALL_KEY` | Secret Manager | Ultra plan key |
 | `SESSION_JWT_SECRET` | Secret Manager | `openssl rand -hex 32` |
 | `GOOGLE_OAUTH_CLIENT_ID` | Secret Manager | iOS-type client id (token audience) |
@@ -66,14 +66,23 @@ queries:
 
 ```sh
 gcloud logging read \
-  'resource.type="cloud_run_revision" AND resource.labels.service_name="alldayidreamaboutsports-backend" AND jsonPayload.message=~"fcm_|match_event|poll_"' \
+  'resource.type="cloud_run_revision" AND resource.labels.service_name="alldayidreamaboutsports-backend" AND jsonPayload.message=~"poll_|match_state_published|dispatch_|schedule_sync"' \
   --project=dreamaboutsports-staging --order=desc --limit=200
 ```
 
-Each FCM send log includes the event id/type, fixture id, team topic, Firebase
-message id, duration, and any send error.
+The messages worth knowing:
 
-Trigger a test goal on staging:
+| Message | Means |
+|---|---|
+| `poll_provider_complete` | one tick finished; carries a per-league fixture count |
+| `match_state_published` | a `matches/{id}.json` actually changed — logs before → after, so a bad publish (wrong score, stuck clock, missing scorer) is auditable |
+| `dispatch_skipped_no_match_window` | the gate is shut; no tasks enqueued, no API calls |
+| `match_window_loaded` | the gate read a fixture file (once per date per instance per day) |
+| `league_seasons_missing` | a configured league has no season in `catalog.json` and is being skipped — run `/internal/sync-catalog` |
+| `score_decreased` | a per-side goal count dropped (real VAR disallow vs a feed glitch) |
+
+Trigger a test goal on staging — it writes a synthetic `matches/{id}.json`, which
+a polling client picks up exactly as it would a real one:
 
 ```sh
 TOKEN=$(gcloud auth print-identity-token \
@@ -81,17 +90,26 @@ TOKEN=$(gcloud auth print-identity-token \
   --audiences=<SERVICE_URL>)
 curl -X POST "<SERVICE_URL>/internal/test-event" \
   -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-  -d '{"type":"GOAL","teamId":6,"homeGoals":1}'
+  -d '{"fixtureId":999999,"homeGoals":1,"minute":73}'
 ```
+
+Defaults are a live La Liga Real Madrid–Barcelona fixture; every field in
+`testEventSchema` (`routes.ts`) can be overridden.
 
 ## Cost-critical invariants (don't break these)
 
 1. Match comparison state lives in private R2 and uses conditional writes.
-   FCM is sent before state advances, favoring duplicate delivery over missed goals.
+   Nothing is pushed: the app polls the published object, so a write that lands
+   is a goal delivered to everyone at once.
 2. `/celebrate` accepts a batched count; the aggregator flushes to sharded
-   counters every 1.5s. Firestore writes are O(instances), never O(users).
+   counters every 1.5s. Firestore writes are O(instances), never O(users) — and
+   the read half of a flush is sampled (`CELEBRATION_PUBLISH_RATE`), so reads
+   are sub-linear in instances too.
 3. Everything the app fetches goes to R2 with `Cache-Control` — never serve
    per-user reads from Firestore.
+4. The dispatcher only enqueues inside a match window. Five leagues polled 24/7
+   would be ~95,000 API calls/day against a 75,000 quota; window-gated, a peak
+   Saturday is ~51,900. Do not remove the gate to "simplify" the dispatcher.
 
 `/celebrate` is limited to 60 calls per minute per authenticated user on each
 Cloud Run instance. This is basic abuse protection, not a globally coordinated
