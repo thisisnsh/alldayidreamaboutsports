@@ -1,28 +1,41 @@
 # All Day I Dream About Sports ⚽☁️
 
-macOS menu bar app for FIFA World Cup 2026: follow your teams, get live goal
-celebration animations on a transparent overlay, tap the ball to celebrate with
-fans across the globe, and see fixtures at a glance — all from the menu bar.
+macOS menu bar app for Europe's top five leagues — the Premier League, La Liga,
+Serie A, Bundesliga and Ligue 1. Follow your teams, get live goal celebration
+animations on a transparent overlay, tap the ball to celebrate with fans across
+the globe, and see fixtures at a glance — all from the menu bar.
 
 Website: [alldayidreamaboutsports.com](https://alldayidreamaboutsports.com)
 
 ## How it works (the 10-cent version)
 
-One backend poller asks [API-Football](https://www.api-football.com) for a
-three-day UTC fixture range every 5 seconds. Goal and match events fan out to
-every Mac via free FCM topic push (`l1_6`, `l1_16`, …). Fixtures, refreshed scores, celebration counts,
-and the backup kill switch are fetched on demand from cached JSON on Cloudflare R2.
-Sign-in is Google OAuth verified by our own API — no per-user billing anywhere.
-That is how 10M users/day costs hundreds, not thousands, per month.
+**Nothing is pushed and nothing is per-user.** One backend poller asks
+[API-Football](https://www.api-football.com) for a three-day UTC fixture range
+every 5 seconds — one call per league — and writes every match's state to
+Cloudflare R2 as JSON with a 5s edge TTL. Every Mac polls those same cached
+objects. One goal costs us one R2 write however many people are watching, and
+the reads are served by Cloudflare's edge, which is unmetered on a proxied zone.
+Sign-in is Google OAuth verified by our own API.
+
+The poller is **gated on a live match window**: outside
+`[kickoff−30min, kickoff+4h]` for every fixture it knows about, it enqueues no
+work at all. Five leagues are live roughly 38 hours a week, not 168 — that gate
+is what keeps them inside the API-Football quota.
 
 ```
-API-Football ───5s──▶ Cloud Run backend ──▶ FCM topics ──▶ menu bar apps
-                          │    ▲                              ▲
-                          ▼    │ /auth /me /celebrate         │
-                     Firestore │                              │
-                          ▼    │                              │
-                     R2 JSON ──┴───── Cloudflare CDN ─────────┘
+                     ┌── 5s tick, only inside a match window
+                     ▼
+API-Football ──▶ Cloud Run backend ──▶ R2 JSON ──▶ Cloudflare CDN
+                      │      ▲                          │
+                      ▼      │ /auth /me /celebrate     │ 5s poll
+                 Firestore   └──────── menu bar apps ◀──┘
 ```
+
+Only `/celebrate` scales with users, at roughly **$17 per 1M concurrent**.
+Everything else scales with *matches*, or with nothing at all — which is why
+the whole bill is ~$55/month at 1M concurrent users. See
+[backend/README.md](backend/README.md) for the cost-critical invariants that
+keep it that way.
 
 ## Repo layout
 
