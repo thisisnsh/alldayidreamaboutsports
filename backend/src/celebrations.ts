@@ -6,7 +6,9 @@ import { log } from "./log.js";
 /**
  * In-memory tap aggregator. Each instance buffers incoming batched celebrate
  * requests and flushes ONE sharded-counter increment per fixture every
- * `flushMs` — Firestore write volume is O(instances), not O(users).
+ * `flushMs` — Firestore write volume is O(instances), not O(users). The read
+ * half of a flush is sampled (`publishRate`) so the READ volume is sub-linear
+ * in instances too.
  */
 export class CelebrationAggregator {
   private buffer = new Map<number, Record<string, number>>();
@@ -19,6 +21,9 @@ export class CelebrationAggregator {
     // Only a `sampleRate` fraction of clients report taps; the published total is
     // scaled back up by 1/sampleRate to estimate the global count. 1.0 = exact.
     private readonly sampleRate = env.celebrationSampleRate,
+    // Probability that a flush also reads the shards and republishes. See below.
+    private readonly publishRate = env.celebrationPublishRate,
+    private readonly random: () => number = Math.random,
   ) {}
 
   add(fixtureId: number, teamId: string, taps: number): void {
@@ -40,7 +45,18 @@ export class CelebrationAggregator {
     log.info("celebration_flush_start", { fixtures: batch.size });
     await Promise.all([...batch].map(async ([fixtureId, counts]) => {
       try {
+        // ALWAYS increment: this is the half that must not lose a tap.
         await this.store.addCelebrations(fixtureId, counts);
+        // Only sometimes read-and-publish. `celebrationTotals` reads all shards,
+        // and at ~30 instances × a flush every 1.5s that is ~19k Firestore reads
+        // per goal. Cloud Run instances are stateless and disposable, so there
+        // is nowhere to cache the result — thinning it by probability needs no
+        // coordination between instances and still republishes ~2×/second,
+        // which is already faster than the 5s edge TTL can serve.
+        if (this.random() >= this.publishRate) {
+          log.info("celebration_publish_sampled_out", { fixtureId, counts, publishRate: this.publishRate });
+          return;
+        }
         const sampled = await this.store.celebrationTotals(fixtureId);
         // Scale the sampled (reported) totals up to an estimated global total.
         const scale = this.sampleRate > 0 ? 1 / this.sampleRate : 1;
