@@ -14,6 +14,7 @@ function providerReturning(payload: unknown, status = 200) {
 
 const league = (seasons: Array<{ year: number; current: boolean; end: string }>) => ({
   league: { id: 39, name: "Premier League", type: "League", logo: "pl.png" },
+  country: { name: "England" },
   seasons,
 });
 
@@ -22,7 +23,7 @@ describe("ApiFootballProvider.leagueInfo", () => {
     const { provider } = providerReturning({
       response: [league([
         { year: 2024, current: false, end: "2025-05-25" },
-        { year: 2025, current: true, end: "2026-05-24" },
+        { year: 2025, current: true, end: "2999-05-24" },
       ])],
     });
     expect(await provider.leagueInfo(39)).toMatchObject({ season: 2025, scheduled: true });
@@ -43,6 +44,44 @@ describe("ApiFootballProvider.leagueInfo", () => {
       response: [league([{ year: 2000, current: false, end: "2000-05-25" }])],
     });
     expect(await provider.leagueInfo(39)).toMatchObject({ season: null, scheduled: false });
+  });
+
+  it("carries the league's country through", async () => {
+    const { provider } = providerReturning({
+      response: [league([{ year: 2025, current: true, end: "2999-05-24" }])],
+    });
+    expect(await provider.leagueInfo(39)).toMatchObject({ country: "England" });
+  });
+});
+
+describe("ApiFootballProvider.leagueInfo ended", () => {
+  it("derives ended from the season end date, NOT from `current`", async () => {
+    // Exactly the World Cup 2026 shape: still flagged current a month after the
+    // final, so `current` would say it is live and the end date says it is over.
+    const { provider } = providerReturning({
+      response: [{
+        league: { id: 1, name: "World Cup", type: "Cup", logo: "wc.png" },
+        country: { name: "World" },
+        seasons: [{ year: 2026, current: true, end: "2026-07-19" }],
+      }],
+    });
+    expect(await provider.leagueInfo(1)).toMatchObject({
+      id: 1, season: 2026, scheduled: true, ended: true,
+    });
+  });
+
+  it("is not ended while the current season still has time to run", async () => {
+    const { provider } = providerReturning({
+      response: [league([{ year: 2026, current: true, end: "2999-05-24" }])],
+    });
+    expect(await provider.leagueInfo(39)).toMatchObject({ ended: false });
+  });
+
+  it("is not ended when there is no season at all", async () => {
+    const { provider } = providerReturning({
+      response: [league([{ year: 2000, current: false, end: "2000-05-25" }])],
+    });
+    expect(await provider.leagueInfo(39)).toMatchObject({ season: null, ended: false });
   });
 });
 
@@ -73,8 +112,10 @@ describe("CatalogService", () => {
         name: `League ${id}`,
         logo: `${id}.png`,
         type: id === 1 ? "Cup" : "League",
+        country: id === 1 ? "World" : "England",
         season: id === 61 ? null : 2026, // pretend Ligue 1 (61) has nothing scheduled
         scheduled: id !== 61,
+        ended: id === 1, // the archived World Cup
       })),
       teamsForLeague: vi.fn(async (leagueId: number): Promise<CatalogTeam[]> => [
         { id: leagueId * 10, code: "X", name: "Team", country: "C", logo: "t.png", leagueId },
@@ -89,9 +130,15 @@ describe("CatalogService", () => {
 
     const payload = await svc.build();
 
-    expect(payload.leagues.find((l) => l.id === 1)).toMatchObject({ active: true, scheduled: true, season: 2026 });
-    expect(payload.leagues.find((l) => l.id === 39)).toMatchObject({ active: false, scheduled: true });
-    expect(payload.leagues.find((l) => l.id === 61)).toMatchObject({ active: false, scheduled: false, season: null });
+    // The World Cup is archived: listed, inactive, ended — but still scheduled,
+    // so its teams stay resolvable for anyone still following a national side.
+    expect(payload.leagues.find((l) => l.id === 1)).toMatchObject({
+      active: false, ended: true, scheduled: true, season: 2026, country: "World",
+    });
+    expect(payload.leagues.find((l) => l.id === 39)).toMatchObject({
+      active: true, ended: false, scheduled: true, country: "England",
+    });
+    expect(payload.leagues.find((l) => l.id === 61)).toMatchObject({ active: true, scheduled: false, season: null });
 
     // Scheduled leagues get teams; the not-scheduled one is empty and never fetched.
     expect(payload.teams["1"]).toHaveLength(1);

@@ -6,10 +6,14 @@ export interface LeagueInfo {
   name: string;
   logo: string;
   type: string; // "Cup" | "League"
+  /** Where it's played — "World" for international cups. */
+  country: string | null;
   /** Current season (or the next scheduled one); null when nothing is on. */
   season: number | null;
   /** True when `season` is set — there's an ongoing or upcoming season. */
   scheduled: boolean;
+  /** True when `season`'s end date has passed — the competition is over. */
+  ended: boolean;
 }
 
 /** One team in the catalog, sourced from API-Football (logo is a CDN URL). */

@@ -4,9 +4,13 @@ import { log } from "./log.js";
 
 /**
  * Which leagues the app knows about. `active` = users can follow it now;
- * everything else renders in the picker as "Coming soon". Adding a league here
+ * everything else renders in the picker as "Coming soon" (or "Ended", when the
+ * league's season is over — see `CatalogLeague.ended`). Adding a league here
  * (and flipping `active`) is the only change needed to support it — teams,
  * logos and current-season detection all come from the API.
+ *
+ * The World Cup stays listed but inactive: archived rather than deleted, so a
+ * saved national team still resolves to a name and crest.
  */
 export interface SupportedLeague {
   id: number;
@@ -14,12 +18,12 @@ export interface SupportedLeague {
 }
 
 export const SUPPORTED_LEAGUES: SupportedLeague[] = [
-  { id: 1, active: true }, // FIFA World Cup
-  { id: 39, active: false }, // Premier League
-  { id: 78, active: false }, // Bundesliga
-  { id: 140, active: false }, // La Liga
-  { id: 135, active: false }, // Serie A
-  { id: 61, active: false }, // Ligue 1
+  { id: 1, active: false }, // FIFA World Cup — archived
+  { id: 39, active: true }, // Premier League
+  { id: 140, active: true }, // La Liga
+  { id: 135, active: true }, // Serie A
+  { id: 78, active: true }, // Bundesliga
+  { id: 61, active: true }, // Ligue 1
 ];
 
 export interface CatalogLeague {
@@ -27,8 +31,12 @@ export interface CatalogLeague {
   name: string;
   logo: string;
   type: string;
+  /** Country the league is played in ("World" for international cups). */
+  country: string | null;
   active: boolean;
   scheduled: boolean;
+  /** True when the league's season is over — archived, never polled. */
+  ended: boolean;
   season: number | null;
 }
 
@@ -63,7 +71,8 @@ export class CatalogService {
           ? await this.provider.teamsForLeague(id, info.season)
           : [];
       log.info("catalog_league_complete", {
-        leagueId: id, active, scheduled: info.scheduled, season: info.season, teams: teams[String(id)]!.length,
+        leagueId: id, active, scheduled: info.scheduled, ended: info.ended,
+        season: info.season, teams: teams[String(id)]!.length,
       });
     }
     log.info("catalog_build_complete", { leagues: leagues.length, durationMs: Date.now() - started });
