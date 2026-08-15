@@ -4,11 +4,16 @@ TypeScript/Express. Two personalities in one deployable:
 - **Public API** for the app: sign-in, celebrate, account deletion.
 - **Internal fetch** (`/internal/*`): one Cloud Scheduler job hits
   `/internal/dispatch` every minute (OIDC); it enqueues 12 Cloud Tasks spaced 5s
-  apart, each calling `/internal/fetch`. A fetch is a single read of a three-day
-  UTC fixture range that diffs state, publishes FCM events, and writes CDN JSON
-  to R2, then returns in ~1s. The cadence lives in Cloud Tasks `scheduleTime`
-  (sub-minute), so no request ever sleeps — CPU is billed only per short fetch,
-  not for waiting between polls.
+  apart, each calling `/internal/fetch`. A fetch is one range read PER LEAGUE
+  (API-Football's `league` parameter takes a single integer) over a three-day UTC
+  window, which diffs state and writes CDN JSON to R2, then returns in ~1s. The
+  cadence lives in Cloud Tasks `scheduleTime` (sub-minute), so no request ever
+  sleeps — CPU is billed only per short fetch, not for waiting between polls.
+
+  The dispatcher gates itself on a live match window: outside
+  `[kickoff−30min, kickoff+4h]` for every fixture it knows about, it enqueues
+  nothing at all. That is what keeps five leagues — live ~38 hours a week, not
+  168 — inside the API-Football quota.
 
 ## Develop
 
@@ -31,7 +36,9 @@ npm run dev         # tsx watch (needs env below)
 | `R2_BUCKET_SCORES` | deploy var | required environment-specific scores bucket |
 | `SCHEDULER_SA_EMAIL` | optional | default `sports-scheduler@$PROJECT.iam.gserviceaccount.com` |
 | `TASKS_QUEUE` / `TASKS_LOCATION` | deploy var | default `live-scores` / `us-central1` — Cloud Tasks fan-out target |
-| `LEAGUE_ID` / `SEASON` | optional | default `1` / `2026` (World Cup) |
+| `LEAGUE_IDS` | optional | comma-separated; default `39,140,135,78,61` (Europe's top five). Seasons are NOT configured here — they resolve per-league from `catalog.json`, so the August rollover needs no deploy |
+| `CELEBRATION_SAMPLE_RATE` | set by setup-gcp | client reporter probability; MUST equal RC `celebration_sample_percent` |
+| `CELEBRATION_PUBLISH_RATE` | set by setup-gcp | default `0.1` — fraction of celebration flushes that re-read the shards and republish. The increment always runs |
 | `SERVICE_URL` | set by setup-gcp | dispatcher task target + enforces OIDC audience on `/internal/*` |
 
 Local dev against staging: `gcloud auth application-default login` gives the
@@ -46,7 +53,10 @@ Admin SDK credentials.
 | `POST /celebrate` | session JWT | `{fixtureId, teamId, taps}` — ONE batched call per goal per user |
 | `DELETE /me` | session JWT | account deletion |
 | `POST /internal/dispatch` | scheduler OIDC | enqueue 12 Cloud Tasks at 5s offsets → `/internal/fetch` |
-| `POST /internal/fetch` | scheduler OIDC | one fetch: read range → diff → notify → R2 |
+| `POST /internal/fetch` | scheduler OIDC | one fetch: read range per league → diff → R2 |
+| `POST /internal/sync-schedule` | scheduler OIDC | every 6h: rewrite `fixtures-{date}.json` for today±1, so the dispatch gate has something to read while the poller sleeps |
+| `POST /internal/sync-catalog` | scheduler OIDC | daily: leagues + teams (with logos) → `catalog.json` |
+| `POST /internal/cache-health` | scheduler OIDC | `cf-cache-status` probe; skips `matches/*` outside a match window |
 | `POST /internal/test-event` | scheduler OIDC | inject fake events on staging |
 
 ## Diagnostics
