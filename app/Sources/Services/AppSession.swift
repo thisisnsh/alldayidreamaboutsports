@@ -14,6 +14,9 @@ final class AppSession: ObservableObject {
     @Published var fixtures: [Fixture] = []
     @Published var celebrationTotals: [Int: [String: Int]] = [:]
     @Published var signInError: String?
+    /// Shows the one-line "the World Cup has ended" note at the top of the
+    /// picker. Set once, by `promptLeagueMigrationIfNeeded()`.
+    @Published var showsLeagueMigrationNotice = false
 
     private var api: BackendAPI { Services.api }
     private var scores: ScoresProviding { Services.scores }
@@ -29,6 +32,7 @@ final class AppSession: ObservableObject {
         static let fixtures = "cachedFixtures"
         static let celebrationTotals = "cachedCelebrationTotals"
         static let fixtureBootstrapDay = "fixtureBootstrapDay"
+        static let leagueMigrationPrompted = "leagueMigrationPrompted"
     }
 
     var isSignedIn: Bool { profile != nil }
@@ -304,6 +308,40 @@ final class AppSession: ObservableObject {
             uniqueKeysWithValues: catalog.leagues.map { ($0.id, catalog.teams(for: $0.id)) },
         )
         AppLog.info(.catalog, "refresh_complete leagues=\(leagues.count) teams=\(allTeams.count)")
+        promptLeagueMigrationIfNeeded()
+    }
+
+    /// Once, on the first catalog refresh after the top-five switch: if every
+    /// team the user follows belongs to a competition that has ended (i.e. they
+    /// only ever followed World Cup sides), open the picker so they can pick a
+    /// club. The national teams stay saved — they become followable again in
+    /// 2030 without the user re-picking — and the notice explains why.
+    private func promptLeagueMigrationIfNeeded() {
+        guard !defaults.bool(forKey: CacheKey.leagueMigrationPrompted) else { return }
+        // Wait for a catalog that actually knows which leagues have ended.
+        let ended = endedLeagueIds
+        guard !ended.isEmpty, !activeLeagueIds.isEmpty else { return }
+        let followed = fanTeamIds
+        guard !followed.isEmpty else {
+            // Nothing followed: there is nothing to migrate and no story to
+            // tell. Burn the flag anyway so it can never fire later.
+            defaults.set(true, forKey: CacheKey.leagueMigrationPrompted)
+            return
+        }
+        // Only when EVERY followed team we can place is in an ended competition.
+        // A user who already follows a club has nothing to be told. Ids the
+        // catalog cannot place are skipped rather than counted as clubs — one
+        // stale id must not silently suppress the whole prompt.
+        let leagueOfTeam = Dictionary(
+            allTeams.map { ($0.id, $0.leagueId) }, uniquingKeysWith: { first, _ in first },
+        )
+        let placed = followed.compactMap { leagueOfTeam[$0] }
+        let allEnded = !placed.isEmpty && placed.allSatisfy(ended.contains)
+        defaults.set(true, forKey: CacheKey.leagueMigrationPrompted)
+        guard allEnded else { return }
+        AppLog.info(.prefs, "league_migration_prompt fan_teams=\(followed.sorted())")
+        showsLeagueMigrationNotice = true
+        openWindow(WindowID.teamPicker)
     }
 
     /// Manual refresh (the menu's ↻ button): force a schedule re-bootstrap, run
