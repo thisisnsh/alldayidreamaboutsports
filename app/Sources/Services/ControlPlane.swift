@@ -14,6 +14,16 @@ private let defaultPollSeconds: Double = 5
 private let defaultCelebrationSamplePercent: Double = 1.0
 private let defaultMaxFanTeams = 10
 private let defaultEventStaleMinutes = 3
+/// Bootstrap cadence for the periodic Remote Config fetch, used until the
+/// template supplies its own value. It never delays startup — the initial fetch
+/// still goes out immediately; this only schedules the *next* one while that
+/// request is in flight or after it fails.
+private let defaultRemoteConfigFetchSeconds: Double = 300
+/// Safety range for `remote_config_fetch_interval_seconds`. Below the floor an
+/// accidental edit becomes a tight billing loop; above the ceiling refreshes are
+/// effectively off. Anything outside falls back to the 300s default.
+private let minRemoteConfigFetchSeconds: Double = 60
+private let maxRemoteConfigFetchSeconds: Double = 86_400
 
 /// Kill switch + forced updates + remote tunables, via Firebase Remote Config
 /// with real-time listeners (seconds to propagate).
@@ -44,8 +54,20 @@ final class ControlPlane: ObservableObject {
     /// minutes after the fact) and is suppressed. Config-driven so we can tune it
     /// without shipping a build. See EventRouter's staleness guard.
     @Published var eventStaleMinutes: Int = 3
+    /// Effective interval between periodic forced Remote Config fetches. The
+    /// app-wide loop below is the only periodic owner — the menu has none.
+    @Published private(set) var remoteConfigFetchSeconds: Double = defaultRemoteConfigFetchSeconds
 
     private var remoteConfig: RemoteConfig?
+    /// The single periodic-fetch loop. Restarted only when the effective
+    /// interval actually changes, cancelled on `stop()`.
+    private var periodicFetchTask: Task<Void, Never>?
+    /// Interval the running `periodicFetchTask` is sleeping on.
+    private var periodicFetchInterval: Double?
+    /// One Remote Config network request at a time: a periodic fetch and a
+    /// foreground recovery fetch landing together would bill twice for the same
+    /// template.
+    private var fetchInFlight = false
     private var firebaseKillSwitch = false
     private var firebaseUpdateRequired = false
     private var firebaseUpdateAvailable = false
@@ -54,9 +76,13 @@ final class ControlPlane: ObservableObject {
     private var firebaseCelebrationSamplePercent = defaultCelebrationSamplePercent
     private var firebaseMaxFanTeams = defaultMaxFanTeams
     private var firebaseEventStaleMinutes = defaultEventStaleMinutes
+    private var firebaseRemoteConfigFetchSeconds = defaultRemoteConfigFetchSeconds
 
     func start() {
         if FirebaseConfigured.isConfigured {
+            // Idempotent: a second start must not add a second listener or a
+            // second periodic task.
+            guard remoteConfig == nil else { return }
             let rc = RemoteConfig.remoteConfig()
             remoteConfig = rc
             let settings = RemoteConfigSettings()
@@ -76,13 +102,18 @@ final class ControlPlane: ObservableObject {
                 "celebration_sample_percent": 1.0 as NSNumber,
                 "max_fan_teams": defaultMaxFanTeams as NSNumber,
                 "event_stale_minutes": defaultEventStaleMinutes as NSNumber,
+                "remote_config_fetch_interval_seconds": defaultRemoteConfigFetchSeconds as NSNumber,
             ])
             // Apply the last activated values before session bootstrap can let
-            // a previously-killed install make authenticated requests.
+            // a previously-killed install make authenticated requests. This also
+            // starts the periodic loop on the bootstrap cadence; the fetch below
+            // (or a real-time update) reschedules it if the template disagrees.
             apply(rc)
+            fetchInFlight = true
             rc.fetchAndActivate { [weak self] _, _ in
                 Task { @MainActor in
                     AppLog.info(.remoteConfig, "initial_fetch_complete")
+                    self?.fetchInFlight = false
                     self?.apply(rc)
                 }
             }
@@ -111,6 +142,13 @@ final class ControlPlane: ObservableObject {
         firebaseMaxFanTeams = maxFans >= 1 ? maxFans : defaultMaxFanTeams
         let staleMins = rc["event_stale_minutes"].numberValue.intValue
         firebaseEventStaleMinutes = staleMins >= 0 ? staleMins : defaultEventStaleMinutes
+        // Missing/malformed values arrive as 0 here, so the range check covers
+        // them alongside non-finite and out-of-range edits.
+        let fetchSecs = rc["remote_config_fetch_interval_seconds"].numberValue.doubleValue
+        let fetchSecsValid = fetchSecs.isFinite
+            && fetchSecs >= minRemoteConfigFetchSeconds
+            && fetchSecs <= maxRemoteConfigFetchSeconds
+        firebaseRemoteConfigFetchSeconds = fetchSecsValid ? fetchSecs : defaultRemoteConfigFetchSeconds
         let minBuild = rc["min_build"].numberValue.intValue
         firebaseUpdateRequired = minBuild > 0 && AppEnvironment.buildNumber < minBuild
         let latestBuild = rc["latest_build"].numberValue.intValue
@@ -122,7 +160,7 @@ final class ControlPlane: ObservableObject {
             animationParams = defaultAnimationParams
         }
         applyEffectiveState()
-        AppLog.info(.remoteConfig, "firebase_state_applied kill_switch=\(firebaseKillSwitch) update_required=\(firebaseUpdateRequired) update_available=\(firebaseUpdateAvailable) celebration_enabled=\(celebrationEnabled) poll_seconds=\(firebasePollSeconds) celebration_sample=\(firebaseCelebrationSamplePercent) max_fan_teams=\(firebaseMaxFanTeams) event_stale_minutes=\(firebaseEventStaleMinutes)")
+        AppLog.info(.remoteConfig, "firebase_state_applied kill_switch=\(firebaseKillSwitch) update_required=\(firebaseUpdateRequired) update_available=\(firebaseUpdateAvailable) celebration_enabled=\(celebrationEnabled) poll_seconds=\(firebasePollSeconds) celebration_sample=\(firebaseCelebrationSamplePercent) max_fan_teams=\(firebaseMaxFanTeams) event_stale_minutes=\(firebaseEventStaleMinutes) rc_fetch_seconds=\(firebaseRemoteConfigFetchSeconds)")
     }
 
     private func applyEffectiveState() {
@@ -136,6 +174,10 @@ final class ControlPlane: ObservableObject {
         celebrationSamplePercent = firebaseCelebrationSamplePercent
         maxFanTeams = firebaseMaxFanTeams
         eventStaleMinutes = firebaseEventStaleMinutes
+        remoteConfigFetchSeconds = firebaseRemoteConfigFetchSeconds
+        // Ahead of the kill/update returns below: a killed or blocked install
+        // still has to keep fetching to hear that it has been recovered.
+        schedulePeriodicFetch(interval: remoteConfigFetchSeconds)
 
         if killSwitch {
             OverlayManager.shared.dismissAll()
@@ -165,40 +207,85 @@ final class ControlPlane: ObservableObject {
 
     var isOperational: Bool { !killSwitch && !updateRequired }
 
-    /// Real-time Remote Config is primary; this also gives a menu open an
-    /// immediate recovery path after connectivity or sleep interruptions.
+    /// The app-wide periodic fetch. Real-time updates are primary, but a socket
+    /// that died while the machine slept goes unnoticed, so we also force a
+    /// fetch on this cadence. Idempotent — re-scheduling the interval already
+    /// running leaves the current sleep alone; a changed interval cancels the
+    /// sleep and starts over on the new one.
+    private func schedulePeriodicFetch(interval: Double) {
+        guard periodicFetchTask == nil || periodicFetchInterval != interval else { return }
+        periodicFetchTask?.cancel()
+        periodicFetchInterval = interval
+        AppLog.info(.remoteConfig, "periodic_fetch_scheduled interval_seconds=\(interval)")
+        periodicFetchTask = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                do {
+                    try await Task.sleep(for: .seconds(interval))
+                } catch {
+                    return // cancelled mid-sleep: no last fetch on the way out
+                }
+                guard !Task.isCancelled, let self else { return }
+                AppLog.info(.remoteConfig, "periodic_fetch_start interval_seconds=\(interval)")
+                self.refreshRemoteConfig(ignoreCache: true)
+            }
+        }
+    }
+
+    /// Real-time Remote Config is primary; this also gives launch, foreground
+    /// recovery and the periodic loop an immediate fetch path after
+    /// connectivity or sleep interruptions.
     func refreshRemoteConfig(ignoreCache: Bool = false) {
         guard let rc = remoteConfig else { return }
-        let completion: (RemoteConfigFetchAndActivateStatus, Error?) -> Void = { [weak self] _, error in
-            if let error {
-                AppLog.error(.remoteConfig, "refresh_failed", error: error)
-                return
+        // A periodic fetch and a foreground recovery fetch can land together —
+        // one request in flight is enough, and dropping the duplicate keeps the
+        // billable fetch count at the configured cadence.
+        guard !fetchInFlight else {
+            AppLog.info(.remoteConfig, "refresh_skipped reason=fetch_in_flight")
+            return
+        }
+        fetchInFlight = true
+        let finish: (Bool) -> Void = { [weak self] applyValues in
+            Task { @MainActor in
+                self?.fetchInFlight = false
+                if applyValues { self?.apply(rc) }
             }
-            AppLog.info(.remoteConfig, "refresh_complete ignore_cache=false")
-            Task { @MainActor in self?.apply(rc) }
         }
         if ignoreCache {
-            rc.fetch(withExpirationDuration: 0) { [weak self] _, error in
+            rc.fetch(withExpirationDuration: 0) { _, error in
                 if let error {
                     AppLog.error(.remoteConfig, "refresh_failed ignore_cache=true", error: error)
+                    finish(false)
                     return
                 }
                 rc.activate { _, error in
                     if let error {
                         AppLog.error(.remoteConfig, "activation_failed", error: error)
+                        finish(false)
                         return
                     }
                     AppLog.info(.remoteConfig, "refresh_complete ignore_cache=true")
-                    Task { @MainActor in self?.apply(rc) }
+                    finish(true)
                 }
             }
         } else {
-            rc.fetchAndActivate(completionHandler: completion)
+            rc.fetchAndActivate { _, error in
+                if let error {
+                    AppLog.error(.remoteConfig, "refresh_failed", error: error)
+                    finish(false)
+                    return
+                }
+                AppLog.info(.remoteConfig, "refresh_complete ignore_cache=false")
+                finish(true)
+            }
         }
     }
 
     /// For app termination only.
     func stop() {
+        periodicFetchTask?.cancel()
+        periodicFetchTask = nil
+        periodicFetchInterval = nil
+        fetchInFlight = false
         remoteConfig = nil
     }
 }

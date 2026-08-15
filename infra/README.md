@@ -322,3 +322,30 @@ backend reads its R2 creds from GCP Secret Manager (`r2-*`, via
   installs show a soft "Update available" banner atop the menu (still usable);
   leave at `0` to hide the banner.
 - **Celebration cost spike**: `celebration_enabled=false`.
+
+## Remote Config fetch cadence
+
+`remote_config_fetch_interval_seconds` controls how often a running app forces a
+periodic Remote Config fetch. Default **300 s (5 min)**; accepted range **60 –
+86400 s**. Missing, malformed, non-finite, zero, negative or out-of-range values
+fall back to 300 s, so a bad edit can't create a tight billing loop or switch
+refreshes off. The app also carries a local 300 s bootstrap default it uses
+until the template's value has been fetched.
+
+The interval only governs the *periodic* loop, which one app-wide task owns (the
+menu bar popover has no Remote Config timer — opening it or leaving it open does
+not change fetch frequency):
+
+- **Startup** fetches immediately.
+- **Foreground / wake** fetches immediately (`applicationDidBecomeActive`).
+- **Real-time invalidations** stay enabled, so a publish still lands within
+  seconds without waiting for the next periodic fetch.
+
+Publishing a new value takes effect without a restart — the real-time listener
+applies it and reschedules the next fetch. Verify in the app log:
+`firebase_state_applied … rc_fetch_seconds=300` and
+`periodic_fetch_scheduled interval_seconds=300`.
+
+Lowering the interval multiplies billable Remote Config fetches per install once
+Firebase's usage-based pricing applies. Raise it, don't lower it, unless an
+incident needs faster recovery than the real-time listener provides.

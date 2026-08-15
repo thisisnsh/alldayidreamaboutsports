@@ -36,6 +36,10 @@
       "defaultValue": { "value": "10" },
       "description": "Max teams a user can be a fan of. Raise without shipping a build. Starts at 10."
     },
+    "remote_config_fetch_interval_seconds": {
+      "defaultValue": { "value": "300" },
+      "description": "How often the app forces a periodic Remote Config fetch, in seconds. Default 300 (5 min). The app clamps this to 60–86400 and falls back to 300 for anything missing, malformed, or out of range. Startup and foreground still fetch immediately, and real-time updates still arrive within seconds. Lower = more billable fetches."
+    },
     "event_stale_minutes": {
       "defaultValue": { "value": "3" },
       "description": "Out-of-order staleness tolerance (minutes). A VAR decision whose incident minute is more than this behind an event already notified for the match is suppressed as a late/backfilled 'past' event (api-football injects VAR minutes after the fact). Only VAR is guarded; goals, cards, subs always show."

@@ -156,7 +156,6 @@ final class MenuPopoverController: NSObject, NSPopoverDelegate {
     static let shared = MenuPopoverController()
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
     private let popover = NSPopover()
-    private var remoteConfigTimer: Timer?
     private var eventMonitor: Any?
 
     func install() {
@@ -188,7 +187,8 @@ final class MenuPopoverController: NSObject, NSPopoverDelegate {
     func showMenu() {
         guard let button = statusItem.button, button.window != nil, !popover.isShown else { return }
         NSApp.activate(ignoringOtherApps: true)
-        ControlPlane.shared.refreshRemoteConfig(ignoreCache: true)
+        // No Remote Config fetch here: ControlPlane owns the only periodic loop,
+        // so opening the menu (or leaving it open) can't raise fetch frequency.
         // The soft "Update available" banner adds a row atop the compact
         // signed-out menu; give it the headroom so it isn't clipped.
         let updateBannerPad = ControlPlane.shared.updateAvailable ? 64 : 0
@@ -216,13 +216,10 @@ final class MenuPopoverController: NSObject, NSPopoverDelegate {
 
     private func startRefreshing() {
         // Live scores flow continuously from LiveStore (always-on poll loop) —
-        // opening the menu just nudges a schedule refresh for immediate freshness
-        // and keeps the control plane current.
+        // opening the menu just nudges a schedule refresh for immediate
+        // freshness. The control plane refreshes on its own cadence.
         if AppSession.shared.isSignedIn, ControlPlane.shared.isOperational {
             Task { await AppSession.shared.refreshFixtures() }
-        }
-        remoteConfigTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { _ in
-            Task { @MainActor in ControlPlane.shared.refreshRemoteConfig(ignoreCache: true) }
         }
         // .transient doesn't reliably close the popover on outside clicks for
         // accessory-policy apps on macOS Sequoia+, so we add our own monitor.
@@ -232,8 +229,6 @@ final class MenuPopoverController: NSObject, NSPopoverDelegate {
     }
 
     private func stopRefreshing() {
-        remoteConfigTimer?.invalidate()
-        remoteConfigTimer = nil
         if let monitor = eventMonitor {
             NSEvent.removeMonitor(monitor)
             eventMonitor = nil
