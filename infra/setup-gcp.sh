@@ -100,8 +100,10 @@ if SERVICE_URL=$(gcloud run services describe "$SERVICE" --region "$REGION" --fo
   # Cloud Scheduler is minute-granular, so once a minute it hits /internal/dispatch,
   # which enqueues 12 Cloud Tasks spaced 5s apart (each → /internal/fetch, a single
   # fast read). That gives ~every-5s polling with no request ever sleeping/pinning
-  # the CPU. Pause this one job to stop polling outside match windows:
-  #   gcloud scheduler jobs pause dispatch-live-scores --location "$REGION"
+  # the CPU. The handler gates itself on the match window (tasks.ts), enqueuing
+  # nothing at all when no match is within [kickoff−30min, kickoff+4h] — which is
+  # what keeps five leagues inside the API-Football quota. The job itself runs
+  # year-round and never needs pausing.
   echo "── Cloud Scheduler → /internal/dispatch every minute (fans out to Cloud Tasks)"
   upsert_scheduler_job dispatch-live-scores '* * * * *' /internal/dispatch
 
