@@ -125,7 +125,15 @@ Object TTLs (plan §3): `matches/*` and `celebrate/*` are
 `public, max-age=5, stale-while-revalidate=25`; `fixtures-*` and `catalog.json`
 are `public, max-age=43200` (12h). The `/internal/cache-health` scheduler job
 (every 5 min) reads `cf-cache-status` and alerts if users start hitting R2 —
-treat a falling hit ratio or rising R2 reads as sev-1.
+treat a falling hit ratio or rising R2 reads as sev-1. It probes `catalog.json`
+year-round, but skips `matches/*` outside a live match window: those files are
+stale by design between matches, so probing them would page us about a
+Wednesday.
+
+Four scheduler jobs run per environment: `dispatch-live-scores` (every minute,
+self-gating on the match window), `sync-schedule` (every 6h), `sync-catalog`
+(daily) and `cache-health` (every 5 min). Cloud Scheduler's free tier is three
+jobs, so the fourth costs $0.10/month.
 
 The same script manages the zone `http_ratelimit` ruleset. Cloudflare may cap
 the zone at one rate-limit rule depending on plan, so the setup uses a single
@@ -150,13 +158,20 @@ the requested object has not been uploaded yet. After the first backend deploy:
 gcloud scheduler jobs run sync-catalog \
   --project=dreamaboutsports-staging --location=us-central1
 
-# Populate the three UTC fixture files immediately. The dispatcher enqueues 12
-# Cloud Tasks (5s apart) that hit /internal/fetch, giving ~every-5s polling.
+# Populate the three UTC fixture files immediately. Run this BEFORE the
+# dispatcher: the dispatch gate reads these files to decide whether any match
+# is in its [kickoff-30min, kickoff+4h] window, and with no file it stays shut.
+gcloud scheduler jobs run sync-schedule \
+  --project=dreamaboutsports-staging --location=us-central1
+
+# Then the live tick. Inside a match window the dispatcher enqueues 12 Cloud
+# Tasks (5s apart) that hit /internal/fetch, giving ~every-5s polling; outside
+# one it enqueues nothing and returns {"enqueued":0}.
 gcloud scheduler jobs run dispatch-live-scores \
   --project=dreamaboutsports-staging --location=us-central1
 
-# Control polling by pausing/resuming the single dispatcher job (saves
-# API-Football quota outside match windows):
+# Polling no longer needs pausing to save API-Football quota — the handler gates
+# itself. Pause it only to stop live scores outright:
 gcloud scheduler jobs pause  dispatch-live-scores --location=us-central1
 gcloud scheduler jobs resume dispatch-live-scores --location=us-central1
 

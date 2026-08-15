@@ -10,7 +10,7 @@ import { CACHE_CONTROL_LIVE, type R2 } from "./r2.js";
 import { FixedWindowRateLimiter } from "./rateLimit.js";
 import type { ScheduleService } from "./schedule.js";
 import type { Store } from "./store.js";
-import type { Dispatcher } from "./tasks.js";
+import type { Dispatcher, MatchWindow } from "./tasks.js";
 import type { MatchState } from "./types.js";
 import { log } from "./log.js";
 
@@ -42,6 +42,7 @@ export interface Deps {
   store: Store;
   poller: Poller;
   dispatcher: Dispatcher;
+  window: MatchWindow;
   catalog: CatalogService;
   schedule: ScheduleService;
   celebrations: CelebrationAggregator;
@@ -128,7 +129,9 @@ export async function probeCacheHealth(
   return { ok: unhealthy.length === 0, probes, unhealthy };
 }
 
-export function buildApp({ store, poller, dispatcher, catalog, schedule, celebrations, r2 }: Deps): Express {
+export function buildApp(
+  { store, poller, dispatcher, window, catalog, schedule, celebrations, r2 }: Deps,
+): Express {
   const app = express();
   const signInRateLimiter = new FixedWindowRateLimiter(10, 60_000);
   const sessionRateLimiter = new FixedWindowRateLimiter(120, 60_000);
@@ -269,16 +272,26 @@ export function buildApp({ store, poller, dispatcher, catalog, schedule, celebra
       .safeParse(req.body ?? {});
     if (!body.success) return void res.status(400).json({ error: body.error.message });
 
-    const result = await probeCacheHealth(env.scoresDomain, body.data.fixtureIds);
+    // Outside a match window the per-match files are stale by design and the
+    // edge has no reason to hold them, so probing them would page us about a
+    // Wednesday. The warm file (catalog.json) is still probed year-round —
+    // a cache regression must be caught even when no football is on.
+    const windowOpen = await window.isOpen();
+    const fixtureIds = windowOpen ? body.data.fixtureIds : [];
+    if (!windowOpen && body.data.fixtureIds.length > 0) {
+      log.info("cache_health_matches_skipped", { requested: body.data.fixtureIds.length });
+    }
+
+    const result = await probeCacheHealth(env.scoresDomain, fixtureIds);
     // R2 Class B (read) ops baseline check: no per-request metric is available
     // from this process (it needs CF/R2 analytics), so the dedicated Class B
     // alarm lives in infra. TODO(infra): wire the R2 Class B ops alarm (§0).
     if (!result.ok) {
-      log.error("cache_health_degraded", new Error("non-cache reads detected"), { ...result });
-      return void res.status(503).json(result);
+      log.error("cache_health_degraded", new Error("non-cache reads detected"), { ...result, windowOpen });
+      return void res.status(503).json({ ...result, windowOpen });
     }
-    log.info("cache_health_ok", { probed: result.probes.length });
-    res.json(result);
+    log.info("cache_health_ok", { probed: result.probes.length, windowOpen });
+    res.json({ ...result, windowOpen });
   });
 
   return app;
