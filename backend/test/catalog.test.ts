@@ -131,6 +131,10 @@ describe("CatalogService", () => {
 
     const payload = await svc.build();
 
+    // The picker preserves catalog order, so active leagues come first and the
+    // archived World Cup stays available at the bottom for existing fans.
+    expect(payload.leagues.map((league) => league.id)).toEqual([39, 140, 135, 78, 61, 1]);
+
     // The World Cup is archived: listed, inactive, ended — but still scheduled,
     // so its teams stay resolvable for anyone still following a national side.
     expect(payload.leagues.find((l) => l.id === 1)).toMatchObject({

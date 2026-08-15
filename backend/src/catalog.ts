@@ -18,12 +18,12 @@ export interface SupportedLeague {
 }
 
 export const SUPPORTED_LEAGUES: SupportedLeague[] = [
-  { id: 1, active: false }, // FIFA World Cup — archived
   { id: 39, active: true }, // Premier League
   { id: 140, active: true }, // La Liga
   { id: 135, active: true }, // Serie A
   { id: 78, active: true }, // Bundesliga
   { id: 61, active: true }, // Ligue 1
+  { id: 1, active: false }, // FIFA World Cup — archived; keep after active leagues
 ];
 
 export interface CatalogLeague {
