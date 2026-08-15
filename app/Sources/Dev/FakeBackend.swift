@@ -256,8 +256,9 @@ final class FakeScores: ScoresProviding {
         return FakeStore.shared.celebrations[fixtureId] ?? [:]
     }
 
-    /// Multi-league catalog for the picker: World Cup is active/selectable; a
-    /// coming-soon club league shows greyed; one league is "not scheduled".
+    /// Multi-league catalog for the picker, covering all three section states:
+    /// the top-five club leagues are active/selectable, the World Cup is
+    /// archived ("Ended", teams still listed), and one is "not scheduled".
     static let demoCatalog: Catalog = {
         func team(_ id: Int, _ name: String, _ code: String, _ league: Int) -> Team {
             Team(id: id, name: name, code: code, logo: TeamCatalog.logoURL(id), leagueId: league)
@@ -265,26 +266,37 @@ final class FakeScores: ScoresProviding {
         func leagueLogo(_ id: Int) -> String { "https://media.api-sports.io/football/leagues/\(id).png" }
         return Catalog(
             leagues: [
-                League(id: 1, name: "World Cup", logo: leagueLogo(1), active: true, scheduled: true, season: 2026),
-                League(id: 39, name: "Premier League", logo: leagueLogo(39), active: false, scheduled: true, season: 2025),
-                League(id: 78, name: "Bundesliga", logo: leagueLogo(78), active: false, scheduled: false, season: nil),
+                League(id: 39, name: "Premier League", logo: leagueLogo(39), country: "England",
+                       active: true, scheduled: true, season: 2026),
+                League(id: 140, name: "La Liga", logo: leagueLogo(140), country: "Spain",
+                       active: true, scheduled: true, season: 2026),
+                League(id: 135, name: "Serie A", logo: leagueLogo(135), country: "Italy",
+                       active: true, scheduled: true, season: 2026),
+                League(id: 78, name: "Bundesliga", logo: leagueLogo(78), country: "Germany",
+                       active: true, scheduled: false, season: nil),
+                League(id: 1, name: "World Cup", logo: leagueLogo(1), country: "World",
+                       active: false, scheduled: true, season: 2026, ended: true),
             ],
             teams: [
+                "39": [
+                    team(33, "Manchester United", "MUN", 39), team(40, "Liverpool", "LIV", 39),
+                    team(42, "Arsenal", "ARS", 39), team(50, "Manchester City", "MCI", 39),
+                ],
+                "140": [
+                    team(541, "Real Madrid", "MAD", 140), team(529, "Barcelona", "BAR", 140),
+                    team(530, "Atletico Madrid", "ATL", 140), team(536, "Sevilla", "SEV", 140),
+                ],
+                "135": [
+                    team(496, "Juventus", "JUV", 135), team(505, "Inter", "INT", 135),
+                    team(489, "AC Milan", "MIL", 135), team(492, "Napoli", "NAP", 135),
+                ],
+                "78": [],
                 "1": [
                     team(6,    "Brazil",       "BRA", 1), team(26,   "Argentina",  "ARG", 1),
                     team(10,   "England",      "ENG", 1), team(2384, "United States", "USA", 1),
                     team(2,    "France",       "FRA", 1), team(25,   "Germany",    "GER", 1),
                     team(9,    "Spain",        "ESP", 1), team(27,   "Portugal",   "POR", 1),
-                    team(3,    "Croatia",      "CRO", 1), team(775,  "Austria",    "AUT", 1),
-                    team(1548, "Jordan",       "JOR", 1), team(1508, "Congo DR",   "COD", 1),
-                    team(1504, "Ghana",        "GHA", 1), team(11,   "Panama",     "PAN", 1),
-                    team(1568, "Uzbekistan",   "UZB", 1), team(8,   "Colombia",   "COL", 1),
                 ],
-                "39": [
-                    team(33, "Manchester United", "MUN", 39), team(40, "Liverpool", "LIV", 39),
-                    team(42, "Arsenal", "ARS", 39), team(50, "Manchester City", "MCI", 39),
-                ],
-                "78": [],
             ],
         )
     }()

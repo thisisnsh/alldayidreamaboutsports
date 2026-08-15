@@ -2,8 +2,9 @@ import SwiftUI
 
 /// "Become a Fan": search + per-league sections of team logos with a tick on
 /// selected tiles, and the current "Fan of" strip at the bottom. The active
-/// league (World Cup) is selectable; the rest show greyed as "Coming soon".
-/// Saves on every toggle.
+/// leagues (the top five) are selectable; a finished competition shows greyed
+/// as "Ended" with its teams still listed and still deselectable, and anything
+/// not launched yet shows as "Coming soon". Saves on every toggle.
 struct TeamPickerView: View {
     @EnvironmentObject var session: AppSession
     @State private var query = ""
@@ -92,23 +93,59 @@ struct TeamPickerView: View {
     }
 }
 
-/// One league: header (logo + name + status), then its team grid. Non-active
-/// leagues are dimmed and their tiles are not tappable.
+/// How a league presents itself in the picker.
+private enum LeagueState {
+    /// Followable now.
+    case live
+    /// Over. Greyed and badged, but its teams stay listed and stay deselectable
+    /// so anyone still following a national side can see and drop it.
+    case ended
+    /// Known about, not launched yet.
+    case comingSoon
+
+    init(_ league: League) {
+        if league.ended { self = .ended } else if league.active { self = .live } else { self = .comingSoon }
+    }
+
+    var badge: String? {
+        switch self {
+        case .live: return nil
+        case .ended: return "Ended"
+        case .comingSoon: return "Coming soon"
+        }
+    }
+
+    /// Ended leagues allow removal but not new picks — following a team whose
+    /// competition is finished would just be a row that never plays.
+    var allowsAdding: Bool { self == .live }
+    var allowsRemoving: Bool { self != .comingSoon }
+    var opacity: Double { self == .live ? 1 : 0.55 }
+}
+
+/// One league: header (logo + country + name + status), then its team grid.
 private struct LeagueSection: View {
     @EnvironmentObject var session: AppSession
     let league: League
     let teams: [Team]
 
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 12), count: 4)
+    private var state: LeagueState { LeagueState(league) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
                 CachedTeamLogo(url: league.logo, size: 22, fallbackSymbol: "trophy.fill")
                 Text(league.name).font(.system(size: 14, weight: .bold, design: .rounded))
-                if !league.active {
+                // With five leagues on screen the country is what tells them
+                // apart at a glance.
+                if let country = league.country, !country.isEmpty {
+                    Text(country)
+                        .font(.system(size: 11, weight: .medium))
+                        .opacity(0.5)
+                }
+                if let badge = state.badge {
                     Spacer()
-                    Text("Coming soon")
+                    Text(badge)
                         .font(.system(size: 10, weight: .semibold))
                         .padding(.horizontal, 7).padding(.vertical, 3)
                         .background(Capsule().fill(Color.primary.opacity(0.1)))
@@ -123,10 +160,13 @@ private struct LeagueSection: View {
             } else {
                 LazyVGrid(columns: columns, spacing: 12) {
                     ForEach(teams) { team in
+                        let selected = session.fanTeamIds.contains(team.id)
                         TeamTile(
                             team: team,
-                            selected: session.fanTeamIds.contains(team.id),
-                            enabled: league.active
+                            selected: selected,
+                            // An ended league's tiles stay live only for the
+                            // teams already followed, so they can be dropped.
+                            enabled: state.allowsAdding || (selected && state.allowsRemoving)
                         ) {
                             toggle(team)
                         }
@@ -134,16 +174,17 @@ private struct LeagueSection: View {
                 }
             }
         }
-        .opacity(league.active ? 1 : 0.55)
+        .opacity(state.opacity)
     }
 
     private func toggle(_ team: Team) {
-        guard league.active else { return }
         var ids = session.prefs.fanTeamIds
         let key = String(team.id)
         if let index = ids.firstIndex(of: key) {
+            guard state.allowsRemoving else { return }
             ids.remove(at: index)
         } else {
+            guard state.allowsAdding else { return }
             // Cap how many teams a user can follow (config-driven). Adding past
             // the cap is a no-op so the user can't silently lose later picks.
             guard ids.count < ControlPlane.shared.maxFanTeams else { return }

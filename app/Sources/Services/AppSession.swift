@@ -10,7 +10,7 @@ final class AppSession: ObservableObject {
     @Published var profile: Profile?
     @Published var prefs: AppPrefs = .empty
     @Published var leagues: [League] = []
-    @Published var teamsByLeague: [Int: [Team]] = [1: TeamCatalog.fallback]
+    @Published var teamsByLeague: [Int: [Team]] = TeamCatalog.fallbackByLeague
     @Published var fixtures: [Fixture] = []
     @Published var celebrationTotals: [Int: [String: Int]] = [:]
     @Published var signInError: String?
@@ -36,8 +36,11 @@ final class AppSession: ObservableObject {
     var allTeams: [Team] { teamsByLeague.values.flatMap { $0 } }
     /// Alias used by the overlay/menu lookups (`TeamCatalog.team(for:in:)`).
     var teams: [Team] { allTeams }
-    /// The single league users can follow today (World Cup); others are "coming soon".
-    var activeLeagueId: Int { leagues.first(where: \.active)?.id ?? AppEnvironment.leagueId }
+    /// The leagues users can follow today (the top five); the rest are "Coming
+    /// soon" or, for a finished competition, "Ended".
+    var activeLeagueIds: Set<Int> { Set(leagues.filter(\.active).map(\.id)) }
+    /// Leagues that are over — still listed, teams still resolvable, never polled.
+    var endedLeagueIds: Set<Int> { Set(leagues.filter(\.ended).map(\.id)) }
     var fanTeamIds: Set<Int> { Set(prefs.fanTeamIds.compactMap(Int.init)) }
     var fanTeams: [Team] {
         prefs.fanTeamIds.compactMap(Int.init).map { TeamCatalog.team(for: $0, in: allTeams) }
