@@ -59,6 +59,7 @@ function derivePeriod(short: string, elapsed: number | null): Period {
 
 interface ApiLeague {
   league: { id: number; name: string; type: string; logo: string };
+  country?: { name: string | null };
   seasons: Array<{ year: number; current: boolean; end: string }>;
 }
 
@@ -160,14 +161,20 @@ export class ApiFootballProvider implements ScoreProvider {
     // counts as "to be scheduled" (e.g. a tournament drawn but not yet started).
     const today = new Date().toISOString().slice(0, 10);
     const upcoming = current ? undefined : [...row.seasons].reverse().find((s) => s.end >= today);
-    const season = current?.year ?? upcoming?.year ?? null;
+    const seasonRow = current ?? upcoming;
+    const season = seasonRow?.year ?? null;
+    // `current` is not trustworthy for "is it over": API-Football still flagged
+    // WC 2026 current a month after the final. The season's end date is.
+    const ended = season != null && seasonRow!.end < today;
     return {
       id: row.league.id,
       name: row.league.name,
       type: row.league.type,
       logo: row.league.logo,
+      country: row.country?.name ?? null,
       season,
       scheduled: season != null,
+      ended,
     };
   }
 
