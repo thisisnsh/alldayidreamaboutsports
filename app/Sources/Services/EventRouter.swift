@@ -181,9 +181,19 @@ private func teamLogo(_ id: Int) -> String {
     TeamCatalog.team(for: id, in: AppSession.shared.teams).logo
 }
 
-@MainActor
-private func teamName(_ id: Int) -> String {
-    TeamCatalog.team(for: id, in: AppSession.shared.teams).name
+extension MatchEvent {
+    /// The full name this payload carries for one side of the match — the
+    /// fallback whenever the catalog has no shorter label for that team.
+    func wireName(for teamId: Int) -> String {
+        teamId == awayTeamId ? awayName : homeName
+    }
+
+    /// How a side is labelled in a pill: the catalog's short code, or the
+    /// payload's full name when there's none. Pills are one line hanging off
+    /// the notch, so they always take the compact form.
+    @MainActor func shortName(for teamId: Int) -> String {
+        TeamCatalog.shortName(for: teamId, in: AppSession.shared.teams, fallback: wireName(for: teamId))
+    }
 }
 
 /// The leading team's (name, id), or nil when level. The matchup / score
@@ -191,8 +201,8 @@ private func teamName(_ id: Int) -> String {
 @MainActor
 private func leaderInfo(for event: MatchEvent) -> (name: String, teamId: Int)? {
     guard event.homeGoals != event.awayGoals else { return nil }
-    let homeLeads = event.homeGoals > event.awayGoals
-    return homeLeads ? (event.homeName, event.homeTeamId) : (event.awayName, event.awayTeamId)
+    let teamId = event.homeGoals > event.awayGoals ? event.homeTeamId : event.awayTeamId
+    return (event.shortName(for: teamId), teamId)
 }
 
 // Every in-match pill follows one grammar so the eye can learn it:
@@ -215,7 +225,7 @@ func pillTitle(for event: MatchEvent) -> [PillSegment] {
     case .goal:
         // Backend now always sends a scorer; if it's ever missing, name the
         // scoring team — never the home team (that mislabels away goals).
-        let scorer = event.player ?? event.teamId.map(teamName) ?? ""
+        let scorer = event.player ?? event.teamId.map { event.shortName(for: $0) } ?? ""
         let label: String
         switch event.goalKind {
         case "own": label = "Own goal"
@@ -269,9 +279,9 @@ func pillSubtitle(for event: MatchEvent) -> [PillSegment]? {
     // which build their own text, fall through to nil.
     case .kickoff:
         return [
-            .text("\(event.homeName) "),
+            .text("\(event.shortName(for: event.homeTeamId)) "),
             .text("vs"),
-            .text(" \(event.awayName)"),
+            .text(" \(event.shortName(for: event.awayTeamId))"),
         ]
     case .goal, .goalCancelled, .yellowCard, .redCard, .halfTime,
          .secondHalf, .fullTime, .extraTime, .penaltyShootout, .penaltyKick,
@@ -283,9 +293,9 @@ func pillSubtitle(for event: MatchEvent) -> [PillSegment]? {
             penAway: event.penAway
         )
         return [
-            .text("\(event.homeName) "),
+            .text("\(event.shortName(for: event.homeTeamId)) "),
             .text(scoreline),
-            .text(" \(event.awayName)"),
+            .text(" \(event.shortName(for: event.awayTeamId))"),
         ]
     default:
         return nil
@@ -296,8 +306,8 @@ func pillSubtitle(for event: MatchEvent) -> [PillSegment]? {
 @MainActor
 private func shootoutWinnerInfo(for event: MatchEvent) -> (name: String, teamId: Int)? {
     guard let home = event.penHome, let away = event.penAway, home != away else { return nil }
-    let homeWon = home > away
-    return homeWon ? (event.homeName, event.homeTeamId) : (event.awayName, event.awayTeamId)
+    let teamId = home > away ? event.homeTeamId : event.awayTeamId
+    return (event.shortName(for: teamId), teamId)
 }
 
 func pillIcon(for event: MatchEvent) -> String {

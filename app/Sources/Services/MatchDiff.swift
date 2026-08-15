@@ -120,7 +120,11 @@ enum MatchDiff {
                         .goal,
                         idSuffix: "\(team.id):\(g)",
                         teamId: team.id,
-                        player: goalEv?.player ?? team.name,
+                        // No scorer named yet: leave it nil like the card events
+                        // do and let the pill fall back to the team's own label —
+                        // baking the full name in here would slip a long club
+                        // name into a pill that shows short codes everywhere else.
+                        player: goalEv?.player,
                         minute: goalEv?.minute ?? next.minute,
                         extra: goalEv?.extra,
                         goalKind: goalEv?.kind

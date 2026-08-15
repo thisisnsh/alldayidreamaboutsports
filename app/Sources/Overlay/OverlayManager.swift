@@ -273,7 +273,9 @@ final class OverlayManager: ObservableObject {
             id: "count:\(fixtureId):\(teamId):\(Date().timeIntervalSince1970)",
             icon: pillIcon(for: .celebration),
             iconColor: pillIconColor(for: .celebration),
-            title: [.text("\(count.formattedCompact) celebrations for \(team.name) this match")],
+            // Short code like every other pill; there's no wire name to fall
+            // back on here, so a codeless team keeps its full one.
+            title: [.text("\(count.formattedCompact) celebrations for \(team.code ?? team.name) this match")],
             subtitle: nil,
             fanGoal: nil
         ), isGoal: false)

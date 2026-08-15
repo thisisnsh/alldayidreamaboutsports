@@ -55,4 +55,16 @@ enum TeamCatalog {
         return teams.first { $0.id == id }
             ?? Team(id: id, name: String(id), code: nil, logo: "", leagueId: 0)
     }
+
+    /// How a team is labelled where space is tight — the menu's fixture rows,
+    /// event pills, and a capsule at rest: the API's 3-letter code ("MUN"),
+    /// which club names badly need ("Manchester United" is four times as wide).
+    /// The code is null for some clubs, and an id the catalog doesn't know
+    /// resolves to a placeholder team — both fall back to `fallback`, the full
+    /// name the fixture/event payload already carries. Surfaces with room to
+    /// spare (the picker, a hovered capsule, the goal celebration) show that
+    /// full name instead.
+    static func shortName(for id: Int, in teams: [Team], fallback: String) -> String {
+        team(for: id, in: teams).code ?? fallback
+    }
 }
