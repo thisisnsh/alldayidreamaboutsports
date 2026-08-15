@@ -192,9 +192,20 @@ this private repo. `scores-staging.`, `scores.`, `download-staging.`, and
 
 ## 4. API-Football
 
-Subscribe to **Ultra** ($29/mo, cancel after the final) at
+Subscribe to **Ultra** ($29/mo) at
 [api-football.com/pricing](https://www.api-football.com/pricing). Key → secret
-`api-football-key`. World Cup = league `1`, season `2026`.
+`api-football-key`.
+
+The polled leagues are `LEAGUE_IDS` on the Cloud Run service — by default
+`39,140,135,78,61` (Premier League, La Liga, Serie A, Bundesliga, Ligue 1).
+Seasons are **not** configured anywhere: they resolve per-league from
+`catalog.json`, so the August rollover needs no deploy.
+
+Ultra allows 75,000 calls/day. A peak Saturday is ~51,900 (69%): five range
+calls plus one enrichment call per 5s tick, across a ~12h union match window,
+plus 20 for the schedule sync and 12 for the catalog sync. An average day is
+nearer 22,000. A sixth league does not fit without the Mega plan — watch the
+request counter on the first live weekend.
 
 ## 5. Sparkle keys (global, once)
 

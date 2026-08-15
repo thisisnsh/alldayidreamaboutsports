@@ -32,15 +32,20 @@ import type { CardEvent, MatchState, TeamScore } from "../backend/src/types.js";
 const RESERVED_ID_MIN = 900001;
 const isFakeId = (id: number) => id >= RESERVED_ID_MIN;
 
-const REAL_LEAGUE_ID = 1; // API-Football: FIFA World Cup
-const REAL_WORLD_CUP_TEAMS = [
-  { id: 2, name: "France" },
-  { id: 26, name: "Argentina" },
-  { id: 6, name: "Brazil" },
-  { id: 10, name: "England" },
-  { id: 9, name: "Spain" },
-  { id: 25, name: "Germany" },
-  { id: 27, name: "Portugal" },
+// A league the app actually follows, so a seeded fixture is a fan match for
+// someone testing with the default club picks. League 1 (the World Cup) is
+// archived and never polled, so seeding into it would publish into a void.
+const REAL_LEAGUE_ID = 140; // API-Football: La Liga
+/** Seasons come from catalog.json in production; a fake fixture just needs one. */
+const REAL_SEASON = 2026;
+const REAL_TEAMS = [
+  { id: 541, name: "Real Madrid" },
+  { id: 529, name: "Barcelona" },
+  { id: 530, name: "Atletico Madrid" },
+  { id: 536, name: "Sevilla" },
+  { id: 532, name: "Valencia" },
+  { id: 548, name: "Real Sociedad" },
+  { id: 543, name: "Real Betis" },
 ];
 
 /** Friendly state name → API-Football raw short code + a sensible default minute. */
@@ -127,8 +132,8 @@ function kickoffFor(index: number, dayOffsets: number[], time: string, spacingMi
 }
 
 function teamPair(index: number): { home: TeamScore; away: TeamScore } {
-  const home = REAL_WORLD_CUP_TEAMS[index % REAL_WORLD_CUP_TEAMS.length]!;
-  const away = REAL_WORLD_CUP_TEAMS[(index + 1) % REAL_WORLD_CUP_TEAMS.length]!;
+  const home = REAL_TEAMS[index % REAL_TEAMS.length]!;
+  const away = REAL_TEAMS[(index + 1) % REAL_TEAMS.length]!;
   return {
     home: makeTeam(home.id, home.name),
     away: makeTeam(away.id, away.name),
@@ -236,7 +241,7 @@ async function seed(r2: R2, args: Map<string, string>): Promise<void> {
     const state: MatchState = {
       fixtureId,
       leagueId: REAL_LEAGUE_ID,
-      season: env.season,
+      season: REAL_SEASON,
       round: `Test - ${utcDay(dayOffsets[i % dayOffsets.length]!)} ${Math.floor(i / dayOffsets.length) + 1}`,
       kickoffISO: kickoffFor(i, dayOffsets, kickoffTime, spacingMinutes),
       secondHalfStartISO: null,
