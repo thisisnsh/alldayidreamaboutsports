@@ -23,6 +23,12 @@ esac
 # or the server's estimated totals will be wrong. 1.0 = exact (no sampling).
 CELEBRATION_SAMPLE_RATE="1.0"
 
+# Probability that a celebration flush also reads all shards and republishes the
+# totals file. The increment always runs, so no tap is lost — this only thins the
+# read half, which is what Firestore charges for at scale. Lower it if Firestore
+# reads ever surprise us; it is independent of CELEBRATION_SAMPLE_RATE above.
+CELEBRATION_PUBLISH_RATE="0.1"
+
 gcloud config set project "$PROJECT_ID"
 
 echo "── Enabling APIs"
@@ -127,9 +133,9 @@ if SERVICE_URL=$(gcloud run services describe "$SERVICE" --region "$REGION" --fo
   # cache regression is caught even outside match windows.
   upsert_scheduler_job cache-health '*/5 * * * *' /internal/cache-health
 
-  echo "── Cloud Run env → SERVICE_URL + SCORES_DOMAIN + CELEBRATION_SAMPLE_RATE"
+  echo "── Cloud Run env → SERVICE_URL + SCORES_DOMAIN + celebration rates"
   gcloud run services update "$SERVICE" --region "$REGION" \
-    --update-env-vars "SERVICE_URL=${SERVICE_URL},SCORES_DOMAIN=${SCORES_DOMAIN},CELEBRATION_SAMPLE_RATE=${CELEBRATION_SAMPLE_RATE}" >/dev/null
+    --update-env-vars "SERVICE_URL=${SERVICE_URL},SCORES_DOMAIN=${SCORES_DOMAIN},CELEBRATION_SAMPLE_RATE=${CELEBRATION_SAMPLE_RATE},CELEBRATION_PUBLISH_RATE=${CELEBRATION_PUBLISH_RATE}" >/dev/null
 else
   echo "   Cloud Run service not deployed yet — skipping scheduler jobs"
   echo "   Rerun this script after the first deploy to create or update them"

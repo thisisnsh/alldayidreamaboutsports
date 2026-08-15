@@ -52,4 +52,10 @@ export const env = {
   // Client reporter probability + server multiply-back factor. MUST equal the
   // RC `celebration_sample_percent`. 1.0 = everyone reports → exact counts.
   celebrationSampleRate: Number(process.env.CELEBRATION_SAMPLE_RATE ?? 1),
+  // Probability that a flush also READS the shards and republishes the totals
+  // file. The shard increment always runs, so no tap is ever lost; this only
+  // thins the read half, which is what costs Firestore money at scale. Across
+  // ~30 Cloud Run instances flushing every 1.5s, 0.1 still republishes about
+  // twice a second — faster than the 5s edge TTL can serve.
+  celebrationPublishRate: Number(process.env.CELEBRATION_PUBLISH_RATE ?? 0.1),
 };

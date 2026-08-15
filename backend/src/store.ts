@@ -16,7 +16,9 @@ function defaultFirestore(): Firestore {
   return firestore;
 }
 
-const CELEBRATION_SHARDS = 16;
+// Firestore's soft ceiling is ~1 sustained write/sec/document. At 1M concurrent
+// users, 16 shards put ~1.25 writes/sec on each; 64 keeps every shard well under.
+const CELEBRATION_SHARDS = 64;
 
 export class Store {
   private readonly db: Firestore;
