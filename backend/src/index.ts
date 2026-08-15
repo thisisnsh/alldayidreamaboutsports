@@ -17,13 +17,14 @@ const provider = new ApiFootballProvider(env.apiFootballKey);
 const state = new R2MatchStateStore();
 const celebrations = new CelebrationAggregator(store, r2);
 const poller = new Poller(provider, state, r2);
-const dispatcher = new Dispatcher(new CloudTasksClient(), new MatchWindow(r2));
+const window = new MatchWindow(r2);
+const dispatcher = new Dispatcher(new CloudTasksClient(), window);
 const catalog = new CatalogService(provider, r2);
 const schedule = new ScheduleService(provider, r2);
 
 celebrations.start();
 
-const app = buildApp({ store, poller, dispatcher, catalog, schedule, celebrations, r2 });
+const app = buildApp({ store, poller, dispatcher, window, catalog, schedule, celebrations, r2 });
 const server = app.listen(env.port, () => {
   log.info("backend_listening", { port: env.port });
 });
