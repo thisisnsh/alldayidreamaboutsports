@@ -8,6 +8,7 @@ import { syntheticPhase } from "./phase.js";
 import type { Poller } from "./poller.js";
 import { CACHE_CONTROL_LIVE, type R2 } from "./r2.js";
 import { FixedWindowRateLimiter } from "./rateLimit.js";
+import type { ScheduleService } from "./schedule.js";
 import type { Store } from "./store.js";
 import type { Dispatcher } from "./tasks.js";
 import type { MatchState } from "./types.js";
@@ -42,6 +43,7 @@ export interface Deps {
   poller: Poller;
   dispatcher: Dispatcher;
   catalog: CatalogService;
+  schedule: ScheduleService;
   celebrations: CelebrationAggregator;
   r2: R2;
 }
@@ -126,7 +128,7 @@ export async function probeCacheHealth(
   return { ok: unhealthy.length === 0, probes, unhealthy };
 }
 
-export function buildApp({ store, poller, dispatcher, catalog, celebrations, r2 }: Deps): Express {
+export function buildApp({ store, poller, dispatcher, catalog, schedule, celebrations, r2 }: Deps): Express {
   const app = express();
   const signInRateLimiter = new FixedWindowRateLimiter(10, 60_000);
   const sessionRateLimiter = new FixedWindowRateLimiter(120, 60_000);
@@ -195,6 +197,19 @@ export function buildApp({ store, poller, dispatcher, catalog, celebrations, r2 
       res.json(result);
     } catch (err) {
       log.error("fetch_failed", err);
+      res.status(500).json({ error: (err as Error).message });
+    }
+  });
+
+  // Every 6h: refresh fixtures-{date}.json for today±1. Runs independently of
+  // the live tick — the dispatcher gate reads these files to decide whether to
+  // open a match window, so they cannot depend on the gated job to write them.
+  app.post("/internal/sync-schedule", requireSchedulerOidc, async (_req, res) => {
+    try {
+      const result = await schedule.sync();
+      res.json(result);
+    } catch (err) {
+      log.error("sync_schedule_failed", err);
       res.status(500).json({ error: (err as Error).message });
     }
   });
