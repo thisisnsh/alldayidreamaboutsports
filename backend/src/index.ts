@@ -5,6 +5,7 @@ import { Poller } from "./poller.js";
 import { ApiFootballProvider } from "./providers/apiFootball.js";
 import { R2, R2MatchStateStore } from "./r2.js";
 import { buildApp } from "./routes.js";
+import { ScheduleService } from "./schedule.js";
 import { Store } from "./store.js";
 import { Dispatcher } from "./tasks.js";
 import { log } from "./log.js";
@@ -17,10 +18,11 @@ const celebrations = new CelebrationAggregator(store, r2);
 const poller = new Poller(provider, state, r2);
 const dispatcher = new Dispatcher();
 const catalog = new CatalogService(provider, r2);
+const schedule = new ScheduleService(provider, r2);
 
 celebrations.start();
 
-const app = buildApp({ store, poller, dispatcher, catalog, celebrations, r2 });
+const app = buildApp({ store, poller, dispatcher, catalog, schedule, celebrations, r2 });
 const server = app.listen(env.port, () => {
   log.info("backend_listening", { port: env.port });
 });

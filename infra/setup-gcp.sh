@@ -105,9 +105,17 @@ if SERVICE_URL=$(gcloud run services describe "$SERVICE" --region "$REGION" --fo
   echo "── Cloud Scheduler → /internal/dispatch every minute (fans out to Cloud Tasks)"
   upsert_scheduler_job dispatch-live-scores '* * * * *' /internal/dispatch
 
+  echo "── Cloud Scheduler → /internal/sync-schedule every 6h (fixtures-{date}.json)"
+  # Keeps today±1's fixture files alive while the poller is asleep. The dispatch
+  # gate above reads those files to decide whether to open a match window, so
+  # they must NOT depend on the gated job to write them — on a day with no
+  # football the poller never runs, and the file would never exist.
+  # 5 calls × 4 runs = 20 API calls/day.
+  upsert_scheduler_job sync-schedule '0 */6 * * *' /internal/sync-schedule
+
   echo "── Cloud Scheduler → /internal/sync-catalog daily (leagues + teams refresh)"
-  # Independent of the live-score dispatcher (which only runs during the tournament
-  # window), so the multi-league catalog stays fresh year-round.
+  # Independent of the live-score dispatcher (which only runs inside match
+  # windows), so the multi-league catalog stays fresh year-round.
   upsert_scheduler_job sync-catalog '0 4 * * *' /internal/sync-catalog
 
   echo "── Cloud Scheduler → /internal/cache-health every 5 min (cf-cache-status probe)"

@@ -108,6 +108,54 @@ function summarizeState(s: MatchState) {
   };
 }
 
+/**
+ * One range call per league, run concurrently, concatenated. API-Football's
+ * `league` parameter takes a single integer, so this is N calls however it is
+ * dressed up; the tick's wall time is still one call.
+ */
+export async function fetchLeagueFixtures(
+  provider: ScoreProvider,
+  leagues: Array<{ leagueId: number; season: number }>,
+  range: { from: string; to: string },
+): Promise<{ fixtures: MatchState[]; byLeague: Array<{ leagueId: number; fixtures: number }> }> {
+  const perLeague = await Promise.all(
+    leagues.map(({ leagueId, season }) =>
+      provider.fixturesForRange(leagueId, season, range.from, range.to)),
+  );
+  return {
+    fixtures: perLeague.flat(),
+    byLeague: leagues.map(({ leagueId }, i) => ({ leagueId, fixtures: perLeague[i]!.length })),
+  };
+}
+
+/**
+ * The `fixtures-{date}.json` writes for today±1 — schedule/bootstrap data on the
+ * long edge TTL, live state never. Written by BOTH the live tick and the
+ * schedule sync, from the same source through the same projection, so the
+ * overlap is a harmless identical rewrite. A date with no fixtures is still
+ * written (empty), because the app and the dispatcher gate both read the file
+ * and must not confuse "no football today" with "the file is missing".
+ */
+export async function publishScheduleFiles(
+  r2: R2,
+  fixtures: MatchState[],
+  range: { from: string; to: string },
+  today = new Date().toISOString().slice(0, 10),
+): Promise<string[]> {
+  const partitions = partitionFixtures(fixtures);
+  for (const date of [range.from, today, range.to]) {
+    if (!partitions.has(date)) partitions.set(date, []);
+  }
+  await Promise.all([...partitions].map(([date, matches]) =>
+    r2.putJsonIfChanged(
+      `fixtures-${date}.json`,
+      { matches: matches.map(toScheduleRow) },
+      CACHE_CONTROL_LONG,
+    ),
+  ));
+  return [...partitions.keys()];
+}
+
 export class Poller {
   constructor(
     private readonly provider: ScoreProvider,
@@ -130,35 +178,14 @@ export class Poller {
     const range = utcPollRange();
     const leagues = await this.seasons.resolve(this.leagueIds);
     log.info("poll_start", { ...range, leagues });
-    // Concurrent: the tick's wall time is one range call, not five.
-    const perLeague = await Promise.all(
-      leagues.map(({ leagueId, season }) =>
-        this.provider.fixturesForRange(leagueId, season, range.from, range.to)),
-    );
-    const fixtures = perLeague.flat();
+    const { fixtures, byLeague } = await fetchLeagueFixtures(this.provider, leagues, range);
     const liveCount = fixtures.filter(isLive).length;
-    log.info("poll_provider_complete", {
-      fixtures: fixtures.length,
-      live: liveCount,
-      byLeague: leagues.map(({ leagueId }, i) => ({ leagueId, fixtures: perLeague[i]!.length })),
-    });
+    log.info("poll_provider_complete", { fixtures: fixtures.length, live: liveCount, byLeague });
 
     const eligible = fixtures.filter((m) => isStartingSoon(m) || isLive(m) || isRecentlyFinished(m));
     // Fixture date files are schedule/bootstrap data. Live changes are served
     // from matches/*.json, so fixtures always use the long edge TTL.
-    const today = new Date().toISOString().slice(0, 10);
-
-    const partitions = partitionFixtures(fixtures);
-    for (const date of [range.from, today, range.to]) {
-      if (!partitions.has(date)) partitions.set(date, []);
-    }
-    await Promise.all([...partitions].map(([date, matches]) =>
-      this.r2.putJsonIfChanged(
-        `fixtures-${date}.json`,
-        { matches: matches.map(toScheduleRow) },
-        CACHE_CONTROL_LONG,
-      ),
-    ));
+    await publishScheduleFiles(this.r2, fixtures, range);
 
     log.info("poll_eligible_fixtures", {
       count: eligible.length,
