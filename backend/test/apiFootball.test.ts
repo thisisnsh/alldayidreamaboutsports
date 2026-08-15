@@ -21,16 +21,16 @@ function providerReturning(payload: unknown, status = 200) {
     status,
     json: () => Promise.resolve(payload),
   });
-  return { provider: new ApiFootballProvider("key", 1, 2026, fetchMock as never), fetchMock };
+  return { provider: new ApiFootballProvider("key", fetchMock as never), fetchMock };
 }
 
 describe("ApiFootballProvider", () => {
   it("maps a live fixture to MatchState with cards and last scorer", async () => {
     const { provider, fetchMock } = providerReturning({ response: [liveFixture] });
-    const [match] = await provider.fixturesForRange("2026-06-10", "2026-06-12");
+    const [match] = await provider.fixturesForRange(39, 2026, "2026-06-10", "2026-06-12");
 
     expect(fetchMock).toHaveBeenCalledWith(
-      "https://v3.football.api-sports.io/fixtures?league=1&season=2026&from=2026-06-10&to=2026-06-12&timezone=UTC",
+      "https://v3.football.api-sports.io/fixtures?league=39&season=2026&from=2026-06-10&to=2026-06-12&timezone=UTC",
       { headers: { "x-apisports-key": "key" } },
     );
     expect(match).toMatchObject({
@@ -61,7 +61,7 @@ describe("ApiFootballProvider", () => {
       ],
     };
     const { provider } = providerReturning({ response: [stoppageFixture] });
-    const [match] = await provider.fixturesForRange("2026-06-10", "2026-06-12");
+    const [match] = await provider.fixturesForRange(39, 2026, "2026-06-10", "2026-06-12");
 
     expect(match).toMatchObject({ minute: 90, extra: 3, period: "SECOND", running: true });
     // The goal record carries `extra` so a pill can render `90+3′`.
@@ -90,7 +90,7 @@ describe("ApiFootballProvider", () => {
         events: [],
       };
       const { provider } = providerReturning({ response: [fixture] });
-      const [match] = await provider.fixturesForRange("2026-06-10", "2026-06-12");
+      const [match] = await provider.fixturesForRange(39, 2026, "2026-06-10", "2026-06-12");
       expect(match, short).toMatchObject({ period, running, status });
     }
   });
@@ -105,15 +105,15 @@ describe("ApiFootballProvider", () => {
     });
 
     const first = providerReturning({ response: [make(100)] });
-    const [etFirst] = await first.provider.fixturesForRange("2026-06-10", "2026-06-12");
+    const [etFirst] = await first.provider.fixturesForRange(39, 2026, "2026-06-10", "2026-06-12");
     expect(etFirst).toMatchObject({ period: "EXTRA_FIRST", running: true, status: "LIVE" });
 
     const boundary = providerReturning({ response: [make(105)] });
-    const [etBoundary] = await boundary.provider.fixturesForRange("2026-06-10", "2026-06-12");
+    const [etBoundary] = await boundary.provider.fixturesForRange(39, 2026, "2026-06-10", "2026-06-12");
     expect(etBoundary!.period).toBe("EXTRA_FIRST"); // 105 is still the first half
 
     const second = providerReturning({ response: [make(106)] });
-    const [etSecond] = await second.provider.fixturesForRange("2026-06-10", "2026-06-12");
+    const [etSecond] = await second.provider.fixturesForRange(39, 2026, "2026-06-10", "2026-06-12");
     expect(etSecond).toMatchObject({ period: "EXTRA_SECOND", running: true });
   });
 
@@ -136,7 +136,7 @@ describe("ApiFootballProvider", () => {
       ],
     };
     const { provider } = providerReturning({ response: [penFixture] });
-    const [match] = await provider.fixturesForRange("2026-06-10", "2026-06-12");
+    const [match] = await provider.fixturesForRange(39, 2026, "2026-06-10", "2026-06-12");
 
     expect(match!.status).toBe("FINISHED");
     expect(match!.round).toBe("Round of 16");
@@ -166,7 +166,7 @@ describe("ApiFootballProvider", () => {
       ],
     };
     const { provider } = providerReturning({ response: [fixture] });
-    const [match] = await provider.fixturesForRange("2026-06-10", "2026-06-12");
+    const [match] = await provider.fixturesForRange(39, 2026, "2026-06-10", "2026-06-12");
     expect(match!.home.subs).toEqual([{ playerOut: "Fred", playerIn: "Paquetá", minute: 46, extra: null }]);
     expect(match!.away.subs).toEqual([{ playerOut: "Reyna", playerIn: "Aaronson", minute: 64, extra: null }]);
   });
@@ -186,7 +186,7 @@ describe("ApiFootballProvider", () => {
       ],
     };
     const { provider } = providerReturning({ response: [fixture] });
-    const [match] = await provider.fixturesForRange("2026-06-10", "2026-06-12");
+    const [match] = await provider.fixturesForRange(39, 2026, "2026-06-10", "2026-06-12");
     expect(match!.home.goals).toBe(1);
     expect(match!.home.goalEvents).toEqual([{ player: "Robinson", minute: 50, extra: null, kind: "own" }]);
     expect(match!.away.goalEvents).toEqual([]);
@@ -204,7 +204,7 @@ describe("ApiFootballProvider", () => {
       ],
     };
     const { provider } = providerReturning({ response: [fixture] });
-    const [match] = await provider.fixturesForRange("2026-06-10", "2026-06-12");
+    const [match] = await provider.fixturesForRange(39, 2026, "2026-06-10", "2026-06-12");
     expect(match!.home.goalEvents).toEqual([{ player: "Neymar", minute: 73, extra: null, kind: "penalty" }]);
   });
 
@@ -220,7 +220,7 @@ describe("ApiFootballProvider", () => {
       ],
     };
     const { provider } = providerReturning({ response: [fixture] });
-    const [match] = await provider.fixturesForRange("2026-06-10", "2026-06-12");
+    const [match] = await provider.fixturesForRange(39, 2026, "2026-06-10", "2026-06-12");
     expect(match!.varEvents).toEqual([
       { teamId: 10, detail: "Penalty confirmed", player: "Neymar", minute: 67, extra: null },
     ]);
@@ -228,7 +228,7 @@ describe("ApiFootballProvider", () => {
 
   it("leaves shootout undefined for a normal in-play fixture", async () => {
     const { provider } = providerReturning({ response: [liveFixture] });
-    const [match] = await provider.fixturesForRange("2026-06-10", "2026-06-12");
+    const [match] = await provider.fixturesForRange(39, 2026, "2026-06-10", "2026-06-12");
     expect(match!.shootout).toBeUndefined();
   });
 
@@ -237,18 +237,34 @@ describe("ApiFootballProvider", () => {
     fixture.teams.home = { id: 99999, name: "New Caledonia" };
     fixture.events = [];
     const { provider } = providerReturning({ response: [fixture] });
-    const [match] = await provider.fixturesForRange("2026-06-10", "2026-06-12");
+    const [match] = await provider.fixturesForRange(39, 2026, "2026-06-10", "2026-06-12");
     expect(match!.home).toMatchObject({ id: 99999, name: "New Caledonia" });
   });
 
   it("throws a useful error on API failure", async () => {
     const { provider } = providerReturning({ errors: { token: "bad key" } });
-    await expect(provider.fixturesForRange("2026-06-10", "2026-06-12")).rejects.toThrow(/bad key|bad body/);
+    await expect(provider.fixturesForRange(39, 2026, "2026-06-10", "2026-06-12")).rejects.toThrow(/bad key|bad body/);
   });
 
   it("throws on HTTP errors", async () => {
     const { provider } = providerReturning({}, 429);
-    await expect(provider.fixturesForRange("2026-06-10", "2026-06-12")).rejects.toThrow("HTTP 429");
+    await expect(provider.fixturesForRange(39, 2026, "2026-06-10", "2026-06-12")).rejects.toThrow("HTTP 429");
+  });
+
+  it("takes league and season per call, so one provider serves all five leagues", async () => {
+    const { provider, fetchMock } = providerReturning({ response: [] });
+
+    await provider.fixturesForRange(140, 2026, "2026-08-14", "2026-08-16");
+    await provider.fixturesForRange(78, 2025, "2026-08-14", "2026-08-16");
+
+    expect(fetchMock).toHaveBeenNthCalledWith(1,
+      "https://v3.football.api-sports.io/fixtures?league=140&season=2026&from=2026-08-14&to=2026-08-16&timezone=UTC",
+      { headers: { "x-apisports-key": "key" } },
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(2,
+      "https://v3.football.api-sports.io/fixtures?league=78&season=2025&from=2026-08-14&to=2026-08-16&timezone=UTC",
+      { headers: { "x-apisports-key": "key" } },
+    );
   });
 
   it("fetches events via ids endpoint for live fixtures (range endpoint omits them)", async () => {
@@ -257,9 +273,9 @@ describe("ApiFootballProvider", () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce({ ok: true, status: 200, json: () => Promise.resolve({ response: [rangeFixture] }) })
       .mockResolvedValueOnce({ ok: true, status: 200, json: () => Promise.resolve({ response: [liveFixture] }) });
-    const provider = new ApiFootballProvider("key", 1, 2026, fetchMock as never);
+    const provider = new ApiFootballProvider("key", fetchMock as never);
 
-    const [match] = await provider.fixturesForRange("2026-06-10", "2026-06-12");
+    const [match] = await provider.fixturesForRange(39, 2026, "2026-06-10", "2026-06-12");
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(fetchMock).toHaveBeenNthCalledWith(2,
@@ -280,7 +296,7 @@ describe("ApiFootballProvider", () => {
       events: [{ time: { elapsed: 22 }, team: { id: 20, name: "USA" }, player: { name: "Adams" }, type: "Card", detail: "Yellow Card" }],
     };
     const { provider } = providerReturning({ response: [racing] });
-    const [match] = await provider.fixturesForRange("2026-06-10", "2026-06-12");
+    const [match] = await provider.fixturesForRange(39, 2026, "2026-06-10", "2026-06-12");
     // Score follows the authoritative aggregate the instant it moves — the diff
     // emits GOAL now; the scorer name fills in on a later poll via goalEvents.
     expect(match!.home.goals).toBe(1);
@@ -296,7 +312,7 @@ describe("ApiFootballProvider", () => {
       events: [],
     };
     const { provider } = providerReturning({ response: [fixture] });
-    const [match] = await provider.fixturesForRange("2026-06-10", "2026-06-12");
+    const [match] = await provider.fixturesForRange(39, 2026, "2026-06-10", "2026-06-12");
     expect(match).toMatchObject({ minute: 120, extra: 4, period: "EXTRA_SECOND", running: true });
   });
 
@@ -309,7 +325,7 @@ describe("ApiFootballProvider", () => {
       events: [],
     };
     const { provider } = providerReturning({ response: [fixture] });
-    const [match] = await provider.fixturesForRange("2026-06-10", "2026-06-12");
+    const [match] = await provider.fixturesForRange(39, 2026, "2026-06-10", "2026-06-12");
     expect(match).toMatchObject({ minute: 90, extra: 3, period: "SECOND" });
   });
 
@@ -325,7 +341,7 @@ describe("ApiFootballProvider", () => {
       ],
     };
     const { provider } = providerReturning({ response: [fixture] });
-    const [match] = await provider.fixturesForRange("2026-06-10", "2026-06-12");
+    const [match] = await provider.fixturesForRange(39, 2026, "2026-06-10", "2026-06-12");
     expect(match!.home.goalEvents).toEqual([{ player: null, minute: 66, extra: null }]);
     expect(match!.away.yellowCardEvents).toEqual([{ player: null, minute: 60, extra: null }]);
     expect(match!.lastGoal).toMatchObject({ teamId: 10, player: null });
@@ -333,7 +349,7 @@ describe("ApiFootballProvider", () => {
 
   it("exposes goalEvents in scoring order and keeps the count once scorers land", async () => {
     const { provider } = providerReturning({ response: [liveFixture] });
-    const [match] = await provider.fixturesForRange("2026-06-10", "2026-06-12");
+    const [match] = await provider.fixturesForRange(39, 2026, "2026-06-10", "2026-06-12");
     expect(match!.home.goals).toBe(2);
     expect(match!.home.goalEvents).toEqual([
       { player: "Rodrygo", minute: 30, extra: null },

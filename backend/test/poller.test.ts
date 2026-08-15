@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   isLive, isRecentlyFinished, isRegressiveSnapshot, isStartingSoon, partitionFixtures, Poller, toScheduleRow, utcPollRange,
 } from "../src/poller.js";
+import type { LeagueSeasons } from "../src/catalog.js";
 import { CACHE_CONTROL_LONG } from "../src/r2.js";
 import type { MatchState } from "../src/types.js";
 
@@ -19,6 +20,13 @@ function state(
     away: { id: 2, name: "B", goals: 0, yellowCards: 0, redCards: 0, yellowCardEvents: [], redCardEvents: [], goalEvents: [] },
     ...extra,
   };
+}
+
+/** Stand-in for the catalog lookup: every asked-for league is on season 2026. */
+function seasons(): LeagueSeasons {
+  return {
+    resolve: async (ids: number[]) => ids.map((leagueId) => ({ leagueId, season: 2026 })),
+  } as unknown as LeagueSeasons;
 }
 
 describe("polling helpers", () => {
@@ -55,6 +63,101 @@ describe("polling helpers", () => {
   });
 });
 
+describe("Poller multi-league pass", () => {
+  const TOP_FIVE = [39, 140, 135, 78, 61];
+
+  it("fetches every configured league in one pass and concatenates the results", async () => {
+    const today = new Date().toISOString().slice(0, 10);
+    // One live fixture per league, so the concatenation is observable.
+    const provider = {
+      fixturesForRange: vi.fn(async (leagueId: number) => [
+        state(leagueId, `${today}T01:00:00Z`, "LIVE", { leagueId }),
+      ]),
+    };
+    const stateStore = {
+      load: vi.fn().mockResolvedValue({ state: null, etag: null }),
+      save: vi.fn().mockResolvedValue(undefined),
+    };
+    const r2 = { putJsonIfChanged: vi.fn().mockResolvedValue(undefined) };
+    const poller = new Poller(provider as never, stateStore as never, r2 as never, seasons(), TOP_FIVE);
+
+    const result = await poller.fetchOnce();
+
+    // Five range calls — API-Football's `league` parameter takes one integer.
+    expect(provider.fixturesForRange).toHaveBeenCalledTimes(5);
+    const range = utcPollRange();
+    for (const leagueId of TOP_FIVE) {
+      expect(provider.fixturesForRange).toHaveBeenCalledWith(leagueId, 2026, range.from, range.to);
+    }
+    // All five fixtures flow into the one pipeline.
+    expect(result).toEqual({ live: 5 });
+    expect(stateStore.save).toHaveBeenCalledTimes(5);
+    const written = r2.putJsonIfChanged.mock.calls.find(([key]) => key === `fixtures-${today}.json`);
+    expect((written![1] as { matches: MatchState[] }).matches).toHaveLength(5);
+  });
+
+  it("reads each league's season from catalog.json, not from config", async () => {
+    const { LeagueSeasons } = await import("../src/catalog.js");
+    const r2 = {
+      putJsonIfChanged: vi.fn().mockResolvedValue(undefined),
+      getJson: vi.fn().mockResolvedValue({
+        leagues: [
+          { id: 39, season: 2026 },
+          { id: 140, season: 2025 }, // mid-rollover: La Liga still on last season
+        ],
+      }),
+    };
+    const provider = { fixturesForRange: vi.fn().mockResolvedValue([]) };
+    const stateStore = { load: vi.fn(), save: vi.fn() };
+    const poller = new Poller(
+      provider as never, stateStore as never, r2 as never, new LeagueSeasons(r2 as never), [39, 140],
+    );
+
+    await poller.fetchOnce();
+
+    const range = utcPollRange();
+    expect(provider.fixturesForRange).toHaveBeenCalledWith(39, 2026, range.from, range.to);
+    expect(provider.fixturesForRange).toHaveBeenCalledWith(140, 2025, range.from, range.to);
+  });
+
+  it("skips a league the catalog has no season for rather than guessing one", async () => {
+    const { LeagueSeasons } = await import("../src/catalog.js");
+    const r2 = {
+      putJsonIfChanged: vi.fn().mockResolvedValue(undefined),
+      getJson: vi.fn().mockResolvedValue({ leagues: [{ id: 39, season: 2026 }, { id: 61, season: null }] }),
+    };
+    const provider = { fixturesForRange: vi.fn().mockResolvedValue([]) };
+    const stateStore = { load: vi.fn(), save: vi.fn() };
+    const poller = new Poller(
+      provider as never, stateStore as never, r2 as never, new LeagueSeasons(r2 as never), [39, 61],
+    );
+
+    await poller.fetchOnce();
+
+    expect(provider.fixturesForRange).toHaveBeenCalledTimes(1);
+    expect(provider.fixturesForRange).toHaveBeenCalledWith(39, 2026, expect.any(String), expect.any(String));
+  });
+
+  it("caches the catalog read for the day — one R2 GET across many ticks", async () => {
+    const { LeagueSeasons } = await import("../src/catalog.js");
+    const r2 = {
+      putJsonIfChanged: vi.fn().mockResolvedValue(undefined),
+      getJson: vi.fn().mockResolvedValue({ leagues: [{ id: 39, season: 2026 }] }),
+    };
+    const provider = { fixturesForRange: vi.fn().mockResolvedValue([]) };
+    const stateStore = { load: vi.fn(), save: vi.fn() };
+    const poller = new Poller(
+      provider as never, stateStore as never, r2 as never, new LeagueSeasons(r2 as never), [39],
+    );
+
+    await poller.fetchOnce();
+    await poller.fetchOnce();
+    await poller.fetchOnce();
+
+    expect(r2.getJson).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("Poller", () => {
   it("publishes per-match state for a live fixture (no FCM, no purge)", async () => {
     const today = new Date().toISOString().slice(0, 10);
@@ -65,7 +168,7 @@ describe("Poller", () => {
       save: vi.fn().mockResolvedValue(undefined),
     };
     const r2 = { putJsonIfChanged: vi.fn().mockResolvedValue(undefined) };
-    const poller = new Poller(provider as never, stateStore as never, r2 as never);
+    const poller = new Poller(provider as never, stateStore as never, r2 as never, seasons(), [39]);
 
     const result = await poller.fetchOnce();
 
@@ -91,7 +194,7 @@ describe("Poller", () => {
       save: vi.fn().mockResolvedValue(undefined),
     };
     const r2 = { putJsonIfChanged: vi.fn().mockResolvedValue(undefined) };
-    const poller = new Poller(provider as never, stateStore as never, r2 as never);
+    const poller = new Poller(provider as never, stateStore as never, r2 as never, seasons(), [39]);
 
     await poller.fetchOnce();
 
@@ -113,7 +216,7 @@ describe("Poller", () => {
     const provider = { fixturesForRange: vi.fn().mockResolvedValue([future]) };
     const stateStore = { load: vi.fn(), save: vi.fn() };
     const r2 = { putJsonIfChanged: vi.fn().mockResolvedValue(undefined) };
-    const poller = new Poller(provider as never, stateStore as never, r2 as never);
+    const poller = new Poller(provider as never, stateStore as never, r2 as never, seasons(), [39]);
 
     await poller.fetchOnce();
 
@@ -126,7 +229,7 @@ describe("Poller", () => {
     const provider = { fixturesForRange: vi.fn().mockResolvedValue([]) };
     const stateStore = { load: vi.fn(), save: vi.fn() };
     const r2 = { putJsonIfChanged: vi.fn().mockResolvedValue(undefined) };
-    const poller = new Poller(provider as never, stateStore as never, r2 as never);
+    const poller = new Poller(provider as never, stateStore as never, r2 as never, seasons(), [39]);
 
     await poller.fetchOnce();
 
@@ -148,7 +251,7 @@ describe("Poller", () => {
       save: vi.fn().mockResolvedValue(undefined),
     };
     const r2 = { putJsonIfChanged: vi.fn().mockResolvedValue(undefined) };
-    const poller = new Poller(provider as never, stateStore as never, r2 as never);
+    const poller = new Poller(provider as never, stateStore as never, r2 as never, seasons(), [39]);
 
     const result = await poller.fetchOnce();
 
@@ -165,7 +268,7 @@ describe("Poller", () => {
     const provider = { fixturesForRange: vi.fn().mockResolvedValue([scheduled, oldFinished]) };
     const stateStore = { load: vi.fn(), save: vi.fn() };
     const r2 = { putJsonIfChanged: vi.fn().mockResolvedValue(undefined) };
-    const poller = new Poller(provider as never, stateStore as never, r2 as never);
+    const poller = new Poller(provider as never, stateStore as never, r2 as never, seasons(), [39]);
 
     await poller.fetchOnce();
 
@@ -181,7 +284,7 @@ describe("Poller", () => {
       save: vi.fn().mockResolvedValue(undefined),
     };
     const r2 = { putJsonIfChanged: vi.fn().mockResolvedValue(undefined) };
-    const poller = new Poller(provider as never, stateStore as never, r2 as never);
+    const poller = new Poller(provider as never, stateStore as never, r2 as never, seasons(), [39]);
 
     await poller.fetchOnce();
 
@@ -200,7 +303,7 @@ describe("Poller", () => {
       save: vi.fn(),
     };
     const r2 = { putJsonIfChanged: vi.fn().mockResolvedValue(undefined) };
-    const poller = new Poller(provider as never, stateStore as never, r2 as never);
+    const poller = new Poller(provider as never, stateStore as never, r2 as never, seasons(), [39]);
 
     await poller.fetchOnce();
 
@@ -223,7 +326,7 @@ describe("Poller", () => {
       save: vi.fn().mockResolvedValue(undefined),
     };
     const r2 = { putJsonIfChanged: vi.fn().mockResolvedValue(undefined) };
-    const poller = new Poller(provider as never, stateStore as never, r2 as never);
+    const poller = new Poller(provider as never, stateStore as never, r2 as never, seasons(), [39]);
 
     await poller.fetchOnce();
 
@@ -240,7 +343,7 @@ describe("Poller", () => {
       save: vi.fn(),
     };
     const r2 = { putJsonIfChanged: vi.fn().mockResolvedValue(undefined) };
-    const poller = new Poller(provider as never, stateStore as never, r2 as never);
+    const poller = new Poller(provider as never, stateStore as never, r2 as never, seasons(), [39]);
 
     await poller.fetchOnce();
 
@@ -276,8 +379,11 @@ describe("isRecentlyFinished", () => {
 describe("isStartingSoon", () => {
   const now = Date.parse("2026-06-14T20:00:00Z");
 
-  it("includes scheduled fixtures starting within one minute", () => {
+  it("includes scheduled fixtures starting within five minutes", () => {
+    // The app starts polling matches/{id}.json at kickoff−5min, so the object
+    // must exist by then — at the old 60s every client 404'd for four minutes.
     expect(isStartingSoon(state(1, "2026-06-14T20:00:45Z"), now)).toBe(true);
+    expect(isStartingSoon(state(2, "2026-06-14T20:04:30Z"), now)).toBe(true);
   });
 
   it("keeps briefly overdue scheduled fixtures until the provider marks them live", () => {
@@ -285,7 +391,7 @@ describe("isStartingSoon", () => {
   });
 
   it("excludes distant, stale, live, and finished fixtures", () => {
-    expect(isStartingSoon(state(1, "2026-06-14T20:02:00Z"), now)).toBe(false);
+    expect(isStartingSoon(state(1, "2026-06-14T20:06:00Z"), now)).toBe(false);
     expect(isStartingSoon(state(2, "2026-06-14T19:40:00Z"), now)).toBe(false);
     expect(isStartingSoon(state(3, "2026-06-14T20:00:45Z", "LIVE"), now)).toBe(false);
     expect(isStartingSoon(state(4, "2026-06-14T20:00:45Z", "FINISHED"), now)).toBe(false);

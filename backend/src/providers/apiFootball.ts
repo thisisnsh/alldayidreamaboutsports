@@ -93,8 +93,6 @@ interface ApiFixture {
 export class ApiFootballProvider implements ScoreProvider {
   constructor(
     private readonly apiKey: string,
-    private readonly leagueId: number,
-    private readonly season: number,
     private readonly fetchImpl: typeof fetch = fetch,
   ) {}
 
@@ -122,9 +120,14 @@ export class ApiFootballProvider implements ScoreProvider {
     }
   }
 
-  async fixturesForRange(fromISO: string, toISO: string): Promise<MatchState[]> {
+  async fixturesForRange(
+    leagueId: number,
+    season: number,
+    fromISO: string,
+    toISO: string,
+  ): Promise<MatchState[]> {
     const fixtures = await this.get<ApiFixture>(
-      `/fixtures?league=${this.leagueId}&season=${this.season}&from=${fromISO}&to=${toISO}&timezone=UTC`,
+      `/fixtures?league=${leagueId}&season=${season}&from=${fromISO}&to=${toISO}&timezone=UTC`,
     );
 
     // The range endpoint omits events; enrich live fixtures via the ids endpoint (max 20/request).
@@ -133,7 +136,7 @@ export class ApiFootballProvider implements ScoreProvider {
       .filter((f) => liveStatuses.has(f.fixture.status.short))
       .map((f) => f.fixture.id);
     log.info("provider_fixture_range", {
-      fromISO, toISO, fixtures: fixtures.length, liveFixtureIds: liveIds,
+      leagueId, season, fromISO, toISO, fixtures: fixtures.length, liveFixtureIds: liveIds,
     });
 
     if (liveIds.length > 0) {

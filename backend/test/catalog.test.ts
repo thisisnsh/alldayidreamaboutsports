@@ -9,7 +9,7 @@ function providerReturning(payload: unknown, status = 200) {
     status,
     json: () => Promise.resolve(payload),
   });
-  return { provider: new ApiFootballProvider("key", 1, 2026, fetchMock as never), fetchMock };
+  return { provider: new ApiFootballProvider("key", fetchMock as never), fetchMock };
 }
 
 const league = (seasons: Array<{ year: number; current: boolean; end: string }>) => ({

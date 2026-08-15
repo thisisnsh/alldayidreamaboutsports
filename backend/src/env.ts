@@ -41,8 +41,13 @@ export const env = {
   },
   tasksQueue: process.env.TASKS_QUEUE ?? "live-scores",
   tasksLocation: process.env.TASKS_LOCATION ?? "us-central1",
-  leagueId: Number(process.env.LEAGUE_ID ?? 1), // World Cup
-  season: Number(process.env.SEASON ?? 2026),
+  // The leagues the poller and the schedule sync fetch, in kickoff-density
+  // order. Seasons are NOT configured here — they come per-league from
+  // catalog.json, so the August season rollover needs no deploy.
+  leagueIds: (process.env.LEAGUE_IDS ?? "39,140,135,78,61")
+    .split(",")
+    .map((id) => Number(id.trim()))
+    .filter((id) => Number.isFinite(id) && id > 0),
   port: Number(process.env.PORT ?? 8080),
   // Client reporter probability + server multiply-back factor. MUST equal the
   // RC `celebration_sample_percent`. 1.0 = everyone reports → exact counts.

@@ -24,14 +24,15 @@ const celebrateSchema = z.object({
 // end-to-end without any push. The fields mirror what the poller would produce.
 const testEventSchema = z.object({
   fixtureId: z.number().int().default(999999),
-  leagueId: z.number().int().default(1),
+  leagueId: z.number().int().default(140), // La Liga
+  season: z.number().int().default(2026),
   rawStatus: z.string().default("2H"),
   minute: z.number().int().nullable().default(73),
   extra: z.number().int().nullable().default(null),
-  homeTeamId: z.number().int().default(6), // Brazil
-  awayTeamId: z.number().int().default(16), // Mexico
-  homeName: z.string().default("Brazil"),
-  awayName: z.string().default("Mexico"),
+  homeTeamId: z.number().int().default(541), // Real Madrid
+  awayTeamId: z.number().int().default(529), // Barcelona
+  homeName: z.string().default("Real Madrid"),
+  awayName: z.string().default("Barcelona"),
   homeGoals: z.number().int().default(1),
   awayGoals: z.number().int().default(0),
 });
@@ -220,7 +221,7 @@ export function buildApp({ store, poller, dispatcher, catalog, celebrations, r2 
     const state: MatchState = {
       fixtureId: d.fixtureId,
       leagueId: d.leagueId,
-      season: env.season,
+      season: d.season,
       kickoffISO: now,
       secondHalfStartISO: null,
       status: phase.status,
