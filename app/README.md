@@ -29,20 +29,25 @@ picks the implementation — that's the release flag:
 **Day-to-day dev loop:**
 
 1. Build & run **Debug** from Xcode (⌘R). No sign-in — you're already "Dev Fan"
-   with 5 fan teams; the popover shows a seeded LIVE match (Brazil 2–1 USA,
-   73′) plus scheduled and finished fixtures, and celebration counts are
-   pre-populated. ~8s after launch, random match events start firing
-   automatically (fan goals weighted highest), so celebrations and pills
-   appear hands-free.
+   with the fan teams in `DevConfig.fanTeams`; the popover shows a seeded LIVE
+   match (Brazil 2–1 USA, 73′) plus scheduled and finished fixtures, and
+   celebration counts are pre-populated. ~8s after launch, random match events
+   start firing automatically (fan goals weighted highest), so celebrations and
+   pills appear hands-free.
+
+   The seeded fixtures are still World Cup sides while the demo catalog now
+   leads with the top five club leagues, so a fresh Debug run also exercises the
+   one-time "the World Cup has ended" migration prompt (delete the
+   `leagueMigrationPrompted` default to see it again).
 2. **Everything is a code knob in `Sources/Dev/DevConfig.swift`**: the fake
    profile, the fan-team list, auto-events on/off, first-event delay, interval
    range, and event weights. Fixtures/counts seed data lives next door in
    `Sources/Dev/FakeBackend.swift`. Edit, ⌘R, observe.
 3. Settings shows a small 🧪 pill so you always know you're in a dev session
    (no dev controls — the auto loop and `DevConfig` are the controls). The
-   simulated events are the exact payloads FCM would deliver, through the real
-   EventRouter/Overlay pipeline; `Settings → Celebration → Preview animation`
-   fires one on demand.
+   simulated events run through the real EventRouter/Overlay pipeline, exactly
+   as a state change polled from the scores CDN would; `Settings → Celebration
+   → Preview animation` fires one on demand.
 4. Tap the ball during the window; the fake `/celebrate` logs and accumulates,
    and the count text reflects it (POST → GET round-trip, all in memory).
    Each click counts as 4 celebrations and lands 4 mini balls on the bottom
@@ -55,13 +60,13 @@ picks the implementation — that's the release flag:
 | Google sign-in (`GIDSignIn`) | never invoked — `FakeGoogleAuth`, and bootstrap bypasses the flow entirely |
 | Backend API (`URLSession` in `APIClient`) | never instantiated — `FakeBackendAPI` |
 | Scores CDN (`URLSession` in `CDNScoresClient`) | never instantiated — `FakeScores` (incl. the kill-switch backup `config.json`) |
-| FCM / Remote Config / Crashlytics / Analytics | `GoogleService-Info.plist` absent → Firebase never configured |
+| Remote Config / Crashlytics / Analytics | `GoogleService-Info.plist` absent → Firebase never configured (there is no Messaging — push was dropped for polling + CDN) |
 | Sparkle appcast fetch | updater not started in dev builds (`startingUpdater: false`) |
 | Profile photo (`AsyncImage`) | dev profile has `photoURL: nil` |
 
 Debug builds also skip login-item registration (`LaunchAtLogin`), so your dev
-build never sneaks into Login Items. The only outbound thing left is clicking
-a fixture, which opens FIFA.com in your browser — deliberate.
+build never sneaks into Login Items. Nothing in a Debug session reaches the
+network at all.
 
 ## Real-service configuration
 
@@ -160,7 +165,7 @@ the build. Neither setting can silently call production.
 | Dir | What |
 |---|---|
 | `Sources/App.swift` | window scenes (login, picker, settings, gate) |
-| `Sources/AppDelegate.swift` | transient AppKit menu, Firebase/APNs bootstrap, Sparkle updater, reopen handling |
+| `Sources/AppDelegate.swift` | transient AppKit menu, Firebase bootstrap (Remote Config + Crashlytics/Analytics — no Messaging), Sparkle updater, reopen handling |
 | `Sources/Services/` | session/auth, backend API, local prefs, kill switch (`ControlPlane`), event routing, tap batching |
 | `Sources/Overlay/` | the two overlay panels: full-screen click-through display + small clickable ball; celebration, notch pill, particles |
 | `Sources/Views/` | login, popover, team picker, settings, kill/update gate |
@@ -179,11 +184,16 @@ Key invariants:
   team, sent when the ball disappears.
 - `ControlPlane` gates everything; `kill_switch`/`min_build` from Remote Config
   (real-time) with `config.json` on the scores CDN as backup.
-- Fixture date files bootstrap and persist the daily schedule once. While the
-  menu is open, only followed-team `matches/{fixtureId}.json` objects that are
-  live or starting within one minute are polled. Finished fixtures and
-  celebration totals remain in the local cache; celebration totals refresh
-  only when the cached and newly fetched scores differ.
+- Fixture date files bootstrap and persist the daily schedule once. Only
+  followed-team `matches/{fixtureId}.json` objects inside their live window are
+  polled — from kickoff−5min (`LiveStore.preKickoffLead`) until FINISHED, capped
+  at 3.5h. The backend publishes those objects from kickoff−5min too, so the
+  two ends agree and no client 404s its way to kickoff. Finished fixtures and
+  celebration totals remain in the local cache; celebration totals refresh only
+  when the cached and newly fetched scores differ.
+- The published `fixtures` list is fan-filtered. The full day's fixtures — up to
+  ~48 across five leagues — stay in the working set for the poll loop, but only
+  the user's own are published and written to the local cache.
 
 ## Code signing & notarization (one-time setup)
 
@@ -215,9 +225,10 @@ Key invariants:
      --apple-id <your-apple-id> --team-id 983LBM5U6B \
      --password <app-specific-password>   # appleid.apple.com → App-Specific Passwords
    ```
-5. **Push capability**: developer.apple.com → Identifiers →
-   `com.alldayidreamaboutsports.mac` → enable Push Notifications; create an
-   APNs auth key (.p8) and upload it in Firebase → Cloud Messaging.
+
+There is no push capability to set up. The app polls the scores CDN, so it
+needs no Push Notifications entitlement, no APNs auth key, and no Firebase
+Cloud Messaging configuration.
 
 ### Rotating the Developer ID certificate
 
