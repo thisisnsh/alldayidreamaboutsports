@@ -52,6 +52,11 @@ jobs:
           # August rollover needs no deploy. Override per environment with the
           # LEAGUE_IDS GitHub variable.
           LEAGUE_IDS="${{ vars.LEAGUE_IDS || '39,140,135,78,61' }}"
+          # NOTE: --update-env-vars splits entries on commas, so a value that
+          # CONTAINS commas (LEAGUE_IDS) has to change the delimiter. The
+          # leading ^##^ tells gcloud to split on ## instead; without it,
+          # "LEAGUE_IDS=39,140,..." parses as LEAGUE_IDS=39 plus a bare "140"
+          # and the deploy fails with "Bad syntax for dict arg: [140]".
           gcloud run deploy "$SERVICE" \
             --source backend \
             --project "${{ vars.GCP_PROJECT_ID }}" \
@@ -63,7 +68,7 @@ jobs:
             --max-instances 50 \
             --memory 512Mi \
             --cpu 1 \
-            --update-env-vars "GCP_PROJECT_ID=${{ vars.GCP_PROJECT_ID }},R2_BUCKET_SCORES=${{ vars.R2_BUCKET_SCORES }},TASKS_QUEUE=live-scores,TASKS_LOCATION=${{ vars.GCP_REGION }},SCORES_DOMAIN=${SCORES_DOMAIN},LEAGUE_IDS=${LEAGUE_IDS}" \
+            --update-env-vars "^##^GCP_PROJECT_ID=${{ vars.GCP_PROJECT_ID }}##R2_BUCKET_SCORES=${{ vars.R2_BUCKET_SCORES }}##TASKS_QUEUE=live-scores##TASKS_LOCATION=${{ vars.GCP_REGION }}##SCORES_DOMAIN=${SCORES_DOMAIN}##LEAGUE_IDS=${LEAGUE_IDS}" \
             --set-secrets "API_FOOTBALL_KEY=api-football-key:latest,SESSION_JWT_SECRET=session-jwt-secret:latest,R2_ACCESS_KEY_ID=r2-access-key-id:latest,R2_SECRET_ACCESS_KEY=r2-secret-access-key:latest,R2_ENDPOINT=r2-endpoint:latest,GOOGLE_OAUTH_CLIENT_ID=google-oauth-client-id:latest"
 
       - name: Smoke test
