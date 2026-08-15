@@ -1,15 +1,18 @@
 # TODO before shipping 🚢
 
-The big picture: this is a Mac menu-bar app that shows live World Cup scores and
-fires a goal celebration on your screen. To go live you need (1) accounts to
-build & sign the app, (2) a cloud backend that watches matches and pushes goals,
-(3) cheap storage + a website for downloads, and (4) one real end-to-end test
-during an actual match before you tag `v1.0.0`.
+The big picture: this is a Mac menu-bar app that shows live scores from Europe's
+top five leagues and fires a goal celebration on your screen. To go live you need
+(1) accounts to build & sign the app, (2) a cloud backend that watches matches and
+publishes their state to a CDN, (3) cheap storage + a website for downloads, and
+(4) one real end-to-end test during an actual match before you tag `v1.0.0`.
 
 Do the sections in order — later steps reuse values from earlier ones. The exact
 commands live in the linked READMEs; this file explains *why* each step exists so
-you don't paste things blindly. Tournament is LIVE, so target `v1.0.0` within
-3 days.
+you don't paste things blindly.
+
+**Nothing here involves push.** Goals reach the app because every Mac polls a
+CDN-cached JSON object, not because we send anything — so there is no APNs key,
+no Push Notifications capability, and no Firebase Cloud Messaging to configure.
 
 ### How "staging" vs "prod" works (read this once)
 
@@ -26,9 +29,9 @@ You build the app in three flavors:
 Because of that, most cloud things get created **twice** — once in staging, once
 in prod (you'll see "per env" below). The app carries **two**
 `GoogleService-Info.plist` files (a staging one and a prod one) and the
-`Staging`/`Release` build configuration copies in the right one. The **one**
-thing you make once and reuse for both is
-the APNs push key (`.p8`) — it's tied to your Apple account, not to a project.
+`Staging`/`Release` build configuration copies in the right one. The things you
+make once and reuse for both are your Apple signing identity and the Sparkle
+key — they're tied to your account, not to a project.
 
 ---
 
@@ -37,14 +40,11 @@ the APNs push key (`.p8`) — it's tied to your Apple account, not to a project.
 These are the paid/identity things nothing else works without.
 
 - [ ] **Apple Developer membership** active for team `983LBM5U6B`. Then register
-      the app's bundle id `com.alldayidreamaboutsports.mac` and turn on the
-      **Push Notifications** capability — without this, goal alerts can't reach
-      the app.
-- [ ] **Create an APNs auth key (`.p8`)** at developer.apple.com → Keys. This is
-      the credential Apple's push servers check. You upload it to Firebase later.
-      Download it once and keep it safe — Apple only lets you download it one time.
+      the app's bundle id `com.alldayidreamaboutsports.mac`. No Push
+      Notifications capability is needed — the app polls.
 - [ ] **Subscribe to API-Football "Ultra"** ($29/mo) and copy the API key. This
-      is the live-scores data feed the backend polls. (Cancel it after the final.)
+      is the live-scores data feed the backend polls. It runs year-round now, so
+      this is a standing $29/mo, not a six-week rental.
 - [ ] **Domain** `alldayidreamaboutsports.com`: keep it **registered at
       Hostinger** (that's fine — you own and renew it there), but later you'll
       point its **nameservers at Cloudflare** so Cloudflare can serve the
@@ -53,8 +53,8 @@ These are the paid/identity things nothing else works without.
 
 ## 2. Google Cloud + Firebase — do staging first, then repeat for prod — `infra/README.md`
 
-This is the backend brain: a project that holds your database (Firestore),
-push messaging (FCM), and the remote on/off switches (Remote Config). You'll run
+This is the backend brain: a project that holds your database (Firestore) and
+the remote on/off switches (Remote Config). You'll run
 this whole section twice. **Note the short project name:** GCP caps project ids at
 30 characters and `alldayidreamaboutsports-staging` is 31 — one too long — so we
 use the shorter `dreamaboutsports-` prefix for the GCP project id only.
@@ -69,8 +69,6 @@ Everything else (bundle id, buckets, domain) still uses the full name.
       `app/Resources/GoogleService-Info-Staging.plist`. This file points at
       `dreamaboutsports-staging`; the build now includes it only in `Staging`.
       Repeat for prod later as `GoogleService-Info-Production.plist`.
-- [ ] **Upload the APNs `.p8`** in Firebase → Cloud Messaging. Skip this and push
-      silently fails — no error, just no goal alerts ever arrive.
 - [ ] **Import + publish** `infra/remoteconfig.template.json` in Remote Config.
       These are the live switches (kill switch, minimum build, celebration
       toggles) you can flip without shipping an update.
@@ -167,7 +165,7 @@ update itself.
 - [ ] **Export your Developer ID certificate** as a `.p12` → add to CI secrets so
       CI can sign release builds.
 
-## 6. End-to-end test on staging (during any live group-stage match)
+## 6. End-to-end test on staging (during any live league match)
 
 Don't ship without watching the whole pipeline work on a real goal. Use a
 **staging build** (section "How staging vs prod works" above).
@@ -187,6 +185,12 @@ Don't ship without watching the whole pipeline work on a real goal. Use a
       "please update" gate should appear; reset it afterward.
 - [ ] **Test the notch pill** on a notched Mac *and* on an external / non-notch
       display, since the layout differs.
+- [ ] **Watch the dispatch gate open and close.** `/internal/dispatch` should
+      return `{"enqueued":0}` outside a match window and `{"enqueued":12}` inside
+      it. If it never opens, `sync-schedule` has not written the fixture files it
+      reads. This is the control that keeps five leagues inside the API quota.
+- [ ] **Check the API-Football request counter** against ~51,900/day on the first
+      busy Saturday (69% of the Ultra quota).
 
 ## 7. Ship
 
@@ -210,5 +214,6 @@ Don't ship without watching the whole pipeline work on a real goal. Use a
 - [ ] Global tap-rate ball-density pulses (currently: local balls + final count).
 - [ ] Multi-display picker for the overlay (currently: main screen only).
 - [ ] Quiet hours; football-data.org fallback provider; localization.
-- [ ] Cancel API-Football after the final (July 19, 2026); flip `kill_switch`
-      with a "see you next time" message.
+- [ ] A sixth competition (Champions League) needs either the Mega plan or a
+      per-league gate — five leagues already use 69% of the Ultra quota on a
+      Saturday.
