@@ -76,7 +76,10 @@ describe("ScheduleService", () => {
       status: "LIVE", rawStatus: "2H", minute: 73, period: "SECOND", running: true,
       home: { id: 1, name: "A", goals: 2, yellowCards: 1, redCards: 0, yellowCardEvents: [], redCardEvents: [], goalEvents: [{ player: "X", minute: 20, extra: null }] },
     };
-    const provider = { fixturesForRange: vi.fn().mockResolvedValue([live]) };
+    const provider = {
+      fixturesForRange: vi.fn().mockResolvedValue([live]),
+      fixturesByIds: vi.fn().mockResolvedValue([live]),
+    };
     const r2 = { putJsonIfChanged: vi.fn().mockResolvedValue(undefined) };
     const svc = new ScheduleService(provider as never, r2 as never, seasons(), [39]);
 

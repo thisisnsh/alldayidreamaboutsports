@@ -129,30 +129,19 @@ export class ApiFootballProvider implements ScoreProvider {
     const fixtures = await this.get<ApiFixture>(
       `/fixtures?league=${leagueId}&season=${season}&from=${fromISO}&to=${toISO}&timezone=UTC`,
     );
-
-    // The range endpoint omits events; enrich live fixtures via the ids endpoint (max 20/request).
-    const liveStatuses = new Set(["1H", "HT", "2H", "ET", "BT", "P", "INT", "LIVE"]);
-    const liveIds = fixtures
-      .filter((f) => liveStatuses.has(f.fixture.status.short))
-      .map((f) => f.fixture.id);
     log.info("provider_fixture_range", {
-      leagueId, season, fromISO, toISO, fixtures: fixtures.length, liveFixtureIds: liveIds,
+      leagueId, season, fromISO, toISO, fixtures: fixtures.length,
     });
+    // No enrichment here: the range endpoint omits events, but the live fixtures
+    // of ALL leagues are enriched together by the caller (see fetchLeagueFixtures)
+    // so a normal night costs one ids call instead of one per league.
+    return fixtures.map((f) => this.toState(f));
+  }
 
-    if (liveIds.length > 0) {
-      const enriched: ApiFixture[] = [];
-      for (let i = 0; i < liveIds.length; i += 20) {
-        const batch = liveIds.slice(i, i + 20);
-        const rows = await this.get<ApiFixture>(`/fixtures?ids=${batch.join("-")}`);
-        enriched.push(...rows);
-      }
-      const eventsById = new Map(enriched.map((f) => [f.fixture.id, f.events ?? []]));
-      for (const f of fixtures) {
-        const events = eventsById.get(f.fixture.id);
-        if (events) f.events = events;
-      }
-    }
-
+  async fixturesByIds(ids: number[]): Promise<MatchState[]> {
+    if (ids.length === 0) return [];
+    const fixtures = await this.get<ApiFixture>(`/fixtures?ids=${ids.join("-")}`);
+    log.info("provider_fixtures_by_ids", { requested: ids.length, fixtures: fixtures.length });
     return fixtures.map((f) => this.toState(f));
   }
 

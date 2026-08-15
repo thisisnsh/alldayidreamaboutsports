@@ -107,6 +107,7 @@ describe("CatalogService", () => {
   function fakeProvider(): ScoreProvider {
     return {
       fixturesForRange: vi.fn(),
+      fixturesByIds: vi.fn(),
       leagueInfo: vi.fn(async (id: number): Promise<LeagueInfo> => ({
         id,
         name: `League ${id}`,

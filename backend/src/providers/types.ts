@@ -36,6 +36,10 @@ export interface ScoreProvider {
     fromISO: string,
     toISO: string,
   ): Promise<MatchState[]>;
+  /** Full state — events included — for specific fixtures. The range endpoint
+   * omits events, so live fixtures are re-read through here. API-Football's
+   * `ids` parameter takes at most 20 per request, so the caller batches. */
+  fixturesByIds(ids: number[]): Promise<MatchState[]>;
   /** League info + current/upcoming season, for the daily catalog. */
   leagueInfo(leagueId: number): Promise<LeagueInfo>;
   /** All teams in a league's season, with logos. */
