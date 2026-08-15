@@ -92,9 +92,9 @@ struct MenuPopoverView: View {
             }
             let shown = session.fixtures.filter { $0.involves(session.fanTeamIds) }
             if shown.isEmpty {
-                Text(session.fixtures.isEmpty
-                     ? "No matches today — rest day ☁️"
-                     : "None of your teams play today 💤")
+                Text(session.hasFixturesToday
+                     ? "None of your teams play today 💤"
+                     : "No matches today — rest day ☁️")
                     .font(.system(size: 13))
                     .opacity(0.7)
             } else {

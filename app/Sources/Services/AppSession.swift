@@ -401,17 +401,33 @@ final class AppSession: ObservableObject {
     }
 
     /// Project the working set into the published, sorted, visible `fixtures`
-    /// list and persist it. Visible = kicks off today, or a live fan match.
+    /// list and persist it. Visible = a fan match that kicks off today, or a
+    /// live one whatever day it started on. Five leagues put up to ~48 fixtures
+    /// a day in the working set; only the user's own belong in the published
+    /// (and cached-to-disk) list. The full set stays in `fixturesById` for the
+    /// poll loop.
     func publishFixtures() {
         let calendar = Calendar.current
         let now = Date()
         fixtures = fixturesById.values
             .filter { fixture in
-                fixture.kickoff.map { calendar.isDate($0, inSameDayAs: now) } == true
-                    || (fixture.isLive && fixture.involves(fanTeamIds))
+                guard fixture.involves(fanTeamIds) else { return false }
+                return fixture.kickoff.map { calendar.isDate($0, inSameDayAs: now) } == true
+                    || fixture.isLive
             }
             .sorted { ($0.kickoff ?? .distantFuture) < ($1.kickoff ?? .distantFuture) }
         persistFixtureCache()
+    }
+
+    /// Is there any football on today at all, fan teams or not? The menu needs
+    /// this to tell "none of your teams play today" from "nobody plays today" —
+    /// `fixtures` alone can no longer answer it now that it is fan-filtered.
+    var hasFixturesToday: Bool {
+        let calendar = Calendar.current
+        let now = Date()
+        return fixturesById.values.contains { fixture in
+            fixture.kickoff.map { calendar.isDate($0, inSameDayAs: now) } == true
+        }
     }
 
     /// Optimistically fold the user's own taps into the local total so their
