@@ -53,6 +53,13 @@ body {
 
 a { color: inherit; text-decoration: none; }
 
+/* Headings that exist for crawlers and screen readers, not for the eye */
+.sr-only {
+  position: absolute; width: 1px; height: 1px;
+  margin: -1px; padding: 0; border: 0;
+  overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+}
+
 .content { position: relative; z-index: 2; }
 
 /* ════════════════════════ NAV ═══════════════════════════════════════════ */
@@ -83,8 +90,20 @@ a { color: inherit; text-decoration: none; }
 }
 .brand-text b { font-weight: 800; }
 
-.nav-links { display: flex; align-items: center; }
+.nav-links { display: flex; align-items: center; gap: 22px; }
 .nav-cta { margin-left: 4px; }
+.nav-link {
+  font-family: var(--display);
+  font-size: 14px; font-weight: 600; letter-spacing: -0.005em;
+  color: var(--ash);
+  transition: color .2s var(--ease);
+}
+.nav-link:hover { color: var(--bone); }
+
+@media (max-width: 900px) {
+  /* the CTA is the only thing that has to survive on a phone */
+  .nav-link { display: none; }
+}
 
 @media (max-width: 760px) {
   .nav { padding-top: max(14px, env(safe-area-inset-top, 0px)); }
@@ -191,7 +210,7 @@ a { color: inherit; text-decoration: none; }
 .reveal.d3 { transition-delay: .21s; }
 
 /* keep in-page anchor targets clear of the fixed nav */
-.hero, .stage-section, .features, .feature, .faq, .final { scroll-margin-top: 88px; }
+.hero, .stage-section, .features, .feature, .leagues, .faq, .final { scroll-margin-top: 88px; }
 
 /* ════════════════════════ HERO ══════════════════════════════════════════ */
 .hero {
@@ -515,6 +534,12 @@ a { color: inherit; text-decoration: none; }
 /* ════════════════════════ FAQ ═══════════════════════════════════════════ */
 .faq { padding: 0 var(--gutter) clamp(50px, 9vh, 100px); }
 .faq-inner { max-width: 760px; margin: 0 auto; }
+.faq-title {
+  font-family: var(--display);
+  font-size: clamp(20px, 2.4vw, 26px); font-weight: 800; letter-spacing: -0.02em;
+  color: var(--bone);
+  margin-bottom: clamp(18px, 2.4vh, 26px);
+}
 .faq-list { display: flex; flex-direction: column; gap: 10px; }
 .faq-item {
   background: var(--card); border: 1px solid var(--hairline); border-radius: 16px;
