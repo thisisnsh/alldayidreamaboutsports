@@ -357,26 +357,26 @@ final class DemoEngine: ObservableObject {
     }
 
     /// A one-off parade of every pill layout, fired through the real pipeline
-    /// before the timeline proper. Uses one match (FRA vs GER) and only the
-    /// opponent (GER) side for goal-type events, so each shows as a notch PILL
-    /// rather than a fan-goal celebration — the point here is to preview the
-    /// pills. Scores are coherent so the subtitle row reads sensibly, and a
+    /// before the timeline proper. Uses one match (Inter vs Juventus) and only
+    /// the opponent (Juve) side for goal-type events, so each shows as a notch
+    /// PILL rather than a fan-goal celebration — the point here is to preview
+    /// the pills. Scores are coherent so the subtitle row reads sensibly, and a
     /// shootout decides it so full-time shows the "won on pens" variant.
     private func runShowcase() async {
-        let f = DemoFixture.fraGer
+        let f = DemoFixture.intJuv
         let beats: [DemoMoment] = [
             DemoMoment(at: 0, f, minute: 1,   .kickoff),
-            DemoMoment(at: 0, f, minute: 9,   .goal(.away, player: "Musiala")),       // GER 0–1 → goal pill
-            DemoMoment(at: 0, f, minute: 20,  .yellowCard(.away, player: "Rüdiger")),
+            DemoMoment(at: 0, f, minute: 9,   .goal(.away, player: "Yıldız")),        // JUV 0–1 → goal pill
+            DemoMoment(at: 0, f, minute: 20,  .yellowCard(.away, player: "Locatelli")),
             DemoMoment(at: 0, f, minute: 24,  .goalDisallowed(.away)),                // VAR → back to 0–0
-            DemoMoment(at: 0, f, minute: 33,  .goal(.away, player: "Havertz")),       // GER 0–1 again, for a leader
-            DemoMoment(at: 0, f, minute: 41,  .redCard(.away, player: "Tah")),
-            DemoMoment(at: 0, f, minute: 45,  .halfTime),                             // "Germany ahead"
+            DemoMoment(at: 0, f, minute: 33,  .goal(.away, player: "Openda")),        // JUV 0–1 again, for a leader
+            DemoMoment(at: 0, f, minute: 41,  .redCard(.away, player: "Bremer")),
+            DemoMoment(at: 0, f, minute: 45,  .halfTime),                             // "Juventus ahead"
             DemoMoment(at: 0, f, minute: 91,  .extraTime),
             DemoMoment(at: 0, f, minute: 120, .penaltyShootout),
-            DemoMoment(at: 0, f, minute: 120, .penaltyKick(.home, player: "Mbappé", scored: true)),  // pens 1–0
-            DemoMoment(at: 0, f, minute: 120, .penaltyKick(.away, player: "Sané",   scored: false)), // missed ✗
-            DemoMoment(at: 0, f, minute: 120, .fullTime),                             // "France won on pens"
+            DemoMoment(at: 0, f, minute: 120, .penaltyKick(.home, player: "Çalhanoğlu", scored: true)),  // pens 1–0
+            DemoMoment(at: 0, f, minute: 120, .penaltyKick(.away, player: "Vlahović",   scored: false)), // missed ✗
+            DemoMoment(at: 0, f, minute: 120, .fullTime),                             // "Inter won on pens"
         ]
         FakeStore.shared.resetMatches()
         publishAllFixtures()
@@ -397,7 +397,7 @@ final class DemoEngine: ObservableObject {
     /// the team, not a blank) and a disallow→re-award cycle (the "Goal
     /// disallowed" pill, then the re-awarded GOAL pill must actually show).
     private func runClockLabelWalk() async {
-        let f = DemoFixture.engCro
+        let f = DemoFixture.mciMun
         let id = f.id
         FakeStore.shared.resetMatches()
 
@@ -466,8 +466,8 @@ final class DemoEngine: ObservableObject {
 
         if Task.isCancelled { return }
         FakeStore.shared.states[id]?.minute = 74
-        FakeStore.shared.addGoal(.home, in: id, player: "Harry Kane", minute: 74)
-        push(.goal, f, side: .home, player: "Harry Kane", minute: 74)
+        FakeStore.shared.addGoal(.home, in: id, player: "Haaland", minute: 74)
+        push(.goal, f, side: .home, player: "Haaland", minute: 74)
         publishFixture(f)
         try? await Task.sleep(for: .seconds(DevConfig.showcaseSpacing))
     }

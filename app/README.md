@@ -29,20 +29,21 @@ picks the implementation — that's the release flag:
 **Day-to-day dev loop:**
 
 1. Build & run **Debug** from Xcode (⌘R). No sign-in — you're already "Dev Fan"
-   with the fan teams in `DevConfig.fanTeams`; the popover shows a seeded LIVE
-   match (Brazil 2–1 USA, 73′) plus scheduled and finished fixtures, and
-   celebration counts are pre-populated. ~8s after launch, random match events
-   start firing automatically (fan goals weighted highest), so celebrations and
-   pills appear hands-free.
+   following the club sides in `DevConfig.fanTeams` (Liverpool, Man City,
+   Arsenal, Inter). The popover shows the demo matchday: Manchester City vs
+   Manchester United live, Inter vs Juventus decided on penalties, and two
+   scheduled fixtures. `DevConfig.timeline` starts playing at launch, so pills,
+   celebrations and celebration counts all appear hands-free.
 
-   The seeded fixtures are still World Cup sides while the demo catalog now
-   leads with the top five club leagues, so a fresh Debug run also exercises the
-   one-time "the World Cup has ended" migration prompt (delete the
-   `leagueMigrationPrompted` default to see it again).
+   Every demo side is a club, so a fresh Debug run does NOT trip the one-time
+   "the World Cup has ended" migration prompt. To exercise that, put a World Cup
+   team id in `DevConfig.fanTeams` and delete the `leagueMigrationPrompted`
+   default.
 2. **Everything is a code knob in `Sources/Dev/DevConfig.swift`**: the fake
-   profile, the fan-team list, auto-events on/off, first-event delay, interval
-   range, and event weights. Fixtures/counts seed data lives next door in
-   `Sources/Dev/FakeBackend.swift`. Edit, ⌘R, observe.
+   profile, the fan-team list, the deterministic timeline itself, autostart,
+   looping, and the two warm-up passes (`showcaseAtStart`, `clockWalkAtStart`).
+   The fixtures those beats play out on, and the fake catalog behind the picker,
+   live next door in `Sources/Dev/FakeBackend.swift`. Edit, ⌘R, observe.
 3. Settings shows a small 🧪 pill so you always know you're in a dev session
    (no dev controls — the auto loop and `DevConfig` are the controls). The
    simulated events run through the real EventRouter/Overlay pipeline, exactly

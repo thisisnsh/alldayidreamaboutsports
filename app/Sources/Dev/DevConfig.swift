@@ -8,6 +8,9 @@ import Foundation
 // ║  matches run in parallel; each moment names which one it belongs to.  ║
 // ║  Compiled only into Debug (DEV_BACKEND) builds; see DemoEngine in     ║
 // ║  FakeBackend.swift for the runtime that plays it.                     ║
+// ║  Club sides only — the World Cup is archived, so the demo runs on the ║
+// ║  same five domestic leagues the app actually follows, and every team  ║
+// ║  id below exists in FakeScores.demoCatalog (name, code and crest).    ║
 // ╚══════════════════════════════════════════════════════════════════════╝
 
 @MainActor
@@ -21,11 +24,11 @@ enum DevConfig {
         photoURL: nil
     )
 
-    /// Teams you follow, as API team ids (BRA 6, ARG 26, ENG 10, FRA 2). A goal
-    /// by ANY of these runs the full celebration; everyone else's goals are
-    /// notch pills. Must cover both sides of the `braArg` match below (you're a
+    /// Teams you follow, as API team ids (LIV 40, MCI 50, ARS 42, INT 505). A
+    /// goal by ANY of these runs the full celebration; everyone else's goals are
+    /// notch pills. Must cover both sides of the `livMci` match below (you're a
     /// fan of both teams there) and the followed side of every other match.
-    static let fanTeams = ["6", "26", "10", "2"]
+    static let fanTeams = ["40", "50", "42", "505"]
 
     /// Start the timeline automatically at launch. Turn off to drive the
     /// show by hand from Settings → Developer (Play / Restart / Stop).
@@ -50,7 +53,7 @@ enum DevConfig {
 
     // ── THE TIMELINE ────────────────────────────────────────────────────
     // `at`      seconds after the demo starts (deterministic — not random).
-    // fixture   which parallel match the event belongs to (.braArg, …).
+    // fixture   which parallel match the event belongs to (.livMci, …).
     // `minute`  match clock shown in the pill.
     // Scores per match are tracked automatically as goals fire, so you never
     // hand-maintain a scoreline: a `.goal(.home)` makes it 1-0, a later
@@ -58,178 +61,178 @@ enum DevConfig {
     // `at` fire together — that's how you stage overlaps across matches to
     // stress the notch stack, goal-priority selection, chronological display
     // order, and shared center-ball celebrations.
+    //
+    // NOT wired in: its three fixtures aren't in `demoMatches`. To run it,
+    // rename it to `timeline` (renaming the reel below) and set
+    // `DemoFixture.demoMatches = [livMci, arsMun, intJuv]`.
     static let timeline1: [DemoMoment] = [
         // Three matches kick off seconds apart.
-        DemoMoment(at: 0,  .braArg, minute: 1,  .kickoff),
-        DemoMoment(at: 1,  .engUsa, minute: 1,  .kickoff),
-        DemoMoment(at: 2,  .fraGer, minute: 1,  .kickoff),
+        DemoMoment(at: 0,  .livMci, minute: 1,  .kickoff),
+        DemoMoment(at: 1,  .arsMun, minute: 1,  .kickoff),
+        DemoMoment(at: 2,  .intJuv, minute: 1,  .kickoff),
 
         // QUEUE STRESS: kickoff pills are still on screen, so this whole burst
         // waits. The next visible set should pick all goals first (fan + nonfan
         // across several teams), fill remaining slots with cards/VAR, and keep
         // the visible stack chronological inside that selected set.
-        DemoMoment(at: 5,  .braArg, minute: 9,  .goal(.home, player: "Vinícius Jr")), // fan
-        DemoMoment(at: 5,  .engUsa, minute: 9,  .goal(.away, player: "Pulisic")),     // nonfan opponent
-        DemoMoment(at: 5,  .fraGer, minute: 9,  .goal(.home, player: "Mbappé")),      // fan
-        DemoMoment(at: 5,  .fraGer, minute: 10, .goal(.away, player: "Musiala")),     // nonfan opponent
-        DemoMoment(at: 5,  .engUsa, minute: 10, .goal(.home, player: "Kane")),        // fan
-        DemoMoment(at: 5,  .braArg, minute: 10, .goal(.away, player: "Messi")),       // fan, different team
-        DemoMoment(at: 5,  .engUsa, minute: 11, .yellowCard(.away, player: "Adams")),
-        DemoMoment(at: 5,  .fraGer, minute: 11, .yellowCard(.away, player: "Rüdiger")),
-        DemoMoment(at: 5,  .braArg, minute: 12, .redCard(.away, player: "Otamendi")),
-        DemoMoment(at: 5,  .braArg, minute: 12, .yellowCard(.home, player: "Casemiro")),
-        DemoMoment(at: 5,  .engUsa, minute: 12, .yellowCard(.home, player: "Rice")),
-        DemoMoment(at: 5,  .fraGer, minute: 12, .redCard(.away, player: "Tah")),
-        DemoMoment(at: 5,  .braArg, minute: 13, .goalDisallowed(.home)),             // fan goal cancelled before display
+        DemoMoment(at: 5,  .livMci, minute: 9,  .goal(.home, player: "Salah")),          // fan
+        DemoMoment(at: 5,  .arsMun, minute: 9,  .goal(.away, player: "Mbeumo")),         // nonfan opponent
+        DemoMoment(at: 5,  .intJuv, minute: 9,  .goal(.home, player: "Lautaro Martínez")), // fan
+        DemoMoment(at: 5,  .intJuv, minute: 10, .goal(.away, player: "Yıldız")),         // nonfan opponent
+        DemoMoment(at: 5,  .arsMun, minute: 10, .goal(.home, player: "Gyökeres")),       // fan
+        DemoMoment(at: 5,  .livMci, minute: 10, .goal(.away, player: "Haaland")),        // fan, different team
+        DemoMoment(at: 5,  .arsMun, minute: 11, .yellowCard(.away, player: "Casemiro")),
+        DemoMoment(at: 5,  .intJuv, minute: 11, .yellowCard(.away, player: "Locatelli")),
+        DemoMoment(at: 5,  .livMci, minute: 12, .redCard(.away, player: "Rodri")),
+        DemoMoment(at: 5,  .livMci, minute: 12, .yellowCard(.home, player: "Gravenberch")),
+        DemoMoment(at: 5,  .arsMun, minute: 12, .yellowCard(.home, player: "Rice")),
+        DemoMoment(at: 5,  .intJuv, minute: 12, .redCard(.away, player: "Bremer")),
+        DemoMoment(at: 5,  .livMci, minute: 13, .goalDisallowed(.home)),             // fan goal cancelled before display
 
         // More goals arrive while the stress burst is still draining.
-        DemoMoment(at: 9,  .engUsa, minute: 14, .goal(.home, player: "Saka")),
-        DemoMoment(at: 9,  .fraGer, minute: 15, .goal(.home, player: "Griezmann")),
+        DemoMoment(at: 9,  .arsMun, minute: 14, .goal(.home, player: "Saka")),
+        DemoMoment(at: 9,  .intJuv, minute: 15, .goal(.home, player: "Thuram")),
 
-        // ARG extend the lead — you're a fan of BOTH teams in this match, so
+        // City extend the lead — you're a fan of BOTH teams in this match, so
         // an away goal here ALSO runs the full celebration when displayed.
-        DemoMoment(at: 13, .braArg, minute: 22, .goal(.away, player: "Álvarez")),
+        DemoMoment(at: 13, .livMci, minute: 22, .goal(.away, player: "Foden")),
 
-        DemoMoment(at: 16, .engUsa, minute: 26, .yellowCard(.away, player: "McKennie")),
-        DemoMoment(at: 18, .fraGer, minute: 30, .goal(.away, player: "Wirtz")), // opponent → pill only
+        DemoMoment(at: 16, .arsMun, minute: 26, .yellowCard(.away, player: "Mount")),
+        DemoMoment(at: 18, .intJuv, minute: 30, .goal(.away, player: "Openda")), // opponent → pill only
 
         // TRIPLE OVERLAP: a goal in every match at the same second.
-        DemoMoment(at: 22, .braArg, minute: 35, .goal(.home, player: "Rodrygo")),
-        DemoMoment(at: 22, .engUsa, minute: 35, .goal(.away, player: "Reyna")), // opponent → pill only
-        DemoMoment(at: 22, .fraGer, minute: 36, .goal(.home, player: "Dembélé")),
+        DemoMoment(at: 22, .livMci, minute: 35, .goal(.home, player: "Gakpo")),
+        DemoMoment(at: 22, .arsMun, minute: 35, .goal(.away, player: "Šeško")), // opponent → pill only
+        DemoMoment(at: 22, .intJuv, minute: 36, .goal(.home, player: "Barella")),
 
-        DemoMoment(at: 26, .braArg, minute: 37, .goalDisallowed(.home)),          // VAR pulls BRA's latest back
+        DemoMoment(at: 26, .livMci, minute: 37, .goalDisallowed(.home)),          // VAR pulls Liverpool's latest back
 
         // Half-times roll in close together.
-        DemoMoment(at: 30, .braArg, minute: 45, .halfTime),
-        DemoMoment(at: 31, .engUsa, minute: 45, .halfTime),
-        DemoMoment(at: 32, .fraGer, minute: 45, .halfTime),
+        DemoMoment(at: 30, .livMci, minute: 45, .halfTime),
+        DemoMoment(at: 31, .arsMun, minute: 45, .halfTime),
+        DemoMoment(at: 32, .intJuv, minute: 45, .halfTime),
 
         // Celebration surges (tap counts) for the followed matches.
-        DemoMoment(at: 36, .braArg, minute: 45, .celebrationSurge(["6": 3_200_000, "26": 2_800_000])),
-        DemoMoment(at: 37, .engUsa, minute: 45, .celebrationSurge(["10": 1_900_000, "2384": 540_000])),
+        DemoMoment(at: 36, .livMci, minute: 45, .celebrationSurge(["40": 3_200_000, "50": 2_800_000])),
+        DemoMoment(at: 37, .arsMun, minute: 45, .celebrationSurge(["42": 1_900_000, "33": 540_000])),
 
         // Second half.
-        DemoMoment(at: 41, .fraGer, minute: 52, .goal(.home, player: "Kolo Muani")),
-        DemoMoment(at: 45, .engUsa, minute: 61, .redCard(.away, player: "Robinson")),
+        DemoMoment(at: 41, .intJuv, minute: 52, .goal(.home, player: "Çalhanoğlu")),
+        DemoMoment(at: 45, .arsMun, minute: 61, .redCard(.away, player: "Dalot")),
 
-        // OVERLAP in one match: ARG go ahead and BRA reply in the same
+        // OVERLAP in one match: City go ahead and Liverpool reply in the same
         // instant — two full celebrations queued back to back.
-        DemoMoment(at: 49, .braArg, minute: 70, .goal(.away, player: "Álvarez")),
-        DemoMoment(at: 49, .braArg, minute: 70, .goal(.home, player: "Raphinha")),
+        DemoMoment(at: 49, .livMci, minute: 70, .goal(.away, player: "Doku")),
+        DemoMoment(at: 49, .livMci, minute: 70, .goal(.home, player: "Wirtz")),
 
-        // Germany claw back to level — the France match is heading the distance.
-        DemoMoment(at: 50, .fraGer, minute: 74, .goal(.away, player: "Gnabry")),
-        DemoMoment(at: 53, .engUsa, minute: 82, .goal(.home, player: "Bellingham")),
-        DemoMoment(at: 56, .fraGer, minute: 88, .celebrationSurge(["2": 4_100_000, "25": 770_000])),
-        DemoMoment(at: 58, .fraGer, minute: 90, .goal(.away, player: "Havertz")),
+        // Juventus claw back to level — the Inter match is heading the distance.
+        DemoMoment(at: 50, .intJuv, minute: 74, .goal(.away, player: "Conceição")),
+        DemoMoment(at: 53, .arsMun, minute: 82, .goal(.home, player: "Ødegaard")),
+        DemoMoment(at: 56, .intJuv, minute: 88, .celebrationSurge(["505": 4_100_000, "496": 770_000])),
+        DemoMoment(at: 58, .intJuv, minute: 90, .goal(.away, player: "Vlahović")),
 
         // Two matches end in normal time.
-        DemoMoment(at: 60, .braArg, minute: 90, .fullTime),
-        DemoMoment(at: 61, .engUsa, minute: 90, .fullTime),
+        DemoMoment(at: 60, .livMci, minute: 90, .fullTime),
+        DemoMoment(at: 61, .arsMun, minute: 90, .fullTime),
 
-        // Extra time, a goal each way, then a shootout decides it.
-        DemoMoment(at: 63, .fraGer, minute: 91,  .extraTime),
-        DemoMoment(at: 66, .fraGer, minute: 105, .goal(.home, player: "Thuram")),
-        DemoMoment(at: 69, .fraGer, minute: 118, .goal(.away, player: "Füllkrug")),
-        DemoMoment(at: 72, .fraGer, minute: 120, .penaltyShootout),
+        // Extra time, a goal each way, then a shootout decides it. League play
+        // never goes past 90 — this tail is here purely to exercise the ET /
+        // shootout / pen-tally rendering that a cup competition will need.
+        DemoMoment(at: 63, .intJuv, minute: 91,  .extraTime),
+        DemoMoment(at: 66, .intJuv, minute: 105, .goal(.home, player: "Dimarco")),
+        DemoMoment(at: 69, .intJuv, minute: 118, .goal(.away, player: "Kalulu")),
+        DemoMoment(at: 72, .intJuv, minute: 120, .penaltyShootout),
 
         // The shootout — every kick is its own pill (scored ✓ / missed ✗),
         // and the running pen tally rides along in the subheading.
-        DemoMoment(at: 74, .fraGer, minute: 120, .penaltyKick(.home, player: "Mbappé",     scored: true)),  // 1-0
-        DemoMoment(at: 76, .fraGer, minute: 120, .penaltyKick(.away, player: "Tah",        scored: true)),  // 1-1
-        DemoMoment(at: 78, .fraGer, minute: 120, .penaltyKick(.home, player: "Coman",      scored: false)), // 1-1
-        DemoMoment(at: 80, .fraGer, minute: 120, .penaltyKick(.away, player: "Musiala",    scored: true)),  // 1-2
-        DemoMoment(at: 82, .fraGer, minute: 120, .penaltyKick(.home, player: "Tchouaméni", scored: true)),  // 2-2
-        DemoMoment(at: 84, .fraGer, minute: 120, .penaltyKick(.away, player: "Goretzka",   scored: false)), // 2-2
-        DemoMoment(at: 86, .fraGer, minute: 120, .penaltyKick(.home, player: "Hernández",  scored: true)),  // 3-2
-        DemoMoment(at: 88, .fraGer, minute: 120, .penaltyKick(.away, player: "Sané",       scored: false)), // 3-2
+        DemoMoment(at: 74, .intJuv, minute: 120, .penaltyKick(.home, player: "Çalhanoğlu", scored: true)),  // 1-0
+        DemoMoment(at: 76, .intJuv, minute: 120, .penaltyKick(.away, player: "Vlahović",   scored: true)),  // 1-1
+        DemoMoment(at: 78, .intJuv, minute: 120, .penaltyKick(.home, player: "Bonny",      scored: false)), // 1-1
+        DemoMoment(at: 80, .intJuv, minute: 120, .penaltyKick(.away, player: "Yıldız",     scored: true)),  // 1-2
+        DemoMoment(at: 82, .intJuv, minute: 120, .penaltyKick(.home, player: "Barella",    scored: true)),  // 2-2
+        DemoMoment(at: 84, .intJuv, minute: 120, .penaltyKick(.away, player: "Locatelli",  scored: false)), // 2-2
+        DemoMoment(at: 86, .intJuv, minute: 120, .penaltyKick(.home, player: "Dimarco",    scored: true)),  // 3-2
+        DemoMoment(at: 88, .intJuv, minute: 120, .penaltyKick(.away, player: "Conceição",  scored: false)), // 3-2
 
-        DemoMoment(at: 90, .fraGer, minute: 120, .fullTime),  // France win 3-2 on penalties
+        DemoMoment(at: 90, .intJuv, minute: 120, .fullTime),  // Inter win 3-2 on penalties
     ]
 
-    // ── DEMO REEL (unused) ──────────────────────────────────────────────
-    // Jun 17 2026, Group Stage Day 7: England 4-2 Croatia, with realistic
-    // context from the same calendar day. Real scorers, real minutes.
-    // You follow England (10 is in fanTeams), so every ENG goal is a full
-    // center-ball celebration; Croatia goals and all other events are pills.
-    //
-    // NOT wired in. To record with it:
-    //   1. Rename this `demo` to `timeline` (rename the existing `timeline`).
-    //   2. Change DemoFixture.demoMatches to:
-    //         [engCro, autJor, porCon, ghaPan, uzbCol]
-    //   3. Set showcaseAtStart = false (showcase fixture fraGer won't be in
-    //      demoMatches and will fire silently into nothing).
-    //   4. Optionally set fanTeams = ["10"] for a clean England-only view.
+    // ── DEMO REEL (the one that plays) ──────────────────────────────────
+    // A Premier League matchday: Manchester City 4-2 Manchester United, with
+    // the rest of the day's card around it. You follow Man City (50 is in
+    // fanTeams), so every City goal is a full center-ball celebration; United
+    // goals and all other events are pills.
     static let timeline: [DemoMoment] = [
         // ── Past matches — fire at t=0 so the scoreboard opens with them
         // already finished. Their pills appear as a brief burst up front.
 
-        // Austria 3-1 Jordan (kicked off 4 AM UTC; finished hours before ENG-CRO)
-        // DemoMoment(at: 0, .autJor, minute: 1,  .kickoff),
-        // DemoMoment(at: 0, .autJor, minute: 21, .goal(.home, player: "Schmid")),         // 1-0
-        // DemoMoment(at: 0, .autJor, minute: 45, .halfTime),
-        // DemoMoment(at: 0, .autJor, minute: 50, .goal(.away, player: "Olwan")),           // 1-1
-        // DemoMoment(at: 0, .autJor, minute: 76, .goal(.home, player: "Al Arab (OG)")),    // 2-1
-        // DemoMoment(at: 0, .autJor, minute: 77, .yellowCard(.home, player: "Sabitzer")),
-        // DemoMoment(at: 0, .autJor, minute: 90, .goal(.home, player: "Arnautovic")),      // 3-1 (pen)
-        // DemoMoment(at: 0, .autJor, minute: 90, .fullTime),
+        // Liverpool 3-1 Arsenal (early kickoff; finished hours before the derby)
+        // DemoMoment(at: 0, .livArs, minute: 1,  .kickoff),
+        // DemoMoment(at: 0, .livArs, minute: 21, .goal(.home, player: "Salah")),          // 1-0
+        // DemoMoment(at: 0, .livArs, minute: 45, .halfTime),
+        // DemoMoment(at: 0, .livArs, minute: 50, .goal(.away, player: "Saka")),            // 1-1
+        // DemoMoment(at: 0, .livArs, minute: 76, .goal(.home, player: "Timber (OG)")),     // 2-1
+        // DemoMoment(at: 0, .livArs, minute: 77, .yellowCard(.home, player: "Mac Allister")),
+        // DemoMoment(at: 0, .livArs, minute: 90, .goal(.home, player: "Ekitiké")),         // 3-1 (pen)
+        // DemoMoment(at: 0, .livArs, minute: 90, .fullTime),
 
-        // Portugal 1-1 Congo DR, decided on PENALTIES (kicked off 5 PM UTC).
-        DemoMoment(at: 0, .porCon, minute: 1,  .kickoff),
-        DemoMoment(at: 10, .porCon, minute: 6,  .goal(.home, player: "João Neves")),      // 1-0
+        // Inter 1-1 Juventus, decided on PENALTIES (afternoon kickoff). A league
+        // fixture never actually goes to a shootout — this one does so the ET
+        // and pen-tally rendering stays covered until a cup competition lands.
+        DemoMoment(at: 0, .intJuv, minute: 1,  .kickoff),
+        DemoMoment(at: 10, .intJuv, minute: 6,  .goal(.home, player: "Lautaro Martínez")), // 1-0
         // DISALLOWED-OFFSIDE PHANTOM: VAR chalks off the 6' goal for offside. The
         // aggregate drops back to 0-0, but the goal event lingers in the list
-        // (goalEvents.count > goals) — pin Portugal and hover: the 6' goal shows
+        // (goalEvents.count > goals) — pin Inter and hover: the 6' goal shows
         // STRUCK THROUGH while the scoreline stays correct.
-        DemoMoment(at: 12, .porCon, minute: 7,  .goalDisallowedOffside(.home)),           // → 0-0, 6' struck
-        DemoMoment(at: 20, .porCon, minute: 13, .yellowCard(.home, player: "Bernardo Silva")),
-        DemoMoment(at: 23, .porCon, minute: 32, .yellowCard(.away, player: "Mbemba")),
-        DemoMoment(at: 30, .porCon, minute: 45, extra: 7, .goal(.away, player: "Yoane Wissa")), // 1-1 (45+7')
-        DemoMoment(at: 35, .porCon, minute: 45, .halfTime),
-        // Still level after 90 and extra time — Portugal go to a SHOOTOUT.
-        // Pin Portugal and the capsule scoreline switches to the pen tally
+        DemoMoment(at: 12, .intJuv, minute: 7,  .goalDisallowedOffside(.home)),           // → 0-0, 6' struck
+        DemoMoment(at: 20, .intJuv, minute: 13, .yellowCard(.home, player: "Barella")),
+        DemoMoment(at: 23, .intJuv, minute: 32, .yellowCard(.away, player: "Locatelli")),
+        DemoMoment(at: 30, .intJuv, minute: 45, extra: 7, .goal(.away, player: "Vlahović")), // 1-1 (45+7')
+        DemoMoment(at: 35, .intJuv, minute: 45, .halfTime),
+        // Still level after 90 and extra time — Inter go to a SHOOTOUT.
+        // Pin Inter and the capsule scoreline switches to the pen tally
         // (`1+P3 – 1+P2`), using the same spaced en-dash separator as a
         // regular result — the exact case to eyeball for consistent spacing.
-        DemoMoment(at: 37, .porCon, minute: 91,  .extraTime),
-        DemoMoment(at: 40, .porCon, minute: 120, .penaltyShootout),
-        DemoMoment(at: 41, .porCon, minute: 120, .penaltyKick(.home, player: "Ronaldo",         scored: true)),  // 1-0
-        DemoMoment(at: 42, .porCon, minute: 120, .penaltyKick(.away, player: "Wissa",           scored: true)),  // 1-1
-        DemoMoment(at: 43, .porCon, minute: 120, .penaltyKick(.home, player: "Bruno Fernandes", scored: true)),  // 2-1
-        DemoMoment(at: 44, .porCon, minute: 120, .penaltyKick(.away, player: "Bakambu",         scored: false)), // 2-1
-        DemoMoment(at: 45, .porCon, minute: 120, .penaltyKick(.home, player: "Bernardo Silva",  scored: true)),  // 3-1
-        DemoMoment(at: 46, .porCon, minute: 120, .penaltyKick(.away, player: "Mbemba",          scored: true)),  // 3-2
-        DemoMoment(at: 47, .porCon, minute: 120, .penaltyKick(.home, player: "Leão",            scored: false)), // 3-2
-        DemoMoment(at: 48, .porCon, minute: 120, .penaltyKick(.away, player: "Masuaku",         scored: false)), // 3-2
-        DemoMoment(at: 49, .porCon, minute: 120, .fullTime),  // Portugal win 3-2 on penalties
+        DemoMoment(at: 37, .intJuv, minute: 91,  .extraTime),
+        DemoMoment(at: 40, .intJuv, minute: 120, .penaltyShootout),
+        DemoMoment(at: 41, .intJuv, minute: 120, .penaltyKick(.home, player: "Çalhanoğlu", scored: true)),  // 1-0
+        DemoMoment(at: 42, .intJuv, minute: 120, .penaltyKick(.away, player: "Vlahović",   scored: true)),  // 1-1
+        DemoMoment(at: 43, .intJuv, minute: 120, .penaltyKick(.home, player: "Dimarco",    scored: true)),  // 2-1
+        DemoMoment(at: 44, .intJuv, minute: 120, .penaltyKick(.away, player: "Openda",     scored: false)), // 2-1
+        DemoMoment(at: 45, .intJuv, minute: 120, .penaltyKick(.home, player: "Barella",    scored: true)),  // 3-1
+        DemoMoment(at: 46, .intJuv, minute: 120, .penaltyKick(.away, player: "Yıldız",     scored: true)),  // 3-2
+        DemoMoment(at: 47, .intJuv, minute: 120, .penaltyKick(.home, player: "Thuram",     scored: false)), // 3-2
+        DemoMoment(at: 48, .intJuv, minute: 120, .penaltyKick(.away, player: "Conceição",  scored: false)), // 3-2
+        DemoMoment(at: 49, .intJuv, minute: 120, .fullTime),  // Inter win 3-2 on penalties
 
-        // Ghana vs Panama and Uzbekistan vs Colombia have no events →
+        // Real Madrid vs Barcelona and Milan vs Napoli have no events →
         // they stay SCHEDULED, appearing as upcoming in the scoreboard.
 
-        // ── England 4-2 Croatia (live, 8 PM UTC / 4 PM ET) ─────────────
-        DemoMoment(at: 40,  .engCro, minute: 1,  .kickoff),
+        // ── Manchester City 4-2 Manchester United (live, evening kickoff) ──
+        DemoMoment(at: 40,  .mciMun, minute: 1,  .kickoff),
 
-        // VAR confirms the spot kick, then Kane converts — exercises the
+        // VAR confirms the spot kick, then Haaland converts — exercises the
         // varDecision pill and the "Penalty goal" label.
-        DemoMoment(at: 46, .engCro, minute: 11, .varDecision(.home, detail: "Penalty confirmed")),
-        DemoMoment(at: 50, .engCro, minute: 12, .goal(.home, player: "Harry Kane", kind: "penalty")), // pen → 1-0
-        // DemoMoment(at: 90, .engCro, minute: 12, .celebrationSurge(["10": 2_400_000, "3": 0])),
+        DemoMoment(at: 46, .mciMun, minute: 11, .varDecision(.home, detail: "Penalty confirmed")),
+        DemoMoment(at: 50, .mciMun, minute: 12, .goal(.home, player: "Haaland", kind: "penalty")), // pen → 1-0
+        // DemoMoment(at: 90, .mciMun, minute: 12, .celebrationSurge(["50": 2_400_000, "33": 0])),
 
-        DemoMoment(at: 60, .engCro, minute: 36, .goal(.away, player: "Baturina")),      // 1-1
-        DemoMoment(at: 61, .engCro, minute: 42, .goal(.home, player: "Harry Kane")),    // 2-1
-        // DemoMoment(at: 47, .engCro, minute: 42, .celebrationSurge(["10": 3_800_000, "3": 120_000])),
-        DemoMoment(at: 70, .engCro, minute: 45, extra: 7, .goal(.away, player: "Petar Musa")), // 2-2 (45+7')
-        DemoMoment(at: 72, .engCro, minute: 45, .halfTime),
+        DemoMoment(at: 60, .mciMun, minute: 36, .goal(.away, player: "Bruno Fernandes")), // 1-1
+        DemoMoment(at: 61, .mciMun, minute: 42, .goal(.home, player: "Haaland")),         // 2-1
+        // DemoMoment(at: 47, .mciMun, minute: 42, .celebrationSurge(["50": 3_800_000, "33": 120_000])),
+        DemoMoment(at: 70, .mciMun, minute: 45, extra: 7, .goal(.away, player: "Mbeumo")), // 2-2 (45+7')
+        DemoMoment(at: 72, .mciMun, minute: 45, .halfTime),
 
-        DemoMoment(at: 83, .engCro, minute: 47, .goal(.home, player: "Bellingham")),    // 3-2
+        DemoMoment(at: 83, .mciMun, minute: 47, .goal(.home, player: "Foden")),           // 3-2
 
         // A sub each way — exercises the substitution pill + timeline rows.
-        DemoMoment(at: 94, .engCro, minute: 63, .substitution(.home, playerIn: "Foden", playerOut: "Saka")),
-        DemoMoment(at: 97, .engCro, minute: 64, .substitution(.away, playerIn: "Ivanović", playerOut: "Petar Musa")),
+        DemoMoment(at: 94, .mciMun, minute: 63, .substitution(.home, playerIn: "Doku", playerOut: "Marmoush")),
+        DemoMoment(at: 97, .mciMun, minute: 64, .substitution(.away, playerIn: "Amad", playerOut: "Mbeumo")),
 
-        // Gvardiol turns it into his own net — the own goal credits ENGLAND
+        // Maguire turns it into his own net — the own goal credits CITY
         // (the benefiting side), matching the backend's attribution.
-        DemoMoment(at: 100, .engCro, minute: 85, .goal(.home, player: "Gvardiol", kind: "own")), // OG → 4-2
+        DemoMoment(at: 100, .mciMun, minute: 85, .goal(.home, player: "Maguire", kind: "own")), // OG → 4-2
 
         // OUT-OF-ORDER VAR (must be IGNORED): API-Football backfills a 67'
         // "Penalty confirmed" long after the fact. By now the 85' own goal is the
@@ -237,16 +240,18 @@ enum DevConfig {
         // (85-67 > event_stale_minutes) — NO pill should appear. Contrast with the
         // in-order 11' VAR above, which shows normally. This is the exact
         // real-world case (a 67' VAR that surfaced at 79') the guard fixes.
-        DemoMoment(at: 105, .engCro, minute: 67, .varDecision(.home, detail: "Penalty confirmed")),
+        DemoMoment(at: 105, .mciMun, minute: 67, .varDecision(.home, detail: "Penalty confirmed")),
 
-        DemoMoment(at: 110, .engCro, minute: 90, .fullTime),
+        DemoMoment(at: 110, .mciMun, minute: 90, .fullTime),
     ]
 }
 
 // MARK: - Timeline vocabulary
 
 /// A team in a demo match, named once so events can refer to a side. `id` is
-/// the API team id (also the FCM topic / fan key); `logo` is its CDN image.
+/// the API team id (also the fan key); `logo` is its CDN image. Every id here
+/// is in FakeScores.demoCatalog, so the app resolves its full name and its
+/// short code (the label the menu, pills and a resting capsule show).
 struct DemoTeam {
     let id: Int
     let code: String
@@ -264,64 +269,57 @@ struct DemoFixture {
 }
 
 extension DemoFixture {
+    // ── Fixtures for the parallel stress timeline (see DevConfig.timeline1) ──
+
     /// Fan of BOTH sides — every goal here is a full celebration.
-    static let braArg = DemoFixture(
-        id: 1001, leagueId: 1, round: "Semi-finals",
-        home: DemoTeam(id: 6, code: "BRA", name: "Brazil"),
-        away: DemoTeam(id: 26, code: "ARG", name: "Argentina")
+    static let livMci = DemoFixture(
+        id: 1001, leagueId: 39, round: "Regular Season - 12",
+        home: DemoTeam(id: 40, code: "LIV", name: "Liverpool"),
+        away: DemoTeam(id: 50, code: "MCI", name: "Manchester City")
     )
-    /// Fan of the home side only; USA is the opponent (pills).
-    static let engUsa = DemoFixture(
-        id: 1002, leagueId: 1, round: "Group B - 2",
-        home: DemoTeam(id: 10, code: "ENG", name: "England"),
-        away: DemoTeam(id: 2384, code: "USA", name: "United States")
+    /// Fan of the home side only; Manchester United is the opponent (pills).
+    static let arsMun = DemoFixture(
+        id: 1002, leagueId: 39, round: "Regular Season - 12",
+        home: DemoTeam(id: 42, code: "ARS", name: "Arsenal"),
+        away: DemoTeam(id: 33, code: "MUN", name: "Manchester United")
     )
-    /// Fan of the home side only; Germany is the opponent (pills).
-    static let fraGer = DemoFixture(
-        id: 1003, leagueId: 1, round: "Quarter-finals",
-        home: DemoTeam(id: 2, code: "FRA", name: "France"),
-        away: DemoTeam(id: 25, code: "GER", name: "Germany")
-    )
-
-    // ── Fixtures for the unused `demo` reel (see DevConfig.demo) ─────────
-
-    /// The 2022 World Cup Final. Fan of BOTH sides — every goal is a full
-    /// celebration.
-    static let argFra = DemoFixture(
-        id: 2001, leagueId: 1, round: "Final",
-        home: DemoTeam(id: 26, code: "ARG", name: "Argentina"),
-        away: DemoTeam(id: 2, code: "FRA", name: "France")
+    /// Fan of the home side only; Juventus is the opponent (pills). Also the
+    /// reel's shootout fixture, and the showcase's (see DemoEngine.runShowcase).
+    static let intJuv = DemoFixture(
+        id: 1003, leagueId: 135, round: "Regular Season - 3",
+        home: DemoTeam(id: 505, code: "INT", name: "Inter"),
+        away: DemoTeam(id: 496, code: "JUV", name: "Juventus")
     )
 
-    // Jun 17 2026 demo reel — swap demoMatches to [engCro, autJor, porCon, ghaPan, uzbCol] when using.
-    static let engCro = DemoFixture(
-        id: 1489384, leagueId: 1, round: "Group L - Matchday 1",
-        home: DemoTeam(id: 10,   code: "ENG", name: "England"),
-        away: DemoTeam(id: 3,    code: "CRO", name: "Croatia")
+    // ── Fixtures for the demo reel (see DevConfig.timeline) ─────────────
+
+    /// The derby the reel is built around. Fan of the home side only.
+    static let mciMun = DemoFixture(
+        id: 1489384, leagueId: 39, round: "Regular Season - 3",
+        home: DemoTeam(id: 50, code: "MCI", name: "Manchester City"),
+        away: DemoTeam(id: 33, code: "MUN", name: "Manchester United")
     )
-    static let autJor = DemoFixture(
-        id: 1489382, leagueId: 1, round: "Group J - Matchday 1",
-        home: DemoTeam(id: 775,  code: "AUT", name: "Austria"),
-        away: DemoTeam(id: 1548, code: "JOR", name: "Jordan")
+    /// Finished before the derby kicks off. Fan of BOTH sides.
+    static let livArs = DemoFixture(
+        id: 1489382, leagueId: 39, round: "Regular Season - 3",
+        home: DemoTeam(id: 40, code: "LIV", name: "Liverpool"),
+        away: DemoTeam(id: 42, code: "ARS", name: "Arsenal")
     )
-    static let porCon = DemoFixture(
-        id: 1539003, leagueId: 1, round: "Group K - Matchday 1",
-        home: DemoTeam(id: 27,   code: "POR", name: "Portugal"),
-        away: DemoTeam(id: 1508, code: "COD", name: "Congo DR")
+    /// No events in the reel — stays SCHEDULED, and neither side is followed.
+    static let madBar = DemoFixture(
+        id: 1489385, leagueId: 140, round: "Regular Season - 3",
+        home: DemoTeam(id: 541, code: "MAD", name: "Real Madrid"),
+        away: DemoTeam(id: 529, code: "BAR", name: "Barcelona")
     )
-    static let ghaPan = DemoFixture(
-        id: 1489385, leagueId: 1, round: "Group L - Matchday 1",
-        home: DemoTeam(id: 1504, code: "GHA", name: "Ghana"),
-        away: DemoTeam(id: 11,   code: "PAN", name: "Panama")
-    )
-    static let uzbCol = DemoFixture(
-        id: 1489386, leagueId: 1, round: "Group K - Matchday 1",
-        home: DemoTeam(id: 1568, code: "UZB", name: "Uzbekistan"),
-        away: DemoTeam(id: 8,    code: "COL", name: "Colombia")
+    /// No events in the reel — stays SCHEDULED, and neither side is followed.
+    static let milNap = DemoFixture(
+        id: 1489386, leagueId: 135, round: "Regular Season - 3",
+        home: DemoTeam(id: 489, code: "MIL", name: "AC Milan"),
+        away: DemoTeam(id: 492, code: "NAP", name: "Napoli")
     )
 
     /// Every match the demo runs in parallel (drives the live scoreboard).
-    static let demoMatches = [engCro, autJor, porCon, ghaPan, uzbCol]
+    static let demoMatches = [mciMun, livArs, intJuv, madBar, milNap]
 }
 
 /// Which team an action belongs to, relative to its match's fixture.

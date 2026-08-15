@@ -327,12 +327,14 @@ private struct FixtureRow: View {
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 6) {
                         CachedTeamLogo(url: logo(fixture.home.id), size: 16)
-                        // Long names truncate with … — score, logos and the
-                        // time on the right never get squeezed.
-                        Text(fixture.home.name).font(.system(size: 12)).lineLimit(1)
+                        // Short codes ("MUN"), not full club names — the row is
+                        // 320pt wide and the crest already says who it is. A
+                        // codeless team falls back to its name and truncates
+                        // with …; score, logos and the time never get squeezed.
+                        Text(shortName(fixture.home)).font(.system(size: 12)).lineLimit(1)
                         Text(score).font(.system(size: 12, weight: .bold))
                             .fixedSize().layoutPriority(1)
-                        Text(fixture.away.name).font(.system(size: 12)).lineLimit(1)
+                        Text(shortName(fixture.away)).font(.system(size: 12)).lineLimit(1)
                         CachedTeamLogo(url: logo(fixture.away.id), size: 16)
                         Spacer()
                         trailing
@@ -409,5 +411,9 @@ private struct FixtureRow: View {
 
     private func logo(_ id: Int) -> String {
         TeamCatalog.team(for: id, in: session.teams).logo
+    }
+
+    private func shortName(_ team: ScoreboardTeam) -> String {
+        TeamCatalog.shortName(for: team.id, in: session.teams, fallback: team.name)
     }
 }

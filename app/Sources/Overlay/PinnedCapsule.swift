@@ -470,10 +470,11 @@ private struct PinnedCapsuleStackView: View {
 }
 
 /// The capsule content. At rest it's the tightest possible scoreline —
-/// `logo score logo time` — in the notch pill's exact chrome. Hovering fades
-/// and slides the team names and event timeline in. The screen-sized parent
-/// panel is static and click-through; hover comes from the manager's global
-/// pointer tracking. Reads live from `AppSession` as `LiveStore` polls.
+/// `logo MCI score MUN logo time`, each side its short code — in the notch
+/// pill's exact chrome. Hovering swaps the codes for full club names and slides
+/// the event timeline in. The screen-sized parent panel is static and
+/// click-through; hover comes from the manager's global pointer tracking. Reads
+/// live from `AppSession` as `LiveStore` polls.
 struct PinnedCapsuleView: View {
     let fixtureId: Int
     @EnvironmentObject var session: AppSession
@@ -542,19 +543,19 @@ struct PinnedCapsuleView: View {
         .contentShape(RoundedRectangle(cornerRadius: capsuleCorner, style: .continuous))
     }
 
-    /// Names fade 0→1 while the width slide reveals them; on the way out the
-    /// fade finishes FIRST (quick ease-out), so the shrinking capsule never
-    /// shows visibly truncating text. The explicit animations are needed —
-    /// a bare .opacity transition pops in at full alpha here.
-    private var nameTransition: AnyTransition {
-        .asymmetric(
-            insertion: .opacity.animation(.easeInOut(duration: 0.2)),
-            removal: .opacity.animation(.easeOut(duration: 0.1))
-        )
+    /// One side of the scoreline. The resting capsule is the tightest thing on
+    /// screen, so it labels each team with its short code; `full` (hover) swaps
+    /// in the club's full name and the capsule widens to fit. `contentTransition`
+    /// cross-fades the two rather than snapping mid-slide.
+    private func teamLabel(_ team: ScoreboardTeam, full: Bool) -> some View {
+        Text(full ? team.name : TeamCatalog.shortName(for: team.id, in: session.teams, fallback: team.name))
+            .font(.system(size: metrics.nameFont, design: .rounded))
+            .lineLimit(1)
+            .contentTransition(.opacity)
     }
 
-    /// The scoreline row. At rest it's `logo score logo time`; with
-    /// `showNames` the team names slide in around the score.
+    /// The scoreline row: `logo name score name logo time`, where the names are
+    /// short codes at rest and full club names while `showNames` (hover).
     private func header(_ fixture: Fixture, showNames: Bool) -> some View {
         HStack(spacing: 6) {
             // The scoreline itself hugs its content on ONE line (the inner
@@ -564,21 +565,11 @@ struct PinnedCapsuleView: View {
             // pinned right instead of drifting in beside the score.
             HStack(spacing: 6) {
                 CachedTeamLogo(url: logo(fixture.home.id), size: metrics.headerLogo)
-                if showNames {
-                    Text(fixture.home.name)
-                        .font(.system(size: metrics.nameFont, design: .rounded))
-                        .lineLimit(1)
-                        .transition(nameTransition)
-                }
+                teamLabel(fixture.home, full: showNames)
                 Text(scoreText(fixture))
                     .font(.system(size: metrics.scoreFont, weight: .bold, design: .rounded))
                     .fixedSize().layoutPriority(1)
-                if showNames {
-                    Text(fixture.away.name)
-                        .font(.system(size: metrics.nameFont, design: .rounded))
-                        .lineLimit(1)
-                        .transition(nameTransition)
-                }
+                teamLabel(fixture.away, full: showNames)
                 CachedTeamLogo(url: logo(fixture.away.id), size: metrics.headerLogo)
             }
             // Keep the scoreline on ONE line: at `45+x′` the wider clock would
