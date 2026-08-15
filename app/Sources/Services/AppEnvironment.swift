@@ -5,7 +5,6 @@ enum AppEnvironment {
     static let scoresBase = configuredURL("ScoresBaseURL")
     static let website = URL(string: "https://alldayidreamaboutsports.com")!
     static let supportEmail = "support@alldayidreamaboutsports.com"
-    static let leagueId = 1 // FIFA World Cup
 
     static var buildNumber: Int {
         Int(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "1") ?? 1

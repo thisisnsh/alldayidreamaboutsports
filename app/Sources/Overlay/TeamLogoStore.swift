@@ -15,6 +15,7 @@ final class TeamLogoStore: ObservableObject {
 
     private var images: [String: NSImage] = [:]
     private var loading: Set<String> = []
+    private var warmTask: Task<Void, Never>?
 
     /// The cached image for a URL, or nil while it loads (kicking off a fetch).
     func image(for url: String) -> NSImage? {
@@ -40,23 +41,40 @@ final class TeamLogoStore: ObservableObject {
     /// Fetch+cache every logo (used when the picker opens). If the last refresh
     /// was over 24h ago, re-fetch them all too, swapping each in place once
     /// decoded so nothing flashes to a placeholder.
+    ///
+    /// Five leagues means ~150 logos, not ~50, so this staggers: a batch goes on
+    /// the wire, then a short pause, rather than 150 concurrent requests the
+    /// moment the picker opens. Re-opening the picker cancels the previous warm
+    /// instead of stacking a second sweep on top of it.
     func warm(_ urls: [String]) {
         let last = UserDefaults.standard.object(forKey: "logoRefreshedAt") as? Date ?? .distantPast
         let stale = Date().timeIntervalSince(last) > 24 * 3600
         if stale { UserDefaults.standard.set(Date(), forKey: "logoRefreshedAt") }
-        for url in urls where !url.isEmpty {
-            if images[url] == nil {
-                _ = image(for: url)
-            } else if stale, let parsed = URL(string: url) {
-                Task {
-                    if let img = await Self.load(parsed) {
-                        images[url] = img
-                        version &+= 1
+        let targets = urls.filter { !$0.isEmpty }
+        warmTask?.cancel()
+        warmTask = Task { [weak self] in
+            for (index, url) in targets.enumerated() {
+                if Task.isCancelled { return }
+                guard let self else { return }
+                if self.images[url] == nil {
+                    _ = self.image(for: url) // kicks off its own fetch; doesn't block
+                } else if stale, let parsed = URL(string: url) {
+                    Task {
+                        if let img = await Self.load(parsed) {
+                            self.images[url] = img
+                            self.version &+= 1
+                        }
                     }
+                }
+                if index % Self.warmBatchSize == Self.warmBatchSize - 1 {
+                    try? await Task.sleep(for: Self.warmBatchPause)
                 }
             }
         }
     }
+
+    private static let warmBatchSize = 12
+    private static let warmBatchPause = Duration.milliseconds(120)
 
     private static func load(_ url: URL) async -> NSImage? {
         guard let (data, _) = try? await URLSession.shared.data(from: url) else { return nil }
