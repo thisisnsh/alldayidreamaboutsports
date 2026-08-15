@@ -14,10 +14,13 @@ These reuse the deployed `R2` class, cache constants, and types from `backend/sr
 > ⚠️ **Staging only — never production.**
 > - The publisher **refuses to run** unless `R2_BUCKET_SCORES` contains `staging`.
 > - Fake fixtures use a reserved id range (`900001+`) so they can never collide
->   with real World Cup matches and are trivially purged with `clear`.
+>   with real matches and are trivially purged with `clear`.
 > - Fake fixtures keep the reserved fixture ids, but use real API-Football ids for
->   the World Cup league (`1`) and teams such as France (`2`), Brazil (`6`),
->   England (`10`), Argentina (`26`), and Portugal (`27`).
+>   La Liga (`140`) and teams such as Real Madrid (`541`), Barcelona (`529`),
+>   Atletico Madrid (`530`) and Sevilla (`536`) — a league the app actually
+>   follows, so a seeded fixture is a fan match for anyone testing with the
+>   default club picks. Change `REAL_LEAGUE_ID` / `REAL_TEAMS` in
+>   `fake-publisher.ts` to seed a different one.
 > - Always point `R2_*` and `SCORES_DOMAIN` at the **staging** environment. Double-
 >   check `.staging.env` before running. Do not put production credentials here.
 
@@ -59,7 +62,7 @@ Run everything from `tester/`. A typical end-to-end pass:
    ```
 
    Copy-paste seed for 10 fake fixtures across yesterday/today/tomorrow UTC, all
-   using real World Cup league/team ids and a fixed UTC kickoff time:
+   using real La Liga league/team ids and a fixed UTC kickoff time:
 
    ```sh
    npm run fake -- clear && npm run fake -- seed --count 10 --days -1,0,1 --time 18:00 --spacing-minutes 120 --state SCHEDULED,LIVE,HT,FINISHED
