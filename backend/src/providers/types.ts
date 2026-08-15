@@ -28,7 +28,14 @@ export interface CatalogTeam {
 
 /** Swappable data source (API-Football primary; football-data.org fallback later). */
 export interface ScoreProvider {
-  fixturesForRange(fromISO: string, toISO: string): Promise<MatchState[]>;
+  /** One league's fixtures over a date range. API-Football's `league` parameter
+   * takes a single integer, so multi-league polling is N of these calls. */
+  fixturesForRange(
+    leagueId: number,
+    season: number,
+    fromISO: string,
+    toISO: string,
+  ): Promise<MatchState[]>;
   /** League info + current/upcoming season, for the daily catalog. */
   leagueInfo(leagueId: number): Promise<LeagueInfo>;
   /** All teams in a league's season, with logos. */

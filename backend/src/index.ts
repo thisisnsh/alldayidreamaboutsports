@@ -11,7 +11,7 @@ import { log } from "./log.js";
 
 const store = new Store();
 const r2 = new R2();
-const provider = new ApiFootballProvider(env.apiFootballKey, env.leagueId, env.season);
+const provider = new ApiFootballProvider(env.apiFootballKey);
 const state = new R2MatchStateStore();
 const celebrations = new CelebrationAggregator(store, r2);
 const poller = new Poller(provider, state, r2);

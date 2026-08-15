@@ -1,3 +1,5 @@
+import { LeagueSeasons } from "./catalog.js";
+import { env } from "./env.js";
 import type { ScoreProvider } from "./providers/types.js";
 import { CACHE_CONTROL_LONG, R2, R2ConflictError, R2MatchStateStore } from "./r2.js";
 import type { MatchState } from "./types.js";
@@ -22,10 +24,15 @@ export function isLive(match: MatchState): boolean {
   return match.status === "LIVE" || match.status === "HALF_TIME";
 }
 
+// 5 minutes, matching when the app starts polling `matches/{id}.json`. At the
+// old 60s the object did not exist yet for the app's first four minutes of
+// polling, so every client 404'd its way to kickoff.
+const STARTING_SOON_MS = 5 * 60_000;
+
 export function isStartingSoon(match: MatchState, now = Date.now()): boolean {
   if (match.status !== "SCHEDULED") return false;
   const untilKickoff = Date.parse(match.kickoffISO) - now;
-  return untilKickoff <= 60_000 && untilKickoff > -15 * 60_000;
+  return untilKickoff <= STARTING_SOON_MS && untilKickoff > -15 * 60_000;
 }
 
 export function isRegressiveSnapshot(previous: MatchState, next: MatchState): boolean {
@@ -106,21 +113,35 @@ export class Poller {
     private readonly provider: ScoreProvider,
     private readonly state: R2MatchStateStore,
     private readonly r2: R2,
+    private readonly seasons: LeagueSeasons = new LeagueSeasons(r2),
+    private readonly leagueIds: number[] = env.leagueIds,
   ) {}
 
-  // A single fetch: one provider read, publish dated fixtures + per-match state
-  // files (the live source). Freshness is the short cache TTL on those files; no
-  // push, no diff, no purge. Cadence (e.g. every 5s) is driven externally by
-  // staggered Cloud Tasks (see tasks.ts) so the request returns immediately
-  // instead of sleeping/hogging CPU.
+  // A single fetch: one provider read PER LEAGUE (API-Football's `league`
+  // parameter takes one integer, so five leagues is five range calls), publish
+  // dated fixtures + per-match state files (the live source). Freshness is the
+  // short cache TTL on those files; no push, no diff, no purge. Cadence (e.g.
+  // every 5s) is driven externally by staggered Cloud Tasks (see tasks.ts) so
+  // the request returns immediately instead of sleeping/hogging CPU — and the
+  // dispatcher only enqueues those tasks inside a match window.
   async fetchOnce(): Promise<{ live: number }> {
     const started = Date.now();
 
     const range = utcPollRange();
-    log.info("poll_start", range);
-    const fixtures = await this.provider.fixturesForRange(range.from, range.to);
+    const leagues = await this.seasons.resolve(this.leagueIds);
+    log.info("poll_start", { ...range, leagues });
+    // Concurrent: the tick's wall time is one range call, not five.
+    const perLeague = await Promise.all(
+      leagues.map(({ leagueId, season }) =>
+        this.provider.fixturesForRange(leagueId, season, range.from, range.to)),
+    );
+    const fixtures = perLeague.flat();
     const liveCount = fixtures.filter(isLive).length;
-    log.info("poll_provider_complete", { fixtures: fixtures.length, live: liveCount });
+    log.info("poll_provider_complete", {
+      fixtures: fixtures.length,
+      live: liveCount,
+      byLeague: leagues.map(({ leagueId }, i) => ({ leagueId, fixtures: perLeague[i]!.length })),
+    });
 
     const eligible = fixtures.filter((m) => isStartingSoon(m) || isLive(m) || isRecentlyFinished(m));
     // Fixture date files are schedule/bootstrap data. Live changes are served

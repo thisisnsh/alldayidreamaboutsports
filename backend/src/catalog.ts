@@ -47,9 +47,56 @@ export interface CatalogPayload {
 }
 
 /**
+ * Per-league seasons, read back out of the published `catalog.json` and cached
+ * in-process for the UTC day. Both the live poller and the schedule sync need a
+ * season per league to call the provider, and the catalog already carries one —
+ * so the August season rollover is a catalog refresh, never a deploy.
+ *
+ * A league with no season in the catalog (nothing scheduled, or the catalog has
+ * never been built) is skipped rather than guessed at: fetching the wrong season
+ * returns an empty fixture list that looks exactly like "no matches today".
+ */
+export class LeagueSeasons {
+  private cache: { day: string; seasons: Map<number, number> } | null = null;
+
+  constructor(private readonly r2: R2) {}
+
+  async resolve(leagueIds: number[]): Promise<Array<{ leagueId: number; season: number }>> {
+    const seasons = await this.load();
+    const resolved: Array<{ leagueId: number; season: number }> = [];
+    const missing: number[] = [];
+    for (const leagueId of leagueIds) {
+      const season = seasons.get(leagueId);
+      if (season == null) missing.push(leagueId);
+      else resolved.push({ leagueId, season });
+    }
+    if (missing.length > 0) {
+      log.warning("league_seasons_missing", {
+        leagueIds: missing,
+        hint: "no season in catalog.json — run /internal/sync-catalog",
+      });
+    }
+    return resolved;
+  }
+
+  private async load(): Promise<Map<number, number>> {
+    const day = new Date().toISOString().slice(0, 10);
+    if (this.cache?.day === day) return this.cache.seasons;
+    const catalog = await this.r2.getJson<CatalogPayload>("catalog.json");
+    const seasons = new Map<number, number>();
+    for (const league of catalog?.leagues ?? []) {
+      if (league.season != null) seasons.set(league.id, league.season);
+    }
+    this.cache = { day, seasons };
+    log.info("league_seasons_loaded", { day, leagues: seasons.size });
+    return seasons;
+  }
+}
+
+/**
  * Builds the leagues+teams catalog from the API and publishes it to the CDN.
- * Run daily by Cloud Scheduler (independent of the live-score poller, which
- * only runs during the active tournament window).
+ * Run daily by Cloud Scheduler, independent of the live-score poller (which
+ * only runs inside match windows), so it stays fresh year-round.
  */
 export class CatalogService {
   constructor(
