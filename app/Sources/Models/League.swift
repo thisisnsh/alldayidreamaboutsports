@@ -46,6 +46,19 @@ struct League: Codable, Identifiable, Hashable {
         case id, name, logo, country, active, scheduled, season
         case endedFlag = "ended"
     }
+
+    /// Names for the supported competitions, for the moment before catalog.json
+    /// lands (the menu labels every fixture row with its league, and the
+    /// bundled team fallback has to resolve to something). The CDN catalog
+    /// replaces these as soon as it loads.
+    static let fallbackNames: [Int: String] = [
+        39: "Premier League",
+        140: "La Liga",
+        135: "Serie A",
+        78: "Bundesliga",
+        61: "Ligue 1",
+        1: "World Cup",
+    ]
 }
 
 /// The full leagues + teams catalog (catalog.json), refreshed daily by the
