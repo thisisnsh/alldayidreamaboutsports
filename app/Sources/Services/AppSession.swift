@@ -12,6 +12,11 @@ final class AppSession: ObservableObject {
     @Published var leagues: [League] = []
     @Published var teamsByLeague: [Int: [Team]] = TeamCatalog.fallbackByLeague
     @Published var fixtures: [Fixture] = []
+    /// Every fixture kicking off today across all leagues — the menu's "All
+    /// Teams" list. Schedule data only (`fixtures-{date}.json` publishes rows
+    /// as SCHEDULED / 0-0 by construction): matches outside `fixtures` are
+    /// never polled, so they carry a kickoff time and nothing live.
+    @Published var todayFixtures: [Fixture] = []
     @Published var celebrationTotals: [Int: [String: Int]] = [:]
     @Published var signInError: String?
     /// Shows the one-line "the World Cup has ended" note at the top of the
@@ -71,8 +76,8 @@ final class AppSession: ObservableObject {
         AppAnalytics.syncSettingProperties(prefs.settings)
         if let data = defaults.data(forKey: CacheKey.fixtures),
            let stored = try? JSONDecoder().decode([Fixture].self, from: data) {
-            fixtures = stored
             fixturesById = Dictionary(uniqueKeysWithValues: stored.map { ($0.fixtureId, $0) })
+            publishFixtures()
         }
         if let data = defaults.data(forKey: CacheKey.celebrationTotals),
            let stored = try? JSONDecoder().decode([Int: [String: Int]].self, from: data) {
@@ -438,34 +443,33 @@ final class AppSession: ObservableObject {
         fixturesById[fixture.fixtureId] = fixture
     }
 
-    /// Project the working set into the published, sorted, visible `fixtures`
-    /// list and persist it. Visible = a fan match that kicks off today, or a
-    /// live one whatever day it started on. Five leagues put up to ~48 fixtures
-    /// a day in the working set; only the user's own belong in the published
-    /// (and cached-to-disk) list. The full set stays in `fixturesById` for the
-    /// poll loop.
+    /// Project the working set into the two published, sorted lists and persist
+    /// them. Visible = a match that kicks off today, or a live one whatever day
+    /// it started on; `fixtures` narrows that to the user's own teams.
+    /// `fixtures` — NOT `todayFixtures` — is what `LiveStore` polls, so a
+    /// fuller today list costs nothing beyond the schedule file we already read.
     func publishFixtures() {
         let calendar = Calendar.current
         let now = Date()
-        fixtures = fixturesById.values
+        todayFixtures = fixturesById.values
             .filter { fixture in
-                guard fixture.involves(fanTeamIds) else { return false }
-                return fixture.kickoff.map { calendar.isDate($0, inSameDayAs: now) } == true
+                fixture.kickoff.map { calendar.isDate($0, inSameDayAs: now) } == true
                     || fixture.isLive
             }
             .sorted { ($0.kickoff ?? .distantFuture) < ($1.kickoff ?? .distantFuture) }
+        fixtures = todayFixtures.filter { $0.involves(fanTeamIds) }
         persistFixtureCache()
     }
 
     /// Is there any football on today at all, fan teams or not? The menu needs
     /// this to tell "none of your teams play today" from "nobody plays today" —
     /// `fixtures` alone can no longer answer it now that it is fan-filtered.
-    var hasFixturesToday: Bool {
-        let calendar = Calendar.current
-        let now = Date()
-        return fixturesById.values.contains { fixture in
-            fixture.kickoff.map { calendar.isDate($0, inSameDayAs: now) } == true
-        }
+    var hasFixturesToday: Bool { !todayFixtures.isEmpty }
+
+    /// The competition a fixture belongs to, for the menu's fixture rows. Falls
+    /// back to the bundled names while catalog.json is still loading.
+    func leagueName(for leagueId: Int) -> String? {
+        leagues.first { $0.id == leagueId }?.name ?? League.fallbackNames[leagueId]
     }
 
     /// Optimistically fold the user's own taps into the local total so their
@@ -491,7 +495,10 @@ final class AppSession: ObservableObject {
     }
 
     private func persistFixtureCache() {
-        if let data = try? JSONEncoder().encode(fixtures) {
+        // The wider list: the schedule bootstrap runs once a UTC day, so a
+        // relaunch later that day rebuilds the working set from this cache
+        // alone — caching only the fan matches would empty "All Teams".
+        if let data = try? JSONEncoder().encode(todayFixtures) {
             defaults.set(data, forKey: CacheKey.fixtures)
         }
     }
@@ -511,6 +518,7 @@ final class AppSession: ObservableObject {
     /// `clearSession`), and on quit (`applicationWillTerminate`).
     func clearMatchCache() {
         fixtures = []
+        todayFixtures = []
         fixturesById = [:]
         celebrationTotals = [:]
         defaults.removeObject(forKey: CacheKey.fixtures)

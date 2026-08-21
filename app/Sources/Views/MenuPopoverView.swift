@@ -6,6 +6,10 @@ struct MenuPopoverView: View {
     @EnvironmentObject var session: AppSession
     @ObservedObject private var control = ControlPlane.shared
     @Environment(\.openWindow) private var openWindow
+    /// Which slice of today the fixture list shows. Stored locally rather than
+    /// in `prefs` — it's a view preference for this Mac, not synced state, and
+    /// the menu rebuilds its view on every open so it has to outlive that.
+    @AppStorage("menuFixtureScope") private var fixtureScope: FixtureScope = .mine
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -73,12 +77,14 @@ struct MenuPopoverView: View {
 
     private var fixturesSection: some View {
         VStack(alignment: .leading, spacing: 8) {
+            let shown = shownFixtures
             HStack {
-                Text("Today's matches")
+                Text(fixtureScope == .mine ? "Today's live scores" : "Today's matches")
                     .font(.caption)
                     .fontWeight(.semibold)
                     .opacity(0.7)
                 Spacer()
+                FixtureScopePicker(scope: $fixtureScope)
                 // Hidden for now — `refreshFixtures()` and its wiring stay intact;
                 // re-enable when we revisit the manual refresh UX.
                 if false {
@@ -90,19 +96,54 @@ struct MenuPopoverView: View {
                     .buttonStyle(.plain)
                 }
             }
-            let shown = session.fixtures.filter { $0.involves(session.fanTeamIds) }
             if shown.isEmpty {
-                Text(session.hasFixturesToday
-                     ? "None of your teams play today 💤"
-                     : "No matches today — rest day ☁️")
+                Text(emptyMessage)
                     .font(.system(size: 13))
                     .opacity(0.7)
-            } else {
-                ForEach(shown.prefix(6)) { fixture in
-                    FixtureRow(fixture: fixture)
+            } else if shown.count <= Self.unscrolledRows {
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(shown) { fixture in
+                        FixtureRow(fixture: fixture, live: fixtureScope == .mine)
+                    }
                 }
+            } else {
+                // "All Teams" is a whole matchday across five leagues (~30-50
+                // rows) — scroll it rather than growing the menu past the
+                // bottom of the screen.
+                ScrollView(.vertical, showsIndicators: true) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(shown) { fixture in
+                            FixtureRow(fixture: fixture, live: fixtureScope == .mine)
+                        }
+                    }
+                }
+                .frame(height: Self.scrolledHeight)
             }
         }
+    }
+
+    /// How many rows fit before the list starts scrolling, and the height it
+    /// settles at then. A row is ~42pt with 8pt between, so the scrolling list
+    /// is five rows plus a peek of the sixth — the cue that it scrolls. Both
+    /// stay under the old `.prefix(6)` list's height, which is what the
+    /// popover's fixed content size (`MenuPopoverController.showMenu`) is
+    /// budgeted for: go past it and the last row loses its subtitle line.
+    private static let unscrolledRows = 5
+    private static let scrolledHeight: CGFloat = 5 * 42 + 4 * 8 + 20
+
+    private var shownFixtures: [Fixture] {
+        switch fixtureScope {
+        case .mine: return session.fixtures
+        case .all: return session.todayFixtures
+        }
+    }
+
+    /// Nothing to list: either football is off entirely today, or it's on but
+    /// none of it is theirs (only reachable in "My Teams").
+    private var emptyMessage: String {
+        session.hasFixturesToday
+            ? "None of your teams play today 💤"
+            : "No matches today — rest day ☁️"
     }
 
     private var actions: some View {
@@ -306,13 +347,83 @@ extension LabelStyle where Self == FixedIconLabelStyle {
     static var fixedIcon: FixedIconLabelStyle { .init() }
 }
 
+/// Which of today's matches the menu lists: only the followed teams' (the
+/// default), or the whole day across every league. Both come out of the one
+/// schedule file the app already downloads — "All Teams" adds no fetching.
+enum FixtureScope: String, CaseIterable {
+    case mine
+    case all
+
+    var label: String {
+        switch self {
+        case .mine: return "My Teams"
+        case .all: return "All Teams"
+        }
+    }
+}
+
+/// The two-segment scope switch in the "Today's matches" header. Hand-rolled
+/// rather than `.pickerStyle(.segmented)`: at caption size AppKit's segmented
+/// control brings chrome (and a fixed height) far too heavy for a menu row.
+private struct FixtureScopePicker: View {
+    @Binding var scope: FixtureScope
+
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(FixtureScope.allCases, id: \.self) { option in
+                Segment(option: option, selected: scope == option) {
+                    withAnimation(.easeOut(duration: 0.15)) { scope = option }
+                }
+            }
+        }
+        .padding(2)
+        .background(
+            RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.06))
+        )
+    }
+
+    private struct Segment: View {
+        let option: FixtureScope
+        let selected: Bool
+        let action: () -> Void
+        @State private var hovering = false
+
+        var body: some View {
+            Button(action: action) {
+                Text(option.label)
+                    .font(.system(size: 10, weight: selected ? .semibold : .regular))
+                    .opacity(selected ? 1 : 0.6)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 3)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(Color.primary.opacity(selected ? 0.12 : (hovering ? 0.06 : 0)))
+                    )
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .onHover { hovering = $0 }
+        }
+    }
+}
+
 private struct FixtureRow: View {
     let fixture: Fixture
+    /// Whether this row may show live state — score, minute, FT, celebration
+    /// tally. Only "My Teams" can: `LiveStore` polls `session.fixtures` alone,
+    /// and `fixtures-{date}.json` is schedule data by construction (goals
+    /// zeroed, status forced to SCHEDULED — see `toScheduleRow` in the
+    /// backend's poller). A schedule row is teams + kickoff time, nothing else;
+    /// showing it a "0 – 0" would be inventing a scoreline.
+    var live: Bool = true
     @EnvironmentObject var session: AppSession
     @ObservedObject private var capsules = PinnedCapsuleManager.shared
     @State private var hovering = false
 
     private var isPinned: Bool { capsules.isPinned(fixture.fixtureId) }
+    /// A capsule reads `session.fixtures`, so only a followed team's match can
+    /// be pinned — and only from the list that's actually showing live state.
+    private var pinnable: Bool { live && fixture.involves(session.fanTeamIds) }
 
     var body: some View {
         // The row is hover-only (reveals the celebration tally + the pin
@@ -321,7 +432,7 @@ private struct FixtureRow: View {
         Button {
         } label: {
             HStack(alignment: .center, spacing: 6) {
-                if isPinned || hovering {
+                if pinnable, isPinned || hovering {
                     pinSlot
                 }
                 VStack(alignment: .leading, spacing: 3) {
@@ -350,7 +461,9 @@ private struct FixtureRow: View {
         }
     }
 
-    /// The description line under the scoreline. Once a match has kicked off
+    /// The description line under the scoreline. It always leads with the
+    /// competition — with five leagues in the list, the crests alone don't say
+    /// which one a match belongs to. After that: once a match has kicked off
     /// (live or finished) it's the celebration tally, with the stage label on
     /// hover; before kickoff — or while neither team has any celebrations yet —
     /// there's nothing to celebrate, so it's the stage label always.
@@ -358,12 +471,15 @@ private struct FixtureRow: View {
         let totals = session.celebrationTotals[fixture.fixtureId]
         let home = totals?[String(fixture.home.id)] ?? 0
         let away = totals?[String(fixture.away.id)] ?? 0
-        if !hovering, fixture.status != "SCHEDULED", home > 0 || away > 0 {
-            Text("\(home.formattedCompact) vs \(away.formattedCompact) celebrations")
-                .font(.system(size: 10))
-                .opacity(0.7)
-        } else if let stage = fixture.stageLabel {
-            Text(stage).font(.system(size: 10)).opacity(0.6)
+        let detail: String? = {
+            if live, !hovering, fixture.status != "SCHEDULED", home > 0 || away > 0 {
+                return "\(home.formattedCompact) vs \(away.formattedCompact) celebrations"
+            }
+            return fixture.stageLabel
+        }()
+        let league = session.leagueName(for: fixture.leagueId)
+        if let text = [league, detail].compactMap({ $0 }).joined(separator: " · ").trimmedNonEmpty {
+            Text(text).font(.system(size: 10)).opacity(0.6).lineLimit(1)
         }
     }
 
@@ -385,14 +501,18 @@ private struct FixtureRow: View {
     }
 
     private var score: String {
-        if fixture.status == "SCHEDULED" { return "vs" }
+        if !live || fixture.status == "SCHEDULED" { return "vs" }
         return fixture.scorelineText
     }
 
     /// The right edge is always about time: minute when live, kickoff time
     /// when scheduled, FT when done.
     @ViewBuilder private var trailing: some View {
-        if fixture.isLive {
+        if !live {
+            if let kickoff = fixture.kickoff {
+                Text(kickoff, style: .time).font(.system(size: 11)).opacity(0.7)
+            }
+        } else if fixture.isLive {
             HStack(spacing: 4) {
                 Circle().fill(.red).frame(width: 6, height: 6)
                 TimelineView(.periodic(from: .now, by: 1)) { ctx in
