@@ -157,13 +157,7 @@ struct SettingsView: View {
     private func profileCard(_ profile: Profile) -> some View {
         SettingsCard("Account") {
             HStack(spacing: 12) {
-                AsyncImage(url: profile.photoURL.flatMap(URL.init)) { image in
-                    image.resizable()
-                } placeholder: {
-                    Image(systemName: "person.crop.circle.fill").resizable()
-                }
-                .frame(width: 44, height: 44)
-                .clipShape(Circle())
+                CachedProfilePhoto(url: profile.photoURL, size: 44)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(profile.name ?? "Fan")
                         .font(.system(size: 14, weight: .semibold))

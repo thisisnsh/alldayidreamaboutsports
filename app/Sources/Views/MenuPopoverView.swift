@@ -47,13 +47,7 @@ struct MenuPopoverView: View {
 
     private func header(_ profile: Profile) -> some View {
         HStack(spacing: 10) {
-            AsyncImage(url: profile.photoURL.flatMap(URL.init)) { image in
-                image.resizable()
-            } placeholder: {
-                Image(systemName: "person.crop.circle.fill").resizable()
-            }
-            .frame(width: 36, height: 36)
-            .clipShape(Circle())
+            CachedProfilePhoto(url: profile.photoURL, size: 36)
             VStack(alignment: .leading, spacing: 1) {
                 Text(profile.name ?? "Fan").font(.system(size: 14, weight: .semibold))
                 Text(profile.email ?? "").font(.caption).opacity(0.7)
