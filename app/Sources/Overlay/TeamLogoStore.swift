@@ -1,11 +1,13 @@
 import AppKit
 import SwiftUI
 
-/// Loads team logos as `NSImage`s, memoized in memory and shared app-wide (the
-/// picker/menu via `CachedTeamLogo`, and the Canvas-drawn celebration surfaces).
-/// Bumps `version` when a new logo arrives so observers repaint. Network/disk
+/// Loads remote images as `NSImage`s — team and league crests, and the signed-in
+/// profile photo — memoized in memory and shared app-wide (the picker/menu via
+/// `CachedTeamLogo` and `CachedProfilePhoto`, and the Canvas-drawn celebration
+/// surfaces). Bumps `version` when a load finishes, success or failure, so
+/// observers repaint and a rendered fallback gets one retry. Network/disk
 /// caching is handled by `URLCache.shared` (configured in AppDelegate), so this
-/// never re-downloads a logo already fetched elsewhere in the app.
+/// never re-downloads an image already fetched elsewhere in the app.
 @MainActor
 final class TeamLogoStore: ObservableObject {
     static let shared = TeamLogoStore()
@@ -16,19 +18,40 @@ final class TeamLogoStore: ObservableObject {
     private var images: [String: NSImage] = [:]
     private var loading: Set<String> = []
     private var warmTask: Task<Void, Never>?
+    /// Consecutive failed loads per URL, cleared the moment one succeeds.
+    private var failures: [String: Int] = [:]
+    /// When a URL that failed twice may be asked for again.
+    private var coolingUntil: [String: Date] = [:]
 
     /// The cached image for a URL, or nil while it loads (kicking off a fetch).
+    /// A URL that has just failed twice is in its cooldown and returns nil
+    /// without touching the network until the window is up.
     func image(for url: String) -> NSImage? {
         if let img = images[url] { return img }
+        if let until = coolingUntil[url], until > Date() { return nil }
         guard !url.isEmpty, let parsed = URL(string: url), !loading.contains(url) else { return nil }
         loading.insert(url)
         Task {
             let img = await Self.load(parsed)
             loading.remove(url)
             if let img {
+                failures[url] = nil
+                coolingUntil[url] = nil
                 images[url] = img
-                version &+= 1
+            } else {
+                // A rendered fallback is the signal to refresh, so bumping
+                // `version` below is what sends the retry: observers redraw and
+                // the redraw calls back in here. The cooldown on the second
+                // failure is what stops that pair from looping forever.
+                let count = (failures[url] ?? 0) + 1
+                if count >= 2 {
+                    failures[url] = nil
+                    coolingUntil[url] = Date().addingTimeInterval(Self.failureCooldown)
+                } else {
+                    failures[url] = count
+                }
             }
+            version &+= 1
         }
         return nil
     }
@@ -75,6 +98,9 @@ final class TeamLogoStore: ObservableObject {
 
     private static let warmBatchSize = 12
     private static let warmBatchPause = Duration.milliseconds(120)
+    /// How long a URL that failed twice in a row is left alone. `TimeInterval`
+    /// rather than `Duration` because it is compared against `Date()`.
+    private static let failureCooldown: TimeInterval = 6 * 3600
 
     private static func load(_ url: URL) async -> NSImage? {
         guard let (data, _) = try? await URLSession.shared.data(from: url) else { return nil }
