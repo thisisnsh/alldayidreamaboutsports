@@ -461,25 +461,27 @@ private struct FixtureRow: View {
         }
     }
 
-    /// The description line under the scoreline. It always leads with the
+    /// The description line under the scoreline. At rest it leads with the
     /// competition — with five leagues in the list, the crests alone don't say
-    /// which one a match belongs to. After that: once a match has kicked off
-    /// (live or finished) it's the celebration tally, with the stage label on
-    /// hover; before kickoff — or while neither team has any celebrations yet —
-    /// there's nothing to celebrate, so it's the stage label always.
+    /// which one a match belongs to — followed by the stage label. Hovering a
+    /// kicked-off match that has celebrations swaps the whole line for the
+    /// tally, league prefix and all. With nothing to celebrate — before
+    /// kickoff, or while neither team has a tap — hover changes nothing, since
+    /// blanking the line would make the row twitch.
     @ViewBuilder private var subtitle: some View {
         let totals = session.celebrationTotals[fixture.fixtureId]
         let home = totals?[String(fixture.home.id)] ?? 0
         let away = totals?[String(fixture.away.id)] ?? 0
-        let detail: String? = {
-            if live, !hovering, fixture.status != "SCHEDULED", home > 0 || away > 0 {
-                return "\(home.formattedCompact) vs \(away.formattedCompact) celebrations"
+        let hasCelebrations = live && fixture.status != "SCHEDULED" && (home > 0 || away > 0)
+        if hovering, hasCelebrations {
+            Text("\(home.formattedCompact) vs \(away.formattedCompact) celebrations")
+                .font(.system(size: 10)).opacity(0.6).lineLimit(1)
+        } else {
+            let league = session.leagueName(for: fixture.leagueId)
+            if let text = [league, fixture.stageLabel]
+                .compactMap({ $0 }).joined(separator: " · ").trimmedNonEmpty {
+                Text(text).font(.system(size: 10)).opacity(0.6).lineLimit(1)
             }
-            return fixture.stageLabel
-        }()
-        let league = session.leagueName(for: fixture.leagueId)
-        if let text = [league, detail].compactMap({ $0 }).joined(separator: " · ").trimmedNonEmpty {
-            Text(text).font(.system(size: 10)).opacity(0.6).lineLimit(1)
         }
     }
 
