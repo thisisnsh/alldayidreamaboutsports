@@ -8,6 +8,10 @@ import SwiftUI
 /// every toggle.
 struct TeamPickerView: View {
     @EnvironmentObject var session: AppSession
+    /// Observed, not just read through `session`, so the "n of 10" counter
+    /// follows a Remote Config change to `max_fan_teams` while the window is
+    /// open.
+    @ObservedObject private var control = ControlPlane.shared
     @State private var query = ""
 
     var body: some View {
@@ -109,6 +113,11 @@ struct TeamPickerView: View {
                 }
             }
             Spacer()
+            // Always shown, empty selection included: "0 of 10" tells you the
+            // cap before you've picked anything, which is when it helps most.
+            Text("\(session.fanTeams.count) of \(control.maxFanTeams)")
+                .font(.system(size: 12, weight: .medium))
+                .opacity(0.6)
         }
         .padding(14)
         .background(.thinMaterial)
