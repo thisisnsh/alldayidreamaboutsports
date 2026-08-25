@@ -1,10 +1,11 @@
 import SwiftUI
 
 /// "Become a Fan": search + per-league sections of team logos with a tick on
-/// selected tiles, and the current "Fan of" strip at the bottom. The active
-/// leagues (the top five) are selectable; a finished competition shows greyed
-/// as "Ended" with its teams still listed and still deselectable, and anything
-/// not launched yet shows as "Coming soon". Saves on every toggle.
+/// selected tiles, and the current "Fan of" strip at the bottom. Every league
+/// is followable, at full opacity — a finished competition is badged "Ended"
+/// and one that hasn't started "Coming soon", but those are labels, not gates.
+/// Each section header carries a follow-all / unfollow-all control. Saves on
+/// every toggle.
 struct TeamPickerView: View {
     @EnvironmentObject var session: AppSession
     @State private var query = ""
@@ -77,8 +78,8 @@ struct TeamPickerView: View {
     }
 
     /// Shown once, to someone whose only saved teams are World Cup sides. Their
-    /// picks are not being taken away — the note says so, because the greyed
-    /// "Ended" section below would otherwise read as exactly that.
+    /// picks are not being taken away — the note says so, because the "Ended"
+    /// badge below would otherwise read as exactly that.
     private var migrationNotice: some View {
         HStack(alignment: .top, spacing: 8) {
             Image(systemName: "sparkles").font(.system(size: 12)).opacity(0.7)
@@ -114,12 +115,13 @@ struct TeamPickerView: View {
     }
 }
 
-/// How a league presents itself in the picker.
+/// How a league presents itself in the picker. Presentation only: every state
+/// is followable, and none of them dims the section.
 private enum LeagueState {
-    /// Followable now.
+    /// Under way.
     case live
-    /// Over. Greyed and badged, but its teams stay listed and stay deselectable
-    /// so anyone still following a national side can see and drop it.
+    /// Over — its teams stay listed, and stay pickable for anyone who wants to
+    /// keep a national side on the shelf.
     case ended
     /// Known about, not launched yet.
     case comingSoon
@@ -135,17 +137,14 @@ private enum LeagueState {
         case .comingSoon: return "Coming soon"
         }
     }
-
-    /// Ended leagues allow removal but not new picks — following a team whose
-    /// competition is finished would just be a row that never plays.
-    var allowsAdding: Bool { self == .live }
-    var allowsRemoving: Bool { self != .comingSoon }
-    var opacity: Double { self == .live ? 1 : 0.55 }
 }
 
 /// One league: header (logo + country + name + status), then its team grid.
 private struct LeagueSection: View {
     @EnvironmentObject var session: AppSession
+    /// Observed, not just read: the cap drives the button's label, so a Remote
+    /// Config change to `max_fan_teams` has to land while the window is open.
+    @ObservedObject private var control = ControlPlane.shared
     let league: League
     let teams: [Team]
 
@@ -164,13 +163,14 @@ private struct LeagueSection: View {
                         .font(.system(size: 11, weight: .medium))
                         .opacity(0.5)
                 }
+                Spacer()
                 if let badge = state.badge {
-                    Spacer()
                     Text(badge)
                         .font(.system(size: 10, weight: .semibold))
                         .padding(.horizontal, 7).padding(.vertical, 3)
                         .background(Capsule().fill(Color.primary.opacity(0.1)))
                 }
+                bulkButton
             }
 
             if !league.scheduled {
@@ -181,44 +181,86 @@ private struct LeagueSection: View {
             } else {
                 LazyVGrid(columns: columns, spacing: 12) {
                     ForEach(teams) { team in
-                        let selected = session.fanTeamIds.contains(team.id)
-                        TeamTile(
-                            team: team,
-                            selected: selected,
-                            // An ended league's tiles stay live only for the
-                            // teams already followed, so they can be dropped.
-                            enabled: state.allowsAdding || (selected && state.allowsRemoving)
-                        ) {
+                        TeamTile(team: team, selected: session.fanTeamIds.contains(team.id)) {
                             toggle(team)
                         }
                     }
                 }
             }
         }
-        .opacity(state.opacity)
     }
 
     private func toggle(_ team: Team) {
         var ids = session.prefs.fanTeamIds
         let key = String(team.id)
         if let index = ids.firstIndex(of: key) {
-            guard state.allowsRemoving else { return }
             ids.remove(at: index)
         } else {
-            guard state.allowsAdding else { return }
             // Cap how many teams a user can follow (config-driven). Adding past
             // the cap is a no-op so the user can't silently lose later picks.
-            guard ids.count < ControlPlane.shared.maxFanTeams else { return }
+            guard ids.count < control.maxFanTeams else { return }
             ids.append(key)
         }
         session.setFanTeams(ids)
+    }
+
+    // MARK: Follow all / unfollow all
+
+    /// The teams the button acts on: whatever the section is showing. Under a
+    /// search that's the matching subset, so what the button does always
+    /// matches what's in front of you.
+    private var shownIds: [String] { teams.map { String($0.id) } }
+    private var unfollowed: [String] {
+        let followed = Set(session.prefs.fanTeamIds)
+        return shownIds.filter { !followed.contains($0) }
+    }
+    private var room: Int { max(0, control.maxFanTeams - session.prefs.fanTeamIds.count) }
+
+    @ViewBuilder private var bulkButton: some View {
+        if !teams.isEmpty, league.scheduled {
+            let clearing = unfollowed.isEmpty
+            Button {
+                if clearing { unfollowAll() } else { followAll() }
+            } label: {
+                Text(clearing ? "Unfollow all" : followLabel)
+                    .font(.system(size: 11, weight: .medium))
+            }
+            .buttonStyle(.hoverHighlight)
+            .disabled(!clearing && room == 0)
+        }
+    }
+
+    /// A league is 18-20 teams and the cap is 10, so "Follow all" usually can't
+    /// follow all of them. Say how many will actually fit rather than quietly
+    /// doing less than the label promises.
+    private var followLabel: String {
+        room >= unfollowed.count ? "Follow all" : "Follow all (\(room) fit)"
+    }
+
+    /// One `setFanTeams` call, not one per team: it persists, logs, emits a
+    /// per-team analytics event and kicks off `reconcileFanMatches`, so a loop
+    /// would fire that whole tail twenty times.
+    private func followAll() {
+        var ids = session.prefs.fanTeamIds
+        let capacity = room
+        var added = 0
+        for id in unfollowed {
+            if added >= capacity { break }
+            ids.append(id)
+            added += 1
+        }
+        session.setFanTeams(ids)
+    }
+
+    private func unfollowAll() {
+        let shown = Set(shownIds)
+        session.setFanTeams(session.prefs.fanTeamIds.filter { !shown.contains($0) })
     }
 }
 
 private struct TeamTile: View {
     let team: Team
     let selected: Bool
-    let enabled: Bool
     let action: () -> Void
     @Environment(\.colorScheme) private var scheme
 
@@ -252,7 +294,6 @@ private struct TeamTile: View {
             }
         }
         .buttonStyle(.plain)
-        .disabled(!enabled)
         .hoverLift()
     }
 }
