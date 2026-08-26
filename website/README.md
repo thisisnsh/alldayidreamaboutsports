@@ -19,7 +19,7 @@ Free · macOS 14+ · Premier League · La Liga · Serie A · Bundesliga · Ligue
 
 ---
 
-## What it is
+## Overview
 
 A menu bar app for people who are supposed to be working while their team plays.
 
@@ -30,25 +30,22 @@ A menu bar app for people who are supposed to be working while their team plays.
   counter climb with fans around the world.
 - **Your teams** — follow clubs across the top five leagues.
 
-## What's in this repository
-
-- The landing page code for [alldayidreamaboutsports.com](https://alldayidreamaboutsports.com)
-- **The macOS app and its backend are closed source, in a private repo.**
+**Note:** 
+This repository has landing page code for [alldayidreamaboutsports.com](https://alldayidreamaboutsports.com).
+The macOS app and its backend are closed source.
 
 ## Architecture
 
 **Stack**
 
-| | |
-|---|---|
-| App | SwiftUI, Sparkle (auto-update) |
-| Backend | TypeScript + Express on GCP Cloud Run |
-| Polling | GCP Cloud Scheduler → GCP Cloud Tasks → the service |
-| Data | Firebase Firestore |
-| Delivery | Cloudflare R2 + Cloudflare CDN |
-| Auth | Google OAuth |
-| Control plane | Firebase Remote Config |
-| CI/CD | GitHub Actions — deploys, signing, Apple notarization |
+- **App** — SwiftUI, Sparkle (auto-update) 
+- **Backend** — TypeScript + Express on GCP Cloud Run 
+- **Polling** — GCP Cloud Scheduler → GCP Cloud Tasks → the service 
+- **Data** — Firebase Firestore 
+- **Delivery** — Cloudflare R2 + Cloudflare CDN 
+- **Auth** — Google OAuth 
+- **Control plane** — Firebase Remote Config 
+- **CI/CD** — GitHub Actions
 
 **Shape**
 
@@ -76,22 +73,15 @@ A menu bar app for people who are supposed to be working while their team plays.
 - **Celebrations are the one real per-user cost**, so they're batched: one call per
   goal from the app, aggregated in memory and flushed to sharded Firestore
   counters, then republished as another cached object.
-- **Firestore is deny-all to clients.** Everything goes through the backend, public
-  routes are rate-limited, and internal routes require service-to-service auth.
 - **Firebase Remote Config is the control plane** — kill switch, forced updates and
-  feature flags, applied to running apps in realtime, with an R2 fallback if
-  Firebase itself is the outage.
-- **The app derives its own events.** Polled state → diff → event router →
-  transparent click-through overlay, so a missed poll can't fire a phantom alert.
-- **GitHub Actions handles backend deploys, app builds and Apple notarization.**
-  Updates ship via Sparkle; the appcast signing key never enters CI.
+  feature flags, applied to running apps in realtime.
+- **Sparkle powered updates.** In place app updates with delta patches from an
+  EdDSA-signed appcast.
+- **GitHub Actions handles release** Backend deploys, app builds and Apple notarization.
 
 ## The website
 
-- Hand-written HTML, CSS and vanilla JS. No framework, no bundler, no
-  dependencies, no build.
-- The hero is a playable recreation of the app in DOM — the page demonstrates
-  the product instead of describing it.
+- HTML, CSS and vanilla JS.
 - Run it with `python3 -m http.server` and open the folder. That's the whole
   toolchain.
 
