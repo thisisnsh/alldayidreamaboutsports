@@ -25,7 +25,7 @@ final class AppSession: ObservableObject {
 
     private var api: BackendAPI { Services.api }
     private var scores: ScoresProviding { Services.scores }
-    private let defaults = UserDefaults.standard
+    private let defaults = AppDefaults.shared
     private var isBootstrappingFixtures = false
     /// Working set of fixtures keyed by id — the live poll loop merges into this
     /// and `publishFixtures()` projects the visible, sorted list into `fixtures`.
@@ -61,9 +61,8 @@ final class AppSession: ObservableObject {
         AppLog.info(.app, "session_bootstrap_start")
         #if DEV_BACKEND
         // Sign-in bypass: already signed in before the first frame. Profile
-        // comes from Dev/DevConfig.swift, while fan teams/settings are local.
+        // comes from Dev/DevConfig.swift.
         profile = DevConfig.profile
-        prefs.fanTeamIds = DevConfig.fanTeams
         #else
         if let data = defaults.data(forKey: "profile"),
            let stored = try? JSONDecoder().decode(Profile.self, from: data),
@@ -72,8 +71,19 @@ final class AppSession: ObservableObject {
         }
         #endif
         loadLocalPrefs()
+        #if DEV_BACKEND
+        // DevConfig is the single source of truth for who you follow in a demo
+        // run — that's what keeps "My Teams" to the fixtures the timeline
+        // actually scripts. It wins over anything `loadLocalPrefs()` restored,
+        // so picking teams in a Debug build lasts only until the next launch.
+        prefs.fanTeamIds = DevConfig.fanTeams
+        #endif
         applyApplicationTheme()
         AppAnalytics.syncSettingProperties(prefs.settings)
+        #if !DEV_BACKEND
+        // A demo run starts from an empty board: DemoEngine seeds every fixture
+        // itself, so restoring a cache would only leave rows from an older
+        // reel (or an older DevConfig) sitting in "All Teams".
         if let data = defaults.data(forKey: CacheKey.fixtures),
            let stored = try? JSONDecoder().decode([Fixture].self, from: data) {
             fixturesById = Dictionary(uniqueKeysWithValues: stored.map { ($0.fixtureId, $0) })
@@ -83,6 +93,7 @@ final class AppSession: ObservableObject {
            let stored = try? JSONDecoder().decode([Int: [String: Int]].self, from: data) {
             celebrationTotals = stored
         }
+        #endif
         Task {
             await refreshCatalog()
             #if DEV_BACKEND

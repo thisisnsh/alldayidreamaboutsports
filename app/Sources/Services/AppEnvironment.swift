@@ -48,3 +48,17 @@ enum FirebaseConfigured {
         Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist") != nil
     }
 }
+
+/// Where the app keeps its preferences. A Debug build shares its bundle id with
+/// an installed Release app, so `UserDefaults.standard` is the SAME store for
+/// both: without this, a dev run reads that app's real fan teams and cached
+/// matchday (and writes demo data back over them). Debug therefore gets its own
+/// suite; Release is plain `.standard`, unchanged.
+enum AppDefaults {
+    #if DEV_BACKEND
+    static let shared: UserDefaults =
+        UserDefaults(suiteName: "com.alldayidreamaboutsports.mac.dev") ?? .standard
+    #else
+    static let shared: UserDefaults = .standard
+    #endif
+}

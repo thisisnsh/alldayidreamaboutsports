@@ -62,7 +62,12 @@ targets:
           GOOGLE_CLIENT_ID: UNUSED_IN_DEBUG
           GOOGLE_REVERSED_CLIENT_ID: UNUSED_IN_DEBUG
           APP_API_BASE_URL: https://unused.invalid
-          APP_SCORES_BASE_URL: https://unused.invalid
+          # The ONE real read a Debug build makes: catalog.json, so the picker
+          # shows the current leagues and squads instead of a hand-maintained
+          # list (FakeScores.fetchCatalog; everything else stays faked). It's a
+          # public, CDN-cached, read-only file — no auth, no API quota. Point it
+          # at production because staging's scores domain is access-protected.
+          APP_SCORES_BASE_URL: https://scores.alldayidreamaboutsports.com
           APP_FEED_URL: https://unused.invalid/appcast.xml
         Staging:
           SWIFT_ACTIVE_COMPILATION_CONDITIONS: STAGING
