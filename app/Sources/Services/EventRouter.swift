@@ -13,8 +13,8 @@ final class EventRouter {
     static let shared = EventRouter()
 
     private var seenEventIds: [String] {
-        get { UserDefaults.standard.stringArray(forKey: "handledEventIds") ?? [] }
-        set { UserDefaults.standard.set(newValue, forKey: "handledEventIds") }
+        get { AppDefaults.shared.stringArray(forKey: "handledEventIds") ?? [] }
+        set { AppDefaults.shared.set(newValue, forKey: "handledEventIds") }
     }
 
     /// Greatest incident minute we've already surfaced per fixture — the

@@ -70,9 +70,9 @@ final class TeamLogoStore: ObservableObject {
     /// moment the picker opens. Re-opening the picker cancels the previous warm
     /// instead of stacking a second sweep on top of it.
     func warm(_ urls: [String]) {
-        let last = UserDefaults.standard.object(forKey: "logoRefreshedAt") as? Date ?? .distantPast
+        let last = AppDefaults.shared.object(forKey: "logoRefreshedAt") as? Date ?? .distantPast
         let stale = Date().timeIntervalSince(last) > 24 * 3600
-        if stale { UserDefaults.standard.set(Date(), forKey: "logoRefreshedAt") }
+        if stale { AppDefaults.shared.set(Date(), forKey: "logoRefreshedAt") }
         let targets = urls.filter { !$0.isEmpty }
         warmTask?.cancel()
         warmTask = Task { [weak self] in

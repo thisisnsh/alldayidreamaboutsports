@@ -11,10 +11,10 @@ enum LaunchAtLogin {
     }
 
     static func registerByDefault() {
-        guard !UserDefaults.standard.bool(forKey: appliedKey) else { return }
+        guard !AppDefaults.shared.bool(forKey: appliedKey) else { return }
         do {
             try SMAppService.mainApp.register()
-            UserDefaults.standard.set(true, forKey: appliedKey)
+            AppDefaults.shared.set(true, forKey: appliedKey)
             AppLog.info(.app, "launch_at_login_default_registered")
         } catch {
             AppLog.error(.app, "launch_at_login_default_registration_failed", error: error)

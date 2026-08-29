@@ -136,7 +136,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // tick). Terminate gives no such tick, so without forcing a flush the
         // removals in clearMatchCache() are lost and the next launch reads the
         // stale cache back. synchronize() blocks until the writes hit disk.
-        UserDefaults.standard.synchronize()
+        AppDefaults.shared.synchronize()
         ControlPlane.shared.stop()
     }
 

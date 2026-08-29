@@ -153,13 +153,18 @@ final class FakeStore {
         states[id] = state
     }
 
-    /// A fixture rebuilt from its current demo state — kickoff is back-dated
-    /// to match the on-screen minute.
+    /// A fixture rebuilt from its current demo state.
     func fixture(_ def: DemoFixture) -> Fixture {
         let s = states[def.id] ?? LiveMatchState()
-        let kickoff = Date().addingTimeInterval(-Double(s.minute ?? 0) * 60)
+        // A FIXED fake kickoff — today at the fixture's own scheduled time (see
+        // DemoFixture.kickoffTime), never derived from the wall clock or from
+        // how far the reel has run. That's what makes the "All Teams" list read
+        // like a printed matchday, an hour between kickoffs, no matter when you
+        // hit Play. The live minute label doesn't come from here: it's driven by
+        // the half changes the timeline fires (LiveStore's local clock).
         let shootout = (s.penHome != nil || s.penAway != nil)
             ? Shootout(home: s.penHome ?? 0, away: s.penAway ?? 0, kicks: s.kicks) : nil
+        let kickoff = def.kickoffTime
         let running = s.rawStatus == "1H" || s.rawStatus == "2H" || s.rawStatus == "ET"
         let period: MatchPeriod = {
             switch s.rawStatus {
@@ -239,9 +244,29 @@ final class FakeBackendAPI: BackendAPI {
 
 @MainActor
 final class FakeScores: ScoresProviding {
-    func fetchCatalog() async throws -> Catalog { FakeScores.demoCatalog }
+    // ╔════════════════════════════════════════════════════════════════╗
+    // ║  WHERE THE TEAMS COME FROM — flip these two lines.              ║
+    // ║  LIVE (default): the same `catalog.json` the shipped app reads, ║
+    // ║    off the production CDN, so "Become a Fan" lists the real     ║
+    // ║    current leagues and squads. A public, edge-cached, read-only ║
+    // ║    file: no auth, no API-Football quota.                        ║
+    // ║  HARD-CODED: comment out the fetch, uncomment the return below, ║
+    // ║    and the picker runs off `hardcodedCatalog` — offline, frozen.║
+    // ║  Nothing else in this file ever touches the network.            ║
+    // ╚════════════════════════════════════════════════════════════════╝
+    func fetchCatalog() async throws -> Catalog {
+        // return FakeScores.hardcodedCatalog
+
+        let catalog = try await CDNScoresClient().fetchCatalog()
+        NSLog("🧪 FakeBackend: live catalog from %@ — %d leagues, %d teams",
+              AppEnvironment.scoresBase.absoluteString,
+              catalog.leagues.count,
+              catalog.teams.values.reduce(0) { $0 + $1.count })
+        return catalog
+    }
+
     func fetchFixtures(date: Date) async throws -> [Fixture] {
-        FakeStore.shared.todayFixtures + FakeStore.shared.liveFixtures
+        FakeStore.shared.allFixtures
     }
     func fetchFixture(fixtureId: Int) async throws -> Fixture {
         guard let fixture = FakeStore.shared.allFixtures.first(where: { $0.fixtureId == fixtureId }) else {
@@ -256,10 +281,14 @@ final class FakeScores: ScoresProviding {
         return FakeStore.shared.celebrations[fixtureId] ?? [:]
     }
 
-    /// Multi-league catalog for the picker, covering all three section states:
-    /// the top-five club leagues are active/selectable, the World Cup is
-    /// archived ("Ended", teams still listed), and one is "not scheduled".
-    static let demoCatalog: Catalog = {
+    /// Offline fallback for `fetchCatalog()`, and the one to switch to when you
+    /// want a catalog that never changes. A trimmed snapshot of the live
+    /// `catalog.json` (fetched 29 Aug 2026): the five club leagues the app
+    /// follows, each with its best-known sides — including every team the demo
+    /// timeline fields — plus the archived World Cup, which is what exercises
+    /// the picker's "Ended" section. Ids, codes and names are the real ones, so
+    /// crests and short labels resolve exactly as they do in production.
+    static let hardcodedCatalog: Catalog = {
         func team(_ id: Int, _ name: String, _ code: String, _ league: Int) -> Team {
             Team(id: id, name: name, code: code, logo: TeamCatalog.logoURL(id), leagueId: league)
         }
@@ -273,29 +302,41 @@ final class FakeScores: ScoresProviding {
                 League(id: 135, name: "Serie A", logo: leagueLogo(135), country: "Italy",
                        active: true, scheduled: true, season: 2026),
                 League(id: 78, name: "Bundesliga", logo: leagueLogo(78), country: "Germany",
-                       active: true, scheduled: false, season: nil),
+                       active: true, scheduled: true, season: 2026),
+                League(id: 61, name: "Ligue 1", logo: leagueLogo(61), country: "France",
+                       active: true, scheduled: true, season: 2026),
                 League(id: 1, name: "World Cup", logo: leagueLogo(1), country: "World",
                        active: false, scheduled: true, season: 2026, ended: true),
             ],
             teams: [
                 "39": [
-                    team(33, "Manchester United", "MUN", 39), team(40, "Liverpool", "LIV", 39),
-                    team(42, "Arsenal", "ARS", 39), team(50, "Manchester City", "MCI", 39),
+                    team(50, "Manchester City", "MCI", 39), team(42, "Arsenal", "ARS", 39),
+                    team(40, "Liverpool", "LIV", 39), team(33, "Manchester United", "MUN", 39),
+                    team(49, "Chelsea", "CHE", 39), team(47, "Tottenham", "TOT", 39),
                 ],
                 "140": [
-                    team(541, "Real Madrid", "MAD", 140), team(529, "Barcelona", "BAR", 140),
-                    team(530, "Atletico Madrid", "ATL", 140), team(536, "Sevilla", "SEV", 140),
+                    team(541, "Real Madrid", "REA", 140), team(529, "Barcelona", "BAR", 140),
+                    team(530, "Atletico Madrid", "ATM", 140), team(536, "Sevilla", "SEV", 140),
+                    team(533, "Villarreal", "VIL", 140),
                 ],
                 "135": [
-                    team(496, "Juventus", "JUV", 135), team(505, "Inter", "INT", 135),
-                    team(489, "AC Milan", "MIL", 135), team(492, "Napoli", "NAP", 135),
+                    team(505, "Inter", "INT", 135), team(489, "AC Milan", "MIL", 135),
+                    team(496, "Juventus", "JUV", 135), team(492, "Napoli", "NAP", 135),
+                    team(497, "AS Roma", "ROM", 135),
                 ],
-                "78": [],
+                "78": [
+                    team(157, "Bayern München", "BAY", 78), team(165, "Borussia Dortmund", "DOR", 78),
+                    team(168, "Bayer Leverkusen", "BAY", 78), team(173, "RB Leipzig", "LEI", 78),
+                ],
+                "61": [
+                    team(85, "Paris Saint Germain", "PSG", 61), team(81, "Marseille", "MAR", 61),
+                    team(80, "Lyon", "LYO", 61), team(91, "Monaco", "MON", 61),
+                ],
                 "1": [
-                    team(6,    "Brazil",       "BRA", 1), team(26,   "Argentina",  "ARG", 1),
-                    team(10,   "England",      "ENG", 1), team(2384, "United States", "USA", 1),
-                    team(2,    "France",       "FRA", 1), team(25,   "Germany",    "GER", 1),
-                    team(9,    "Spain",        "ESP", 1), team(27,   "Portugal",   "POR", 1),
+                    team(6,  "Brazil",    "BRA", 1), team(26, "Argentina", "ARG", 1),
+                    team(2,  "France",    "FRA", 1), team(10, "England",   "ENG", 1),
+                    team(9,  "Spain",     "ESP", 1), team(25, "Germany",   "GER", 1),
+                    team(27, "Portugal",  "POR", 1), team(2384, "USA",     "USA", 1),
                 ],
             ],
         )
@@ -357,26 +398,27 @@ final class DemoEngine: ObservableObject {
     }
 
     /// A one-off parade of every pill layout, fired through the real pipeline
-    /// before the timeline proper. Uses one match (Inter vs Juventus) and only
-    /// the opponent (Juve) side for goal-type events, so each shows as a notch
-    /// PILL rather than a fan-goal celebration — the point here is to preview
-    /// the pills. Scores are coherent so the subtitle row reads sensibly, and a
-    /// shootout decides it so full-time shows the "won on pens" variant.
+    /// before the timeline proper. Uses one match (Bayern vs Dortmund) and only
+    /// the opponent (Dortmund) side for goal-type events, so each shows as a
+    /// notch PILL rather than a fan-goal celebration — the point here is to
+    /// preview the pills. Unlike the timeline this is a synthetic parade, not a
+    /// real match: scores are coherent so the subtitle row reads sensibly, and
+    /// a shootout decides it so full-time shows the "won on pens" variant.
     private func runShowcase() async {
-        let f = DemoFixture.intJuv
+        let f = DemoFixture.bayDor
         let beats: [DemoMoment] = [
             DemoMoment(at: 0, f, minute: 1,   .kickoff),
-            DemoMoment(at: 0, f, minute: 9,   .goal(.away, player: "Yıldız")),        // JUV 0–1 → goal pill
-            DemoMoment(at: 0, f, minute: 20,  .yellowCard(.away, player: "Locatelli")),
-            DemoMoment(at: 0, f, minute: 24,  .goalDisallowed(.away)),                // VAR → back to 0–0
-            DemoMoment(at: 0, f, minute: 33,  .goal(.away, player: "Openda")),        // JUV 0–1 again, for a leader
-            DemoMoment(at: 0, f, minute: 41,  .redCard(.away, player: "Bremer")),
-            DemoMoment(at: 0, f, minute: 45,  .halfTime),                             // "Juventus ahead"
+            DemoMoment(at: 0, f, minute: 9,   .goal(.away, player: "Serhou Guirassy")), // DOR 0–1 → goal pill
+            DemoMoment(at: 0, f, minute: 20,  .yellowCard(.away, player: "Julian Brandt")),
+            DemoMoment(at: 0, f, minute: 24,  .goalDisallowed(.away)),                  // VAR → back to 0–0
+            DemoMoment(at: 0, f, minute: 33,  .goal(.away, player: "Karim Adeyemi")),   // DOR 0–1 again, for a leader
+            DemoMoment(at: 0, f, minute: 41,  .redCard(.away, player: "Nico Schlotterbeck")),
+            DemoMoment(at: 0, f, minute: 45,  .halfTime),                               // "Dortmund ahead"
             DemoMoment(at: 0, f, minute: 91,  .extraTime),
             DemoMoment(at: 0, f, minute: 120, .penaltyShootout),
-            DemoMoment(at: 0, f, minute: 120, .penaltyKick(.home, player: "Çalhanoğlu", scored: true)),  // pens 1–0
-            DemoMoment(at: 0, f, minute: 120, .penaltyKick(.away, player: "Vlahović",   scored: false)), // missed ✗
-            DemoMoment(at: 0, f, minute: 120, .fullTime),                             // "Inter won on pens"
+            DemoMoment(at: 0, f, minute: 120, .penaltyKick(.home, player: "Harry Kane",     scored: true)),  // pens 1–0
+            DemoMoment(at: 0, f, minute: 120, .penaltyKick(.away, player: "Julian Brandt",  scored: false)), // missed ✗
+            DemoMoment(at: 0, f, minute: 120, .fullTime),                               // "Bayern won on pens"
         ]
         FakeStore.shared.resetMatches()
         publishAllFixtures()
@@ -397,7 +439,7 @@ final class DemoEngine: ObservableObject {
     /// the team, not a blank) and a disallow→re-award cycle (the "Goal
     /// disallowed" pill, then the re-awarded GOAL pill must actually show).
     private func runClockLabelWalk() async {
-        let f = DemoFixture.mciMun
+        let f = DemoFixture.mciArs
         let id = f.id
         FakeStore.shared.resetMatches()
 
@@ -477,7 +519,14 @@ final class DemoEngine: ObservableObject {
         publishAllFixtures()
         firedCount = 0
         let start = Date()
-        for moment in DevConfig.timeline {
+        // Play in `at` order, not source order, so the timeline can stay
+        // grouped by match: an earlier beat further down the array would
+        // otherwise have a negative wait and fire the moment we reached it.
+        // Ties keep their source order, so same-`at` beats stay deterministic.
+        let script = DevConfig.timeline.enumerated()
+            .sorted { ($0.element.at, $0.offset) < ($1.element.at, $1.offset) }
+            .map(\.element)
+        for moment in script {
             let wait = start.addingTimeInterval(moment.at).timeIntervalSinceNow
             if wait > 0 { try? await Task.sleep(for: .seconds(wait)) }
             if Task.isCancelled { return }
@@ -486,8 +535,17 @@ final class DemoEngine: ObservableObject {
         }
     }
 
+    /// Set while a `silent` beat is applied: its state change lands on the
+    /// scoreboard, but nothing is routed to the overlays. That's how a match
+    /// that finished before you opened the app gets a full history without
+    /// spraying its pills across the screen at t=0 — and it matches production,
+    /// where a match with no followed team is never polled at all.
+    private var suppressPush = false
+
     private func fire(_ moment: DemoMoment) {
         let store = FakeStore.shared
+        suppressPush = moment.silent
+        defer { suppressPush = false }
         let def = moment.fixture
         let id = def.id
         // Stoppage minute on the live clock (`+7` in `45+7`). Every clock-bearing
@@ -497,6 +555,17 @@ final class DemoEngine: ObservableObject {
         if case .celebrationSurge = moment.action {} else {
             store.states[id]?.extra = moment.extra
         }
+        // Any in-play beat implies the match is running, in the half its minute
+        // falls in — so a 54' goal after half-time moves the fixture out of HT
+        // and into the second half, and the local clock rebases to 45:00
+        // instead of snapping back to 1'. (The real backend infers the same
+        // thing from API-Football's status; the demo has no `.secondHalf`
+        // action, so the minute is what tells us.)
+        func markRunning(_ minute: Int) {
+            store.states[id]?.status = "LIVE"
+            store.states[id]?.rawStatus = minute <= 45 ? "1H" : (minute <= 90 ? "2H" : "ET")
+            store.states[id]?.minute = minute
+        }
         switch moment.action {
         case .kickoff:
             store.states[id]?.status = "LIVE"
@@ -504,34 +573,32 @@ final class DemoEngine: ObservableObject {
             store.states[id]?.minute = moment.minute
             push(.kickoff, def, minute: moment.minute)
         case let .goal(side, player, kind):
-            store.states[id]?.status = "LIVE"
-            store.states[id]?.rawStatus = "1H"
-            store.states[id]?.minute = moment.minute
+            markRunning(moment.minute)
             store.addGoal(side, in: id, player: player, minute: moment.minute, extra: moment.extra, kind: kind)
             push(.goal, def, side: side, player: player, minute: moment.minute, extra: moment.extra, goalKind: kind)
         case let .goalDisallowed(side):
-            store.states[id]?.minute = moment.minute
+            markRunning(moment.minute)
             store.removeGoal(side, in: id)
             push(.goalCancelled, def, side: side, minute: moment.minute)
         case let .goalDisallowedOffside(side):
-            store.states[id]?.minute = moment.minute
+            markRunning(moment.minute)
             store.disallowGoalKeepingEvent(side, in: id)
             push(.goalCancelled, def, side: side, minute: moment.minute)
         case let .yellowCard(side, player):
-            store.states[id]?.minute = moment.minute
+            markRunning(moment.minute)
             store.addCard(side, red: false, in: id, player: player, minute: moment.minute, extra: moment.extra)
             push(.yellowCard, def, side: side, player: player, minute: moment.minute, extra: moment.extra)
         case let .redCard(side, player):
-            store.states[id]?.minute = moment.minute
+            markRunning(moment.minute)
             store.addCard(side, red: true, in: id, player: player, minute: moment.minute, extra: moment.extra)
             push(.redCard, def, side: side, player: player, minute: moment.minute, extra: moment.extra)
         case let .substitution(side, playerIn, playerOut):
-            store.states[id]?.minute = moment.minute
+            markRunning(moment.minute)
             store.addSub(side, in: id, playerIn: playerIn, playerOut: playerOut, minute: moment.minute, extra: moment.extra)
             push(.substitution, def, side: side, player: playerIn, minute: moment.minute, extra: moment.extra,
                  playerOut: playerOut)
         case let .varDecision(side, detail):
-            store.states[id]?.minute = moment.minute
+            markRunning(moment.minute)
             let teamId = side == .home ? def.home.id : def.away.id
             store.addVar(in: id, teamId: teamId, detail: detail, minute: moment.minute, extra: moment.extra)
             push(.varDecision, def, side: side, minute: moment.minute, extra: moment.extra, varDetail: detail)
@@ -579,6 +646,7 @@ final class DemoEngine: ObservableObject {
                       side: DemoSide? = nil, player: String? = nil, minute: Int,
                       extra: Int? = nil, scored: Bool? = nil, goalKind: String? = nil,
                       playerOut: String? = nil, varDetail: String? = nil) {
+        guard !suppressPush else { return }
         let store = FakeStore.shared
         let s = store.states[def.id] ?? LiveMatchState()
         let teamId = side.map { $0 == .home ? def.home.id : def.away.id }

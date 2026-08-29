@@ -9,7 +9,7 @@ struct MenuPopoverView: View {
     /// Which slice of today the fixture list shows. Stored locally rather than
     /// in `prefs` — it's a view preference for this Mac, not synced state, and
     /// the menu rebuilds its view on every open so it has to outlive that.
-    @AppStorage("menuFixtureScope") private var fixtureScope: FixtureScope = .mine
+    @AppStorage("menuFixtureScope", store: AppDefaults.shared) private var fixtureScope: FixtureScope = .mine
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
