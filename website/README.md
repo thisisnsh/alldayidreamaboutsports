@@ -8,12 +8,14 @@
 
 [Website](https://alldayidreamaboutsports.com) &nbsp;·&nbsp;
 [Download](https://alldayidreamaboutsports.com) &nbsp;·&nbsp;
-[Demo](https://youtu.be/XW4_LArebM8) &nbsp;·&nbsp;
+[Demo](https://youtu.be/B75DYFddkV0) &nbsp;·&nbsp;
 [Privacy](https://alldayidreamaboutsports.com/privacy)
 
 Free · macOS 14+ · Premier League · La Liga · Serie A · Bundesliga · Ligue 1
 
 <img src="assets/og-image.jpg" width="720" alt="Live match alert dropping below the MacBook notch">
+
+<img src="assets/all-sports-promo.gif" width="720" alt="All Day I Dream About Sports app demo">
 
 </div>
 
