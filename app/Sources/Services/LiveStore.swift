@@ -45,10 +45,14 @@ final class LiveStore {
     /// `anchorDate`, ticking forward at 1x thereafter. Reset only at a half
     /// change (or seeded once on a mid-match join) — never corrected from the
     /// backend's noisy running-clock field. See `ingest` for anchor rules.
+    /// `frozen` is the Debug demo's opt-out: it holds `baseSeconds` instead of
+    /// ticking, so the clock reads the scripted minute (see
+    /// `noteClockObservation`).
     struct ClockAnchor {
         var baseSeconds: Double
         var anchorDate: Date
         var period: MatchPeriod
+        var frozen = false
     }
     private var clockAnchor: [Int: ClockAnchor] = [:]
     /// Fixtures whose match file has reported FINISHED (stop polling them).
@@ -114,6 +118,7 @@ final class LiveStore {
     /// `TimelineView` tick re-evaluate this every second without re-polling.
     func localElapsedSeconds(_ fixtureId: Int, at now: Date = Date()) -> Double? {
         guard let anchor = clockAnchor[fixtureId] else { return nil }
+        guard !anchor.frozen else { return anchor.baseSeconds }
         return anchor.baseSeconds + now.timeIntervalSince(anchor.anchorDate)
     }
 
@@ -279,12 +284,6 @@ final class LiveStore {
         celebrationNotify.removeAll()
     }
 
-    /// Fixture ids the Debug demo backend (`FakeBackend`) has published at
-    /// least once — lets `noteClockObservation` tell a genuine mid-match join
-    /// from an ordinary kickoff without needing a real diff baseline, since
-    /// the demo never runs the poll loop that populates `baseline`.
-    private var demoObserved: Set<Int> = []
-
     /// The only two places our local clock's base is touched — never from the
     /// snapshot's running-clock field (`minute`/`extra`), which is the buggy,
     /// jittery source we're deliberately avoiding.
@@ -296,6 +295,9 @@ final class LiveStore {
         guard current.running == true, let period = current.period,
               [.first, .second, .extraFirst, .extraSecond].contains(period)
         else { return }
+        // A demo-pinned clock owns itself — the dev fake's own poll reads must
+        // never rebase it back onto a free-running half.
+        guard clockAnchor[current.fixtureId]?.frozen != true else { return }
 
         if let anchor = clockAnchor[current.fixtureId] {
             guard anchor.period != period else { return } // same half: free-run
@@ -315,13 +317,23 @@ final class LiveStore {
         }
     }
 
-    /// Mirrors the anchor half of `ingest` for the Debug demo backend, which
-    /// publishes scripted fixtures directly (`AppSession.applyLiveFixture`)
-    /// without the real poll loop — so its timeline drives the same local
-    /// clock rules the live app uses.
+    /// The clock rule for the Debug demo backend, which publishes scripted
+    /// fixtures directly (`AppSession.applyLiveFixture`). The demo compresses
+    /// a whole match into a couple of minutes of beats, so the app's real rule
+    /// (anchor at the half's base, then free-run at 1x) would sit at 1′ while
+    /// the pills fire 16′, 36′, 45′ — and snap back to 1′ whenever a beat put
+    /// the fixture back in the first half. So here the clock is PINNED to the
+    /// minute (plus stoppage) the moment itself carries, and held there until
+    /// the next beat moves it.
     func noteClockObservation(_ current: Fixture) {
-        establishClockAnchor(isFirstObservation: !demoObserved.contains(current.fixtureId), current: current)
-        demoObserved.insert(current.fixtureId)
+        guard current.running == true, let period = current.period,
+              [.first, .second, .extraFirst, .extraSecond].contains(period)
+        else { return }
+        let baseSeconds = current.minute.map { Double($0 + (current.extra ?? 0)) * 60 }
+            ?? Fixture.fixedBaseSeconds(for: period)
+        clockAnchor[current.fixtureId] = ClockAnchor(
+            baseSeconds: baseSeconds, anchorDate: Date(), period: period, frozen: true
+        )
     }
 
     /// Merge one freshly-read fixture into state, diffing against the baseline,
