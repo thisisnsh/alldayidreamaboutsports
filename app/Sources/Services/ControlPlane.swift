@@ -110,9 +110,12 @@ final class ControlPlane: ObservableObject {
             // (or a real-time update) reschedules it if the template disagrees.
             apply(rc)
             fetchInFlight = true
-            rc.fetchAndActivate { [weak self] _, _ in
+            rc.fetchAndActivate { [weak self] _, error in
                 Task { @MainActor in
                     AppLog.info(.remoteConfig, "initial_fetch_complete")
+                    if let error {
+                        AppAnalytics.remoteConfigFetchFailed(stage: "initial", error: error)
+                    }
                     self?.fetchInFlight = false
                     self?.apply(rc)
                 }
@@ -180,6 +183,9 @@ final class ControlPlane: ObservableObject {
         schedulePeriodicFetch(interval: remoteConfigFetchSeconds)
 
         if killSwitch {
+            // On the transition INTO the gate, not on every config apply — the
+            // template is re-applied on every fetch and every listener update.
+            if !wasKilled { AppAnalytics.controlPlaneGate("kill_switch") }
             OverlayManager.shared.dismissAll()
             if !wasKilled || AppSession.shared.isSignedIn {
                 AppSession.shared.clearSession(showLogin: false)
@@ -188,6 +194,7 @@ final class ControlPlane: ObservableObject {
             return
         }
         if updateRequired {
+            if !wasUpdateRequired { AppAnalytics.controlPlaneGate("update_required") }
             OverlayManager.shared.dismissAll()
             if !wasUpdateRequired || AppSession.shared.isSignedIn {
                 AppSession.shared.clearSession(showLogin: false)
@@ -226,7 +233,7 @@ final class ControlPlane: ObservableObject {
                 }
                 guard !Task.isCancelled, let self else { return }
                 AppLog.info(.remoteConfig, "periodic_fetch_start interval_seconds=\(interval)")
-                self.refreshRemoteConfig(ignoreCache: true)
+                self.refreshRemoteConfig(ignoreCache: true, stage: "periodic")
             }
         }
     }
@@ -234,7 +241,9 @@ final class ControlPlane: ObservableObject {
     /// Real-time Remote Config is primary; this also gives launch, foreground
     /// recovery and the periodic loop an immediate fetch path after
     /// connectivity or sleep interruptions.
-    func refreshRemoteConfig(ignoreCache: Bool = false) {
+    /// `stage` only labels the analytics: `periodic` for the loop above,
+    /// `refresh` for the launch / foreground-recovery calls.
+    func refreshRemoteConfig(ignoreCache: Bool = false, stage: String = "refresh") {
         guard let rc = remoteConfig else { return }
         // A periodic fetch and a foreground recovery fetch can land together —
         // one request in flight is enough, and dropping the duplicate keeps the
@@ -254,12 +263,14 @@ final class ControlPlane: ObservableObject {
             rc.fetch(withExpirationDuration: 0) { _, error in
                 if let error {
                     AppLog.error(.remoteConfig, "refresh_failed ignore_cache=true", error: error)
+                    Task { @MainActor in AppAnalytics.remoteConfigFetchFailed(stage: stage, error: error) }
                     finish(false)
                     return
                 }
                 rc.activate { _, error in
                     if let error {
                         AppLog.error(.remoteConfig, "activation_failed", error: error)
+                        Task { @MainActor in AppAnalytics.remoteConfigFetchFailed(stage: stage, error: error) }
                         finish(false)
                         return
                     }
@@ -271,6 +282,7 @@ final class ControlPlane: ObservableObject {
             rc.fetchAndActivate { _, error in
                 if let error {
                     AppLog.error(.remoteConfig, "refresh_failed", error: error)
+                    Task { @MainActor in AppAnalytics.remoteConfigFetchFailed(stage: stage, error: error) }
                     finish(false)
                     return
                 }

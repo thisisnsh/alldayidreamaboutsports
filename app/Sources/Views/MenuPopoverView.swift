@@ -10,6 +10,12 @@ struct MenuPopoverView: View {
     /// in `prefs` — it's a view preference for this Mac, not synced state, and
     /// the menu rebuilds its view on every open so it has to outlive that.
     @AppStorage("menuFixtureScope", store: AppDefaults.shared) private var fixtureScope: FixtureScope = .mine
+    /// The analytics screen name for everything in this popover, including the
+    /// controls that live outside this file (the status-item controller, the
+    /// capsule pin). The `screen_view` itself is fired by
+    /// `MenuPopoverController.showMenu()` — the hosting controller is built once
+    /// and reused, so `.onAppear` here would only ever fire once per launch.
+    static let screen = "menu"
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -143,6 +149,7 @@ struct MenuPopoverView: View {
     private var actions: some View {
         VStack(alignment: .leading, spacing: 8) {
             Button {
+                AppAnalytics.teamPickerOpened()
                 Task { await session.refreshCatalog() }
                 dismissMenu()
                 openWindow(id: WindowID.teamPicker)
@@ -151,18 +158,21 @@ struct MenuPopoverView: View {
                 Label("Become a Fan", systemImage: "heart.circle.fill")
             }
             Button {
+                AppAnalytics.featureRequested()
                 dismissMenu()
                 NSWorkspace.shared.open(requestFeatureURL)
             } label: {
                 Label("Request a feature", systemImage: "checklist.unchecked")
             }
             Button {
+                AppAnalytics.bugReported(state: "normal")
                 dismissMenu()
                 NSWorkspace.shared.open(reportBugURL)
             } label: {
                 Label("Report a bug", systemImage: "ladybug")
             }
             Button {
+                AppAnalytics.settingsOpened()
                 dismissMenu()
                 openWindow(id: WindowID.settings)
                 NSApp.activate(ignoringOtherApps: true)
@@ -175,6 +185,14 @@ struct MenuPopoverView: View {
         .labelStyle(.fixedIcon)
         .buttonStyle(.hoverHighlight)
         .font(.system(size: 13))
+    }
+
+    /// The three Quit buttons in this menu are the same action from three
+    /// different states — signed out, kill switch, forced update — so they share
+    /// the one event and are told apart by `source`.
+    private func quit(source: String) {
+        AppAnalytics.appQuit(source: source)
+        NSApp.terminate(nil)
     }
 
     /// Closes the open MenuBarExtra panel. The window-style menu has no SwiftUI
@@ -215,12 +233,13 @@ struct MenuPopoverView: View {
             Text("⚽ Sign in to follow your teams")
                 .font(.system(size: 13, weight: .medium))
             Button("Sign in") {
+                AppAnalytics.loginOpened()
                 dismissMenu()
                 openWindow(id: WindowID.login)
                 NSApp.activate(ignoringOtherApps: true)
             }
             .buttonStyle(.primaryPill)
-            Button("Quit") { NSApp.terminate(nil) }
+            Button("Quit") { quit(source: "menu_signed_out") }
                 .buttonStyle(.hoverHighlight)
                 .font(.caption)
         }
@@ -244,13 +263,14 @@ struct MenuPopoverView: View {
                 .frame(maxWidth: 260)
                 .opacity(0.8)
             Button {
+                AppAnalytics.bugReported(state: "kill_switch")
                 dismissMenu()
                 NSWorkspace.shared.open(reportBugURL)
             } label: {
                 Label("Report a bug", systemImage: "ladybug")
             }
             .buttonStyle(.primaryPill)
-            Button("Quit") { NSApp.terminate(nil) }
+            Button("Quit") { quit(source: "menu_kill_switch") }
                 .buttonStyle(.hoverHighlight)
                 .font(.caption)
         }
@@ -264,6 +284,7 @@ struct MenuPopoverView: View {
     /// exactly like the "Check for Updates" button in Settings.
     private var updateBanner: some View {
         Button {
+            AppAnalytics.updateBannerTapped()
             dismissMenu()
             openWindow(id: WindowID.update)
             NSApp.activate(ignoringOtherApps: true)
@@ -315,7 +336,7 @@ struct MenuPopoverView: View {
                 Label("Update now", systemImage: "arrow.down.circle")
             }
             .buttonStyle(.primaryPill)
-            Button("Quit") { NSApp.terminate(nil) }
+            Button("Quit") { quit(source: "menu_update_required") }
                 .buttonStyle(.hoverHighlight)
                 .font(.caption)
         }
@@ -366,6 +387,7 @@ private struct FixtureScopePicker: View {
         HStack(spacing: 2) {
             ForEach(FixtureScope.allCases, id: \.self) { option in
                 Segment(option: option, selected: scope == option) {
+                    AppAnalytics.fixtureScopeChanged(option.rawValue)
                     withAnimation(.easeOut(duration: 0.15)) { scope = option }
                 }
             }

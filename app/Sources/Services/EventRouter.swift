@@ -41,11 +41,13 @@ final class EventRouter {
     func route(_ event: MatchEvent) {
         guard ControlPlane.shared.isOperational else {
             AppLog.info(.fixtures, "event_rejected event_id=\(event.eventId) reason=control_plane_disabled")
+            AppAnalytics.eventDropped(reason: "control_plane", type: event.type.rawValue)
             return
         }
         // Signed out = silent.
         guard AppSession.shared.isSignedIn else {
             AppLog.info(.fixtures, "event_rejected event_id=\(event.eventId) reason=signed_out")
+            AppAnalytics.eventDropped(reason: "signed_out", type: event.type.rawValue)
             return
         }
         // The poll loop recomputes deterministic ids; drop anything we've
@@ -53,6 +55,7 @@ final class EventRouter {
         // but a baseline-less restart could re-surface a recent transition).
         guard !seenEventIds.contains(event.eventId) else {
             AppLog.info(.fixtures, "event_rejected event_id=\(event.eventId) reason=duplicate")
+            AppAnalytics.eventDropped(reason: "duplicate", type: event.type.rawValue)
             return
         }
         var handled = seenEventIds
@@ -63,6 +66,8 @@ final class EventRouter {
         let settings = AppSession.shared.prefs.settings
         guard settings.eventEnabled(event.type) else {
             AppLog.info(.fixtures, "event_rejected event_id=\(event.eventId) reason=event_disabled type=\(event.type.rawValue)")
+            // Are people muting event types? This is the only place that says so.
+            AppAnalytics.eventDropped(reason: "event_disabled", type: event.type.rawValue)
             return
         }
 
@@ -71,6 +76,7 @@ final class EventRouter {
         let fans = AppSession.shared.fanTeamIds
         guard fans.contains(event.homeTeamId) || fans.contains(event.awayTeamId) else {
             AppLog.info(.fixtures, "event_rejected event_id=\(event.eventId) reason=no_followed_team")
+            AppAnalytics.eventDropped(reason: "no_followed_team", type: event.type.rawValue)
             return
         }
 
@@ -89,6 +95,8 @@ final class EventRouter {
                let mark = maxNotifiedMinute[event.fixtureId],
                mark - absMin > ControlPlane.shared.eventStaleMinutes {
                 AppLog.info(.fixtures, "event_rejected event_id=\(event.eventId) reason=stale_out_of_order event_min=\(absMin) max_notified=\(mark)")
+                // Is the staleness guard eating real goals? Only this can tell us.
+                AppAnalytics.eventDropped(reason: "stale_minute", type: event.type.rawValue)
                 return
             }
             maxNotifiedMinute[event.fixtureId] = maxNotifiedMinute[event.fixtureId].map { Swift.max($0, absMin) } ?? absMin
@@ -96,6 +104,12 @@ final class EventRouter {
 
         let isFanGoal = event.type == .goal && event.teamId.map(fans.contains) == true
         AppLog.info(.fixtures, "event_routed event_id=\(event.eventId) type=\(event.type.rawValue) fixture_id=\(event.fixtureId) fan_goal=\(isFanGoal)")
+        // The accepted half of the `event_dropped` split above: between them
+        // they account for everything the feed produced — what reached a screen,
+        // and where the rest went.
+        let celebrates = isFanGoal && (settings.goalCenter ?? true)
+        AppAnalytics.eventShown(type: event.type.rawValue,
+                                presentation: celebrates ? "celebration" : "pill")
 
         // Every event joins the overlay queues. Goals are prioritized for the
         // next displayed set; followed-team goals start the center celebration

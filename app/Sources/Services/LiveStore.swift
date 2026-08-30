@@ -168,6 +168,7 @@ final class LiveStore {
                 continue
             } catch {
                 AppLog.error(.fixtures, "reconcile_fetch_failed fixture_id=\(previous.fixtureId)", error: error)
+                AppAnalytics.pollFailed(stage: "reconcile", fixtureId: previous.fixtureId, error: error)
                 continue
             }
             ingest(current)
@@ -222,6 +223,7 @@ final class LiveStore {
                 continue // byte-identical to last read — nothing to diff
             } catch {
                 AppLog.error(.fixtures, "poll_fetch_failed fixture_id=\(previous.fixtureId)", error: error)
+                AppAnalytics.pollFailed(stage: "poll", fixtureId: previous.fixtureId, error: error)
                 continue
             }
             guard session.isSignedIn, ControlPlane.shared.isOperational else { return }
@@ -262,6 +264,7 @@ final class LiveStore {
                     // counts unchanged
                 } catch {
                     AppLog.error(.celebrations, "celebration_refresh_failed fixture_id=\(fixtureId)", error: error)
+                    AppAnalytics.pollFailed(stage: "celebration", fixtureId: fixtureId, error: error)
                 }
                 try? await Task.sleep(for: .seconds(Self.celebrationRefreshInterval))
             }
@@ -352,6 +355,7 @@ final class LiveStore {
         // the clock backward (e.g. ET snapping 114→109).
         if let prev, prev.isLive, current.status == "SCHEDULED" {
             AppLog.info(.fixtures, "stale_snapshot_ignored fixture_id=\(current.fixtureId) prev=\(prev.status) next=\(current.status)")
+            AppAnalytics.snapshotRejected(reason: "stale_snapshot")
             return []
         }
 
@@ -374,6 +378,9 @@ final class LiveStore {
             }
             if !events.isEmpty {
                 AppLog.info(.fixtures, "diff_fired fixture_id=\(current.fixtureId) events=\(events.count)")
+                // Once per state change — this branch is what keeps the live
+                // loop's thousand quiet reads per match silent in analytics.
+                AppAnalytics.matchEventsEmitted(events)
             }
         }
 

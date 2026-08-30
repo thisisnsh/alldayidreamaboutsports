@@ -13,6 +13,7 @@ struct SettingsView: View {
     // deferred session write updates the application-level AppKit appearance.
     @State private var activeTheme: ThemeChoice = .system
     @ObservedObject private var displayTarget = OverlayDisplayTarget.shared
+    private static let screen = "settings"
 
     var body: some View {
         ZStack {
@@ -23,6 +24,7 @@ struct SettingsView: View {
         .installsWindowOpener()
         .appTheme(activeTheme)
         .onAppear {
+            AppAnalytics.screenView(Self.screen)
             activeTheme = session.prefs.settings.theme ?? .system
             autoCheck = updater.automaticallyChecksForUpdates
             autoInstall = updater.automaticallyDownloadsUpdates
@@ -78,6 +80,9 @@ struct SettingsView: View {
                                 toggleRow("Play confetti sound", isOn: confettiSoundBinding)
                             }
                             Button {
+                                // No event here: `OverlayManager.preview()`
+                                // reports the same click as
+                                // `celebration_preview`.
                                 OverlayManager.shared.preview()
                             } label: {
                                 Text("Preview animation").frame(maxWidth: .infinity)
@@ -116,6 +121,10 @@ struct SettingsView: View {
                             set: { on in
                                 autoCheck = on
                                 updater.automaticallyChecksForUpdates = on
+                                // Sparkle owns these two flags, so they never
+                                // pass through `AppSession.updateSettings` and
+                                // need reporting from here.
+                                AppAnalytics.settingChanged(.autoCheckUpdates, enabled: on)
                             }
                         ))
                         toggleRow("Automatically download and install", isOn: Binding(
@@ -123,14 +132,18 @@ struct SettingsView: View {
                             set: { on in
                                 autoInstall = on
                                 updater.automaticallyDownloadsUpdates = on
+                                AppAnalytics.settingChanged(.autoInstallUpdates, enabled: on)
                             }
                         ))
-                        CheckForUpdatesButton(updater: updater)
+                        CheckForUpdatesButton(updater: updater, source: "settings")
                             .buttonStyle(.cardButton)
                         caption("\(AppEnvironment.profileName) v\(AppEnvironment.appVersion) (Build \(AppEnvironment.buildNumber))")
                     }
 
-                    Button { NSApp.terminate(nil) } label: {
+                    Button {
+                        AppAnalytics.appQuit(source: "settings")
+                        NSApp.terminate(nil)
+                    } label: {
                         Text("Quit").foregroundStyle(.red).frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.cardButton)
@@ -168,6 +181,8 @@ struct SettingsView: View {
                         .lineLimit(1)
                 }
                 Spacer()
+                // No event here either: this is the only user path into
+                // `clearSession`, which reports it as `sign_out reason=user`.
                 Button("Sign out") { session.signOut() }
                     .buttonStyle(.cardButton)
             }
@@ -356,7 +371,11 @@ struct SettingsView: View {
         Binding(
             get: { displayTarget.selectedDisplayID },
             set: { displayID in
-                if let displayID { displayTarget.select(displayID) }
+                guard let displayID, displayID != displayTarget.selectedDisplayID else { return }
+                // The COUNT, never the display id — that identifies a machine
+                // and means nothing off it.
+                AppAnalytics.overlayDisplayChanged(displayCount: displayTarget.displays.count)
+                displayTarget.select(displayID)
             }
         )
     }
@@ -436,9 +455,13 @@ private struct DemoControls: View {
                 .frame(width: 8, height: 8)
         }
         HStack(spacing: 8) {
-            Button("Restart") { DemoEngine.shared.restart() }
-                .buttonStyle(.cardButton)
+            Button("Restart") {
+                AppAnalytics.demoRestart()
+                DemoEngine.shared.restart()
+            }
+            .buttonStyle(.cardButton)
             Button(engine.isPlaying ? "Stop" : "Play") {
+                AppAnalytics.demoPlayStop(action: engine.isPlaying ? "stop" : "play")
                 engine.isPlaying ? DemoEngine.shared.stop() : DemoEngine.shared.start()
             }
             .buttonStyle(.cardButton)
@@ -455,14 +478,21 @@ private struct DemoControls: View {
 struct CheckForUpdatesButton: View {
     @ObservedObject private var model: CheckForUpdatesModel
     private let updater: SPUUpdater
+    /// Which entry point this button is, for `update_check_started`'s `source`
+    /// — the update window's "Update now" runs the same Sparkle check.
+    private let source: String
 
-    init(updater: SPUUpdater) {
+    init(updater: SPUUpdater, source: String) {
         self.updater = updater
+        self.source = source
         self.model = CheckForUpdatesModel(updater: updater)
     }
 
     var body: some View {
-        Button { updater.checkForUpdates() } label: {
+        Button {
+            AppAnalytics.updateCheckStarted(source: source)
+            updater.checkForUpdates()
+        } label: {
             Text("Check for Updates…").frame(maxWidth: .infinity)
         }
         .disabled(!model.canCheckForUpdates)

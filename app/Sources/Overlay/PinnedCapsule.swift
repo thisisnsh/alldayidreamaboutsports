@@ -111,8 +111,16 @@ final class PinnedCapsuleManager: ObservableObject {
 
     func isPinned(_ fixtureId: Int) -> Bool { pinnedFixtureIds.contains(fixtureId) }
 
+    /// The one place both the menu row's pin affordance and any other caller
+    /// funnel through, so the analytics live here rather than at each call site.
     func toggle(fixtureId: Int) {
-        if isPinned(fixtureId) { unpin(fixtureId: fixtureId) } else { pin(fixtureId: fixtureId) }
+        let pinning = !isPinned(fixtureId)
+        if pinning {
+            AppAnalytics.capsulePinned(fixtureId: fixtureId)
+        } else {
+            AppAnalytics.capsuleUnpinned(fixtureId: fixtureId)
+        }
+        if pinning { pin(fixtureId: fixtureId) } else { unpin(fixtureId: fixtureId) }
     }
 
     func pin(fixtureId: Int) {

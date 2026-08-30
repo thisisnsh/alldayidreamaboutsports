@@ -113,28 +113,37 @@ final class AppSession: ObservableObject {
     func signInWithGoogle(presenting window: NSWindow?) {
         guard ControlPlane.shared.isOperational else {
             signInError = "Sign-in is unavailable while the app is temporarily disabled."
+            AppAnalytics.signInFailed(stage: "control_plane")
             return
         }
         signInError = nil
         Task {
+            // Which leg we're on, so a failure says whether it was the Google
+            // sheet or our backend that turned us away.
+            var stage = "google"
             do {
                 let idToken = try await Services.google.signIn(presenting: window)
                 guard ControlPlane.shared.isOperational else {
                     Services.google.signOut()
+                    AppAnalytics.signInFailed(stage: "control_plane")
                     return
                 }
+                stage = "backend"
                 let response = try await api.signIn(googleIdToken: idToken)
                 guard ControlPlane.shared.isOperational else {
                     Services.google.signOut()
+                    AppAnalytics.signInFailed(stage: "control_plane")
                     return
                 }
                 Keychain.set(response.token, for: "sessionToken")
                 profile = response.profile
                 persist(profile: response.profile)
+                AppAnalytics.signInSuccess()
                 await refreshCatalog()
                 AppLog.info(.app, "sign_in_complete fan_teams=\(fanTeamIds.sorted())")
             } catch {
                 signInError = error.localizedDescription
+                AppAnalytics.signInFailed(stage: stage, error: error)
                 AppLog.error(.app, "sign_in_failed", error: error)
             }
         }
@@ -148,6 +157,13 @@ final class AppSession: ObservableObject {
     /// time the menu opens.
     func clearSession(showLogin: Bool) {
         AppLog.info(.app, "session_clear show_login=\(showLogin)")
+        // `showLogin` is exactly the user-vs-gate distinction: the Sign out
+        // button re-presents the login window, a control-plane gate doesn't.
+        // Only report when there was a session to end — the gate path also runs
+        // for an install that was already signed out.
+        if isSignedIn {
+            AppAnalytics.signOut(reason: showLogin ? "user" : "control_plane")
+        }
         stopAllActivity()
         Services.google.signOut()
         Keychain.delete("sessionToken")
@@ -177,6 +193,7 @@ final class AppSession: ObservableObject {
     func deleteAccount() async {
         do {
             try await api.deleteAccount()
+            AppAnalytics.accountDeleted()
             AppLog.info(.app, "account_delete_complete")
         } catch {
             AppLog.error(.app, "account_delete_failed", error: error)
@@ -253,24 +270,35 @@ final class AppSession: ObservableObject {
     /// Emit one `setting_changed` per field that actually changed.
     private func reportSettingsChange(before: PrefSettings, after: PrefSettings) {
         if before.launchAtLogin != after.launchAtLogin {
-            AppAnalytics.settingChanged(key: "launch_at_login", enabled: after.launchAtLogin ?? true)
+            AppAnalytics.settingChanged(.launchAtLogin, enabled: after.launchAtLogin ?? true)
         }
         if before.goalCenter != after.goalCenter {
-            AppAnalytics.settingChanged(key: "goal_center", enabled: after.goalCenter ?? true)
+            AppAnalytics.settingChanged(.goalCenter, enabled: after.goalCenter ?? true)
         }
         if before.confetti != after.confetti {
-            AppAnalytics.settingChanged(key: "confetti", enabled: after.confetti ?? true)
+            AppAnalytics.settingChanged(.confetti, enabled: after.confetti ?? true)
         }
         if before.confettiSound != after.confettiSound {
-            AppAnalytics.settingChanged(key: "confetti_sound", enabled: after.confettiSound ?? true)
+            AppAnalytics.settingChanged(.confettiSound, enabled: after.confettiSound ?? true)
         }
+        // The enum-valued settings take the `value:` overload; the booleans
+        // above take `enabled:`.
         if before.theme != after.theme {
-            AppAnalytics.themeChanged((after.theme ?? .system).rawValue)
+            AppAnalytics.settingChanged(.theme, value: (after.theme ?? .system).rawValue)
+        }
+        if before.capsuleSize != after.capsuleSize {
+            AppAnalytics.settingChanged(.capsuleSize, value: (after.capsuleSize ?? .medium).rawValue)
+        }
+        if before.capsulePosition != after.capsulePosition {
+            AppAnalytics.settingChanged(.capsulePosition, value: (after.capsulePosition ?? .top).rawValue)
+        }
+        if before.notchDropSize != after.notchDropSize {
+            AppAnalytics.settingChanged(.notchDropSize, value: (after.notchDropSize ?? .medium).rawValue)
         }
         let beforeNotifs = before.notifications ?? [:]
         let afterNotifs = after.notifications ?? [:]
         for (key, value) in afterNotifs where beforeNotifs[key] != value {
-            AppAnalytics.settingChanged(key: "event_\(key)", enabled: value)
+            AppAnalytics.eventTypeToggled(type: key, enabled: value)
         }
     }
 

@@ -59,6 +59,9 @@ final class CelebrationService {
         let sample = ControlPlane.shared.celebrationSamplePercent
         guard sample >= 1.0 || Double.random(in: 0 ..< 1) < sample else {
             AppLog.info(.celebrations, "upload_sampled_out sample=\(sample) targets=\(batch.count) taps=\(count)")
+            // Without this, a low `celebration_sample_percent` is
+            // indistinguishable from nobody tapping.
+            AppAnalytics.celebrationUploadSampledOut(sample: sample)
             return
         }
         Task {
@@ -69,6 +72,7 @@ final class CelebrationService {
                     AppLog.info(.celebrations, "upload_complete fixture_id=\(target.fixtureId) team_id=\(target.teamId) taps=\(count)")
                 } catch {
                     AppLog.error(.celebrations, "upload_failed fixture_id=\(target.fixtureId) team_id=\(target.teamId) taps=\(count)", error: error)
+                    AppAnalytics.celebrationUploadFailed(error: error)
                 }
             }
         }

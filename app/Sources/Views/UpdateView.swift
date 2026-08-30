@@ -11,6 +11,7 @@ struct UpdateView: View {
     @ObservedObject private var control = ControlPlane.shared
     @Environment(\.dismiss) private var dismiss
     let updater: SPUUpdater
+    private static let screen = "update_gate"
 
     var body: some View {
         ZStack {
@@ -20,6 +21,11 @@ struct UpdateView: View {
         .frame(width: 380, height: 360)
         .installsWindowOpener()
         .appTheme(session.prefs.settings.theme ?? .system)
+        // Forced and optional updates land in the same window; `required` is
+        // what tells the two apart.
+        .onAppear {
+            AppAnalytics.screenView(Self.screen, ["required": control.updateRequired ? "yes" : "no"])
+        }
     }
 
     private var content: some View {
@@ -40,6 +46,7 @@ struct UpdateView: View {
                 .frame(maxWidth: 280)
                 .opacity(0.8)
             Button {
+                AppAnalytics.updateCheckStarted(source: "update_gate")
                 updater.checkForUpdates()
             } label: {
                 Label("Update now", systemImage: "arrow.down.circle")
@@ -48,13 +55,19 @@ struct UpdateView: View {
             // A forced update can only be resolved or quit; an optional one can
             // be dismissed for later.
             if control.updateRequired {
-                Button("Quit") { NSApp.terminate(nil) }
-                    .buttonStyle(.hoverHighlight)
-                    .font(.caption)
+                Button("Quit") {
+                    AppAnalytics.appQuit(source: "update_gate")
+                    NSApp.terminate(nil)
+                }
+                .buttonStyle(.hoverHighlight)
+                .font(.caption)
             } else {
-                Button("Later") { dismiss() }
-                    .buttonStyle(.hoverHighlight)
-                    .font(.caption)
+                Button("Later") {
+                    AppAnalytics.updateDeferred()
+                    dismiss()
+                }
+                .buttonStyle(.hoverHighlight)
+                .font(.caption)
             }
             Spacer()
         }
