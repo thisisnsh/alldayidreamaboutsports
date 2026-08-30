@@ -4,7 +4,7 @@
 #
 # The reel is NOT cut: all 64 seconds, same framing, at about a quarter of the
 # weight. At background scale, behind a scrim and text, 2.5 Mbps and 10 Mbps
-# are indistinguishable — so the re-encode costs nothing visually and saves
+# are indistinguishable - so the re-encode costs nothing visually and saves
 # every visitor about 67MB.
 #
 # Nothing here is committed. The three outputs go to the R2 bucket that already
@@ -49,7 +49,7 @@ ffmpeg -y -loglevel error -i "$SRC" \
   -pix_fmt yuv420p \
   "$OUT/promo.webm"
 
-echo "→ promo-f1.webp (first frame — this is the LCP image, so it has to be small)"
+echo "→ promo-f1.webp (first frame - this is the LCP image, so it has to be small)"
 # ffmpeg is only used to pull the frame; cwebp does the encode, because the
 # Homebrew ffmpeg build does not ship libwebp.
 ffmpeg -y -loglevel error -i "$SRC" -frames:v 1 -vf "scale=-2:1080" "$OUT/.f1.png"

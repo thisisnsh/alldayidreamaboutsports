@@ -1,13 +1,13 @@
 ---
 layout: layouts/page.njk
 permalink: /teams/
-title: "Follow Any Team Free — Live Scores on Mac for 144 Clubs & Nations"
-description: "Live scores and goal alerts on your Mac for 96 clubs across Europe's top five leagues and all 48 nations from the 2026 World Cup. Pick your team, keep working. Free for macOS."
-keywords: "follow your team live scores, football team live score app Mac, club goal alerts macOS, free live score alerts, follow team free"
+title: "Follow Teams and Leagues on Mac - Free Match Alerts"
+description: "Goal and match alerts on your Mac for clubs across Europe's top leagues and national teams from the World Cup. Pick your team, keep working. Free for macOS."
+keywords: "follow your team on Mac, football match alerts Mac, club goal alerts macOS, football notifications, follow team free"
 pageName: "Every team you can follow"
-heroMicro: "144 teams"
+heroMicro: "Teams and leagues"
 heroTitle: "Follow your team.<br />Free, and out of the <em>way</em>."
-heroBody: "96 clubs across the Premier League, La Liga, Serie A, Bundesliga and Ligue 1, plus all 48 nations from the 2026 World Cup. Every one of them has a page here and is one tap in the app."
+heroBody: "Clubs across the Premier League, La Liga, Serie A, Bundesliga and Ligue 1, plus national teams from the World Cup. Choose the ones you care about in the app."
 crumbs:
   - name: Home
     url: /
@@ -19,9 +19,8 @@ crumbs:
 <section class="prose-sec solid">
   <div class="wrap wrap-narrow">
     <p class="micro">How following works</p>
-    <h2 class="section-h">Up to {{ site.followCap }} teams, any mix of leagues</h2>
-    <p class="body">Open the picker, tap the teams you want, and that is the setup finished. There is a follow-all and unfollow-all control for each league, a running counter so you can see where you are against the limit, and a banner when you have filled every slot.</p>
-    <p class="body">Your picks stay on your Mac. Nothing is pushed to you and nothing is per-user — every copy of the app polls the same CDN-cached file — so we genuinely do not know which of these teams you chose.</p>
+    <h2 class="section-h">Follow teams or leagues</h2>
+    <p class="body">Choose the teams you care about, mix clubs from different competitions, or follow an entire league.</p>
   </div>
 </section>
 
@@ -29,11 +28,11 @@ crumbs:
 {% set gridTeams = teams | where("leagueId", l.id) %}
 {% set gridId = "l-" + l.slug %}
 {% set gridSolid = loop.index0 % 2 == 1 %}
-{% set gridMicro = l.country + " · " + (gridTeams | length) + (" nations" if l.type == "Cup" else " clubs") %}
+{% set gridMicro = l.country %}
 {% set gridHeading = l.name %}
 {% set gridNote = false %}
 {% include "partials/team-grid.njk" %}
-<p class="backline"><a href="/{{ l.slug }}/">{{ l.name }} live scores →</a></p>
+<p class="backline"><a href="/{{ l.slug }}/">Follow the {{ l.name }} →</a></p>
 {% endfor %}
 
 {% set ctaHeading = "Pick your team.<br />Get on with your <em>day</em>." %}

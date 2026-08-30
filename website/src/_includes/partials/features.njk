@@ -7,7 +7,7 @@
       <li class="row reveal">
         <span class="row-n">{{ loop.index | pad }}</span>
         <div class="row-body">
-          <h3>{{ f.h }}</h3>
+          <h3{% if f.celebration %} class="celebration-title"{% endif %}>{{ f.h }}</h3>
           <p>{{ f.p }}</p>
         </div>
       </li>

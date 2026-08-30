@@ -12,6 +12,8 @@ import { fileURLToPath } from "node:url";
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const SITE = join(ROOT, "_site");
 const ORIGIN = "https://alldayidreamaboutsports.com";
+const DATA = join(ROOT, "src", "_data");
+const EM_DASH = String.fromCodePoint(0x2014);
 
 const fail = [];
 const check = (ok, msg) => { if (!ok) fail.push(msg); };
@@ -26,12 +28,47 @@ function walk(dir, out = []) {
 }
 
 if (!existsSync(SITE)) {
-  console.error("_site/ does not exist — run `npx @11ty/eleventy` first.");
+  console.error("_site/ does not exist - run `npx @11ty/eleventy` first.");
   process.exit(1);
 }
 
 const files = walk(SITE);
 const htmlFiles = files.filter((f) => f.endsWith(".html"));
+
+/* ── catalog and authored content ─────────────────────────────────────── */
+const leagues = JSON.parse(readFileSync(join(DATA, "leagues.json"), "utf8"));
+const teams = JSON.parse(readFileSync(join(DATA, "teams.json"), "utf8"));
+const extras = JSON.parse(readFileSync(join(DATA, "teamExtras.json"), "utf8"));
+const leagueIds = new Set(leagues.map((league) => league.id));
+const teamById = new Map(teams.map((team) => [team.id, team]));
+const slugs = new Set();
+
+check(teamById.size === teams.length, "duplicate team id in teams.json");
+for (const team of teams) {
+  check(!slugs.has(team.slug), `duplicate team slug: ${team.slug}`);
+  slugs.add(team.slug);
+  check(leagueIds.has(team.leagueId), `${team.displayName}: unknown league ${team.leagueId}`);
+
+  const authored = extras[String(team.id)];
+  check(!!authored, `${team.displayName}: missing teamExtras record`);
+  check(!!authored?.blurb, `${team.displayName}: missing authored blurb`);
+  check(!!authored?.leagueContext, `${team.displayName}: missing league context`);
+  const relatedIds = new Set();
+  for (const id of authored?.related || []) {
+    const related = teamById.get(id);
+    check(id !== team.id, `${team.displayName}: related list includes itself`);
+    check(!relatedIds.has(id), `${team.displayName}: duplicate related team ${id}`);
+    relatedIds.add(id);
+    check(!!related, `${team.displayName}: unknown related team ${id}`);
+    check(
+      !related || related.leagueId === team.leagueId,
+      `${team.displayName}: related team ${related?.displayName || id} is in another competition`
+    );
+  }
+}
+for (const id of Object.keys(extras)) {
+  check(teamById.has(Number(id)), `teamExtras has orphan record ${id}`);
+}
 
 /* ── the page count ───────────────────────────────────────────────────── */
 // 1 home + 2 hubs + 6 competitions + 144 teams + privacy + 404, plus the
@@ -78,6 +115,9 @@ for (const file of htmlFiles) {
   const isNoindex = /<meta name="robots" content="noindex/.test(html);
   if (isNoindex) noindex.add(url);
 
+  check(!html.includes(EM_DASH), `${url}: contains an em dash`);
+  check(!/\blive scores?\b/i.test(html), `${url}: implies that the website shows live scores`);
+
   const h1 = html.match(/<h1[\s>]/g) || [];
   check(h1.length === 1, `${url}: expected exactly one <h1>, found ${h1.length}`);
 
@@ -106,7 +146,7 @@ for (const file of htmlFiles) {
       const graph = JSON.parse(m[1])["@graph"];
       check(Array.isArray(graph) && graph.length >= 6, `${url}: @graph looks short`);
     } catch (e) {
-      fail.push(`${url}: JSON-LD does not parse — ${e.message}`);
+      fail.push(`${url}: JSON-LD does not parse - ${e.message}`);
     }
   }
 
@@ -147,5 +187,5 @@ if (fail.length) {
 console.log(
   `✓ ${htmlFiles.length - stub} pages, ${locs.length} sitemap urls, ` +
     `${titles.size} unique titles, ${descs.size} unique descriptions, ` +
-    `${internalLinks.size} internal link targets — all resolve, no orphans.`
+    `${internalLinks.size} internal link targets - all resolve, no orphans.`
 );

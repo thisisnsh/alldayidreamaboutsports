@@ -4,7 +4,7 @@
  * live catalog, and mirrors every league and team crest into src/assets/crests/
  * as a 96px WebP.
  *
- * Run by hand and commit the output — CI stays offline so a build is always
+ * Run by hand and commit the output - CI stays offline so a build is always
  * reproducible and never depends on the catalog being up.
  *
  *   node scripts/build-data.mjs
@@ -110,7 +110,7 @@ for (const league of leagues) {
       leagueName: league.name,
       leagueSlug: league.slug,
       national: league.type === "Cup",
-      // For a national team, the club league we cover in that country — so a
+      // For a national team, the club league we cover in that country - so a
       // nation page has somewhere real to send people while it has no fixtures.
       clubLeagueId:
         league.type === "Cup"
@@ -121,7 +121,7 @@ for (const league of leagues) {
   }
 }
 
-console.log(`${leagues.length} leagues, ${teams.length} teams — mirroring crests…`);
+console.log(`${leagues.length} leagues, ${teams.length} teams - mirroring crests…`);
 for (const l of catalog.leagues) await crest(l.logo, `league-${l.id}`);
 for (const list of Object.values(catalog.teams))
   for (const t of list) await crest(t.logo, String(t.id));

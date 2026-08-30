@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   All Day I Dream About Sports — editorial monochrome.
+   All Day I Dream About Sports - editorial monochrome.
 
    The reel plays behind everything as a fixed layer; the page scrolls over it.
    Sections alternate between transparent (the video shows through) and solid,
@@ -10,9 +10,9 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 :root {
-  /* Surfaces — the app's own pure black */
+  /* Surfaces - the app's own pure black */
   --void:     #000000;
-  --panel:    #000000;          /* the solid sections */
+  --panel:    rgba(0,0,0,0.78); /* reading sections with more of the reel showing through */
   --bone:     #ffffff;
   --ash:      rgba(255,255,255,0.66);
   --smoke:    rgba(255,255,255,0.42);
@@ -24,7 +24,7 @@
 
   /* Type. Mac renders SF Pro Rounded natively via ui-rounded; Nunito is the
      cross-platform rounded fallback. The rounded face is what keeps the site
-     matching the app's chrome — the modernity comes from scale and weight. */
+     matching the app's chrome - the modernity comes from scale and weight. */
   --display: ui-rounded, "SF Pro Rounded", "Nunito", -apple-system, system-ui, sans-serif;
   --ui: -apple-system, "SF Pro Text", system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 
@@ -32,6 +32,7 @@
   --narrow: 720px;
   --gutter: clamp(22px, 5vw, 72px);
   --section: clamp(72px, 11vh, 150px);
+  --nav-h: 76px;
 
   --ease: cubic-bezier(.22,.61,.36,1);
 }
@@ -64,17 +65,27 @@ img { max-width: 100%; }
 
 /* ════════════════════════ THE REEL, AS A LAYER ══════════════════════════ */
 /* Fixed behind everything. The poster is a real <img> so it paints with the
-   first paint and is the LCP element — the background is the video's own first
+   first paint and is the LCP element - the background is the video's own first
    frame from the very start, never black, never empty. The <video> stays
    transparent until it can play, so the crossfade has nothing to reveal, and
    if it never arrives the poster simply remains. */
-.videobg { position: fixed; inset: 0; z-index: 0; overflow: hidden; background: var(--void); }
+.videobg {
+  position: fixed;
+  top: var(--nav-h);
+  right: 0;
+  left: 0;
+  height: calc(100dvh - var(--nav-h));
+  z-index: 0;
+  overflow: hidden;
+  background: var(--void);
+}
 .videobg-poster,
 .videobg-media {
   position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover;
+  object-position: center top;
   /* The reel is a screen recording of a bright desktop. Knocking it back is
      what lets the page stay monochrome and keeps body copy readable over it. */
-  filter: brightness(0.58) saturate(0.9);
+  filter: brightness(0.9) saturate(0.95);
 }
 .videobg-media { opacity: 0; transition: opacity .4s var(--ease); }
 .videobg-media.is-ready { opacity: 1; }
@@ -85,21 +96,21 @@ img { max-width: 100%; }
   background:
     /* darker down the left, which is where every line of text on this site sits */
     linear-gradient(100deg,
-      rgba(0,0,0,0.90) 0%,
-      rgba(0,0,0,0.74) 40%,
-      rgba(0,0,0,0.40) 76%,
-      rgba(0,0,0,0.56) 100%),
+      rgba(0,0,0,0.72) 0%,
+      rgba(0,0,0,0.50) 40%,
+      rgba(0,0,0,0.22) 76%,
+      rgba(0,0,0,0.36) 100%),
     linear-gradient(to bottom,
-      rgba(0,0,0,0.74) 0%,
-      rgba(0,0,0,0.46) 28%,
-      rgba(0,0,0,0.48) 64%,
-      rgba(0,0,0,0.90) 100%);
+      rgba(0,0,0,0.42) 0%,
+      rgba(0,0,0,0.20) 28%,
+      rgba(0,0,0,0.24) 64%,
+      rgba(0,0,0,0.66) 100%);
 }
 
 /* Buffering, as a status rather than a spinner: a 2px monochrome rule at the
    top of the viewport that fills and then disappears. */
 .bufferbar {
-  position: fixed; top: 0; left: 0; right: 0; height: 2px; z-index: 60;
+  position: fixed; top: var(--nav-h); left: 0; right: 0; height: 2px; z-index: 60;
   background: rgba(255,255,255,0.08); pointer-events: none;
 }
 .bufferbar > i {
@@ -110,21 +121,19 @@ img { max-width: 100%; }
 }
 .bufferbar[hidden] { display: none; }
 
-.content { position: relative; z-index: 2; }
+.content { position: relative; z-index: 2; padding-top: var(--nav-h); }
 body.no-video { background: var(--void); }
 
 /* ════════════════════════ NAV ═══════════════════════════════════════════ */
 .nav {
-  position: fixed; top: 0; left: 0; right: 0; z-index: 40;
+  position: fixed; top: 0; right: 0; left: 0; z-index: 40;
   display: flex; align-items: center; justify-content: space-between; gap: 18px;
-  padding: clamp(14px, 2vw, 20px) var(--gutter);
-  transition: background .35s var(--ease), border-color .35s var(--ease);
-  border-bottom: 1px solid transparent;
+  min-height: var(--nav-h); padding: 0 var(--gutter);
+  background: var(--void);
+  border-bottom: 1px solid var(--hairline);
 }
 .nav.scrolled {
-  background: rgba(0,0,0,0.72);
-  backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
-  border-bottom-color: var(--hairline);
+  background: var(--void);
 }
 
 .brand { display: inline-flex; align-items: center; gap: 10px; min-width: 0; }
@@ -156,6 +165,7 @@ body.no-video { background: var(--void); }
 .nav-toggle[aria-expanded="true"] span:last-child { transform: translateY(-4px) rotate(-45deg); }
 
 @media (max-width: 900px) {
+  :root { --nav-h: 64px; }
   .nav { flex-wrap: wrap; }
   .nav-toggle { display: flex; }
   .nav-links {
@@ -191,7 +201,7 @@ body.no-video { background: var(--void); }
 
 /* ════════════════════════ LAYOUT & RHYTHM ═══════════════════════════════ */
 .wrap { max-width: var(--maxw); margin: 0 auto; padding: 0 var(--gutter); }
-/* Narrow sections keep the same left edge as every other section — only the
+/* Narrow sections keep the same left edge as every other section - only the
    text inside them is capped, so nothing on the page is centred against
    anything else. */
 .wrap-narrow .faq-list,
@@ -314,6 +324,28 @@ section:first-of-type { border-top: 0; }
   font-family: var(--display); font-weight: 700;
   font-size: clamp(1.18rem, 2vw, 1.55rem); line-height: 1.16;
   letter-spacing: -0.022em; color: var(--bone);
+}
+.row-body .celebration-title {
+  color: transparent;
+  background: linear-gradient(
+    90deg,
+    #ff375f,
+    #ff9f0a,
+    #ffd60a,
+    #30d158,
+    #64d2ff,
+    #0a84ff,
+    #bf5af2,
+    #ff375f
+  );
+  background-size: 300% 100%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: celebration-rainbow 5s linear infinite;
+}
+@keyframes celebration-rainbow {
+  to { background-position: 300% 0; }
 }
 .row-body p { margin-top: 12px; max-width: 62ch; font-size: 15.5px; line-height: 1.66; color: var(--ash); }
 
@@ -465,6 +497,7 @@ section:first-of-type { border-top: 0; }
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
   .reveal { opacity: 1; transform: none; transition: none; }
+  .celebration-title { animation: none; background-position: 50% 0; }
   .videobg-media { transition: none; }
   .leaguerow a:hover, .crestgrid a:hover { padding-left: 0; }
 }

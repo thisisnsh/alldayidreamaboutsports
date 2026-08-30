@@ -1,7 +1,7 @@
 User-agent: *
 Allow: /
 
-# /privacy.html is a noindex redirect stub to /privacy/ — it must stay crawlable
+# /privacy.html is a noindex redirect stub to /privacy/ - it must stay crawlable
 # so the noindex directive is actually seen, so nothing is disallowed here.
 
 Sitemap: https://alldayidreamaboutsports.com/sitemap.xml

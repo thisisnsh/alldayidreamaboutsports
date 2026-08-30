@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   All Day I Dream About Sports — site behaviour.
+   All Day I Dream About Sports - site behaviour.
 
    Three things, none of which block anything:
      1. the fixed background video, loaded only when it is worth loading
@@ -44,7 +44,7 @@
   add("video/mp4", video.dataset.mp4);
 
   // A hairline rule at the top of the viewport, showing the buffer filling.
-  // A status, not a spinner — it never asks to be looked at.
+  // A status, not a spinner - it never asks to be looked at.
   let done = false;
   const progress = () => {
     if (done || !bar) return;

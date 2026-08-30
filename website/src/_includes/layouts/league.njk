@@ -6,7 +6,7 @@ layout: layouts/base.njk
 
 {% set heroMicro = league.country + " · " + league.season + (" season" if league.type != "Cup" else "") %}
 {% set heroCrest = league.crest %}
-{% set heroTitle = league.name + " live scores on your Mac — <em>free</em>" %}
+{% set heroTitle = league.name + " match alerts on your Mac - <em>free</em>" %}
 {% set heroBody = extras.heroSub %}
 {% include "partials/hero.njk" %}
 
@@ -22,15 +22,15 @@ layout: layouts/base.njk
 {% set featuresHeading = "What following the " + league.name + " looks like" %}
 {% set featuresMicro = "What you get" %}
 {% set featuresId = "features" %}
-{% set featureRows = features.forLeague(league, clubs | length) %}
+{% set featureRows = features.forLeague(league) %}
 {% include "partials/features.njk" %}
 
 {% set gridTeams = clubs %}
 {% set gridId = "clubs" %}
 {% set gridSolid = true %}
-{% set gridMicro = "All " + (clubs | length) + (" nations" if league.type == "Cup" else " clubs") %}
-{% set gridHeading = "Follow any " + league.name + " " + ("nation" if league.type == "Cup" else "club") %}
-{% set gridNote = "Every one of them has a page of its own, and every one is a single tap in the app's team picker." %}
+{% set gridMicro = "Teams and leagues" %}
+{% set gridHeading = "Follow teams or leagues" %}
+{% set gridNote = "Choose a team below, or follow the entire " + league.name + " in the app." %}
 {% include "partials/team-grid.njk" %}
 
 <section class="strip">
@@ -42,9 +42,9 @@ layout: layouts/base.njk
       <li class="leaguerow reveal">
         <a href="/{{ l.slug }}/">
           <img src="{{ l.crest }}" alt="" width="34" height="34" loading="lazy" decoding="async" />
-          <span class="lr-name">{{ l.name }} live scores</span>
-          <span class="lr-meta">{{ l.country }} · {{ l.teamCount }} {% if l.type == "Cup" %}nations{% else %}clubs{% endif %}</span>
-          <span class="lr-state{% if l.active %} is-live{% endif %}">{% if l.active %}Live{% else %}2026 recap{% endif %}</span>
+          <span class="lr-name">{{ l.name }} match alerts</span>
+          <span class="lr-meta">{{ l.country }}</span>
+          <span class="lr-state{% if l.active %} is-live{% endif %}">{% if l.active %}In season{% else %}2026 recap{% endif %}</span>
         </a>
       </li>
       {% endfor %}
@@ -56,5 +56,5 @@ layout: layouts/base.njk
 {% include "partials/faq.njk" %}
 
 {% set ctaHeading = "Follow the " + league.name + ".<br />Keep working." %}
-{% set ctaBody = "Free on macOS 14 and later. No account tier, nothing to unlock, and nothing about your picks ever leaves your Mac." %}
+{% set ctaBody = "Free on macOS 14 and later. Sign in, choose what you follow, and keep the match close while you work." %}
 {% include "partials/cta.njk" %}

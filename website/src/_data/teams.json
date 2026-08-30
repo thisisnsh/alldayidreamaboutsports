@@ -898,7 +898,7 @@
   {
     "id": 164,
     "name": "FSV Mainz 05",
-    "displayName": "1. FSV Mainz 05",
+    "displayName": "FSV Mainz 05",
     "slug": "fsv-mainz-05",
     "code": "MAI",
     "country": "Germany",
@@ -1066,7 +1066,7 @@
   {
     "id": 192,
     "name": "1. FC Köln",
-    "displayName": "1. FC Köln",
+    "displayName": "FC Köln",
     "slug": "1-fc-koln",
     "code": "KOL",
     "country": "Germany",

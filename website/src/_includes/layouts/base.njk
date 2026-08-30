@@ -36,7 +36,7 @@
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
   <meta property="og:image:type" content="image/jpeg" />
-  <meta property="og:image:alt" content="{{ ogImageAlt or 'All Day I Dream About Sports — live football scores under your MacBook notch.' }}" />
+  <meta property="og:image:alt" content="{{ ogImageAlt or 'All Day I Dream About Sports - football match alerts under your MacBook notch.' }}" />
   <meta property="og:locale" content="en_US" />
 
   <!-- Twitter -->
@@ -44,7 +44,7 @@
   <meta name="twitter:title" content="{{ ogTitle or title }}" />
   <meta name="twitter:description" content="{{ ogDescription or description }}" />
   <meta name="twitter:image" content="{{ ogImage or (site.url + '/assets/og-image.jpg') }}" />
-  <meta name="twitter:image:alt" content="{{ ogImageAlt or 'All Day I Dream About Sports — live football scores under your MacBook notch.' }}" />
+  <meta name="twitter:image:alt" content="{{ ogImageAlt or 'All Day I Dream About Sports - football match alerts under your MacBook notch.' }}" />
 
   <!-- Own stylesheet first: it's render-blocking by necessity, the webfont is not -->
   <link rel="stylesheet" href="/style.css" />
@@ -90,7 +90,7 @@
         "@id": "{{ site.url }}/#website",
         "url": "{{ site.url }}/",
         "name": {{ site.name | dump | safe }},
-        "description": "Live football scores from Europe's top five leagues, dropped right below your MacBook notch, with live fan celebrations.",
+        "description": "Football match alerts from Europe's top leagues, dropped right below your MacBook notch, with fan celebrations.",
         "publisher": { "@id": "{{ site.url }}/#org" },
         "inLanguage": "en"
       },
@@ -113,7 +113,7 @@
         "contentUrl": "{{ site.url }}/assets/og-image.jpg",
         "width": 1200,
         "height": 630,
-        "caption": "All Day I Dream About Sports — live football scores under your MacBook notch."
+        "caption": "All Day I Dream About Sports - football match alerts under your MacBook notch."
       },
       {% if crumbs %}
       {
@@ -146,21 +146,21 @@
         "@id": "{{ site.url }}/#app",
         "name": {{ site.name | dump | safe }},
         "applicationCategory": "SportsApplication",
-        "applicationSubCategory": "Live Score Notifications",
+        "applicationSubCategory": "Football Match Notifications",
         "operatingSystem": {{ site.requires | dump | safe }},
         "url": "{{ site.url }}/",
         "downloadUrl": "{{ site.downloadUrl }}",
         "installUrl": "{{ site.downloadUrl }}",
         "image": "{{ site.url }}/assets/og-image.jpg",
         "screenshot": "{{ site.url }}/assets/og-image.jpg",
-        "description": "A macOS app for the Premier League, La Liga, Serie A, Bundesliga and Ligue 1 that drops live match alerts — goals, cards, full-time results — right below your MacBook notch, pins a live score capsule to any corner, and lets you celebrate goals live with fans across the globe — all without breaking your workday.",
+        "description": "A macOS app for the Premier League, La Liga, Serie A, Bundesliga and Ligue 1 that drops match alerts - goals, cards and full-time results - right below your MacBook notch, pins a score capsule to any corner, and lets you celebrate goals with fans across the globe.",
         "featureList": [
-          "Live Premier League, La Liga, Serie A, Bundesliga and Ligue 1 score notifications below the MacBook notch",
-          "Fourteen individually switchable event types, from kickoff to VAR decisions",
-          "Several floating live score capsules pinned at once, with a full event timeline on hover",
-          "Follow up to {{ site.followCap }} teams across any mix of leagues",
-          "Celebrate goals live with football fans around the world",
-          "Multi-monitor support, system light and dark themes, and opens at login"
+          "Premier League, La Liga, Serie A, Bundesliga and Ligue 1 match alerts below the MacBook notch",
+          "Goal, card, substitution and full-time alerts",
+          "Pin several matches and open the full event timeline on hover",
+          "Follow teams or entire leagues",
+          "Celebrate goals with football fans around the world",
+          "Designed to stay close without interrupting your work"
         ],
         "isAccessibleForFree": true,
         "softwareRequirements": {{ site.requires | dump | safe }},

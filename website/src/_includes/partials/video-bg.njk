@@ -2,7 +2,7 @@
   The reel, as a fixed layer the whole page scrolls over.
 
   Order matters. The poster is a plain <img> so it paints with the first paint
-  and is the LCP element — the background is the video's own first frame from
+  and is the LCP element - the background is the video's own first frame from
   the very start, never black. The <video> carries no source at all until
   script.js decides this visitor should get one, and stays transparent until it
   can play, so the crossfade has nothing to reveal.

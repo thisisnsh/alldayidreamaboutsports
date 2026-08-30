@@ -1,8 +1,8 @@
 {
   "id": "/",
   "name": "All Day I Dream About Sports",
-  "short_name": "Sports Live",
-  "description": "Live football scores from the Premier League, La Liga, Serie A, Bundesliga and Ligue 1, dropped right below your MacBook notch.",
+  "short_name": "Sports Alerts",
+  "description": "Football match alerts from the Premier League, La Liga, Serie A, Bundesliga and Ligue 1, dropped right below your MacBook notch.",
   "lang": "en",
   "dir": "ltr",
   "start_url": "/",

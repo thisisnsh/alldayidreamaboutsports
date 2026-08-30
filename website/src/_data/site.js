@@ -2,7 +2,7 @@
 // would be a bug to get out of step lives here.
 export default {
   name: "All Day I Dream About Sports",
-  shortName: "Sports Live",
+  shortName: "Sports Alerts",
   url: "https://alldayidreamaboutsports.com",
   email: "support@alldayidreamaboutsports.com",
   downloadUrl: "https://download.alldayidreamaboutsports.com/latest",
@@ -20,7 +20,7 @@ export default {
     poster: "https://download.alldayidreamaboutsports.com/promo-f1.webp",
   },
 
-  // The canonical, addressable video — the thing VideoObject describes.
+  // The canonical, addressable video - the thing VideoObject describes.
   // uploadDate is read off the YouTube watch page, never guessed.
   youtube: {
     id: "B75DYFddkV0",
@@ -30,7 +30,7 @@ export default {
     title: "All Day I Dream About Sports | Showcase Aug 2026",
     uploadDate: "2026-08-29T15:03:31-07:00",
     description:
-      "A walkthrough of All Day I Dream About Sports on macOS: live goal, card and full-time alerts dropping below the MacBook notch, the floating live score capsule pinned to a corner, and the goal celebration you tap along with fans across the globe.",
+      "A walkthrough of All Day I Dream About Sports on macOS: goal, card and full-time alerts dropping below the MacBook notch, a floating score capsule pinned to a corner, and goal celebrations shared with fans across the globe.",
   },
 
   // The clubs the footer and the home page crest grid carry, by catalog id.
@@ -38,10 +38,6 @@ export default {
   bigClubs: [
     42, 40, 50, 33, 49, 47, 541, 529, 530, 157, 165, 505, 489, 496, 492, 85,
   ],
-
-  // Teams a user can follow at once. Remote-configurable in the app; this is
-  // the shipped default and the number the FAQ quotes.
-  followCap: 10,
 
   // Every event type the app can alert on, straight out of MatchModels.swift.
   eventTypes: [

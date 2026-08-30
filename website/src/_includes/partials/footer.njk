@@ -31,13 +31,13 @@
       <p class="micro">Follow teams</p>
       <ul class="footer-list footer-list-2">
         {% for t in footerClubs %}<li><a href="/teams/{{ t.slug }}/">{{ t.displayName }}</a></li>{% endfor %}
-        <li><a class="footer-more" href="/teams/">All {{ teams | length }} teams →</a></li>
+        <li><a class="footer-more" href="/teams/">Browse every team →</a></li>
       </ul>
     </div>
 
   </div>
   <div class="footer-base">
-    <p class="copy">© {{ site.year }} alldayidreamaboutsports.com — built for the love of the game.</p>
+    <p class="copy">© {{ site.year }} alldayidreamaboutsports.com - built for the love of the game.</p>
     <p class="disclaimer">Not affiliated with FIFA, or any league, club, or brand. Team names and crests are used only to identify the matches you choose to follow.</p>
   </div>
 </footer>

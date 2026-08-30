@@ -3,7 +3,7 @@ layout: layouts/base.njk
 ---
 {% set heroMicro = (team.leagueName + " · " + team.country) if not team.national else ("World Cup 2026 · " + team.country) %}
 {% set heroCrest = team.crest %}
-{% set heroTitle = team.displayName + " live scores on Mac — <em>free</em> goal alerts" %}
+{% set heroTitle = "Follow " + team.displayName + " on Mac - <em>free</em> match alerts" %}
 {% set heroBody = heroSub %}
 {% include "partials/hero.njk" %}
 
@@ -19,16 +19,16 @@ layout: layouts/base.njk
 {% set featuresHeading = "What you get following " + team.displayName %}
 {% set featuresMicro = "Following " + team.displayName %}
 {% set featuresId = "features" %}
-{% set featureRows = features.forTeam(team, league) %}
+{% set featureRows = features.forTeam(team) %}
 {% include "partials/features.njk" %}
 
-{% if rivals | length %}
-{% set gridTeams = rivals %}
-{% set gridId = "rivals" %}
+{% if relatedTeams | length %}
+{% set gridTeams = relatedTeams %}
+{% set gridId = "related" %}
 {% set gridSolid = true %}
-{% set gridMicro = "Rivals and derbies" %}
-{% set gridHeading = "Follow the rivalry too" %}
-{% set gridNote = "You can carry up to " + site.followCap + " teams at once, so there is room for the fixture that actually matters." %}
+{% set gridMicro = "More to follow" %}
+{% set gridHeading = "Teams you might also follow" %}
+{% set gridNote = "A few more clubs from the same competition to keep close." %}
 {% include "partials/team-grid.njk" %}
 {% endif %}
 
@@ -47,17 +47,17 @@ layout: layouts/base.njk
 {% set gridId = "clubs" %}
 {% set gridSolid = true %}
 {% set gridMicro = "Club football in " + team.country %}
-{% set gridHeading = "Live every week: the " + clubLeague.name %}
+{% set gridHeading = "Playing every week: the " + clubLeague.name %}
 {% set gridNote = "There are no " + team.displayName + " fixtures to alert on between tournaments, but the " + clubLeague.name + " runs all season and the app covers every match of it." %}
 {% include "partials/team-grid.njk" %}
-<p class="backline"><a href="/{{ clubLeague.slug }}/">All {{ clubLeague.teamCount }} {{ clubLeague.name }} clubs →</a></p>
+<p class="backline"><a href="/{{ clubLeague.slug }}/">Follow the {{ clubLeague.name }} →</a></p>
 {% endif %}
 
-<p class="backline"><a href="/{{ league.slug }}/">All {{ league.teamCount }} {{ "nations" if team.national else "clubs" }} in the {{ league.name }} →</a></p>
+<p class="backline"><a href="/{{ league.slug }}/">Follow the {{ league.name }} →</a></p>
 
 {% set faqHeading = team.displayName + " on macOS, answered" %}
 {% include "partials/faq.njk" %}
 
 {% set ctaHeading = "Follow " + team.displayName + ".<br />Keep working." %}
-{% set ctaBody = "Free on macOS 14 and later. No account tier, nothing to unlock, and your picks never leave your Mac." %}
+{% set ctaBody = "Free on macOS 14 and later. Sign in, choose what you follow, and keep the match close while you work." %}
 {% include "partials/cta.njk" %}

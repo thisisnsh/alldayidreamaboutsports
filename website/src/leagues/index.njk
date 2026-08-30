@@ -1,13 +1,13 @@
 ---
 layout: layouts/page.njk
 permalink: /leagues/
-title: "Live Football Scores by League on Mac — Free Goal Alerts"
-description: "Follow the Premier League, La Liga, Serie A, Bundesliga, Ligue 1 or the World Cup on your Mac. Live goals, cards and VAR calls under your MacBook notch. Free for macOS."
-keywords: "live football scores by league, Premier League La Liga Serie A Bundesliga Ligue 1 app, football league score app Mac, free live score alerts macOS"
+title: "Football Match Alerts by League on Mac - Free"
+description: "Follow the Premier League, La Liga, Serie A, Bundesliga, Ligue 1 or the World Cup on your Mac. Goals, cards and VAR calls under your MacBook notch. Free for macOS."
+keywords: "football match alerts by league, Premier League La Liga Serie A Bundesliga Ligue 1 app, football alerts Mac, goal alerts macOS"
 pageName: "Every competition covered"
 heroMicro: "Six competitions"
 heroTitle: "Pick your league.<br />We'll bring the <em>goals</em>."
-heroBody: "Five leagues running live and 144 teams between them, plus all 48 nations from the 2026 World Cup. Every goal, card and VAR call drops below your MacBook notch as it happens."
+heroBody: "Follow clubs across Europe's top leagues and national teams from the World Cup. Goals, cards and VAR calls drop below your MacBook notch throughout each match."
 crumbs:
   - name: Home
     url: /
@@ -23,8 +23,8 @@ crumbs:
   <div class="wrap wrap-narrow">
     <p class="micro">How it works</p>
     <h2 class="section-h">One app, whichever league you follow</h2>
-    <p class="body">Follow up to {{ site.followCap }} teams at once, across any mix of these competitions — a Premier League club, two from La Liga and a nation you have not given up on. The picker has a follow-all control per league if you would rather take the whole thing.</p>
-    <p class="body">The All Teams tab shows every fixture across all five live leagues on the same day, with matchday labels per competition, whether you follow those clubs or not. It reads the same file as My Teams, so switching between them costs nothing.</p>
+    <p class="body">Choose teams across different competitions, or follow an entire league. Your clubs and leagues can all live together in the app.</p>
+    <p class="body">Goals, cards, substitutions and full-time alerts arrive below your notch while a capsule keeps each match close by.</p>
   </div>
 </section>
 
@@ -32,10 +32,10 @@ crumbs:
 {% set gridId = "clubs" %}
 {% set gridMicro = "Most followed" %}
 {% set gridHeading = "The clubs people follow first" %}
-{% set gridNote = "Or browse all " + (teams | length) + " of them on the teams page." %}
+{% set gridNote = "Or browse every team covered by the app." %}
 {% include "partials/team-grid.njk" %}
 
-<p class="backline"><a href="/teams/">All {{ teams | length }} teams →</a></p>
+<p class="backline"><a href="/teams/">Browse every team →</a></p>
 
 {% set ctaHeading = "Every league you follow.<br />One <em>quiet</em> corner of the screen." %}
 {% include "partials/cta.njk" %}

@@ -4,7 +4,7 @@
 
 # All Day I Dream About Sports
 
-**Live football scores for Europe's top five leagues — dropped right below your MacBook notch.**
+**Live football scores for Europe's top five leagues - dropped right below your MacBook notch.**
 
 [Website](https://alldayidreamaboutsports.com) &nbsp;·&nbsp;
 [Download](https://alldayidreamaboutsports.com) &nbsp;·&nbsp;
@@ -25,12 +25,12 @@ Free · macOS 14+ · Premier League · La Liga · Serie A · Bundesliga · Ligue
 
 A menu bar app for people who are supposed to be working while their team plays.
 
-- **Notch drops** — goals, cards, penalties, VAR, subs, kickoff and full-time
+- **Notch drops** - goals, cards, penalties, VAR, subs, kickoff and full-time
   slide in below the notch, then get out of the way.
-- **Live capsule** — pin the running score to any corner of the screen.
-- **Celebrate together** — tap the ball when your team scores and watch the
+- **Live capsule** - pin the running score to any corner of the screen.
+- **Celebrate together** - tap the ball when your team scores and watch the
   counter climb with fans around the world.
-- **Your teams** — follow clubs across the top five leagues.
+- **Your teams** - follow clubs across the top five leagues.
 
 **Note:** This repository has landing page code for
 [alldayidreamaboutsports.com](https://alldayidreamaboutsports.com). The macOS
@@ -40,14 +40,14 @@ app and its backend are closed source.
 
 **Stack**
 
-- **App** — [SwiftUI][swiftui], [Sparkle][sparkle] (auto-update)
-- **Backend** — [TypeScript][ts] + [Express][express] on [GCP Cloud Run][run]
-- **Polling** — [GCP Cloud Scheduler][scheduler] → [GCP Cloud Tasks][tasks] → the service
-- **Data** — [Firebase Firestore][firestore]
-- **Delivery** — [Cloudflare R2][r2] + [Cloudflare CDN][cdn]
-- **Auth** — [Google OAuth][oauth]
-- **Control plane** — [Firebase Remote Config][rc]
-- **CI/CD** — [GitHub Actions][actions]
+- **App** - [SwiftUI][swiftui], [Sparkle][sparkle] (auto-update)
+- **Backend** - [TypeScript][ts] + [Express][express] on [GCP Cloud Run][run]
+- **Polling** - [GCP Cloud Scheduler][scheduler] → [GCP Cloud Tasks][tasks] → the service
+- **Data** - [Firebase Firestore][firestore]
+- **Delivery** - [Cloudflare R2][r2] + [Cloudflare CDN][cdn]
+- **Auth** - [Google OAuth][oauth]
+- **Control plane** - [Firebase Remote Config][rc]
+- **CI/CD** - [GitHub Actions][actions]
 
 **Shape**
 
@@ -64,7 +64,7 @@ app and its backend are closed source.
 
 - **Everything is polled, nothing is pushed.** Match state sits in
   [Cloudflare R2][r2] as JSON with a short TTL, and every user reads that same
-  cached object through the [CDN][cdn] — so serving 1M users costs the same as
+  cached object through the [CDN][cdn] - so serving 1M users costs the same as
   serving 1.
 - **Read cost is fixed.** Cloudflare's [tiered caching][tiered] absorbs the
   stampede when every client's copy expires at once, so the edge answers and
@@ -79,7 +79,7 @@ app and its backend are closed source.
 - **Celebrations are the one real per-user cost**, so they're batched: one call
   per goal from the app, aggregated in memory and flushed to sharded
   [Firestore][firestore] counters, then republished as another cached object.
-- **[Firebase Remote Config][rc] is the control plane** — kill switch, forced
+- **[Firebase Remote Config][rc] is the control plane** - kill switch, forced
   updates and feature flags, applied to running apps in realtime.
 - **[Sparkle][sparkle] powered updates.** In place app updates with delta patches
   from an EdDSA-signed appcast.
@@ -90,7 +90,7 @@ app and its backend are closed source.
 
 155 pages, built with [Eleventy][11ty] and deployed to [GitHub Pages][pages] by
 [Actions][actions]. One home page, two hubs, six competition pages, 144 team
-pages, privacy and 404 — every competition and every team the app covers has a
+pages, privacy and 404 - every competition and every team the app covers has a
 page of its own.
 
 ```bash
@@ -130,7 +130,7 @@ scripts/
 
 ## Contributions
 
-Not accepting pull requests. Bug reports and ideas are welcome — open an issue
+Not accepting pull requests. Bug reports and ideas are welcome - open an issue
 or email [support@alldayidreamaboutsports.com](mailto:support@alldayidreamaboutsports.com).
 
 ## Legal
