@@ -86,11 +86,6 @@ app and its backend are closed source.
 
 ## The website
 
-155 pages, built with [Eleventy][11ty] and deployed to [GitHub Pages][pages] by
-[Actions][actions]. One home page, two hubs, six competition pages, 144 team
-pages, privacy and 404 - every competition and every team the app covers has a
-page of its own.
-
 ```bash
 npm install
 npm run build     # → _site/
@@ -98,33 +93,6 @@ npm run serve     # local dev server
 npm run verify    # asserts the built site (see below)
 npm run data      # regenerate leagues/teams/crests from the live catalog
 ```
-
-**Layout**
-
-```
-.eleventy.js
-src/
-  _data/       site.js · faq.js · features.js
-               leagues.json · teams.json      (generated)
-               teamExtras.json · leagueExtras.json  (hand-authored)
-  _includes/   layouts/ · partials/
-  index.njk · leagues/ · teams/ · privacy/ · 404.njk · sitemap.xml.njk
-  style.css · script.js · assets/
-scripts/
-  build-data.mjs     catalog → data + mirrored crests (run by hand, output committed)
-  encode-promo.sh    promo reel → mp4/webm/poster for the background layer
-  verify-build.mjs   page count, unique titles, dead links, orphans, JSON-LD
-```
-
-- **The data is generated, the writing is not.** `build-data.mjs` reads the
-  app's live catalog for the leagues, teams and crests; `teamExtras.json`
-  carries a hand-written record per team so 144 pages are not 144 copies of
-  each other.
-- **CI is offline.** The generated data and the 96px WebP crests are committed,
-  so a build never depends on the catalog being reachable.
-- **The promo reel is not in this repo.** It is encoded by
-  `scripts/encode-promo.sh` and served from the same [R2][r2] bucket as the app
-  downloads, then used as a fixed background layer behind the whole site.
 
 ## Contributions
 
