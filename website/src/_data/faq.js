@@ -44,7 +44,7 @@ const home = [
   },
   {
     q: "Does it track me or need an account?",
-    a: "Yes, you sign in with Google to use the app. We store the profile details needed for sign-in, while the teams you follow and your app settings stay on your device. See the privacy policy for the full details.",
+    a: "Yes, you sign in with Google to use the app. We store the profile details needed for sign-in, while the teams you follow and your app settings stay on your device. We do count anonymous usage - screens opened, buttons used, settings toggled - but only as aggregate numbers that are never tied to your account, and your teams and settings are not stored on our side. See the privacy policy for the full details.",
   },
   {
     q: "How do I keep the app up to date?",
