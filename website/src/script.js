@@ -10,7 +10,7 @@
 /* ───────────────────────── background video ────────────────────────────── */
 (() => {
   const video = document.getElementById("bgvideo");
-  const bar = document.getElementById("bufferbar");
+  const loading = document.getElementById("video-loading");
   const poster = document.querySelector(".videobg-poster");
 
   // If the poster itself is unreachable, hide it rather than leave a browser's
@@ -19,12 +19,10 @@
 
   if (!video) return;
 
-  // Who does not get 20MB of video: phones, anyone who asked for less motion,
-  // and anyone whose browser says they are trying to save data. They keep the
-  // poster, which is the video's own first frame, so nothing looks missing.
+  // Respect explicit accessibility and bandwidth preferences. Everyone else,
+  // including phones, gets the reel; the poster remains as a fallback.
   const conn = navigator.connection || {};
   const skip =
-    window.matchMedia("(max-width: 767px)").matches ||
     window.matchMedia("(prefers-reduced-motion: reduce)").matches ||
     conn.saveData === true;
 
@@ -33,6 +31,8 @@
     return;
   }
 
+  if (loading) loading.hidden = false;
+
   const add = (type, src) => {
     if (!src) return;
     const s = document.createElement("source");
@@ -40,31 +40,13 @@
     s.src = src;
     video.appendChild(s);
   };
-  add("video/webm", video.dataset.webm);
-  add("video/mp4", video.dataset.mp4);
 
-  // A hairline rule at the top of the viewport, showing the buffer filling.
-  // A status, not a spinner - it never asks to be looked at.
   let done = false;
-  const progress = () => {
-    if (done || !bar) return;
-    const d = video.duration;
-    if (!d || !video.buffered.length) return;
-    bar.hidden = false;
-    bar.firstElementChild.style.transform = `scaleX(${Math.min(
-      1,
-      video.buffered.end(video.buffered.length - 1) / d
-    )})`;
-  };
-
   const settle = () => {
     if (done) return;
     done = true;
-    if (bar) bar.hidden = true;
+    if (loading) loading.hidden = true;
   };
-
-  video.addEventListener("progress", progress);
-  video.addEventListener("loadedmetadata", progress);
 
   video.addEventListener(
     "canplay",
@@ -81,6 +63,8 @@
   // If it never arrives, the poster simply remains and nothing is broken.
   video.addEventListener("error", settle, { once: true });
 
+  add("video/webm", video.dataset.webm);
+  add("video/mp4", video.dataset.mp4);
   video.preload = "auto";
   video.load();
 })();

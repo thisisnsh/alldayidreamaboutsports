@@ -10,9 +10,12 @@
 <div class="videobg" aria-hidden="true">
   <img class="videobg-poster" src="{{ site.video.poster }}" alt=""
        width="1664" height="1080" fetchpriority="high" decoding="async" />
-  <video class="videobg-media" id="bgvideo" muted playsinline loop
+  <video class="videobg-media" id="bgvideo" muted playsinline autoplay loop
          preload="none" tabindex="-1"
          data-mp4="{{ site.video.mp4 }}" data-webm="{{ site.video.webm }}"></video>
   <div class="videobg-scrim"></div>
 </div>
-<div class="bufferbar" id="bufferbar" hidden><i></i></div>
+<div class="video-loading" id="video-loading" role="status" hidden>
+  <i class="video-loading-spinner" aria-hidden="true"></i>
+  <span>Video loading</span>
+</div>

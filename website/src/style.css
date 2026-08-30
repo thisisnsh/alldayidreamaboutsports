@@ -107,19 +107,40 @@ img { max-width: 100%; }
       rgba(0,0,0,0.66) 100%);
 }
 
-/* Buffering, as a status rather than a spinner: a 2px monochrome rule at the
-   top of the viewport that fills and then disappears. */
-.bufferbar {
-  position: fixed; top: var(--nav-h); left: 0; right: 0; height: 2px; z-index: 60;
-  background: rgba(255,255,255,0.08); pointer-events: none;
+/* A compact status pill while the background reel becomes playable. */
+.video-loading {
+  position: fixed;
+  top: calc(var(--nav-h) + 14px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 60;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 13px;
+  border-radius: 999px;
+  background: var(--bone);
+  color: var(--void);
+  font-family: var(--display);
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  pointer-events: none;
 }
-.bufferbar > i {
-  display: block; height: 100%; width: 100%;
-  background: var(--bone); opacity: .5;
-  transform: scaleX(0); transform-origin: left center;
-  transition: transform .25s linear;
+.video-loading-spinner {
+  width: 12px;
+  height: 12px;
+  flex: none;
+  border: 2px solid rgba(0,0,0,0.25);
+  border-top-color: var(--void);
+  border-radius: 50%;
+  animation: video-loading-spin .7s linear infinite;
 }
-.bufferbar[hidden] { display: none; }
+.video-loading[hidden] { display: none; }
+
+@keyframes video-loading-spin { to { transform: rotate(1turn); } }
 
 .content { position: relative; z-index: 2; padding-top: var(--nav-h); }
 body.no-video { background: var(--void); }
