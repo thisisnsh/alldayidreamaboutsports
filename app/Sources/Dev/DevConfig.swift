@@ -118,24 +118,24 @@ enum DevConfig {
         // Real match: Premier League, 19 April 2026, Etihad Stadium.
         // BOTH sides are followed, so every goal here is a full center-ball
         // celebration — including Arsenal's. Kicks off first, at t=2.
-        DemoMoment(at: 10 + 10,  .mciArs, minute: 1,  .kickoff),
-        DemoMoment(at: 10 + 20,  .mciArs, minute: 15, .yellowCard(.home, player: "Marc Guéhi")),
-        DemoMoment(at: 10 + 30, .mciArs, minute: 16, .goal(.home, player: "Rayan Cherki")),    // 1-0
-        DemoMoment(at: 10 + 40, .mciArs, minute: 18, .goal(.away, player: "Kai Havertz")),     // 1-1
-        DemoMoment(at: 10 + 50, .mciArs, minute: 36, .yellowCard(.away, player: "Cristhian Mosquera")),
-        DemoMoment(at: 10 + 60, .mciArs, minute: 45, .halfTime),
-        DemoMoment(at: 10 + 70, .mciArs, minute: 45, .celebrationSurge(["50": 3_800_000, "42": 2_400_000])),
-        DemoMoment(at: 10 + 80, .mciArs, minute: 45, .substitution(.away, playerIn: "Gabriel Martinelli", playerOut: "Noni Madueke")),
-        DemoMoment(at: 10 + 90, .mciArs, minute: 65, .goal(.home, player: "Erling Haaland")),  // 2-1
-        DemoMoment(at: 10 + 100, .mciArs, minute: 74, .substitution(.away, playerIn: "Leandro Trossard", playerOut: "Eberechi Eze")),
-        DemoMoment(at: 10 + 120, .mciArs, minute: 74, .substitution(.away, playerIn: "Ben White", playerOut: "Cristhian Mosquera")),
-        DemoMoment(at: 10 + 130, .mciArs, minute: 82, .yellowCard(.away, player: "Gabriel Magalhães")),
-        DemoMoment(at: 10 + 140, .mciArs, minute: 84, .substitution(.away, playerIn: "Viktor Gyökeres", playerOut: "Martín Zubimendi")),
-        DemoMoment(at: 10 + 150, .mciArs, minute: 85, .substitution(.home, playerIn: "Phil Foden", playerOut: "Rayan Cherki")),
-        DemoMoment(at: 10 + 160, .mciArs, minute: 88, .substitution(.home, playerIn: "Nico González", playerOut: "Rodri")),
-        DemoMoment(at: 10 + 170, .mciArs, minute: 88, .substitution(.home, playerIn: "Sávio", playerOut: "Jeremy Doku")),
-        DemoMoment(at: 10 + 180, .mciArs, minute: 90, extra: 6, .substitution(.home, playerIn: "Nathan Aké", playerOut: "Antoine Semenyo")),
-        DemoMoment(at: 10 + 190, .mciArs, minute: 90, .fullTime),
+        DemoMoment(at: 30 + 10,  .mciArs, minute: 1,  .kickoff),
+        DemoMoment(at: 30 + 20,  .mciArs, minute: 15, .yellowCard(.home, player: "Marc Guéhi")),
+        DemoMoment(at: 30 + 30, .mciArs, minute: 16, .goal(.home, player: "Rayan Cherki")),    // 1-0
+        DemoMoment(at: 30 + 40, .mciArs, minute: 18, .goal(.away, player: "Kai Havertz")),     // 1-1
+        DemoMoment(at: 30 + 50, .mciArs, minute: 36, .yellowCard(.away, player: "Cristhian Mosquera")),
+        DemoMoment(at: 30 + 60, .mciArs, minute: 45, .halfTime),
+        DemoMoment(at: 30 + 70, .mciArs, minute: 45, .celebrationSurge(["50": 3_800_000, "42": 2_400_000])),
+        DemoMoment(at: 30 + 80, .mciArs, minute: 45, .substitution(.away, playerIn: "Gabriel Martinelli", playerOut: "Noni Madueke")),
+        DemoMoment(at: 30 + 90, .mciArs, minute: 65, .goal(.home, player: "Erling Haaland")),  // 2-1
+        DemoMoment(at: 30 + 100, .mciArs, minute: 74, .substitution(.away, playerIn: "Leandro Trossard", playerOut: "Eberechi Eze")),
+        DemoMoment(at: 30 + 120, .mciArs, minute: 74, .substitution(.away, playerIn: "Ben White", playerOut: "Cristhian Mosquera")),
+        DemoMoment(at: 30 + 130, .mciArs, minute: 82, .yellowCard(.away, player: "Gabriel Magalhães")),
+        DemoMoment(at: 30 + 140, .mciArs, minute: 84, .substitution(.away, playerIn: "Viktor Gyökeres", playerOut: "Martín Zubimendi")),
+        DemoMoment(at: 30 + 150, .mciArs, minute: 85, .substitution(.home, playerIn: "Phil Foden", playerOut: "Rayan Cherki")),
+        DemoMoment(at: 30 + 160, .mciArs, minute: 88, .substitution(.home, playerIn: "Nico González", playerOut: "Rodri")),
+        DemoMoment(at: 30 + 170, .mciArs, minute: 88, .substitution(.home, playerIn: "Sávio", playerOut: "Jeremy Doku")),
+        DemoMoment(at: 30 + 180, .mciArs, minute: 90, extra: 6, .substitution(.home, playerIn: "Nathan Aké", playerOut: "Antoine Semenyo")),
+        DemoMoment(at: 30 + 190, .mciArs, minute: 90, .fullTime),
 
         // ── Real Madrid 2-1 Barcelona ───────────────────────────────────
         // Real match: LaLiga, 26 October 2025, Santiago Bernabéu — the last
