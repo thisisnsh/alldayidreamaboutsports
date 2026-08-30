@@ -32,10 +32,10 @@
   <meta property="og:title" content="{{ ogTitle or title }}" />
   <meta property="og:description" content="{{ ogDescription or description }}" />
   <meta property="og:url" content="{{ site.url }}{{ page.url }}" />
-  <meta property="og:image" content="{{ ogImage or (site.url + '/assets/og-image.jpg') }}" />
+  <meta property="og:image" content="{{ ogImage or (site.url + '/assets/og-image.png') }}" />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
-  <meta property="og:image:type" content="image/jpeg" />
+  <meta property="og:image:type" content="image/png" />
   <meta property="og:image:alt" content="{{ ogImageAlt or 'All Day I Dream About Sports - football match alerts under your MacBook notch.' }}" />
   <meta property="og:locale" content="en_US" />
 
@@ -43,7 +43,7 @@
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="{{ ogTitle or title }}" />
   <meta name="twitter:description" content="{{ ogDescription or description }}" />
-  <meta name="twitter:image" content="{{ ogImage or (site.url + '/assets/og-image.jpg') }}" />
+  <meta name="twitter:image" content="{{ ogImage or (site.url + '/assets/og-image.png') }}" />
   <meta name="twitter:image:alt" content="{{ ogImageAlt or 'All Day I Dream About Sports - football match alerts under your MacBook notch.' }}" />
 
   <!-- Own stylesheet first: it's render-blocking by necessity, the webfont is not -->
@@ -109,8 +109,8 @@
       {
         "@type": "ImageObject",
         "@id": "{{ site.url }}/#primaryimage",
-        "url": "{{ site.url }}/assets/og-image.jpg",
-        "contentUrl": "{{ site.url }}/assets/og-image.jpg",
+        "url": "{{ site.url }}/assets/og-image.png",
+        "contentUrl": "{{ site.url }}/assets/og-image.png",
         "width": 1200,
         "height": 630,
         "caption": "All Day I Dream About Sports - football match alerts under your MacBook notch."
@@ -151,8 +151,8 @@
         "url": "{{ site.url }}/",
         "downloadUrl": "{{ site.downloadUrl }}",
         "installUrl": "{{ site.downloadUrl }}",
-        "image": "{{ site.url }}/assets/og-image.jpg",
-        "screenshot": "{{ site.url }}/assets/og-image.jpg",
+        "image": "{{ site.url }}/assets/og-image.png",
+        "screenshot": "{{ site.url }}/assets/og-image.png",
         "description": "A macOS app for the Premier League, La Liga, Serie A, Bundesliga and Ligue 1 that drops match alerts - goals, cards and full-time results - right below your MacBook notch, pins a score capsule to any corner, and lets you celebrate goals with fans across the globe.",
         "featureList": [
           "Premier League, La Liga, Serie A, Bundesliga and Ligue 1 match alerts below the MacBook notch",
