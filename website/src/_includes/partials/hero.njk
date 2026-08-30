@@ -1,0 +1,14 @@
+<section class="hero" aria-labelledby="hero-h">
+  <div class="wrap">
+    {% include "partials/breadcrumbs.njk" %}
+    {% if heroCrest %}<img class="hero-crest reveal" src="{{ heroCrest }}" alt="" width="72" height="72" fetchpriority="high" decoding="async" />{% endif %}
+    {% if heroMicro %}<p class="micro reveal">{{ heroMicro }}</p>{% endif %}
+    <h1 class="display reveal d1" id="hero-h">{{ heroTitle | safe }}</h1>
+    <p class="body reveal d2">{{ heroBody | safe }}</p>
+    <div class="actions reveal d3">
+      <a class="btn btn-primary" href="{{ site.downloadUrl }}"><span class="apple" aria-hidden="true"></span>Download for macOS</a>
+      <a class="btn btn-ghost" href="{{ site.youtube.watch }}" target="_blank" rel="noopener">Watch the demo in 4K</a>
+    </div>
+    <span class="meta-note reveal d3">Free · {{ site.requiresShort }} · no account needed</span>
+  </div>
+</section>

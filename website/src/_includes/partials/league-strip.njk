@@ -1,0 +1,23 @@
+<section class="strip" id="leagues" aria-labelledby="leagues-h">
+  <div class="wrap">
+    <p class="micro">Leagues</p>
+    <h2 class="section-h" id="leagues-h">{{ stripHeading or "Live across Europe's top five leagues" }}</h2>
+    <ul class="leaguerows">
+      {% for l in leagues %}
+      <li class="leaguerow reveal">
+        <a href="/{{ l.slug }}/">
+          <img src="{{ l.crest }}" alt="" width="34" height="34" loading="lazy" decoding="async" />
+          <span class="lr-name">{{ l.name }} live scores</span>
+          <span class="lr-meta">{{ l.country }} · {{ l.teamCount }} {% if l.type == "Cup" %}nations{% else %}clubs{% endif %}</span>
+          <span class="lr-state{% if l.active %} is-live{% endif %}">{% if l.active %}Live{% else %}2026 recap{% endif %}</span>
+        </a>
+      </li>
+      {% endfor %}
+    </ul>
+    <p class="strip-note">
+      <img src="/assets/league-2.png" alt="" width="20" height="20" loading="lazy" decoding="async" />
+      <img src="/assets/league-3.png" alt="" width="20" height="20" loading="lazy" decoding="async" />
+      Champions League, Europa League and more sports are coming.
+    </p>
+  </div>
+</section>

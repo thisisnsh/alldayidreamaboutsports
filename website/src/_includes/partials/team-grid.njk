@@ -1,0 +1,17 @@
+<section class="grid-sec{% if gridSolid %} solid{% endif %}" {% if gridId %}id="{{ gridId }}"{% endif %} aria-labelledby="{{ gridId or 'grid' }}-h">
+  <div class="wrap">
+    <p class="micro">{{ gridMicro }}</p>
+    <h2 class="section-h" id="{{ gridId or 'grid' }}-h">{{ gridHeading }}</h2>
+    {% if gridNote %}<p class="body">{{ gridNote }}</p>{% endif %}
+    <ul class="crestgrid">
+      {% for t in gridTeams %}
+      <li>
+        <a href="/teams/{{ t.slug }}/">
+          <img src="{{ t.crest }}" alt="" width="34" height="34" loading="lazy" decoding="async" />
+          <span>{{ t.displayName }}<em> live scores</em></span>
+        </a>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+</section>

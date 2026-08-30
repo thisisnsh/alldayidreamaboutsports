@@ -1,0 +1,16 @@
+{% if faqItems %}
+<section class="faq" id="faq" aria-labelledby="faq-h">
+  <div class="wrap wrap-narrow">
+    <p class="micro">Frequently asked</p>
+    <h2 class="section-h" id="faq-h">{{ faqHeading or "Questions, answered" }}</h2>
+    <div class="faq-list">
+      {% for item in faqItems %}
+      <details class="faq-item reveal">
+        <summary>{{ item.q }}</summary>
+        <p>{{ item.a }}</p>
+      </details>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+{% endif %}

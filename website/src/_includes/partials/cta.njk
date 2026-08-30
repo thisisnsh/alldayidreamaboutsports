@@ -1,0 +1,12 @@
+<section class="cta" aria-labelledby="cta-h">
+  <div class="wrap wrap-narrow">
+    {% set ctaH = ctaHeading or "Don't just watch it. <em>Live</em> it." %}
+    <h2 class="display reveal" id="cta-h">{{ ctaH | safe }}</h2>
+    <p class="body reveal d1">{{ ctaBody or "Follow your teams, catch every moment, and celebrate together. Free for macOS — Windows coming soon." }}</p>
+    <div class="actions reveal d2">
+      <a class="btn btn-primary" href="{{ site.downloadUrl }}"><span class="apple" aria-hidden="true"></span>Download for macOS</a>
+      <a class="btn btn-ghost" href="{{ site.youtube.watch }}" target="_blank" rel="noopener">Watch the demo in 4K</a>
+    </div>
+    <span class="meta-note reveal d2">Free · {{ site.requiresShort }} · no account needed</span>
+  </div>
+</section>

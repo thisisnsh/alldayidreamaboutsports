@@ -1,0 +1,41 @@
+---
+layout: layouts/page.njk
+permalink: /leagues/
+title: "Live Football Scores by League on Mac — Free Goal Alerts"
+description: "Follow the Premier League, La Liga, Serie A, Bundesliga, Ligue 1 or the World Cup on your Mac. Live goals, cards and VAR calls under your MacBook notch. Free for macOS."
+keywords: "live football scores by league, Premier League La Liga Serie A Bundesliga Ligue 1 app, football league score app Mac, free live score alerts macOS"
+pageName: "Every competition covered"
+heroMicro: "Six competitions"
+heroTitle: "Pick your league.<br />We'll bring the <em>goals</em>."
+heroBody: "Five leagues running live and 144 teams between them, plus all 48 nations from the 2026 World Cup. Every goal, card and VAR call drops below your MacBook notch as it happens."
+crumbs:
+  - name: Home
+    url: /
+  - name: Leagues
+    url: /leagues/
+---
+{% include "partials/hero.njk" %}
+
+{% set stripHeading = "Six competitions, one menu bar" %}
+{% include "partials/league-strip.njk" %}
+
+<section class="prose-sec solid">
+  <div class="wrap wrap-narrow">
+    <p class="micro">How it works</p>
+    <h2 class="section-h">One app, whichever league you follow</h2>
+    <p class="body">Follow up to {{ site.followCap }} teams at once, across any mix of these competitions — a Premier League club, two from La Liga and a nation you have not given up on. The picker has a follow-all control per league if you would rather take the whole thing.</p>
+    <p class="body">The All Teams tab shows every fixture across all five live leagues on the same day, with matchday labels per competition, whether you follow those clubs or not. It reads the same file as My Teams, so switching between them costs nothing.</p>
+  </div>
+</section>
+
+{% set gridTeams = teams | pickIds(site.bigClubs) %}
+{% set gridId = "clubs" %}
+{% set gridMicro = "Most followed" %}
+{% set gridHeading = "The clubs people follow first" %}
+{% set gridNote = "Or browse all " + (teams | length) + " of them on the teams page." %}
+{% include "partials/team-grid.njk" %}
+
+<p class="backline"><a href="/teams/">All {{ teams | length }} teams →</a></p>
+
+{% set ctaHeading = "Every league you follow.<br />One <em>quiet</em> corner of the screen." %}
+{% include "partials/cta.njk" %}

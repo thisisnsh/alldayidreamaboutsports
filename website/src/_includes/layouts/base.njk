@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+
+  <title>{{ title }}</title>
+  <meta name="description" content="{{ description }}" />
+  {% if keywords %}<meta name="keywords" content="{{ keywords }}" />{% endif %}
+  <meta name="author" content="{{ site.name }}" />
+  <meta name="robots" content="{% if noindex %}noindex, follow{% else %}index, follow, max-image-preview:large{% endif %}" />
+  <meta name="theme-color" content="#000000" />
+  <meta name="apple-mobile-web-app-title" content="{{ site.shortName }}" />
+  <link rel="canonical" href="{{ site.url }}{{ page.url }}" />
+  <link rel="alternate" hreflang="en" href="{{ site.url }}{{ page.url }}" />
+  <link rel="alternate" hreflang="x-default" href="{{ site.url }}{{ page.url }}" />
+  <script>
+    if (location.pathname.endsWith("/index.html")) {
+      history.replaceState(null, "", location.pathname.slice(0, -"index.html".length) + location.search + location.hash);
+    }
+  </script>
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+  <link rel="icon" href="/favicon.ico" />
+  <link rel="manifest" href="/site.webmanifest" />
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="{{ site.name }}" />
+  <meta property="og:title" content="{{ ogTitle or title }}" />
+  <meta property="og:description" content="{{ ogDescription or description }}" />
+  <meta property="og:url" content="{{ site.url }}{{ page.url }}" />
+  <meta property="og:image" content="{{ ogImage or (site.url + '/assets/og-image.jpg') }}" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:type" content="image/jpeg" />
+  <meta property="og:image:alt" content="{{ ogImageAlt or 'All Day I Dream About Sports — live football scores under your MacBook notch.' }}" />
+  <meta property="og:locale" content="en_US" />
+
+  <!-- Twitter -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="{{ ogTitle or title }}" />
+  <meta name="twitter:description" content="{{ ogDescription or description }}" />
+  <meta name="twitter:image" content="{{ ogImage or (site.url + '/assets/og-image.jpg') }}" />
+  <meta name="twitter:image:alt" content="{{ ogImageAlt or 'All Day I Dream About Sports — live football scores under your MacBook notch.' }}" />
+
+  <!-- Own stylesheet first: it's render-blocking by necessity, the webfont is not -->
+  <link rel="stylesheet" href="/style.css" />
+
+  <!-- Rounded webfont as a cross-platform fallback for SF Pro Rounded (Mac renders the system
+       font natively, so this must never block the first paint) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="preconnect" href="https://download.alldayidreamaboutsports.com" />
+  <link rel="stylesheet" media="print" onload="this.media='all'; this.onload=null"
+        href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800&display=swap" />
+  <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800&display=swap" /></noscript>
+
+  <!-- reveal-on-scroll is a progressive enhancement; without JS the content
+       must still be visible rather than sitting at opacity 0 forever. -->
+  <noscript><style>.reveal{opacity:1;transform:none}</style></noscript>
+
+  {% if not noVideo %}<link rel="preload" as="image" href="{{ site.video.poster }}" fetchpriority="high" />{% endif %}
+
+  <!-- Structured data -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Organization",
+        "@id": "{{ site.url }}/#org",
+        "name": {{ site.name | dump | safe }},
+        "url": "{{ site.url }}/",
+        "email": "{{ site.email }}",
+        "logo": {
+          "@type": "ImageObject",
+          "@id": "{{ site.url }}/#logo",
+          "url": "{{ site.url }}/android-chrome-512x512.png",
+          "width": 512,
+          "height": 512,
+          "caption": {{ site.name | dump | safe }}
+        },
+        "image": { "@id": "{{ site.url }}/#logo" }
+      },
+      {
+        "@type": "WebSite",
+        "@id": "{{ site.url }}/#website",
+        "url": "{{ site.url }}/",
+        "name": {{ site.name | dump | safe }},
+        "description": "Live football scores from Europe's top five leagues, dropped right below your MacBook notch, with live fan celebrations.",
+        "publisher": { "@id": "{{ site.url }}/#org" },
+        "inLanguage": "en"
+      },
+      {
+        "@type": "WebPage",
+        "@id": "{{ site.url }}{{ page.url }}#webpage",
+        "url": "{{ site.url }}{{ page.url }}",
+        "name": {{ (pageName or title) | dump | safe }},
+        "description": {{ description | dump | safe }},
+        "isPartOf": { "@id": "{{ site.url }}/#website" },
+        "about": { "@id": "{{ site.url }}/#app" },
+        "primaryImageOfPage": { "@id": "{{ site.url }}/#primaryimage" },
+        {% if crumbs %}"breadcrumb": { "@id": "{{ site.url }}{{ page.url }}#breadcrumb" },{% endif %}
+        "inLanguage": "en"
+      },
+      {
+        "@type": "ImageObject",
+        "@id": "{{ site.url }}/#primaryimage",
+        "url": "{{ site.url }}/assets/og-image.jpg",
+        "contentUrl": "{{ site.url }}/assets/og-image.jpg",
+        "width": 1200,
+        "height": 630,
+        "caption": "All Day I Dream About Sports — live football scores under your MacBook notch."
+      },
+      {% if crumbs %}
+      {
+        "@type": "BreadcrumbList",
+        "@id": "{{ site.url }}{{ page.url }}#breadcrumb",
+        "itemListElement": [
+          {% for c in crumbs %}{
+            "@type": "ListItem",
+            "position": {{ loop.index }},
+            "name": {{ c.name | dump | safe }},
+            "item": "{{ site.url }}{{ c.url }}"
+          }{% if not loop.last %},{% endif %}{% endfor %}
+        ]
+      },
+      {% endif %}
+      {
+        "@type": "VideoObject",
+        "@id": "{{ site.url }}/#demo",
+        "name": {{ site.youtube.title | dump | safe }},
+        "description": {{ site.youtube.description | dump | safe }},
+        "thumbnailUrl": ["{{ site.youtube.thumb }}"],
+        "uploadDate": "{{ site.youtube.uploadDate }}",
+        "embedUrl": "{{ site.youtube.embed }}",
+        "contentUrl": "{{ site.youtube.watch }}",
+        "publisher": { "@id": "{{ site.url }}/#org" },
+        "isPartOf": { "@id": "{{ site.url }}{{ page.url }}#webpage" }
+      },
+      {
+        "@type": "SoftwareApplication",
+        "@id": "{{ site.url }}/#app",
+        "name": {{ site.name | dump | safe }},
+        "applicationCategory": "SportsApplication",
+        "applicationSubCategory": "Live Score Notifications",
+        "operatingSystem": {{ site.requires | dump | safe }},
+        "url": "{{ site.url }}/",
+        "downloadUrl": "{{ site.downloadUrl }}",
+        "installUrl": "{{ site.downloadUrl }}",
+        "image": "{{ site.url }}/assets/og-image.jpg",
+        "screenshot": "{{ site.url }}/assets/og-image.jpg",
+        "description": "A macOS app for the Premier League, La Liga, Serie A, Bundesliga and Ligue 1 that drops live match alerts — goals, cards, full-time results — right below your MacBook notch, pins a live score capsule to any corner, and lets you celebrate goals live with fans across the globe — all without breaking your workday.",
+        "featureList": [
+          "Live Premier League, La Liga, Serie A, Bundesliga and Ligue 1 score notifications below the MacBook notch",
+          "Fourteen individually switchable event types, from kickoff to VAR decisions",
+          "Several floating live score capsules pinned at once, with a full event timeline on hover",
+          "Follow up to {{ site.followCap }} teams across any mix of leagues",
+          "Celebrate goals live with football fans around the world",
+          "Multi-monitor support, system light and dark themes, and opens at login"
+        ],
+        "isAccessibleForFree": true,
+        "softwareRequirements": {{ site.requires | dump | safe }},
+        "author": { "@id": "{{ site.url }}/#org" },
+        "publisher": { "@id": "{{ site.url }}/#org" },
+        "video": { "@id": "{{ site.url }}/#demo" },
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD", "availability": "https://schema.org/InStock" }
+      }{% if faqItems %},
+      {
+        "@type": "FAQPage",
+        "@id": "{{ site.url }}{{ page.url }}#faq",
+        "isPartOf": { "@id": "{{ site.url }}{{ page.url }}#webpage" },
+        "inLanguage": "en",
+        "mainEntity": [
+          {% for item in faqItems %}{
+            "@type": "Question",
+            "name": {{ item.q | dump | safe }},
+            "acceptedAnswer": { "@type": "Answer", "text": {{ item.a | dump | safe }} }
+          }{% if not loop.last %},{% endif %}{% endfor %}
+        ]
+      }{% endif %}
+    ]
+  }
+  </script>
+</head>
+<body{% if noVideo %} class="no-video"{% endif %}>
+  {% if not noVideo %}{% include "partials/video-bg.njk" %}{% endif %}
+  {% include "partials/nav.njk" %}
+
+  <main class="content" id="top">
+    {{ content | safe }}
+  </main>
+
+  {% include "partials/footer.njk" %}
+
+  <script type="module" src="/script.js"></script>
+</body>
+</html>

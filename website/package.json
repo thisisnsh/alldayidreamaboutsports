@@ -1,0 +1,16 @@
+{
+  "name": "alldayidreamaboutsports.com",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Marketing site for All Day I Dream About Sports — live football scores for macOS.",
+  "type": "module",
+  "scripts": {
+    "build": "eleventy",
+    "serve": "eleventy --serve",
+    "data": "node scripts/build-data.mjs",
+    "verify": "node scripts/verify-build.mjs"
+  },
+  "devDependencies": {
+    "@11ty/eleventy": "^3.0.0"
+  }
+}

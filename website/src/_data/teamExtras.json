@@ -1,0 +1,962 @@
+{
+  "33": {
+    "displayName": "Manchester United",
+    "nickname": "the Red Devils",
+    "blurb": "Twenty league titles, three European Cups and the loudest transfer window in football — Manchester United generate news on a weekday afternoon, never mind a matchday. Old Trafford is the most-watched ground in England, which is exactly why a United score is worth having on your screen before someone tells you about it.",
+    "rivals": [50, 40, 63],
+    "leagueContext": "the club with more Premier League titles than anyone"
+  },
+  "34": {
+    "displayName": "Newcastle United",
+    "nickname": "the Magpies",
+    "blurb": "Newcastle United fill St James' Park whatever the table says, and the Tyne-Wear derby is back on the fixture list now that Sunderland are up. Follow the Magpies and the North East's noisiest ninety minutes lands on your Mac as it happens.",
+    "rivals": [746, 33, 40],
+    "leagueContext": "back in the European conversation and playing like it"
+  },
+  "35": {
+    "displayName": "AFC Bournemouth",
+    "nickname": "the Cherries",
+    "blurb": "Bournemouth play out of the smallest ground in the division and press higher than clubs ten times their size. The Vitality is where big sides come to lose points, and the Cherries' goals tend to arrive in clusters — which makes them a club worth catching live rather than in a highlights reel.",
+    "rivals": [51, 52, 36],
+    "leagueContext": "the smallest ground in the Premier League and one of the highest presses"
+  },
+  "36": {
+    "displayName": "Fulham",
+    "nickname": "the Cottagers",
+    "blurb": "Fulham are the Premier League's most agreeable away day — a river, a cottage in the corner, and a side that has learned to stay up by playing football rather than avoiding it. Craven Cottage matches rarely finish nil-nil, so the alerts keep coming.",
+    "rivals": [49, 55, 47],
+    "leagueContext": "the west London side settled in the top flight"
+  },
+  "40": {
+    "displayName": "Liverpool",
+    "nickname": "the Reds",
+    "blurb": "Six European Cups, a record English league haul, and a crowd that treats the last twenty minutes as a tactic. Liverpool play at a tempo that turns a one-goal game into a three-goal game inside a quarter of an hour, which is precisely the sort of match you do not want to check twenty minutes late.",
+    "rivals": [45, 33, 50],
+    "leagueContext": "record English champions and never out of the title conversation"
+  },
+  "42": {
+    "displayName": "Arsenal",
+    "nickname": "the Gunners",
+    "blurb": "Arsenal went a whole league season unbeaten and have spent the years since building a side that presses from the first whistle and defends set pieces like a chess problem. North London derbies against Tottenham still stop the city, and the Emirates has an appetite for late goals.",
+    "rivals": [47, 49, 33],
+    "leagueContext": "perennial title challengers out of north London"
+  },
+  "45": {
+    "displayName": "Everton",
+    "nickname": "the Toffees",
+    "blurb": "Everton have spent more seasons in England's top flight than any other club, and the move to the waterfront gave them the loudest new ground in the league. The Merseyside derby is the most-carded fixture in Premier League history — follow it and your alerts will earn their keep.",
+    "rivals": [40, 33, 51],
+    "leagueContext": "more top-flight seasons than any other English club"
+  },
+  "47": {
+    "displayName": "Tottenham Hotspur",
+    "nickname": "Spurs",
+    "blurb": "Tottenham build attacks at a sprint and concede the same way, which is why so few Spurs games are decided before the eightieth minute. The north London derby against Arsenal is the fixture the season is planned around.",
+    "rivals": [42, 49, 66],
+    "leagueContext": "north London's other half, and rarely a quiet ninety minutes"
+  },
+  "49": {
+    "displayName": "Chelsea",
+    "nickname": "the Blues",
+    "blurb": "Two Champions League titles, a squad rebuilt from the academy out, and a habit of settling matches from the bench in the last half hour. Chelsea's late substitutions change games often enough that the substitution alert is worth leaving switched on.",
+    "rivals": [42, 47, 36],
+    "leagueContext": "European champions twice over, and rebuilding around youth"
+  },
+  "50": {
+    "displayName": "Manchester City",
+    "nickname": "the Cityzens",
+    "blurb": "City keep the ball for long stretches and then score three in ten minutes, which makes the scoreline at the hour mark a poor guide to the result. The Manchester derby and the trips to Anfield are the two dates that reliably decide their season.",
+    "rivals": [33, 40, 42],
+    "leagueContext": "the most dominant side of the Premier League's modern era"
+  },
+  "51": {
+    "displayName": "Brighton & Hove Albion",
+    "nickname": "the Seagulls",
+    "blurb": "Brighton recruit better than clubs with five times the budget and play a possession game that punishes anyone who presses them badly. The M23 derby with Crystal Palace is far angrier than the geography suggests.",
+    "rivals": [52, 35, 36],
+    "leagueContext": "the Premier League's best-run recruitment operation"
+  },
+  "52": {
+    "displayName": "Crystal Palace",
+    "nickname": "the Eagles",
+    "blurb": "Selhurst Park is the loudest small ground in London and Palace are built to counter — long spells without the ball, then three passes and a shot. Their goals arrive suddenly, which is the whole argument for a live alert rather than a score check.",
+    "rivals": [51, 49, 36],
+    "leagueContext": "south London's top-flight side and a genuine cup threat"
+  },
+  "55": {
+    "displayName": "Brentford",
+    "nickname": "the Bees",
+    "blurb": "Brentford turned set pieces and data recruitment into a Premier League place and have kept it by being awkward for everyone. A Bees corner is a genuine scoring chance, so the goal alerts land at moments other clubs waste.",
+    "rivals": [36, 49, 52],
+    "leagueContext": "the set-piece and analytics side of west London"
+  },
+  "57": {
+    "displayName": "Ipswich Town",
+    "nickname": "the Tractor Boys",
+    "blurb": "Ipswich Town won a league title and a UEFA Cup under Bobby Robson and spent the decades since finding their way back. Portman Road sells out for a side that attacks first and asks questions later.",
+    "rivals": [63, 1346, 64],
+    "leagueContext": "former champions and UEFA Cup winners, back among the big grounds"
+  },
+  "63": {
+    "displayName": "Leeds United",
+    "nickname": "the Whites",
+    "blurb": "Leeds United carry one of the largest travelling supports in England and play to a crowd that expects the ball forward. Elland Road matches run hot, and the meetings with Manchester United carry decades of argument into ninety minutes.",
+    "rivals": [33, 64, 65],
+    "leagueContext": "one of England's biggest travelling supports"
+  },
+  "64": {
+    "displayName": "Hull City",
+    "nickname": "the Tigers",
+    "blurb": "Hull City are the only professional club in a city of a quarter of a million, and the MKM fills accordingly. The Tigers score in bursts and defend deep, so their matches swing late more often than most.",
+    "rivals": [63, 57, 1346],
+    "leagueContext": "the only senior club in one of England's biggest one-club cities"
+  },
+  "65": {
+    "displayName": "Nottingham Forest",
+    "nickname": "the Tricky Trees",
+    "blurb": "Forest won back-to-back European Cups and still play in front of the oldest stand in the Football League. The City Ground crowd is close enough to the pitch to change a referee's mind, and the goal celebrations carry.",
+    "rivals": [63, 66, 1346],
+    "leagueContext": "two-time European champions, back in the top flight"
+  },
+  "66": {
+    "displayName": "Aston Villa",
+    "nickname": "the Villans",
+    "blurb": "Villa Park has hosted more FA Cup semi-finals than any other ground and Aston Villa are European champions from 1982 who have found their way back to continental nights. They score early and defend a lead, which makes the kickoff alert the important one.",
+    "rivals": [1346, 65, 47],
+    "leagueContext": "European Cup winners back in the continental places"
+  },
+  "746": {
+    "displayName": "Sunderland",
+    "nickname": "the Black Cats",
+    "blurb": "Sunderland draw crowds that most mid-table clubs would need a cup run to match, and the Stadium of Light is at its best in the Tyne-Wear derby. Promotion put that fixture back on the calendar for the first time in years.",
+    "rivals": [34, 64, 63],
+    "leagueContext": "back in the top flight, and the Tyne-Wear derby with them"
+  },
+  "1346": {
+    "displayName": "Coventry City",
+    "nickname": "the Sky Blues",
+    "blurb": "Coventry City spent thirty-four straight seasons in England's top division and won the FA Cup in 1987 with one of the great finals. The climb back has been slow and the crowd has not gone anywhere.",
+    "rivals": [66, 65, 63],
+    "leagueContext": "FA Cup winners and long-time top-flight regulars, back up"
+  },
+  "529": {
+    "displayName": "FC Barcelona",
+    "nickname": "Barça",
+    "blurb": "Barcelona have won more European Cups than any Spanish club bar Real Madrid and play a passing game that the rest of Europe has spent two decades copying. El Clásico is the most-watched club fixture on earth, and it is rarely settled before the last twenty minutes.",
+    "rivals": [541, 540, 530],
+    "leagueContext": "La Liga's most decorated club after Real Madrid"
+  },
+  "530": {
+    "displayName": "Atlético Madrid",
+    "nickname": "Los Colchoneros",
+    "blurb": "Atlético defend better than anyone in Spain and turn one-goal leads into results with a ruthlessness that infuriates the other two. The Madrid derby is the roughest ninety minutes in La Liga and the card alerts prove it.",
+    "rivals": [541, 529, 543],
+    "leagueContext": "the third force in Spain, and the hardest side to score against"
+  },
+  "531": {
+    "displayName": "Athletic Club",
+    "nickname": "Los Leones",
+    "blurb": "Athletic Club sign only Basque players and have still never been relegated from La Liga — a record no other club in Europe can claim on those terms. San Mamés is the loudest ground in Spain, and the Basque derby against Real Sociedad is its highest note.",
+    "rivals": [548, 727, 542],
+    "leagueContext": "never relegated, and fielding only Basque players"
+  },
+  "532": {
+    "displayName": "Valencia CF",
+    "nickname": "Los Che",
+    "blurb": "Valencia have six league titles and two Champions League finals behind them, and Mestalla is still the steepest, most intimidating stand in Spanish football. The derby with Levante splits the city street by street.",
+    "rivals": [539, 533, 797],
+    "leagueContext": "six-time Spanish champions and twice Champions League finalists"
+  },
+  "533": {
+    "displayName": "Villarreal CF",
+    "nickname": "the Yellow Submarine",
+    "blurb": "A town of fifty thousand people that won the Europa League and reached a Champions League semi-final. Villarreal play a patient, technical game and their European nights are among the best-attended per head in the sport.",
+    "rivals": [532, 539, 797],
+    "leagueContext": "Europa League winners from a town of fifty thousand"
+  },
+  "535": {
+    "displayName": "Málaga CF",
+    "nickname": "Los Boquerones",
+    "blurb": "Málaga reached a Champions League quarter-final and lost it in stoppage time, which is still the first thing anyone in the city will tell you. La Rosaleda has kept its crowd through everything that followed.",
+    "rivals": [543, 536, 542],
+    "leagueContext": "Champions League quarter-finalists on the Costa del Sol"
+  },
+  "536": {
+    "displayName": "Sevilla FC",
+    "nickname": "Los Nervionenses",
+    "blurb": "Seven Europa League titles — more than any club in the competition's history — and a stadium that treats a Thursday night like a final. The derby with Real Betis is the most heavily policed fixture in Spain.",
+    "rivals": [543, 529, 541],
+    "leagueContext": "record seven-time winners of the Europa League"
+  },
+  "538": {
+    "displayName": "Celta Vigo",
+    "nickname": "Os Celestes",
+    "blurb": "Celta play the most direct football in Galicia and Balaídos sits close enough to the Atlantic that the weather is part of the tactics. The derbi galego against Deportivo is a fixture the whole region arranges its weekend around.",
+    "rivals": [544, 4665, 727],
+    "leagueContext": "Galicia's top-flight side, and the derbi galego with it"
+  },
+  "539": {
+    "displayName": "Levante UD",
+    "nickname": "Els Granotes",
+    "blurb": "Levante are the older of Valencia's two clubs and the one that has made a habit of beating the bigger one at home. The Ciutat de València is small, steep and very loud for ninety minutes.",
+    "rivals": [532, 533, 797],
+    "leagueContext": "the older half of the Valencia derby"
+  },
+  "540": {
+    "displayName": "RCD Espanyol",
+    "nickname": "Els Pericos",
+    "blurb": "Espanyol are Barcelona's other club, four-time Copa del Rey winners and twice Europa League finalists. The derbi barceloní is the one fixture where the league table is genuinely irrelevant.",
+    "rivals": [529, 546, 728],
+    "leagueContext": "Barcelona's other club and a four-time cup winner"
+  },
+  "541": {
+    "displayName": "Real Madrid",
+    "nickname": "Los Blancos",
+    "blurb": "More European Cups than any club in the sport and a stadium that has been rebuilt around the expectation of winning them. Real Madrid concede first and win anyway often enough that the full-time alert matters more than the half-time one.",
+    "rivals": [529, 530, 536],
+    "leagueContext": "record European champions, and Spain's most decorated club"
+  },
+  "542": {
+    "displayName": "Deportivo Alavés",
+    "nickname": "El Glorioso",
+    "blurb": "Alavés reached a UEFA Cup final that finished 5-4 in extra time and remains one of the great European finals. Mendizorroza is compact, cold and unforgiving for visiting sides.",
+    "rivals": [531, 548, 727],
+    "leagueContext": "UEFA Cup finalists from the Basque interior"
+  },
+  "543": {
+    "displayName": "Real Betis",
+    "nickname": "Los Verdiblancos",
+    "blurb": "Betis have one of the largest memberships in Spain and a crowd that sings through a losing scoreline. The Seville derby is the fixture the season is measured by, whatever else happens.",
+    "rivals": [536, 541, 535],
+    "leagueContext": "one of Spain's largest club memberships"
+  },
+  "544": {
+    "displayName": "Deportivo La Coruña",
+    "nickname": "Depor",
+    "blurb": "Deportivo won La Liga in 2000 and reached a Champions League semi-final having overturned a 4-1 first-leg deficit against Milan — still one of the great European comebacks. Riazor has waited a long time for the return.",
+    "rivals": [538, 4665, 531],
+    "leagueContext": "Spanish champions in 2000 and Champions League semi-finalists"
+  },
+  "546": {
+    "displayName": "Getafe CF",
+    "nickname": "El Geta",
+    "blurb": "Getafe are the most physical side in La Liga and make no apology for it — few teams commit more fouls or concede fewer clear chances. The card alerts do a lot of work on a Getafe matchday.",
+    "rivals": [728, 541, 530],
+    "leagueContext": "the most physical side in the Spanish top flight"
+  },
+  "548": {
+    "displayName": "Real Sociedad",
+    "nickname": "La Real",
+    "blurb": "Real Sociedad won back-to-back Spanish titles in the early eighties and now produce more of their own first team than almost anyone in Europe. The Basque derby with Athletic is a whole-region occasion.",
+    "rivals": [531, 727, 542],
+    "leagueContext": "two-time Spanish champions and Europe's best academy pipeline"
+  },
+  "727": {
+    "displayName": "CA Osasuna",
+    "nickname": "Los Rojillos",
+    "blurb": "Osasuna are owned by their members, play in front of a standing-room end and have reached both a Copa del Rey final and a UEFA Cup semi-final. El Sadar is one of the hardest away trips in Spain.",
+    "rivals": [548, 531, 542],
+    "leagueContext": "member-owned, and one of Spain's hardest away days"
+  },
+  "728": {
+    "displayName": "Rayo Vallecano",
+    "nickname": "Los Franjirrojos",
+    "blurb": "Rayo play in a three-sided stadium in the middle of Vallecas and have the most politically vocal support in Spain. They attack whoever they are playing, which produces some absurd scorelines.",
+    "rivals": [546, 541, 530],
+    "leagueContext": "Vallecas's three-sided ground and Madrid's third club"
+  },
+  "797": {
+    "displayName": "Elche CF",
+    "nickname": "Los Franjiverdes",
+    "blurb": "Elche have spent most of the last decade going up and coming back down, and the Martínez Valero fills either way. They defend deep and score from transitions, so their matches are decided in moments.",
+    "rivals": [533, 532, 539],
+    "leagueContext": "the Alicante side that keeps finding its way back"
+  },
+  "4665": {
+    "displayName": "Racing Santander",
+    "nickname": "Los Racinguistas",
+    "blurb": "Racing are one of the founding members of La Liga and spent decades in the top flight before the fall. El Sardinero has stayed full through every division on the way back down and up.",
+    "rivals": [544, 538, 531],
+    "leagueContext": "a founding member of La Liga, back in the picture"
+  },
+  "487": {
+    "displayName": "Lazio",
+    "nickname": "the Biancocelesti",
+    "blurb": "Lazio have two Serie A titles and a Cup Winners' Cup, and share the Stadio Olimpico with the club they least want to share anything with. The Derby della Capitale is the most intensely policed fixture in Italy.",
+    "rivals": [497, 505, 496],
+    "leagueContext": "two-time Italian champions and half of the Rome derby"
+  },
+  "488": {
+    "displayName": "Sassuolo",
+    "nickname": "the Neroverdi",
+    "blurb": "Sassuolo come from a town of forty thousand and have beaten Milan, Inter and Juventus in the same season more than once. They play out from the back at all costs, which produces both the best goals and the worst ones.",
+    "rivals": [500, 523, 502],
+    "leagueContext": "Emilia's giant-killers from a town of forty thousand"
+  },
+  "489": {
+    "displayName": "AC Milan",
+    "nickname": "the Rossoneri",
+    "blurb": "Seven European Cups — only Real Madrid have more — and a share of the loudest derby in club football. The Derby della Madonnina fills San Siro twice a season with eighty thousand people and no neutrals.",
+    "rivals": [505, 496, 497],
+    "leagueContext": "seven-time European champions and half of the Milan derby"
+  },
+  "490": {
+    "displayName": "Cagliari",
+    "nickname": "the Rossoblù",
+    "blurb": "Cagliari won the Scudetto in 1970 with Gigi Riva, still Italy's all-time leading scorer, and remain the only Sardinian club to have done it. The island turns out for the derby with Genoa's clubs and for anyone from the mainland.",
+    "rivals": [495, 494, 867],
+    "leagueContext": "Sardinia's only Italian champions"
+  },
+  "492": {
+    "displayName": "Napoli",
+    "nickname": "the Partenopei",
+    "blurb": "Napoli's title runs shut the city down for weeks, and the Maradona holds fifty thousand people who treat every home game as a referendum. They attack in threes and concede on the counter, so the score moves fast.",
+    "rivals": [497, 496, 489],
+    "leagueContext": "Italian champions, and a city that stops for them"
+  },
+  "494": {
+    "displayName": "Udinese",
+    "nickname": "the Zebrette",
+    "blurb": "Udinese have the longest unbroken run in Serie A of any club outside the traditional big sides, built on a scouting network that finds players nobody else has watched. The derby with Venezia is Friuli against the lagoon.",
+    "rivals": [517, 495, 500],
+    "leagueContext": "Serie A's most durable mid-table survivor and best scouting network"
+  },
+  "495": {
+    "displayName": "Genoa",
+    "nickname": "the Grifone",
+    "blurb": "Genoa are the oldest football club in Italy and nine-time champions, though the last of those was in 1924. The Derby della Lanterna is one of the oldest fixtures in the country and none of it has cooled off.",
+    "rivals": [490, 494, 503],
+    "leagueContext": "Italy's oldest club and nine-time champions"
+  },
+  "496": {
+    "displayName": "Juventus",
+    "nickname": "the Old Lady",
+    "blurb": "More Serie A titles than any other club and a defensive tradition that turns a one-goal lead into an hour of managed possession. The Derby d'Italia against Inter and the Turin derby against Torino are the two that carry real weight.",
+    "rivals": [503, 505, 489],
+    "leagueContext": "record Italian champions"
+  },
+  "497": {
+    "displayName": "AS Roma",
+    "nickname": "the Giallorossi",
+    "blurb": "Roma's support is the most demanding in Italy and the Curva Sud sets the tone before kickoff. The Derby della Capitale against Lazio is the fixture the city's year is organised around.",
+    "rivals": [487, 492, 505],
+    "leagueContext": "the capital's biggest club and half of its derby"
+  },
+  "499": {
+    "displayName": "Atalanta",
+    "nickname": "La Dea",
+    "blurb": "Atalanta went from perennial mid-table to Europa League winners by man-marking across the whole pitch and attacking with five players. Their games produce more goals than anyone else's in Serie A.",
+    "rivals": [1579, 489, 500],
+    "leagueContext": "Europa League winners and Serie A's highest-scoring side"
+  },
+  "500": {
+    "displayName": "Bologna",
+    "nickname": "the Felsinei",
+    "blurb": "Seven-time Italian champions and back in Europe after decades away, Bologna play some of the most watchable football in the league. The Dall'Ara has one of the last great terraced curves in Italy.",
+    "rivals": [502, 523, 488],
+    "leagueContext": "seven-time champions, back in European competition"
+  },
+  "502": {
+    "displayName": "Fiorentina",
+    "nickname": "La Viola",
+    "blurb": "Fiorentina have two Scudetti and a rivalry with Juventus that dates to a title decided in the boardroom. The Franchi is a heritage-listed stadium with a curve that does not stop singing.",
+    "rivals": [496, 500, 487],
+    "leagueContext": "two-time Italian champions from Florence"
+  },
+  "503": {
+    "displayName": "Torino",
+    "nickname": "il Toro",
+    "blurb": "Torino won five straight titles with the Grande Torino side lost at Superga in 1949, and the club has carried that history ever since. The Derby della Mole against Juventus is the oldest derby in Italy.",
+    "rivals": [496, 495, 505],
+    "leagueContext": "seven-time champions and the older half of the Turin derby"
+  },
+  "505": {
+    "displayName": "Inter",
+    "nickname": "the Nerazzurri",
+    "blurb": "Three European Cups, a treble in 2010 and a side built to defend in a back three and break at speed. The Derby della Madonnina and the Derby d'Italia against Juventus are the two nights Inter's season turns on.",
+    "rivals": [489, 496, 1579],
+    "leagueContext": "three-time European champions and treble winners"
+  },
+  "512": {
+    "displayName": "Frosinone",
+    "nickname": "the Canarini",
+    "blurb": "Frosinone come from a town of forty-five thousand in Lazio and have reached Serie A more than once from nothing. They attack when they should probably defend, which makes the alerts worth having.",
+    "rivals": [497, 867, 523],
+    "leagueContext": "Lazio's other club, and a persistent promotion story"
+  },
+  "517": {
+    "displayName": "Venezia",
+    "nickname": "the Lagunari",
+    "blurb": "Venezia play in the most photographed city in the world in front of a few thousand people, and have the best kits in European football by some distance. The derby with Udinese is the north-east's quiet grudge.",
+    "rivals": [494, 523, 895],
+    "leagueContext": "the lagoon club, and the best-dressed side in Italy"
+  },
+  "523": {
+    "displayName": "Parma",
+    "nickname": "the Crociati",
+    "blurb": "Parma won two UEFA Cups and a Cup Winners' Cup in the nineties with one of the great forgotten sides, then went bankrupt and started again in the fourth tier. The climb back has been complete.",
+    "rivals": [500, 488, 502],
+    "leagueContext": "two-time UEFA Cup winners, rebuilt from the amateur leagues"
+  },
+  "867": {
+    "displayName": "Lecce",
+    "nickname": "i Salentini",
+    "blurb": "Lecce sit at the heel of Italy and draw crowds from across Salento for a side that goes up and comes down and goes up again. Via del Mare is a long way from anywhere, which is exactly why away wins there are rare.",
+    "rivals": [512, 490, 523],
+    "leagueContext": "Salento's club and one of Serie A's hardest journeys"
+  },
+  "895": {
+    "displayName": "Como 1907",
+    "nickname": "the Lariani",
+    "blurb": "Como climbed from the fourth tier to Serie A in five years and play in the most scenic ground in the league, on the lake. The rebuild has been fast enough that the fixture list keeps surprising people.",
+    "rivals": [1579, 505, 499],
+    "leagueContext": "four divisions in five years, and the best view in Serie A"
+  },
+  "1579": {
+    "displayName": "Monza",
+    "nickname": "the Biancorossi",
+    "blurb": "Monza waited 110 years for a first season in Serie A and got there in 2022. The U-Power is twenty minutes from San Siro, which makes the trips to Milan the ones the crowd wants.",
+    "rivals": [895, 505, 499],
+    "leagueContext": "110 years in the making, and twenty minutes from San Siro"
+  },
+  "157": {
+    "displayName": "Bayern Munich",
+    "nickname": "Die Roten",
+    "blurb": "More German titles than the rest of the Bundesliga combined and six European Cups on top. Bayern score early and keep scoring, so the interesting alert is usually the second goal rather than the first.",
+    "rivals": [165, 172, 192],
+    "leagueContext": "record German champions, six times European champions"
+  },
+  "160": {
+    "displayName": "SC Freiburg",
+    "nickname": "the Breisgau-Brasilianer",
+    "blurb": "Freiburg run the most stable club in Germany — two managers in thirty years — and keep finishing above sides with four times the wage bill. Their new ground is small, steep and sold out every week.",
+    "rivals": [172, 167, 170],
+    "leagueContext": "the Bundesliga's most stable club, and a persistent overachiever"
+  },
+  "162": {
+    "displayName": "Werder Bremen",
+    "nickname": "Die Werderaner",
+    "blurb": "Four German titles, a Cup Winners' Cup and a crowd at the Weserstadion that has followed the club through relegation and back. The Nordderby against Hamburg is the fiercest fixture in northern Germany.",
+    "rivals": [175, 174, 169],
+    "leagueContext": "four-time German champions and the north's loudest support"
+  },
+  "163": {
+    "displayName": "Borussia Mönchengladbach",
+    "nickname": "Die Fohlen",
+    "blurb": "Gladbach won five titles in the seventies with a side that played the most attacking football in Europe. The Rhine derby against Köln is the oldest grudge on the Bundesliga calendar.",
+    "rivals": [192, 165, 168],
+    "leagueContext": "five-time champions and the Rhine derby's other half"
+  },
+  "164": {
+    "displayName": "1. FSV Mainz 05",
+    "nickname": "Die Nullfünfer",
+    "blurb": "Mainz gave Jürgen Klopp and Thomas Tuchel their first jobs and still press higher than most clubs twice their size. The Rhein-Main derby with Frankfurt is short on distance and long on history.",
+    "rivals": [169, 167, 192],
+    "leagueContext": "where the modern German pressing game was taught"
+  },
+  "165": {
+    "displayName": "Borussia Dortmund",
+    "nickname": "BVB",
+    "blurb": "The Südtribüne holds nearly twenty-five thousand standing supporters and is the largest terrace in world football. Dortmund play at a tempo that suits it, and Der Klassiker against Bayern is German football's biggest date.",
+    "rivals": [174, 157, 163],
+    "leagueContext": "European champions in 1997, and home of the Yellow Wall"
+  },
+  "167": {
+    "displayName": "TSG 1899 Hoffenheim",
+    "nickname": "Die Kraichgauer",
+    "blurb": "Hoffenheim came from a village of three thousand to the Bundesliga and the Champions League inside twenty years. They play a high line and a high press, so the scorelines rarely stay quiet.",
+    "rivals": [172, 160, 164],
+    "leagueContext": "a village side that reached the Champions League"
+  },
+  "168": {
+    "displayName": "Bayer Leverkusen",
+    "nickname": "Die Werkself",
+    "blurb": "Leverkusen went a whole Bundesliga season unbeaten to win a first title, having spent decades as the league's most celebrated runners-up. They score late often enough that leaving before full time is a mistake.",
+    "rivals": [192, 163, 165],
+    "leagueContext": "unbeaten German champions and Champions League finalists"
+  },
+  "169": {
+    "displayName": "Eintracht Frankfurt",
+    "nickname": "Die Adler",
+    "blurb": "Frankfurt won the Europa League by beating Barcelona in the Camp Nou in front of thirty thousand of their own, which is still the best away support story of the decade. The Waldstadion is at its loudest on European nights.",
+    "rivals": [164, 167, 157],
+    "leagueContext": "Europa League winners with Europe's best travelling support"
+  },
+  "170": {
+    "displayName": "FC Augsburg",
+    "nickname": "Die Fuggerstädter",
+    "blurb": "Augsburg have stayed in the Bundesliga far longer than anyone predicted by being extremely difficult to beat at home. Bavarian derbies against Bayern are the games the WWK sells out first.",
+    "rivals": [157, 172, 160],
+    "leagueContext": "Bavaria's other Bundesliga side and a perennial survivor"
+  },
+  "172": {
+    "displayName": "VfB Stuttgart",
+    "nickname": "Die Schwaben",
+    "blurb": "Five German titles and one of the biggest memberships in the country, Stuttgart swing between European qualification and relegation play-offs with very little in between. The Swabian derby with Hoffenheim has grown teeth.",
+    "rivals": [167, 160, 170],
+    "leagueContext": "five-time German champions with one of the largest memberships"
+  },
+  "173": {
+    "displayName": "RB Leipzig",
+    "nickname": "Die Roten Bullen",
+    "blurb": "Leipzig went from the fifth tier to the Champions League semi-finals in eleven years and are the most divisive club in Germany because of it. They counter-press harder than anyone in the league.",
+    "rivals": [182, 165, 157],
+    "leagueContext": "fifth tier to Champions League semi-final in eleven years"
+  },
+  "174": {
+    "displayName": "FC Schalke 04",
+    "nickname": "Die Knappen",
+    "blurb": "Schalke have one of the largest memberships of any football club on earth and a support built out of the Ruhr coalfields. The Revierderby against Dortmund is the most hostile ninety minutes in Germany.",
+    "rivals": [165, 175, 192],
+    "leagueContext": "one of the world's largest club memberships, and the Revierderby"
+  },
+  "175": {
+    "displayName": "Hamburger SV",
+    "nickname": "Der Dino",
+    "blurb": "European champions in 1983 and the only club to have spent every Bundesliga season in the top flight until 2018 — hence the dinosaur. The Nordderby against Werder is northern Germany's defining fixture.",
+    "rivals": [162, 174, 185],
+    "leagueContext": "European champions in 1983 and the Bundesliga's original ever-present"
+  },
+  "182": {
+    "displayName": "Union Berlin",
+    "nickname": "Die Eisernen",
+    "blurb": "Union's supporters rebuilt the Alte Försterei with their own hands and the club went from the third tier to the Champions League. The stadium is almost entirely standing and sings without stopping.",
+    "rivals": [173, 174, 192],
+    "leagueContext": "fan-built, mostly standing, and recently in the Champions League"
+  },
+  "185": {
+    "displayName": "SC Paderborn 07",
+    "nickname": "Die Ostwestfalen",
+    "blurb": "Paderborn have been relegated from the Bundesliga to the third tier and promoted back twice in a decade, which is a record of sorts. They attack relentlessly whatever division they are in.",
+    "rivals": [175, 1660, 162],
+    "leagueContext": "East Westphalia's yo-yo club, and never a dull season"
+  },
+  "192": {
+    "displayName": "1. FC Köln",
+    "nickname": "Die Geißböcke",
+    "blurb": "Köln were the first ever Bundesliga champions and have a support that treats carnival season and the football season as one thing. The Rhine derby with Gladbach is the fixture the city plans around.",
+    "rivals": [163, 168, 165],
+    "leagueContext": "the first Bundesliga champions, and the Rhine derby's other half"
+  },
+  "1660": {
+    "displayName": "SV Elversberg",
+    "nickname": "Die SVE",
+    "blurb": "Elversberg come from a village in Saarland with fewer inhabitants than their away support and have climbed the German pyramid on merit. Every season they stay up is a story in itself.",
+    "rivals": [185, 164, 167],
+    "leagueContext": "Saarland's village side, climbing the German pyramid"
+  },
+  "77": {
+    "displayName": "Angers SCO",
+    "nickname": "le SCO",
+    "blurb": "Angers reached a Coupe de France final and have spent the years since bouncing between Ligue 1 and Ligue 2 without losing the crowd. Raymond Kopa is compact and awkward for visiting sides.",
+    "rivals": [94, 97, 111],
+    "leagueContext": "the Anjou side that keeps finding its way back to Ligue 1"
+  },
+  "79": {
+    "displayName": "LOSC Lille",
+    "nickname": "les Dogues",
+    "blurb": "Lille won Ligue 1 ahead of Paris Saint-Germain with the smallest wage bill in the top six, which nobody in France has forgotten. The Derby du Nord against Lens is the biggest crowd of the season for both clubs.",
+    "rivals": [116, 85, 81],
+    "leagueContext": "French champions who beat the money, and half of the Derby du Nord"
+  },
+  "80": {
+    "displayName": "Olympique Lyonnais",
+    "nickname": "les Gones",
+    "blurb": "Seven consecutive French titles in the 2000s and a Champions League semi-final since. Lyon's academy has produced more full internationals than any other in France.",
+    "rivals": [85, 81, 91],
+    "leagueContext": "seven-in-a-row champions and France's most productive academy"
+  },
+  "81": {
+    "displayName": "Olympique de Marseille",
+    "nickname": "l'OM",
+    "blurb": "The only French club to have won the Champions League, and the Vélodrome holds sixty-seven thousand people who make sure everyone knows it. Le Classique against Paris Saint-Germain is the most watched match in France.",
+    "rivals": [85, 84, 80],
+    "leagueContext": "France's only European champions"
+  },
+  "84": {
+    "displayName": "OGC Nice",
+    "nickname": "les Aiglons",
+    "blurb": "Four-time French champions with the best-located stadium on the Riviera, Nice defend well and score from set pieces. The derby with Monaco is twenty kilometres of genuine dislike.",
+    "rivals": [91, 81, 96],
+    "leagueContext": "four-time French champions on the Côte d'Azur"
+  },
+  "85": {
+    "displayName": "Paris Saint-Germain",
+    "nickname": "les Parisiens",
+    "blurb": "European champions and the most-followed club in France by a distance, PSG score in bursts that can settle a match inside ten minutes. Le Classique against Marseille remains the fixture that stops the country.",
+    "rivals": [81, 114, 79],
+    "leagueContext": "European champions and record French title winners"
+  },
+  "91": {
+    "displayName": "AS Monaco",
+    "nickname": "les Monégasques",
+    "blurb": "Monaco have eight French titles, a Champions League final and an academy that produced Mbappé, Henry and Martial. The ground holds eighteen thousand in a country of forty thousand people.",
+    "rivals": [84, 85, 81],
+    "leagueContext": "eight-time French champions and a remarkable academy"
+  },
+  "94": {
+    "displayName": "Stade Rennais",
+    "nickname": "les Rouge et Noir",
+    "blurb": "Rennes have won the Coupe de France three times and built one of the best training setups in Europe at La Piverdière. The Breton derby with Lorient is the region's fixture of the year.",
+    "rivals": [97, 106, 77],
+    "leagueContext": "Brittany's biggest club and a regular in Europe"
+  },
+  "95": {
+    "displayName": "RC Strasbourg Alsace",
+    "nickname": "le Racing",
+    "blurb": "Strasbourg won Ligue 1 in 1979, went bankrupt into the fifth tier, and were carried back up by a support that never shrank. La Meinau is one of the best atmospheres in France.",
+    "rivals": [108, 116, 80],
+    "leagueContext": "French champions who climbed back from the fifth tier"
+  },
+  "96": {
+    "displayName": "Toulouse FC",
+    "nickname": "le Téfécé",
+    "blurb": "Toulouse won the Coupe de France in 2023 and play the most possession-heavy football outside the top three. The Stadium sits on an island in the Garonne, which is as good as it sounds.",
+    "rivals": [84, 91, 114],
+    "leagueContext": "Coupe de France winners playing the league's most patient football"
+  },
+  "97": {
+    "displayName": "FC Lorient",
+    "nickname": "les Merlus",
+    "blurb": "Lorient come from a town of fifty-seven thousand and have spent most of two decades in Ligue 1 on merit. The Breton derby with Rennes is the one that sells out first.",
+    "rivals": [94, 106, 77],
+    "leagueContext": "Brittany's persistent top-flight side"
+  },
+  "106": {
+    "displayName": "Stade Brestois",
+    "nickname": "les Ty-Zefs",
+    "blurb": "Brest qualified for the Champions League from a ground that could not host it, which is the most Brest thing that has ever happened. They attack directly and their games are rarely low-scoring.",
+    "rivals": [94, 97, 111],
+    "leagueContext": "Champions League qualifiers from the western edge of France"
+  },
+  "108": {
+    "displayName": "AJ Auxerre",
+    "nickname": "l'AJA",
+    "blurb": "Auxerre won a league and cup double from a town of thirty-five thousand under Guy Roux, who managed them for forty-four years. Nothing in modern football resembles it.",
+    "rivals": [95, 116, 1298],
+    "leagueContext": "double winners from a town of thirty-five thousand"
+  },
+  "110": {
+    "displayName": "ESTAC Troyes",
+    "nickname": "les Troyens",
+    "blurb": "Troyes have won more Ligue 2 titles than almost anyone and reached a UEFA Cup via the Intertoto, which remains a fine piece of trivia. The Aube crowd turns up either way.",
+    "rivals": [108, 95, 1298],
+    "leagueContext": "Champagne's club and a serial promotion winner"
+  },
+  "111": {
+    "displayName": "Le Havre AC",
+    "nickname": "les Ciel et Marine",
+    "blurb": "Le Havre are the oldest football club in France, founded in 1872, and their academy produced Pogba, Mendy and Ben Arfa. The Stade Océane is the best modern ground in Normandy.",
+    "rivals": [114, 106, 77],
+    "leagueContext": "France's oldest club and a formidable academy"
+  },
+  "114": {
+    "displayName": "Paris FC",
+    "nickname": "le PFC",
+    "blurb": "Paris FC split from Paris Saint-Germain in 1972 and have spent fifty years working back to the same division. A genuine second Paris club changes what a Paris derby means.",
+    "rivals": [85, 111, 116],
+    "leagueContext": "the capital's second club, back in the top flight"
+  },
+  "116": {
+    "displayName": "RC Lens",
+    "nickname": "les Sang et Or",
+    "blurb": "Lens fill a thirty-eight-thousand stadium in a town of thirty-one thousand and Bollaert-Delelis is the loudest ground in France. The Derby du Nord against Lille is the fixture of the northern season.",
+    "rivals": [79, 114, 108],
+    "leagueContext": "French champions in 1998 and the loudest ground in the country"
+  },
+  "1298": {
+    "displayName": "Le Mans FC",
+    "nickname": "les Manceaux",
+    "blurb": "Le Mans gave Didier Drogba his professional start and have climbed back from the amateur divisions since. The MMArena is a Ligue 1 ground waiting for the football to catch up.",
+    "rivals": [77, 94, 110],
+    "leagueContext": "Drogba's first club, rebuilt from the amateur leagues"
+  },
+  "1": {
+    "displayName": "Belgium",
+    "nickname": "the Red Devils",
+    "blurb": "A country of eleven million that spent years at the top of the world rankings on the strength of one extraordinary generation. Belgium still play the most technically assured football in their half of Europe.",
+    "leagueContext": "a fixture at the top of the world rankings for a decade"
+  },
+  "2": {
+    "displayName": "France",
+    "nickname": "les Bleus",
+    "blurb": "Two World Cups, two European Championships and the deepest talent pool in the game — France can leave a Ballon d'Or contender at home and not weaken. Their tournament runs tend to go the distance.",
+    "leagueContext": "two-time world champions with the deepest squad in the sport"
+  },
+  "3": {
+    "displayName": "Croatia",
+    "nickname": "the Blazers",
+    "blurb": "A nation of under four million that has reached a World Cup final and a semi-final, largely by winning extra time when nobody expected them to. Croatia's knockout matches almost never finish inside ninety minutes.",
+    "leagueContext": "World Cup finalists from a country of under four million"
+  },
+  "5": {
+    "displayName": "Sweden",
+    "nickname": "Blågult",
+    "blurb": "Sweden have reached a World Cup final and three semi-finals, and remain one of the hardest sides in Europe to break down. They defend in a compact block and score from the flanks.",
+    "leagueContext": "World Cup finalists and perennial Scandinavian qualifiers"
+  },
+  "6": {
+    "displayName": "Brazil",
+    "nickname": "the Seleção",
+    "blurb": "Five World Cups, more than anyone, and the only nation to have played at every finals ever held. A Brazil match is the most-watched fixture of any tournament round they are in.",
+    "leagueContext": "record five-time world champions and ever-present at the finals"
+  },
+  "7": {
+    "displayName": "Uruguay",
+    "nickname": "la Celeste",
+    "blurb": "Two World Cups and fifteen Copa Américas from a country of three and a half million — no nation has won more per head. Uruguay defend as a matter of national identity.",
+    "leagueContext": "two-time world champions and record Copa América winners"
+  },
+  "8": {
+    "displayName": "Colombia",
+    "nickname": "los Cafeteros",
+    "blurb": "Colombia reached a World Cup quarter-final and a Copa América final with a side built on technical midfielders and quick wingers. Their goals tend to be worth watching twice.",
+    "leagueContext": "World Cup quarter-finalists and Copa América finalists"
+  },
+  "9": {
+    "displayName": "Spain",
+    "nickname": "la Roja",
+    "blurb": "Spain won a World Cup and back-to-back European Championships playing a passing game that changed how everyone else set up. They still keep the ball longer than any nation in the tournament.",
+    "leagueContext": "world champions and multiple European champions"
+  },
+  "10": {
+    "displayName": "England",
+    "nickname": "the Three Lions",
+    "blurb": "World champions in 1966 and finalists at two of the last European Championships, with the deepest attacking pool England have ever had. Their knockout ties have a habit of going to penalties.",
+    "leagueContext": "world champions in 1966 and recent European finalists"
+  },
+  "11": {
+    "displayName": "Panama",
+    "nickname": "la Marea Roja",
+    "blurb": "Panama's first World Cup qualification in 2018 was declared a national holiday, which tells you what the shirt means there. They defend deep and take their chances when they come.",
+    "leagueContext": "a young World Cup nation and a rising force in CONCACAF"
+  },
+  "12": {
+    "displayName": "Japan",
+    "nickname": "the Samurai Blue",
+    "blurb": "Japan have beaten Germany and Spain at the same World Cup and now qualify with games to spare. Their pressing is as organised as any side in the tournament.",
+    "leagueContext": "serial World Cup qualifiers who beat Germany and Spain in 2022"
+  },
+  "13": {
+    "displayName": "Senegal",
+    "nickname": "the Lions of Teranga",
+    "blurb": "African champions and the first African side to reach a World Cup quarter-final on debut. Senegal combine the physical edge of the continent with a Champions League-level spine.",
+    "leagueContext": "African champions and World Cup quarter-finalists"
+  },
+  "15": {
+    "displayName": "Switzerland",
+    "nickname": "the Nati",
+    "blurb": "Switzerland qualify for nearly everything and knock out somebody big at nearly every tournament — France and Italy have both learned this the hard way. They are extremely difficult to score against.",
+    "leagueContext": "reliable qualifiers with a habit of beating far bigger nations"
+  },
+  "16": {
+    "displayName": "Mexico",
+    "nickname": "el Tri",
+    "blurb": "Mexico have reached the last sixteen at more consecutive World Cups than almost anyone, and the Azteca is the only ground to have hosted three finals-tournament openings. Home matches in 2026 were something else.",
+    "leagueContext": "CONCACAF's most consistent World Cup nation, and a 2026 host"
+  },
+  "17": {
+    "displayName": "South Korea",
+    "nickname": "the Taegeuk Warriors",
+    "blurb": "Semi-finalists on home soil in 2002 and qualifiers for every World Cup since 1986 — the longest active run in Asia. Korea run further than anyone in the tournament.",
+    "leagueContext": "World Cup semi-finalists and Asia's longest qualification streak"
+  },
+  "20": {
+    "displayName": "Australia",
+    "nickname": "the Socceroos",
+    "blurb": "Australia have qualified for six of the last seven World Cups, usually the hard way through a play-off nobody wants. They defend for long spells and score from very little.",
+    "leagueContext": "six of the last seven World Cups, usually via a play-off"
+  },
+  "22": {
+    "displayName": "Iran",
+    "nickname": "Team Melli",
+    "blurb": "Iran are one of Asia's two strongest sides and have topped their qualifying group repeatedly without dropping a game. They defend in a low block and counter with real pace.",
+    "leagueContext": "Asia's most consistent qualifier and a formidable defensive side"
+  },
+  "23": {
+    "displayName": "Saudi Arabia",
+    "nickname": "the Green Falcons",
+    "blurb": "Three-time Asian champions who beat Argentina at the 2022 World Cup with the highest defensive line in the tournament. Saudi Arabia are the last side you want in your group.",
+    "leagueContext": "three-time Asian champions who beat the eventual world champions"
+  },
+  "25": {
+    "displayName": "Germany",
+    "nickname": "die Mannschaft",
+    "blurb": "Four World Cups, three European Championships and a record of reaching the last four more often than any nation in the modern era. Germany have never lost a World Cup penalty shootout in normal circumstances.",
+    "leagueContext": "four-time world champions and the tournament's great survivors"
+  },
+  "26": {
+    "displayName": "Argentina",
+    "nickname": "la Albiceleste",
+    "blurb": "Three World Cups and the most decorated international side of the current era, backed by a support that travels in numbers no other nation matches. Their knockout matches routinely go to the last kick.",
+    "leagueContext": "three-time world champions and the current era's dominant side"
+  },
+  "27": {
+    "displayName": "Portugal",
+    "nickname": "the Selecção",
+    "blurb": "European champions and Nations League winners with a squad that keeps producing forwards faster than it can pick them. Portugal score late more often than any side in Europe.",
+    "leagueContext": "European champions and Nations League winners"
+  },
+  "28": {
+    "displayName": "Tunisia",
+    "nickname": "the Eagles of Carthage",
+    "blurb": "African champions in 2004 and one of the continent's most reliable qualifiers, Tunisia beat France at the last World Cup. They are organised, physical and hard to break down.",
+    "leagueContext": "African champions and regular World Cup qualifiers"
+  },
+  "31": {
+    "displayName": "Morocco",
+    "nickname": "the Atlas Lions",
+    "blurb": "The first African and Arab nation to reach a World Cup semi-final, having knocked out Spain and Portugal on the way. Morocco conceded almost nothing across that entire run.",
+    "leagueContext": "the first African nation to reach a World Cup semi-final"
+  },
+  "32": {
+    "displayName": "Egypt",
+    "nickname": "the Pharaohs",
+    "blurb": "Record seven-time African champions, with the most decorated continental history on the continent. Egypt build slowly and rely on moments from the best forwards in Africa.",
+    "leagueContext": "record seven-time African champions"
+  },
+  "770": {
+    "displayName": "Czechia",
+    "nickname": "the Národní Tým",
+    "blurb": "European champions as Czechoslovakia and finalists as Czechia, with a tradition of producing the best goalkeepers in Europe. They defend well and score from distance.",
+    "leagueContext": "European champions and finalists, and a goalkeeping tradition"
+  },
+  "775": {
+    "displayName": "Austria",
+    "nickname": "das Team",
+    "blurb": "Austria press higher than any nation in Europe, a style borrowed straight from the Bundesliga sides their players fill. Their qualifying campaigns have become genuinely convincing.",
+    "leagueContext": "Europe's highest-pressing national side"
+  },
+  "777": {
+    "displayName": "Türkiye",
+    "nickname": "the Crescent-Stars",
+    "blurb": "World Cup semi-finalists in 2002 and European semi-finalists since, Türkiye travel with a support that turns neutral grounds into home ones. Their matches run at a very high tempo.",
+    "leagueContext": "World Cup semi-finalists and a formidable travelling support"
+  },
+  "1090": {
+    "displayName": "Norway",
+    "nickname": "Ekte Kjærlighet",
+    "blurb": "Norway have the most feared forward line in Europe and qualified with a goal difference that looked like a typing error. Their matches produce goals in quantity.",
+    "leagueContext": "Europe's most dangerous attack and a long-awaited return"
+  },
+  "1108": {
+    "displayName": "Scotland",
+    "nickname": "the Tartan Army",
+    "blurb": "Scotland's support is the best-loved travelling contingent in world football and Hampden on a qualifying night is worth the trip. Their first World Cup in a generation was a long time coming.",
+    "leagueContext": "back at a World Cup after a generation away"
+  },
+  "1113": {
+    "displayName": "Bosnia & Herzegovina",
+    "nickname": "the Dragons",
+    "blurb": "Bosnia produce technical midfielders and centre-forwards well out of proportion to a population of three million. Their qualifying campaigns are decided in the last round more often than not.",
+    "leagueContext": "three million people and a remarkable production line"
+  },
+  "1118": {
+    "displayName": "Netherlands",
+    "nickname": "Oranje",
+    "blurb": "Three World Cup finals, a European Championship and the tactical tradition that most of modern football is built on. The Dutch play out from the back whatever the scoreline says.",
+    "leagueContext": "three-time World Cup finalists and European champions"
+  },
+  "1501": {
+    "displayName": "Ivory Coast",
+    "nickname": "the Elephants",
+    "blurb": "African champions three times, most recently after starting the tournament by losing at home and sacking the manager mid-competition. Few sides in Africa attack with more pace.",
+    "leagueContext": "three-time African champions"
+  },
+  "1504": {
+    "displayName": "Ghana",
+    "nickname": "the Black Stars",
+    "blurb": "Four-time African champions and within a penalty kick of a World Cup semi-final in 2010, which is still the closest Africa came before Morocco. Ghana's tournaments are never quiet.",
+    "leagueContext": "four-time African champions and World Cup quarter-finalists"
+  },
+  "1508": {
+    "displayName": "Congo DR",
+    "nickname": "the Leopards",
+    "blurb": "African champions twice and semi-finalists again recently, DR Congo have one of the largest talent pools on the continent. They are physical, direct and dangerous on the break.",
+    "leagueContext": "two-time African champions and recent semi-finalists"
+  },
+  "1531": {
+    "displayName": "South Africa",
+    "nickname": "Bafana Bafana",
+    "blurb": "African champions in 1996 and hosts of the first World Cup on the continent, South Africa play the most patient passing football in Africa. Their qualification was won on the final matchday.",
+    "leagueContext": "African champions and hosts of the 2010 World Cup"
+  },
+  "1532": {
+    "displayName": "Algeria",
+    "nickname": "the Desert Foxes",
+    "blurb": "African champions twice and unbeaten across a run of more than thirty matches, Algeria have one of the best midfields on the continent. They keep the ball better than any African side.",
+    "leagueContext": "two-time African champions with a record unbeaten run"
+  },
+  "1533": {
+    "displayName": "Cape Verde",
+    "nickname": "the Blue Sharks",
+    "blurb": "A nation of half a million islanders that qualified for a World Cup — the smallest country by population ever to do it. The story alone is worth following the results for.",
+    "leagueContext": "the smallest nation ever to qualify for a World Cup"
+  },
+  "1548": {
+    "displayName": "Jordan",
+    "nickname": "the Chivalrous",
+    "blurb": "Jordan reached an Asian Cup final and then qualified for a first World Cup, having never previously come close. They defend in numbers and counter with genuine quality.",
+    "leagueContext": "Asian Cup finalists at a first World Cup"
+  },
+  "1567": {
+    "displayName": "Iraq",
+    "nickname": "the Lions of Mesopotamia",
+    "blurb": "Asian champions in 2007 in circumstances that made the win one of the great sporting stories. Iraq's support turns any neutral venue into a home fixture.",
+    "leagueContext": "Asian champions and one of football's great stories"
+  },
+  "1568": {
+    "displayName": "Uzbekistan",
+    "nickname": "the White Wolves",
+    "blurb": "Uzbekistan qualified for a first World Cup after years of near misses, on the back of an under-20 side that won the Asian title. The generation arrived all at once.",
+    "leagueContext": "a first World Cup after years of near misses"
+  },
+  "1569": {
+    "displayName": "Qatar",
+    "nickname": "the Maroon",
+    "blurb": "Asian champions twice and World Cup hosts in 2022, Qatar built a national side from a single academy and won the continent with it. They play a technical, possession-based game.",
+    "leagueContext": "two-time Asian champions and 2022 World Cup hosts"
+  },
+  "2380": {
+    "displayName": "Paraguay",
+    "nickname": "la Albirroja",
+    "blurb": "World Cup quarter-finalists and Copa América finalists twice, Paraguay defend as well as any side in South America. Their qualifying campaigns are always decided late.",
+    "leagueContext": "World Cup quarter-finalists and twice Copa América finalists"
+  },
+  "2382": {
+    "displayName": "Ecuador",
+    "nickname": "la Tri",
+    "blurb": "Ecuador have qualified for five of the last six World Cups with the youngest squad in South America. They press high and their matches are settled quickly.",
+    "leagueContext": "five of the last six World Cups, with South America's youngest squad"
+  },
+  "2384": {
+    "displayName": "USA",
+    "nickname": "the Stars and Stripes",
+    "blurb": "World Cup semi-finalists in 1930, quarter-finalists in 2002, and co-hosts of the largest finals ever staged. The 2026 squad was the most European-based the United States have ever fielded.",
+    "leagueContext": "a 2026 co-host with its most experienced squad yet"
+  },
+  "2386": {
+    "displayName": "Haiti",
+    "nickname": "les Grenadiers",
+    "blurb": "Haiti returned to a World Cup after more than fifty years away, having qualified while playing home matches abroad. Very little in the tournament carried more weight.",
+    "leagueContext": "back at a World Cup after more than fifty years"
+  },
+  "4673": {
+    "displayName": "New Zealand",
+    "nickname": "the All Whites",
+    "blurb": "New Zealand went unbeaten at the 1982 and 2010 World Cups and still went out, which remains one of football's better pieces of trivia. They defend deep and set pieces are the plan.",
+    "leagueContext": "unbeaten at a World Cup and still eliminated"
+  },
+  "5529": {
+    "displayName": "Canada",
+    "nickname": "the Canucks",
+    "blurb": "Canada topped CONCACAF qualifying for the first time and then co-hosted the tournament, with the fastest counter-attack in the region. The rise has been very quick.",
+    "leagueContext": "a 2026 co-host and CONCACAF qualifying winners"
+  },
+  "5530": {
+    "displayName": "Curaçao",
+    "nickname": "the Blue Wave",
+    "blurb": "An island of 150,000 people that qualified for a World Cup, drawing on a Dutch-based diaspora and a Caribbean league nobody was watching. It is the smallest territory ever to reach the finals.",
+    "leagueContext": "an island of 150,000 at its first World Cup"
+  }
+}

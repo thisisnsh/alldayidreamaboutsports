@@ -1,0 +1,43 @@
+{% set footerClubs = teams | pickIds(site.bigClubs) %}
+<footer class="footer">
+  <div class="footer-inner">
+
+    <div class="footer-col">
+      <a class="brand" href="/">
+        <img class="brand-mark" src="/assets/app-icon.png" alt="" width="22" height="22" loading="lazy" decoding="async" />
+        <span class="brand-text">All&nbsp;Day&nbsp;I&nbsp;Dream&nbsp;About&nbsp;<b>Sports</b></span>
+      </a>
+      <ul class="footer-list">
+        <li><a href="/">Home</a></li>
+        <li><a href="/#features">Features</a></li>
+        <li><a href="/#faq">FAQ</a></li>
+        <li><a href="/leagues/">All leagues</a></li>
+        <li><a href="/teams/">All teams</a></li>
+        <li><a href="{{ site.downloadUrl }}">Download for macOS</a></li>
+        <li><a href="/privacy/">Privacy</a></li>
+        <li><a href="mailto:{{ site.email }}">Contact</a></li>
+      </ul>
+    </div>
+
+    <div class="footer-col">
+      <p class="micro">Follow leagues</p>
+      <ul class="footer-list">
+        {% for l in leagues %}<li><a href="/{{ l.slug }}/">{{ l.name }}</a></li>{% endfor %}
+        <li><a class="footer-more" href="/leagues/">All leagues →</a></li>
+      </ul>
+    </div>
+
+    <div class="footer-col">
+      <p class="micro">Follow teams</p>
+      <ul class="footer-list footer-list-2">
+        {% for t in footerClubs %}<li><a href="/teams/{{ t.slug }}/">{{ t.displayName }}</a></li>{% endfor %}
+        <li><a class="footer-more" href="/teams/">All {{ teams | length }} teams →</a></li>
+      </ul>
+    </div>
+
+  </div>
+  <div class="footer-base">
+    <p class="copy">© {{ site.year }} alldayidreamaboutsports.com — built for the love of the game.</p>
+    <p class="disclaimer">Not affiliated with FIFA, or any league, club, or brand. Team names and crests are used only to identify the matches you choose to follow.</p>
+  </div>
+</footer>

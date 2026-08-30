@@ -1,0 +1,17 @@
+<section class="rows{% if featuresSolid %} solid{% endif %}" id="{{ featuresId or 'features' }}" aria-labelledby="{{ featuresId or 'features' }}-h">
+  <div class="wrap">
+    <p class="micro">{{ featuresMicro or "What you get" }}</p>
+    <h2 class="section-h" id="{{ featuresId or 'features' }}-h">{{ featuresHeading }}</h2>
+    <ol class="rowlist">
+      {% for f in featureRows %}
+      <li class="row reveal">
+        <span class="row-n">{{ loop.index | pad }}</span>
+        <div class="row-body">
+          <h3>{{ f.h }}</h3>
+          <p>{{ f.p }}</p>
+        </div>
+      </li>
+      {% endfor %}
+    </ol>
+  </div>
+</section>

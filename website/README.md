@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="assets/app-icon.png" width="112" alt="All Day I Dream About Sports app icon">
+<img src="src/assets/app-icon.png" width="112" alt="All Day I Dream About Sports app icon">
 
 # All Day I Dream About Sports
 
@@ -13,9 +13,9 @@
 
 Free · macOS 14+ · Premier League · La Liga · Serie A · Bundesliga · Ligue 1
 
-<img src="assets/og-image.jpg" width="720" alt="Live match alert dropping below the MacBook notch">
+<img src="src/assets/og-image.jpg" width="720" alt="Live match alert dropping below the MacBook notch">
 
-<img src="assets/all-sports-promo.gif" width="720" alt="All Day I Dream About Sports app demo">
+<img src="media/all-sports-promo.gif" width="720" alt="All Day I Dream About Sports app demo">
 
 </div>
 
@@ -88,13 +88,45 @@ app and its backend are closed source.
 
 ## The website
 
-- HTML, CSS and vanilla JS.
-- Run it with `python3 -m http.server` and open the folder. That's the whole
-  toolchain.
+155 pages, built with [Eleventy][11ty] and deployed to [GitHub Pages][pages] by
+[Actions][actions]. One home page, two hubs, six competition pages, 144 team
+pages, privacy and 404 — every competition and every team the app covers has a
+page of its own.
+
+```bash
+npm install
+npm run build     # → _site/
+npm run serve     # local dev server
+npm run verify    # asserts the built site (see below)
+npm run data      # regenerate leagues/teams/crests from the live catalog
+```
+
+**Layout**
 
 ```
-index.html · privacy/ · style.css · script.js · assets/
+.eleventy.js
+src/
+  _data/       site.js · faq.js · features.js
+               leagues.json · teams.json      (generated)
+               teamExtras.json · leagueExtras.json  (hand-authored)
+  _includes/   layouts/ · partials/
+  index.njk · leagues/ · teams/ · privacy/ · 404.njk · sitemap.xml.njk
+  style.css · script.js · assets/
+scripts/
+  build-data.mjs     catalog → data + mirrored crests (run by hand, output committed)
+  encode-promo.sh    promo reel → mp4/webm/poster for the background layer
+  verify-build.mjs   page count, unique titles, dead links, orphans, JSON-LD
 ```
+
+- **The data is generated, the writing is not.** `build-data.mjs` reads the
+  app's live catalog for the leagues, teams and crests; `teamExtras.json`
+  carries a hand-written record per team so 144 pages are not 144 copies of
+  each other.
+- **CI is offline.** The generated data and the 96px WebP crests are committed,
+  so a build never depends on the catalog being reachable.
+- **The promo reel is not in this repo.** It is encoded by
+  `scripts/encode-promo.sh` and served from the same [R2][r2] bucket as the app
+  downloads, then used as a fixed background layer behind the whole site.
 
 ## Contributions
 
@@ -106,6 +138,8 @@ or email [support@alldayidreamaboutsports.com](mailto:support@alldayidreamabouts
 © Nishant Hada. All rights reserved. Not affiliated with FIFA, UEFA, or any
 league or club; badges and marks belong to their owners.
 
+[11ty]: https://www.11ty.dev
+[pages]: https://pages.github.com
 [swiftui]: https://developer.apple.com/xcode/swiftui/
 [sparkle]: https://sparkle-project.org
 [ts]: https://www.typescriptlang.org

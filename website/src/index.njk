@@ -1,0 +1,38 @@
+---
+layout: layouts/page.njk
+permalink: /
+title: "All Day I Dream About Sports — Live Football Scores for Mac"
+description: "Live Premier League, La Liga, Serie A, Bundesliga and Ligue 1 scores that never break your focus — dropped below your MacBook notch. Free for macOS."
+keywords: "live football scores app, Premier League live score app mac, free live score alerts, La Liga, Serie A, Bundesliga, Ligue 1, football notifications, soccer live updates, MacBook notch app, macOS menu bar app, match alerts, goal notifications, fan celebrations"
+pageName: "All Day I Dream About Sports — Live Football Scores for Mac"
+ogTitle: "All Day I Dream About Sports — Live Football Scores for Mac"
+ogDescription: "Keep working, never miss the match. Goals, cards and scores drop below your MacBook notch, a live capsule pins the score to a corner, and you celebrate goals live with fans across the globe. Free for macOS."
+heroTitle: "Still thinking about the<br />match while you <em>work</em>?"
+heroBody: "Now you don't have to choose. Goals, cards, subs, VAR and full-time drop right below your notch, a live capsule pins the score to a corner, and the second your team scores you celebrate it live with fans across the globe. Keep working — never miss a minute."
+---
+{% include "partials/hero.njk" %}
+
+{% set featuresHeading = "Built to be caught out of the corner of your eye" %}
+{% set featuresMicro = "What you get" %}
+{% set featuresId = "features" %}
+{% set featuresSolid = true %}
+{% set featureRows = features.home %}
+{% include "partials/features.njk" %}
+
+{% include "partials/league-strip.njk" %}
+
+{% set gridTeams = teams | pickIds(site.bigClubs) %}
+{% set gridId = "clubs" %}
+{% set gridSolid = true %}
+{% set gridMicro = "Follow your club" %}
+{% set gridHeading = "Start with the one you actually care about" %}
+{% set gridNote = "Every one of the " + (teams | length) + " teams we cover has a page of its own — these are just the ones people reach for first." %}
+{% include "partials/team-grid.njk" %}
+
+<p class="backline"><a href="/teams/">All {{ teams | length }} teams →</a> <a href="/leagues/">All six competitions →</a></p>
+
+{% set faqItems = faq.home %}
+{% set faqHeading = "Everything people ask before downloading" %}
+{% include "partials/faq.njk" %}
+
+{% include "partials/cta.njk" %}
