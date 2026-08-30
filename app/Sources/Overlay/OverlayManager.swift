@@ -110,7 +110,8 @@ final class OverlayManager: ObservableObject {
         guard ballPhase != .hidden else { return }
         ballEvents.removeAll { $0.fixtureId == fixtureId && $0.teamId == teamId }
         if ballEvents.isEmpty {
-            dismissBall()
+            // VAR took the goal back — the ball goes, but nobody dismissed it.
+            hideBall()
         }
     }
 
@@ -119,7 +120,7 @@ final class OverlayManager: ObservableObject {
         goalQueue.removeAll()
         otherQueue.removeAll()
         cancelBallScheduled()
-        dismissBall()
+        hideBall()
         endSet()
     }
 
@@ -158,6 +159,9 @@ final class OverlayManager: ObservableObject {
         }
 
         let fanGoals = set.compactMap(\.fanGoal)
+        // One per displayed set — the unit a user actually perceives, and the
+        // only overlay event that fires per set rather than per event.
+        AppAnalytics.overlaySetShown(count: set.count, hasFanGoal: !fanGoals.isEmpty)
         let settings = AppSession.shared.prefs.settings
         if settings.confetti ?? true {
             fireConfetti(count: fanGoals.count)
@@ -195,6 +199,12 @@ final class OverlayManager: ObservableObject {
         if ballPhase != .hidden {
             flushTapsAndQueueCounts()
         }
+        // A followed team scored and the celebration actually fired. Skips the
+        // Settings preview, whose synthetic event carries fixture 0 — that one
+        // reports as `celebration_preview`.
+        if goals.contains(where: { $0.fixtureId > 0 }) {
+            AppAnalytics.celebrationShown()
+        }
         ballEvents = goals
         tapBursts = 0
         // The ball is tappable the instant it appears — no separate drop phase.
@@ -210,6 +220,17 @@ final class OverlayManager: ObservableObject {
     /// Ball ✕ — only the ball goes; the notification set stays.
     func dismissBall() {
         guard ballPhase != .hidden else { return }
+        // The ✕ is the one overlay control a user can press, so this is what
+        // says whether people close celebrations or let them ride (the other
+        // half is `finishBall`'s `timeout`).
+        AppAnalytics.overlayDismissed(reason: "user")
+        hideBall()
+    }
+
+    /// Tear the ball down WITHOUT reporting a dismissal — a kill switch, a
+    /// sign-out or the preview reset is not the user closing anything.
+    private func hideBall() {
+        guard ballPhase != .hidden else { return }
         cancelBallScheduled()
         flushTapsAndQueueCounts()
         withAnimation(.easeOut(duration: 0.3)) {
@@ -223,6 +244,7 @@ final class OverlayManager: ObservableObject {
     /// Natural ball expiry — independent of the notification set.
     private func finishBall() {
         guard ballPhase != .hidden else { return }
+        AppAnalytics.overlayDismissed(reason: "timeout")
         cancelBallScheduled()
         flushTapsAndQueueCounts()
         fadeOutInteractPanel(duration: 0.35)
@@ -322,6 +344,7 @@ final class OverlayManager: ObservableObject {
             homeGoals: 1,
             awayGoals: 0
         )
+        AppAnalytics.celebrationPreview()
         dismissAll()
         submit(event, isFanGoal: true)
     }

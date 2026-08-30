@@ -5,6 +5,7 @@ struct LoginView: View {
     @ObservedObject private var control = ControlPlane.shared
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openWindow) private var openWindow
+    private static let screen = "login"
 
     var body: some View {
         ZStack {
@@ -14,6 +15,11 @@ struct LoginView: View {
         .frame(width: 380, height: 420)
         .installsWindowOpener()
         .appTheme(session.prefs.settings.theme ?? .system)
+        // The same window renders two different things, so the state rides
+        // along with the screen name.
+        .onAppear {
+            AppAnalytics.screenView(Self.screen, ["signed_in": session.isSignedIn ? "yes" : "no"])
+        }
         .onChange(of: session.profile) { _, profile in
             guard profile != nil else { return }
             dismiss()
@@ -68,6 +74,9 @@ struct LoginView: View {
                 .opacity(0.8)
 
             Button {
+                // Before the call, so we capture attempts and not just the
+                // ones that came back with a profile.
+                AppAnalytics.signInStarted()
                 session.signInWithGoogle(presenting: NSApp.keyWindow)
             } label: {
                 HStack(spacing: 8) {

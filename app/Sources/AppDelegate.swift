@@ -38,6 +38,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist") != nil {
             FirebaseApp.configure()
             AppAnalytics.configureAppMetadata()
+            AppAnalytics.appOpen()
             AppLog.configureFirebaseCollection()
         } else {
             AppLog.info(.app, "firebase_unconfigured remote_config_disabled")
@@ -157,6 +158,10 @@ final class MenuPopoverController: NSObject, NSPopoverDelegate {
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
     private let popover = NSPopover()
     private var eventMonitor: Any?
+    /// When the popover went up, for the `menu_closed` duration. Non-nil only
+    /// while it is showing, so the close event can't fire twice (or at all for
+    /// a close that never followed an open).
+    private var menuOpenedAt: Date?
 
     func install() {
         guard let button = statusItem.button else { return }
@@ -200,6 +205,13 @@ final class MenuPopoverController: NSObject, NSPopoverDelegate {
         )
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
         button.highlight(true)
+        // Fired here, not from the SwiftUI body: the hosting controller is built
+        // once at `install()` and reused, so `.onAppear` never fires per open.
+        menuOpenedAt = Date()
+        AppAnalytics.screenView(MenuPopoverView.screen)
+        if ControlPlane.shared.updateAvailable {
+            AppAnalytics.updateAvailableShown()
+        }
         startRefreshing()
     }
 
@@ -211,6 +223,10 @@ final class MenuPopoverController: NSObject, NSPopoverDelegate {
 
     func popoverDidClose(_ notification: Notification) {
         statusItem.button?.highlight(false)
+        if let openedAt = menuOpenedAt {
+            menuOpenedAt = nil
+            AppAnalytics.menuClosed(openSeconds: Date().timeIntervalSince(openedAt))
+        }
         stopRefreshing()
     }
 

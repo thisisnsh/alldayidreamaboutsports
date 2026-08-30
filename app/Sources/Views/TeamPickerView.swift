@@ -15,6 +15,7 @@ struct TeamPickerView: View {
     @State private var query = ""
     @State private var showsCapWarning = false
     @State private var capWarningTask: Task<Void, Never>?
+    private static let screen = "team_picker"
 
     var body: some View {
         ZStack {
@@ -24,6 +25,7 @@ struct TeamPickerView: View {
         .frame(width: 560, height: 600)
         .installsWindowOpener()
         .appTheme(session.prefs.settings.theme ?? .system)
+        .onAppear { AppAnalytics.screenView(Self.screen) }
         // Fetch+cache all logos when the window opens; re-fetch if >24h old.
         .task { TeamLogoStore.shared.warm(session.leagues.map(\.logo) + session.allTeams.map(\.logo)) }
     }
@@ -110,6 +112,9 @@ struct TeamPickerView: View {
     }
 
     private func flashCapWarning() {
+        // How often the fan cap is actually hit — a tile tap or a "Follow all"
+        // that couldn't fit everything.
+        AppAnalytics.capWarningShown(max: control.maxFanTeams)
         withAnimation(.easeOut(duration: 0.2)) { showsCapWarning = true }
         // Re-raising restarts the three seconds rather than stacking a second
         // countdown that hides the banner early.
@@ -302,12 +307,19 @@ private struct LeagueSection: View {
         let capacity = room
         if capacity < unfollowed.count { onCapReached() }
         guard capacity > 0 else { return }
+        let taken = min(capacity, unfollowed.count)
+        // The individual `team_follow` events still fire per team; this is the
+        // marker that says they came from one bulk action.
+        AppAnalytics.leagueFollowAll(leagueId: league.id, count: taken)
         session.setFanTeams(session.prefs.fanTeamIds + unfollowed.prefix(capacity))
     }
 
     private func unfollowAll() {
         let shown = Set(shownIds)
-        session.setFanTeams(session.prefs.fanTeamIds.filter { !shown.contains($0) })
+        let remaining = session.prefs.fanTeamIds.filter { !shown.contains($0) }
+        AppAnalytics.leagueUnfollowAll(leagueId: league.id,
+                                       count: session.prefs.fanTeamIds.count - remaining.count)
+        session.setFanTeams(remaining)
     }
 }
 
