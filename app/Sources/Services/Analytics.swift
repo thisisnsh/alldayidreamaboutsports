@@ -243,7 +243,6 @@ enum AppAnalytics {
         case capsulePosition = "capsule_position"
         case notchDropSize = "notch_drop_size"
         case autoCheckUpdates = "auto_check_updates"
-        case autoInstallUpdates = "auto_install_updates"
 
         var event: String { "setting_\(rawValue)_changed" }
         var property: String { "pref_\(rawValue)" }

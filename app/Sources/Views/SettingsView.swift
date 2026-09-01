@@ -6,9 +6,8 @@ struct SettingsView: View {
     @EnvironmentObject var session: AppSession
     @Environment(\.colorScheme) private var scheme
     @State private var launchAtLogin = LaunchAtLogin.isEnabled
-    // Sparkle persists both flags in UserDefaults itself; we just mirror them.
+    // Sparkle persists this flag in UserDefaults itself; we just mirror it.
     @State private var autoCheck = true
-    @State private var autoInstall = true
     // Local mirror so the SwiftUI content reacts synchronously while the
     // deferred session write updates the application-level AppKit appearance.
     @State private var activeTheme: ThemeChoice = .system
@@ -27,7 +26,6 @@ struct SettingsView: View {
             AppAnalytics.screenView(Self.screen)
             activeTheme = session.prefs.settings.theme ?? .system
             autoCheck = updater.automaticallyChecksForUpdates
-            autoInstall = updater.automaticallyDownloadsUpdates
         }
     }
 
@@ -121,18 +119,10 @@ struct SettingsView: View {
                             set: { on in
                                 autoCheck = on
                                 updater.automaticallyChecksForUpdates = on
-                                // Sparkle owns these two flags, so they never
-                                // pass through `AppSession.updateSettings` and
-                                // need reporting from here.
+                                // Sparkle owns this flag, so it never passes
+                                // through `AppSession.updateSettings` and needs
+                                // reporting from here.
                                 AppAnalytics.settingChanged(.autoCheckUpdates, enabled: on)
-                            }
-                        ))
-                        toggleRow("Automatically download and install", isOn: Binding(
-                            get: { autoInstall },
-                            set: { on in
-                                autoInstall = on
-                                updater.automaticallyDownloadsUpdates = on
-                                AppAnalytics.settingChanged(.autoInstallUpdates, enabled: on)
                             }
                         ))
                         CheckForUpdatesButton(updater: updater, source: "settings")

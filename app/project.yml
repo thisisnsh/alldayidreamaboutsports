@@ -128,8 +128,9 @@ targets:
         SUPublicEDKey: ghiXVL8NcRoV6i/FhLk/bHsoeC0afsLGzFMwHqhpQQ4=
         SUEnableAutomaticChecks: true
         SUScheduledCheckInterval: 3600
-        SUAllowsAutomaticUpdates: true
-        SUAutomaticallyUpdate: true # auto download + install by default; Settings can switch off
+        # No silent install: a staged one blocks later feed checks until it lands.
+        SUAllowsAutomaticUpdates: false
+        SUAutomaticallyUpdate: false
     postBuildScripts:
       - name: Select Firebase configuration
         basedOnDependencyAnalysis: false
