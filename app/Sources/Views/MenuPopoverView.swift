@@ -116,8 +116,22 @@ struct MenuPopoverView: View {
                             FixtureRow(fixture: fixture, live: fixtureScope == .mine)
                         }
                     }
+                    // Keeps the first and last row clear of the fades, so a
+                    // list parked at either end reads at full strength.
+                    .padding(.vertical, Self.fadeInset)
                 }
                 .frame(height: Self.scrolledHeight)
+                // Rows dissolve into the menu at both ends instead of being
+                // sliced off by the scroll view's edge.
+                .mask(
+                    VStack(spacing: 0) {
+                        LinearGradient(colors: [.clear, .black], startPoint: .top, endPoint: .bottom)
+                            .frame(height: Self.fadeHeight)
+                        Rectangle()
+                        LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom)
+                            .frame(height: Self.fadeHeight)
+                    }
+                )
             }
         }
     }
@@ -129,7 +143,12 @@ struct MenuPopoverView: View {
     /// popover's fixed content size (`MenuPopoverController.showMenu`) is
     /// budgeted for: go past it and the last row loses its subtitle line.
     private static let unscrolledRows = 5
-    private static let scrolledHeight: CGFloat = 5 * 42 + 4 * 8 + 20
+    private static let scrolledHeight: CGFloat = 5 * 42 + 4 * 8 + 20 + 2 * fadeInset
+    /// The top and bottom fades: short enough to read as a soft edge rather
+    /// than a dimmed row, with a slightly taller inset behind them so a row at
+    /// rest sits clear of the gradient.
+    private static let fadeHeight: CGFloat = 10
+    private static let fadeInset: CGFloat = 12
 
     private var shownFixtures: [Fixture] {
         switch fixtureScope {
