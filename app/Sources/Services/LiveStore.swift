@@ -287,13 +287,41 @@ final class LiveStore {
         celebrationNotify.removeAll()
     }
 
+    /// Latest event in the current period; excludes e.g. 45+7′ after 2H starts.
+    private func latestEventMinute(in current: Fixture, period: MatchPeriod) -> Int? {
+        let bounds: ClosedRange<Int>
+        let cap: Int
+        switch period {
+        case .first: bounds = 0 ... 45; cap = 45
+        case .second: bounds = 46 ... 90; cap = 90
+        case .extraFirst: bounds = 91 ... 105; cap = 105
+        case .extraSecond: bounds = 106 ... 120; cap = 120
+        default: return nil
+        }
+
+        var latest: Int?
+        func consider(minute: Int?, extra: Int?) {
+            guard let minute, bounds.contains(minute) else { return }
+            let displayed = minute + (minute == cap ? max(0, extra ?? 0) : 0)
+            latest = max(latest ?? displayed, displayed)
+        }
+        for team in [current.home, current.away] {
+            for event in team.goalEvents { consider(minute: event.minute, extra: event.extra) }
+            for event in team.yellowCardEvents { consider(minute: event.minute, extra: event.extra) }
+            for event in team.redCardEvents { consider(minute: event.minute, extra: event.extra) }
+            for event in team.subs { consider(minute: event.minute, extra: event.extra) }
+        }
+        for event in current.varEvents { consider(minute: event.minute, extra: event.extra) }
+        return latest
+    }
+
     /// The only two places our local clock's base is touched — never from the
     /// snapshot's running-clock field (`minute`/`extra`), which is the buggy,
     /// jittery source we're deliberately avoiding.
     ///   1. Half change (incl. kickoff): the half dictates the base (0/45/90/105).
     ///   2. Mid-match join: the very first observation of an already-running
     ///      fixture (app opened mid-match) seeds once from the snapshot's minute.
-    /// Same half continuing → anchor untouched; the clock free-runs.
+    /// Same half continuing → free-run, unless a newer event advances the clock.
     private func establishClockAnchor(isFirstObservation: Bool, current: Fixture) {
         guard current.running == true, let period = current.period,
               [.first, .second, .extraFirst, .extraSecond].contains(period)
@@ -302,22 +330,40 @@ final class LiveStore {
         // never rebase it back onto a free-running half.
         guard clockAnchor[current.fixtureId]?.frozen != true else { return }
 
+        let now = Date()
         if let anchor = clockAnchor[current.fixtureId] {
-            guard anchor.period != period else { return } // same half: free-run
-            clockAnchor[current.fixtureId] = ClockAnchor(
-                baseSeconds: Fixture.fixedBaseSeconds(for: period), anchorDate: Date(), period: period
-            )
+            if anchor.period != period {
+                clockAnchor[current.fixtureId] = ClockAnchor(
+                    baseSeconds: Fixture.fixedBaseSeconds(for: period), anchorDate: now, period: period
+                )
+            }
         } else if isFirstObservation {
             // Mid-match join: seed once from the snapshot's minute.
             let seedSeconds = current.minute.map { Double($0) * 60 } ?? Fixture.fixedBaseSeconds(for: period)
-            clockAnchor[current.fixtureId] = ClockAnchor(baseSeconds: seedSeconds, anchorDate: Date(), period: period)
+            clockAnchor[current.fixtureId] = ClockAnchor(baseSeconds: seedSeconds, anchorDate: now, period: period)
         } else {
             // First time this (already-tracked) fixture is seen running — e.g.
             // the ordinary kickoff transition out of SCHEDULED.
             clockAnchor[current.fixtureId] = ClockAnchor(
-                baseSeconds: Fixture.fixedBaseSeconds(for: period), anchorDate: Date(), period: period
+                baseSeconds: Fixture.fixedBaseSeconds(for: period), anchorDate: now, period: period
             )
         }
+
+        guard let anchor = clockAnchor[current.fixtureId] else { return }
+        let localSeconds = anchor.baseSeconds + now.timeIntervalSince(anchor.anchorDate)
+        let localMinute = localSeconds <= 0 ? 0 : Int(ceil(localSeconds / 60))
+        guard let eventMinute = latestEventMinute(in: current, period: period),
+              eventMinute > localMinute
+        else { return }
+        clockAnchor[current.fixtureId] = ClockAnchor(
+            baseSeconds: Double(eventMinute) * 60,
+            anchorDate: now,
+            period: period
+        )
+        AppLog.info(
+            .fixtures,
+            "clock_anchor_corrected fixture_id=\(current.fixtureId) local_minute=\(localMinute) event_minute=\(eventMinute)"
+        )
     }
 
     /// The clock rule for the Debug demo backend, which publishes scripted
