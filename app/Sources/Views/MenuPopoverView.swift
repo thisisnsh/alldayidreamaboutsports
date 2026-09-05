@@ -120,7 +120,7 @@ struct MenuPopoverView: View {
                     // list parked at either end reads at full strength.
                     .padding(.vertical, Self.fadeInset)
                 }
-                .frame(height: Self.scrolledHeight)
+                .frame(height: Self.scrolledHeight + 2 * Self.fadeInset)
                 // Rows dissolve into the menu at both ends instead of being
                 // sliced off by the scroll view's edge.
                 .mask(
@@ -132,6 +132,11 @@ struct MenuPopoverView: View {
                             .frame(height: Self.fadeHeight)
                     }
                 )
+                // The inset is bled back out of the surrounding margins, so the
+                // fades live in the gaps either side and the first row starts
+                // exactly where the unscrolled list's does — the section keeps
+                // the same footprint whether or not it scrolls.
+                .padding(.vertical, -Self.fadeInset)
             }
         }
     }
@@ -143,10 +148,12 @@ struct MenuPopoverView: View {
     /// popover's fixed content size (`MenuPopoverController.showMenu`) is
     /// budgeted for: go past it and the last row loses its subtitle line.
     private static let unscrolledRows = 5
-    private static let scrolledHeight: CGFloat = 5 * 42 + 4 * 8 + 20 + 2 * fadeInset
+    private static let scrolledHeight: CGFloat = 5 * 42 + 4 * 8 + 20
     /// The top and bottom fades: short enough to read as a soft edge rather
     /// than a dimmed row, with a slightly taller inset behind them so a row at
-    /// rest sits clear of the gradient.
+    /// rest sits clear of the gradient. The inset is padding *outside* the
+    /// height above — it overhangs into the section's margins rather than
+    /// eating rows.
     private static let fadeHeight: CGFloat = 10
     private static let fadeInset: CGFloat = 12
 
