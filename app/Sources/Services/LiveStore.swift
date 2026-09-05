@@ -27,6 +27,12 @@ final class LiveStore {
     private static let celebrationRefreshWindow: TimeInterval = 60
     /// …at this cadence, as everyone's taps trickle into the CDN file.
     private static let celebrationRefreshInterval: TimeInterval = 5
+    /// How long a fixture's baseline may go unconfirmed and still count as "the
+    /// state one poll ago". Past this the app wasn't watching (see the
+    /// observation-gap guard in `ingest`). At the 5s poll cadence this is ~24
+    /// missed cycles — far beyond a few failed fetches, and short enough that a
+    /// real gap is caught on the first read after it.
+    private static let maxObservationGap: TimeInterval = 2 * 60
 
     private var loopTask: Task<Void, Never>?
     /// Per-fixture celebration refresh loops; a goal kicks one off (see
@@ -40,6 +46,11 @@ final class LiveStore {
     /// Last-seen state per fixture — the diff baseline. A fixture not in here is
     /// being observed for the first time: it seeds the baseline and emits nothing.
     private var baseline: [Int: Fixture] = [:]
+    /// When each fixture's baseline was last confirmed current. Stamped on every
+    /// successful read INCLUDING a 304 (byte-identical = still current, which a
+    /// quiet stretch like half-time can serve for minutes). The gap since this
+    /// stamp is what tells a live delta apart from a slept-through catch-up.
+    private var baselineObservedAt: [Int: Date] = [:]
 
     /// Our own free-running clock anchor for a fixture: `baseSeconds` at
     /// `anchorDate`, ticking forward at 1x thereafter. Reset only at a half
@@ -107,6 +118,7 @@ final class LiveStore {
     /// fresh and never replays events across an account switch.
     func resetBaseline() {
         baseline = [:]
+        baselineObservedAt = [:]
         clockAnchor = [:]
         finished = []
         didReconcileThisLaunch = false
@@ -220,7 +232,11 @@ final class LiveStore {
             do {
                 current = try await scores.fetchFixture(fixtureId: previous.fixtureId)
             } catch ScoresError.notModified {
-                continue // byte-identical to last read — nothing to diff
+                // Byte-identical to last read — nothing to diff, but the read
+                // itself confirms the baseline is still current, so it keeps the
+                // observation gap closed through a quiet stretch.
+                baselineObservedAt[previous.fixtureId] = Date()
+                continue
             } catch {
                 AppLog.error(.fixtures, "poll_fetch_failed fixture_id=\(previous.fixtureId)", error: error)
                 AppAnalytics.pollFailed(stage: "poll", fixtureId: previous.fixtureId, error: error)
@@ -228,13 +244,17 @@ final class LiveStore {
             }
             guard session.isSignedIn, ControlPlane.shared.isOperational else { return }
 
+            // Read before `ingest` re-stamps the observation: a fixture that
+            // re-seeds after a gap fires no goals, so there are no fresh taps to
+            // chase — its score moved while we were away, not just now.
+            let resynced = baselineIsStale(current.fixtureId, at: Date())
             let fanGoalTeams = ingest(current)
 
             // A score move (goal / VAR correction) is the only thing that grows
             // the celebration total — taps then trickle in for a while, so we
             // re-read for a minute rather than once. Fan goals additionally
             // schedule the convergence notification for the teams that scored.
-            if previous.score != current.score || !fanGoalTeams.isEmpty {
+            if !resynced, previous.score != current.score || !fanGoalTeams.isEmpty {
                 refreshCelebrations(fixtureId: current.fixtureId, notifyTeams: fanGoalTeams)
             }
         }
@@ -390,9 +410,19 @@ final class LiveStore {
     /// celebration notification).
     /// BASELINE GUARD: the first observation seeds the baseline and emits NO
     /// events (don't replay pre-launch goals); only later deltas fire overlays.
+    /// A baseline gone stale (see `baselineIsStale`) re-seeds the same way.
     @discardableResult
     private func ingest(_ current: Fixture) -> [Int] {
+        let now = Date()
         let prev = baseline[current.fixtureId]
+        // OBSERVATION-GAP GUARD: `prev` is only "the state one poll ago" while
+        // we've been watching continuously. After a gap — the lid was shut, the
+        // Mac slept, the network went away — it's an old snapshot, and diffing
+        // against it replays every goal, card and sub we missed as one burst of
+        // live overlays the moment the laptop opens. Re-seed instead: the score,
+        // clock and timeline still merge (the pinned capsule shows what
+        // happened), but nothing animates. Old news doesn't get a celebration.
+        let resync = prev != nil && baselineIsStale(current.fixtureId, at: now)
 
         // Cheap stale-snapshot guard: a CDN edge can momentarily serve a
         // SCHEDULED snapshot for a match we've already seen LIVE/HALF_TIME —
@@ -405,13 +435,25 @@ final class LiveStore {
             return []
         }
 
-        establishClockAnchor(isFirstObservation: prev == nil, current: current)
+        // Our free-running clock drifted through the same gap (and rebases to a
+        // half's base minute on the first post-gap read, reading 45′ for an 80′
+        // match). Drop the anchor so the re-seed below reseeds it from this
+        // snapshot's minute, exactly as a mid-match join does. A demo-pinned
+        // (frozen) anchor owns itself and is left alone.
+        if resync, clockAnchor[current.fixtureId]?.frozen != true {
+            clockAnchor[current.fixtureId] = nil
+        }
+        establishClockAnchor(isFirstObservation: prev == nil || resync, current: current)
 
         session.applyLiveFixture(current)
 
         var fanGoalTeams: [Int] = []
-        if prev == nil {
-            AppLog.info(.fixtures, "baseline_seeded fixture_id=\(current.fixtureId) status=\(current.status) score=\(current.home.goals)-\(current.away.goals)")
+        if prev == nil || resync {
+            AppLog.info(.fixtures, "baseline_seeded fixture_id=\(current.fixtureId) reason=\(resync ? "observation_gap" : "first") status=\(current.status) score=\(current.home.goals)-\(current.away.goals)")
+            if resync {
+                // How often do we drop a whole delta on the floor? Only this says so.
+                AppAnalytics.snapshotRejected(reason: "observation_gap")
+            }
         } else {
             let events = MatchDiff.diff(prev: prev, next: current)
             for event in events {
@@ -431,12 +473,22 @@ final class LiveStore {
         }
 
         baseline[current.fixtureId] = current
+        baselineObservedAt[current.fixtureId] = now
         if current.status == "FINISHED", finished.insert(current.fixtureId).inserted {
             // First time we see this match end — its events will never recur, so
             // drop them from the dedupe store instead of letting it grow forever.
             EventRouter.shared.purgeEvents(forFixture: current.fixtureId)
         }
         return fanGoalTeams
+    }
+
+    /// True when too long has passed since we last confirmed this fixture's
+    /// baseline against the CDN — i.e. we stopped watching rather than saw
+    /// nothing happen. A fixture with no stamp yet (first observation) is not
+    /// stale; `ingest` already seeds that case silently.
+    private func baselineIsStale(_ fixtureId: Int, at now: Date) -> Bool {
+        guard let observedAt = baselineObservedAt[fixtureId] else { return false }
+        return now.timeIntervalSince(observedAt) > Self.maxObservationGap
     }
 
     /// True from ~5 min before kickoff until the match file reports FINISHED,
