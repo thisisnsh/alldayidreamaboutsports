@@ -97,7 +97,7 @@ npm run data      # regenerate leagues/teams/crests from the live catalog
 ## Contributions
 
 Not accepting pull requests. Bug reports and ideas are welcome - open an issue
-or email [support@alldayidreamaboutsports.com](mailto:support@alldayidreamaboutsports.com).
+or email [hello@thisisnsh.com](mailto:hello@thisisnsh.com).
 
 ## Legal
 

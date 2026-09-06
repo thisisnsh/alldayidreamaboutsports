@@ -4,10 +4,10 @@ export default {
   name: "All Day I Dream About Sports",
   shortName: "Sports Alerts",
   url: "https://alldayidreamaboutsports.com",
-  email: "support@alldayidreamaboutsports.com",
+  email: "hello@thisisnsh.com",
   downloadUrl: "https://download.alldayidreamaboutsports.com/latest",
   windowsWaitlist:
-    "mailto:support@alldayidreamaboutsports.com?subject=Waitlist%20for%20Windows",
+    "mailto:hello@thisisnsh.com?subject=Waitlist%20for%20Windows",
   requires: "macOS 14.0 or later",
   requiresShort: "macOS 14+",
   year: 2026,
