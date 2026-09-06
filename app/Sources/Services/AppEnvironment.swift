@@ -4,7 +4,7 @@ enum AppEnvironment {
     static let apiBase = configuredURL("APIBaseURL")
     static let scoresBase = configuredURL("ScoresBaseURL")
     static let website = URL(string: "https://alldayidreamaboutsports.com")!
-    static let supportEmail = "support@alldayidreamaboutsports.com"
+    static let supportEmail = "hello@thisisnsh.com"
 
     static var buildNumber: Int {
         Int(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "1") ?? 1
