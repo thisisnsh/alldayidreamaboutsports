@@ -53,7 +53,7 @@ These are the paid/identity things nothing else works without.
 
 ## 2. Google Cloud + Firebase — do staging first, then repeat for prod — `infra/README.md`
 
-This is the backend brain: a project that holds your database (Firestore) and
+This is the backend brain: a project that runs polling and
 the remote on/off switches (Remote Config). You'll run
 this whole section twice. **Note the short project name:** GCP caps project ids at
 30 characters and `alldayidreamaboutsports-staging` is 31 — one too long — so we
@@ -70,10 +70,10 @@ Everything else (bundle id, buckets, domain) still uses the full name.
       `dreamaboutsports-staging`; the build now includes it only in `Staging`.
       Repeat for prod later as `GoogleService-Info-Production.plist`.
 - [ ] **Import + publish** `infra/remoteconfig.template.json` in Remote Config.
-      These are the live switches (kill switch, minimum build, celebration
-      toggles) you can flip without shipping an update.
-- [ ] **Deploy** `infra/firestore.rules` (they deny all direct access — the app
-      only ever talks to the backend, never the database directly).
+      These are the live switches (kill switch, minimum build, animation
+      settings) you can flip without shipping an update.
+- [ ] **Retire legacy celebration data** with `infra/retire-celebrations.mjs`
+      after deploying the backend without shared counts.
 - [ ] **Set the real secret values:** `api-football-key`
       (generate with `openssl rand -hex 32`), and the three R2 keys (you'll have
       those after section 3). Secrets are how the backend gets credentials
@@ -88,7 +88,7 @@ Everything else (bundle id, buckets, domain) still uses the full name.
 R2 is object storage like an S3 bucket, but Cloudflare serves it through their
 CDN with **zero egress fees** — that's what keeps the bill near $0 even if the
 app blows up (on plain GCP the same traffic could cost hundreds to thousands).
-The app fetches fixtures, live scores, and celebration counts from here whenever
+The app fetches fixtures and live scores from here whenever
 the menu opens. The `scores.` custom domains are the reason the domain's DNS
 lives on Cloudflare.
 
@@ -145,7 +145,7 @@ Don't ship without watching the whole pipeline work on a real goal. Use a
       URL.
 - [ ] **Follow both teams that are playing** on a staging build.
 - [ ] **Inject a test goal** (steps in `backend/README.md`) → the celebration
-      should fire, and tapping it should round-trip a count back to the backend.
+      should fire, and tapping the ball should animate locally without an upload.
 - [ ] **Then watch a real goal:** it should land < 30s behind the TV broadcast,
       the event pill should show, and the popover score should reconcile.
 - [ ] **Test the kill switch:** flip `kill_switch=true` in Remote Config → a
@@ -177,7 +177,6 @@ Don't ship without watching the whole pipeline work on a real goal. Use a
 
 ## Post-MVP (cut from v1, revisit after launch)
 
-- [ ] Global tap-rate ball-density pulses (currently: local balls + final count).
 - [ ] Multi-display picker for the overlay (currently: main screen only).
 - [ ] Quiet hours; football-data.org fallback provider; localization.
 - [ ] A sixth competition (Champions League) needs either the Mega plan or a

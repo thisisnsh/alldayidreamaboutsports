@@ -1,47 +1,57 @@
 {
   "parameters": {
     "kill_switch": {
-      "defaultValue": { "value": "false" },
+      "defaultValue": {
+        "value": "false"
+      },
       "description": "true = app disables itself and shows kill_message. Reversible."
     },
     "kill_message": {
-      "defaultValue": { "value": "We're fixing something — back soon. Thanks for your patience! ⚽" },
+      "defaultValue": {
+        "value": "We're fixing something — back soon. Thanks for your patience! ⚽"
+      },
       "description": "Shown in the blocking window when kill_switch is on."
     },
     "min_build": {
-      "defaultValue": { "value": "1" },
+      "defaultValue": {
+        "value": "1"
+      },
       "description": "Builds below this are blocked behind a forced update (opens the Mac App Store). Raise only once that build is live on the App Store."
     },
     "latest_build": {
-      "defaultValue": { "value": "0" },
+      "defaultValue": {
+        "value": "0"
+      },
       "description": "Newest published build. Builds below this get a soft 'Update available' banner atop the menu (not blocked). 0 = no banner."
     },
-    "celebration_enabled": {
-      "defaultValue": { "value": "true" },
-      "description": "false = hide tap-to-support and stop sending /celebrate (cost kill switch)."
-    },
     "poll_seconds": {
-      "defaultValue": { "value": "5" },
+      "defaultValue": {
+        "value": "5"
+      },
       "description": "Live-score poll interval (matches the matches/*.json TTL). App adds ±15% jitter."
     },
-    "celebration_sample_percent": {
-      "defaultValue": { "value": "1.0" },
-      "description": "Client reporter probability + server multiply-back factor. Must equal CELEBRATION_SAMPLE_RATE on the backend. 1.0 = everyone reports (exact, no sampling)."
-    },
     "animation_params": {
-      "defaultValue": { "value": "{\"pillHoldSeconds\":7,\"notchStackMax\":5}" },
+      "defaultValue": {
+        "value": "{\"pillHoldSeconds\":7,\"notchStackMax\":5}"
+      },
       "description": "Tune animation feel without shipping a build."
     },
     "max_fan_teams": {
-      "defaultValue": { "value": "10" },
+      "defaultValue": {
+        "value": "10"
+      },
       "description": "Max teams a user can be a fan of. Raise without shipping a build. Starts at 10."
     },
     "remote_config_fetch_interval_seconds": {
-      "defaultValue": { "value": "300" },
+      "defaultValue": {
+        "value": "300"
+      },
       "description": "Periodic fetch interval in seconds. Range: 60–86400; default: 300. Startup and foreground fetch immediately. Lower values increase billable fetches."
     },
     "event_stale_minutes": {
-      "defaultValue": { "value": "3" },
+      "defaultValue": {
+        "value": "3"
+      },
       "description": "VAR-only staleness tolerance in minutes. Late VAR decisions beyond this threshold are suppressed; goals, cards, and substitutions are not."
     }
   }

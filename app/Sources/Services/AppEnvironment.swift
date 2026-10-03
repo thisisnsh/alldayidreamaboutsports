@@ -1,7 +1,6 @@
 import Foundation
 
 enum AppEnvironment {
-    static let apiBase = configuredURL("APIBaseURL")
     static let scoresBase = configuredURL("ScoresBaseURL")
     static let website = URL(string: "https://alldayidreamaboutsports.com")!
     static let supportEmail = "hello@thisisnsh.com"

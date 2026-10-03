@@ -189,17 +189,6 @@ enum AppAnalytics {
         log("celebration_preview", [:])
     }
 
-    /// This client's taps weren't reported because it fell outside the sample.
-    /// Without it a low `celebration_sample_percent` looks identical to nobody
-    /// tapping.
-    static func celebrationUploadSampledOut(sample: Double) {
-        log("celebration_upload_sampled_out", ["sample": sample])
-    }
-
-    static func celebrationUploadFailed(error: Error) {
-        log("celebration_upload_failed", ["status": AppLog.errorLabel(error)])
-    }
-
     // MARK: Settings
     //
     // One event per setting, for the same reason the controls above are

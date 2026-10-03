@@ -106,7 +106,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         AppSession.shared.stopAllActivity()
-        // Quitting drops the cached fixtures/scores/celebrations so the next
+        // Quitting drops the cached fixtures/scores so the next
         // launch re-fetches fresh rather than flashing a stale board.
         AppSession.shared.clearMatchCache()
         // UserDefaults writes are async (cfprefsd flushes them on a later runloop

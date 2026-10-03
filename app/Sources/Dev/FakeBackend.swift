@@ -3,9 +3,8 @@ import AppKit
 import Foundation
 
 // Fake service layer for development: compiled only when DEV_BACKEND is set
-// (Debug builds). GETs return seeded hardcoded data; POSTs mutate that data in
-// memory, so round-trips behave like the real system — without touching the
-// network or your API-Football quota. Each parallel match's
+// (Debug builds). Match reads return seeded in-memory data without spending
+// API-Football quota. The catalog alone uses the public CDN. Each parallel match's
 // score is walked through DevConfig.timeline by DemoEngine, so what the popover
 // shows always matches the events that have fired.
 
@@ -53,20 +52,15 @@ final class FakeStore {
     // routes, even if the same timeline played in a previous run.
     let launchToken = UUID().uuidString.prefix(8)
 
-    /// Celebration tap totals per fixture; surges in the timeline overwrite
-    /// this and a user tapping in the app adds to it.
-    var celebrations: [Int: [String: Int]] = [:]
-
     private static func freshStates() -> [Int: LiveMatchState] {
         Dictionary(uniqueKeysWithValues: DemoFixture.demoMatches.map { ($0.id, LiveMatchState()) })
     }
 
-    /// Back to kickoff-minus-one: every match 0–0, not started, no
-    /// celebrations. Called at the top of each play-through. `eventSeq`
+    /// Back to kickoff-minus-one: every match 0–0, not started.
+    /// Called at the top of each play-through. `eventSeq`
     /// deliberately survives so replayed events still look new.
     func resetMatches() {
         states = FakeStore.freshStates()
-        celebrations = [:]
     }
 
     func addGoal(_ side: DemoSide, in id: Int, player: String?, minute: Int?, extra: Int? = nil, kind: String? = nil) {
@@ -210,18 +204,6 @@ final class FakeStore {
 }
 
 @MainActor
-final class FakeBackendAPI: BackendAPI {
-    func celebrate(fixtureId: Int, teamId: String, taps: Int) async throws {
-        try? await Task.sleep(for: .milliseconds(250)) // feel like a network hop
-        // POST appends to the fake data — visible on the next GET.
-        FakeStore.shared.celebrations[fixtureId, default: [:]][teamId, default: 0] += taps
-        NSLog("🧪 FakeBackend: +%d celebrations for %@ in fixture %d (total %d)",
-              taps, teamId, fixtureId,
-              FakeStore.shared.celebrations[fixtureId]?[teamId] ?? 0)
-    }
-}
-
-@MainActor
 final class FakeScores: ScoresProviding {
     // ╔════════════════════════════════════════════════════════════════╗
     // ║  WHERE THE TEAMS COME FROM — flip these two lines.              ║
@@ -252,12 +234,6 @@ final class FakeScores: ScoresProviding {
             throw URLError(.fileDoesNotExist)
         }
         return fixture
-    }
-    func fetchCelebrations(fixtureId: Int) async throws -> [String: Int] {
-        // Production fetches this from the CDN after the batched POST lands
-        // in the DB — simulate that beat so dev timing matches reality.
-        try? await Task.sleep(for: .milliseconds(450))
-        return FakeStore.shared.celebrations[fixtureId] ?? [:]
     }
 
     /// Offline fallback for `fetchCatalog()`, and the one to switch to when you
@@ -527,13 +503,7 @@ final class DemoEngine: ObservableObject {
         defer { suppressPush = false }
         let def = moment.fixture
         let id = def.id
-        // Stoppage minute on the live clock (`+7` in `45+7`). Every clock-bearing
-        // beat carries it — nil for whole-minute beats, which also clears any
-        // stoppage left over from a prior beat. celebrationSurge has no clock, so
-        // it leaves the current minute/extra alone.
-        if case .celebrationSurge = moment.action {} else {
-            store.states[id]?.extra = moment.extra
-        }
+        store.states[id]?.extra = moment.extra
         // Any in-play beat implies the match is running, in the half its minute
         // falls in — so a 54' goal after half-time moves the fixture out of HT
         // and into the second half, and the local clock rebases to 45:00
@@ -610,9 +580,6 @@ final class DemoEngine: ObservableObject {
             store.addPenalty(side, scored: scored, in: id,
                              teamId: side == .home ? def.home.id : def.away.id, player: player)
             push(.penaltyKick, def, side: side, player: player, minute: moment.minute, scored: scored)
-        case let .celebrationSurge(totals):
-            store.celebrations[id] = totals
-            AppSession.shared.mergeCelebrationTotals(totals, fixtureId: id)
         }
         publishFixture(def)
     }

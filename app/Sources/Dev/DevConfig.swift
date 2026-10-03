@@ -110,7 +110,6 @@ enum DevConfig {
         DemoMoment(at: 30 + 40, .mciArs, minute: 18, .goal(.away, player: "Kai Havertz")),     // 1-1
         DemoMoment(at: 30 + 50, .mciArs, minute: 36, .yellowCard(.away, player: "Cristhian Mosquera")),
         DemoMoment(at: 30 + 60, .mciArs, minute: 45, .halfTime),
-        DemoMoment(at: 30 + 70, .mciArs, minute: 45, .celebrationSurge(["50": 3_800_000, "42": 2_400_000])),
         DemoMoment(at: 30 + 80, .mciArs, minute: 45, .substitution(.away, playerIn: "Gabriel Martinelli", playerOut: "Noni Madueke")),
         DemoMoment(at: 30 + 90, .mciArs, minute: 65, .goal(.home, player: "Erling Haaland")),  // 2-1
         DemoMoment(at: 30 + 100, .mciArs, minute: 74, .substitution(.away, playerIn: "Leandro Trossard", playerOut: "Eberechi Eze")),
@@ -140,7 +139,6 @@ enum DevConfig {
         DemoMoment(at: 190 + 50, .madBar, minute: 42, .yellowCard(.away, player: "Pedri")),
         DemoMoment(at: 190 + 60, .madBar, minute: 43, .goal(.home, player: "Jude Bellingham")), // 2-1
         DemoMoment(at: 190 + 70, .madBar, minute: 45, .halfTime),
-        DemoMoment(at: 190 + 80, .madBar, minute: 45, .celebrationSurge(["541": 5_100_000, "529": 4_700_000])),
         DemoMoment(at: 190 + 90, .madBar, minute: 66, .substitution(.home, playerIn: "Brahim Díaz", playerOut: "Arda Güler")),
         DemoMoment(at: 190 + 100, .madBar, minute: 72, .substitution(.home, playerIn: "Dani Carvajal", playerOut: "Federico Valverde")),
         DemoMoment(at: 190 + 120, .madBar, minute: 72, .substitution(.home, playerIn: "Rodrygo", playerOut: "Vinícius Júnior")),
@@ -168,7 +166,6 @@ enum DevConfig {
         // DemoMoment(at: 46,  .bayDor, minute: 20, .yellowCard(.away, player: "Nico Schlotterbeck")),
         // DemoMoment(at: 58,  .bayDor, minute: 26, .goal(.away, player: "Nico Schlotterbeck")), // 0-1, pill only
         // DemoMoment(at: 63,  .bayDor, minute: 45, .halfTime),
-        // DemoMoment(at: 67,  .bayDor, minute: 45, .celebrationSurge(["157": 2_900_000, "165": 1_300_000])),
         // DemoMoment(at: 71,  .bayDor, minute: 45, extra: 5, .substitution(.away, playerIn: "Ramy Bensebaini", playerOut: "Emre Can")),
         // DemoMoment(at: 76,  .bayDor, minute: 54, .goal(.home, player: "Harry Kane")),         // 1-1
         // DemoMoment(at: 80,  .bayDor, minute: 62, .substitution(.home, playerIn: "Jamal Musiala", playerOut: "Serge Gnabry")),
@@ -328,7 +325,6 @@ enum DemoAction {
     case penaltyKick(DemoSide, player: String, scored: Bool) // one shootout kick
     case substitution(DemoSide, playerIn: String, playerOut: String)
     case varDecision(DemoSide, detail: String) // a VAR outcome, e.g. "Penalty confirmed"
-    case celebrationSurge([String: Int])   // a celebration_count push (taps by team)
 }
 
 extension DemoAction {

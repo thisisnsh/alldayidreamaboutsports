@@ -2,7 +2,7 @@
  * Staging-only fake event publisher.
  *
  * Seeds fake matches in arbitrary states into the STAGING scores bucket and
- * mutates them (advance state, score goals, bump celebration tallies) by writing
+ * mutates them (advance state, score goals) by writing
  * directly to R2 via the S3 SDK — reusing the deployed `R2` class and cache
  * constants so every object carries the §0 Cache-Control. This exercises the full
  * live overlay / celebration UI end-to-end without API-Football or the Cloud
@@ -17,7 +17,6 @@
  *   npm run fake -- seed --count 3 --state LIVE
  *   npm run fake -- advance --fixture 900001 --status HT
  *   npm run fake -- goal --fixture 900001 --team home
- *   npm run fake -- celebrate --fixture 900001 --team 910001 --count 50
  *   npm run fake -- clear
  */
 import {
@@ -295,10 +294,9 @@ async function seed(r2: R2, args: Map<string, string>): Promise<void> {
     };
     fakes.push(state);
     await r2.putJson(`matches/${fixtureId}.json`, state, CACHE_CONTROL_LIVE);
-    await r2.putJson(`celebrate/${fixtureId}.json`, { totals: {} }, CACHE_CONTROL_LIVE);
     console.log(
       `seeded matches/${fixtureId}.json (${stateName}, ${state.kickoffISO}, ` +
-        `${home.name} ${home.id} vs ${away.name} ${away.id}) + celebrate/${fixtureId}.json`,
+        `${home.name} ${home.id} vs ${away.name} ${away.id})`,
     );
   }
   await mergeFixtures(r2, fakes, seeded);
@@ -342,31 +340,7 @@ async function goal(r2: R2, args: Map<string, string>): Promise<void> {
   await r2.putJson(`matches/${fixtureId}.json`, match, CACHE_CONTROL_LIVE);
   await upsertFixture(r2, match);
 
-  // Realistic goal → celebration: bump the scoring side's tally.
-  const bump = Number(args.get("count") ?? 1);
-  const key = `celebrate/${fixtureId}.json`;
-  const file = (await r2.getJson<{ totals: Record<string, number> }>(key)) ?? { totals: {} };
-  const teamKey = String(team.id);
-  file.totals[teamKey] = (file.totals[teamKey] ?? 0) + bump;
-  await r2.putJson(key, file, CACHE_CONTROL_LIVE);
-
-  console.log(
-    `goal: ${side} (${team.name}) now ${team.goals}; celebrate[${teamKey}] += ${bump} → ${file.totals[teamKey]}`,
-  );
-}
-
-async function celebrate(r2: R2, args: Map<string, string>): Promise<void> {
-  const fixtureId = Number(args.get("fixture"));
-  const teamId = args.get("team");
-  const count = Number(args.get("count") ?? 1);
-  if (!fixtureId || !teamId) throw new Error("celebrate needs --fixture ID --team <teamId> --count N");
-  await assertSeeded(r2, fixtureId);
-
-  const key = `celebrate/${fixtureId}.json`;
-  const file = (await r2.getJson<{ totals: Record<string, number> }>(key)) ?? { totals: {} };
-  file.totals[teamId] = (file.totals[teamId] ?? 0) + count;
-  await r2.putJson(key, file, CACHE_CONTROL_LIVE);
-  console.log(`celebrate[${teamId}] += ${count} → ${file.totals[teamId]} (fixture ${fixtureId})`);
+  console.log(`goal: ${side} (${team.name}) now ${team.goals}`);
 }
 
 /** Paginate an S3 prefix, returning every key. */
@@ -388,10 +362,10 @@ async function clear(r2: R2): Promise<void> {
   const s3 = rawS3();
   const bucket = env.r2.scoresBucket;
 
-  // Delete the matches/ + celebrate/ objects of manifest ids only.
+  // Delete the matches/ objects of manifest ids only.
   const seeded = await loadManifest(r2);
   const objectKeys: string[] = [];
-  for (const prefix of ["matches/", "celebrate/"]) {
+  for (const prefix of ["matches/"]) {
     for (const key of await listKeys(s3, prefix)) {
       const id = Number(key.replace(prefix, "").replace(/\.json$/, ""));
       if (seeded.has(id)) objectKeys.push(key);
@@ -426,15 +400,13 @@ async function main(): Promise<void> {
     case "seed": return void (await seed(r2, args));
     case "advance": return void (await advance(r2, args));
     case "goal": return void (await goal(r2, args));
-    case "celebrate": return void (await celebrate(r2, args));
     case "clear": return void (await clear(r2));
     default:
       console.error(
-        "usage: npm run fake -- <seed|advance|goal|celebrate|clear> [flags]\n" +
+        "usage: npm run fake -- <seed|advance|goal|clear> [flags]\n" +
           "  seed      --count N --state SCHEDULED|LIVE|HT|FINISHED[,...] [--days -1,0,1] [--time HH:MM] [--spacing-minutes N] [--fixture-start ID]\n" +
           "  advance   --fixture ID --status <1H|HT|2H|ET|FT|...> [--minute N]\n" +
           "  goal      --fixture ID --team <home|away> [--count N]\n" +
-          "  celebrate --fixture ID --team <teamId> --count N\n" +
           "  clear",
       );
       process.exit(1);
