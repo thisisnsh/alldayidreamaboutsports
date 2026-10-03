@@ -13,7 +13,7 @@ gcloud projects create dreamaboutsports-staging && gcloud billing projects link 
 Then in the [Firebase console](https://console.firebase.google.com):
 
 1. **Add Firebase to the GCP project**, register the macOS app (bundle id
-   `com.alldayidreamaboutsports.mac`), and download `GoogleService-Info.plist`.
+   `com.alldaysports`), and download `GoogleService-Info.plist`.
    Save it locally as `app/Resources/GoogleService-Info-Staging.plist` or
    `app/Resources/GoogleService-Info-Production.plist`. See
    [`app/README.md`](../app/README.md#real-service-configuration).
@@ -67,7 +67,7 @@ Maximum instances does not cap the total bill or downstream-service usage.
 - Scopes: only `openid`, `email`, `profile` (non-sensitive → no review wait).
 - **Publishing status: In production** — in Testing mode sign-in caps at 100 users.
 - Clients → create client → **iOS type** (used by Google Sign-In for this macOS
-  app), bundle id `com.alldayidreamaboutsports.mac`, then download its plist.
+  app), bundle id `com.alldaysports`, then download its plist.
   Put its `CLIENT_ID` in the environment's `google-oauth-client-id` Secret
   Manager secret. Put its `CLIENT_ID` and `REVERSED_CLIENT_ID` in the matching
   `Staging`/`Release` settings in `app/project.yml`; the reversed value is only
@@ -180,8 +180,9 @@ curl -fsS https://scores-staging.alldayidreamaboutsports.com/fixtures-$(date -u 
 ```
 
 Production `scores.alldayidreamaboutsports.com` remains empty until the
-production backend is deployed and its jobs run. The downloads domain remains
-empty until the first signed release is published with `app/scripts/publish.sh`.
+production backend is deployed and its jobs run. The `download-staging.` /
+`download.` buckets held the old website DMGs + Sparkle appcast; the app now
+ships only through the Mac App Store, so nothing publishes to them any more.
 
 DNS for `alldayidreamaboutsports.com`: apex → **GitHub Pages** (A records
 185.199.108.153/.109/.110/.111). The website lives in the **public** repo
@@ -207,88 +208,17 @@ plus 20 for the schedule sync and 12 for the catalog sync. An average day is
 nearer 22,000. A sixth league does not fit without the Mega plan — watch the
 request counter on the first live weekend.
 
-## 5. Sparkle keys (global, once)
+## 5. Apple (global, once)
 
-```sh
-# from a Sparkle release download
-./bin/generate_keys   # prints public key, stores private key in Keychain
-./bin/generate_keys -x sparkle_private_key  # export for backup
-```
+The app ships only through the Mac App Store and is signed by Xcode's automatic
+signing — no certificates, notarization or signing secrets live in this repo or
+in CI. At [developer.apple.com](https://developer.apple.com/account/resources/identifiers/list),
+register the explicit App ID `com.alldaysports` with **Keychain Sharing**. Push
+Notifications are not used (the app polls the scores CDN), so no APNs key /
+Cloud Messaging setup is required. App Store Connect setup and the
+archive/upload flow: [`app/README.md`](../app/README.md#mac-app-store).
 
-- Public key → `SUPublicEDKey` in `app/project.yml`.
-- Private key stays in your **login Keychain** — the appcast is signed locally by
-  `app/scripts/publish.sh`, not in CI. Keep a
-  Keychain/password-manager backup — losing it strands all installed apps.
-
-## 6. Apple signing (global, once)
-
-GitHub Actions uses a **Developer ID Application** certificate to sign the app
-and DMG, then submits both to Apple's notary service. These are repository-level
-credentials shared by both environments.
-
-### Signing certificate
-
-1. In Xcode, open **Settings → Accounts**, select the Apple ID and team
-   `983LBM5U6B`, then open **Manage Certificates**. Create or download a
-   **Developer ID Application** certificate. Do not use an **Apple Development**
-   certificate.
-2. Confirm macOS can use the certificate and its private key:
-
-   ```sh
-   security find-identity -v -p codesigning
-   ```
-
-   The output must include:
-
-   ```text
-   Developer ID Application: Nishant Hada (983LBM5U6B)
-   ```
-
-3. In Keychain Access, select the **login** keychain and **My Certificates**.
-   Expand the Developer ID Application certificate and confirm that it contains
-   a private key. Right-click the parent certificate, choose **Export**, save it
-   as a `.p12`, and protect it with a strong export password. If `.p12` is
-   disabled, the certificate/private-key pair is not selected; export from
-   **My Certificates**, not **Certificates** or **All Items**.
-4. Convert the `.p12` to Base64 and copy it to the clipboard:
-
-   ```sh
-   base64 -i /path/to/developer-id-application.p12 | pbcopy
-   ```
-
-5. In **GitHub → repository Settings → Secrets and variables → Actions**, add:
-
-   | Secret | Value |
-   |---|---|
-   | `MACOS_CERT_P12_B64` | Base64 value copied above |
-   | `MACOS_CERT_PASSWORD` | Password used when exporting the `.p12` |
-
-Keep a secure backup of the `.p12` and its password, then delete the unprotected
-local export when it is no longer needed.
-
-### Notarization credentials
-
-Create an app-specific password for the Apple ID associated with the developer
-team at [account.apple.com](https://account.apple.com). Add these GitHub
-repository secrets:
-
-| Secret | Value |
-|---|---|
-| `APPLE_ID` | Apple ID email address |
-| `APPLE_TEAM_ID` | `983LBM5U6B` |
-| `APPLE_APP_PASSWORD` | Generated app-specific password, not the Apple ID password |
-
-The `app-release.yml` workflow imports the `.p12` into a temporary keychain,
-signs the app and DMG, submits both with `notarytool`, and staples Apple's
-notarization tickets.
-
-### App identifier
-
-At [developer.apple.com](https://developer.apple.com/account/resources/identifiers/list),
-register `com.alldayidreamaboutsports.mac`. Push Notifications are not used (the
-app polls the scores CDN), so no APNs key / Cloud Messaging setup is required.
-
-## 7. Other backend secrets
+## 6. Other backend secrets
 
 ```sh
 openssl rand -hex 32 | gcloud secrets versions add session-jwt-secret --data-file=-
@@ -300,13 +230,9 @@ openssl rand -hex 32 | gcloud secrets versions add session-jwt-secret --data-fil
 |---|---|---|
 | env secret | `GCP_WORKLOAD_IDENTITY_PROVIDER`, `GCP_DEPLOY_SERVICE_ACCOUNT` | setup-gcp.sh output |
 | env var | `GCP_PROJECT_ID`, `GCP_REGION`, `R2_BUCKET_SCORES` | setup-gcp.sh output + scores bucket table |
-| repo secret | `GOOGLE_SERVICE_INFO_PRODUCTION_PLIST_B64` | Production Firebase plist; app release workflow |
-| repo secret | `GOOGLE_OAUTH_PRODUCTION_CLIENT_ID`, `GOOGLE_OAUTH_PRODUCTION_REVERSED_CLIENT_ID` | Production OAuth plist; app release workflow |
-| repo secret | `MACOS_CERT_P12_B64`, `MACOS_CERT_PASSWORD`, `APPLE_ID`, `APPLE_TEAM_ID`, `APPLE_APP_PASSWORD` | Apple |
 
-The Sparkle private key and R2 credentials are **not** GitHub secrets: the
-appcast is signed and uploaded to R2 locally (`app/scripts/publish.sh`), and the
-backend reads its R2 creds from GCP Secret Manager (`r2-*`, via
+There are no app secrets in GitHub: the app is built and uploaded from Xcode.
+The backend reads its R2 creds from GCP Secret Manager (`r2-*`, via
 `backend-deploy.yml`).
 
 ## Kill switch runbook
@@ -317,7 +243,8 @@ backend reads its R2 creds from GCP Secret Manager (`r2-*`, via
 - **Recover**: publish `kill_switch=false` in Firebase and clear `killSwitch`
   from the R2 `config.json` (or set it to `false`) if the backup was used.
   The app stays killed until every source that enabled the switch clears it.
-- **Force update**: set `min_build` to the new build number after a bad release.
+- **Force update**: set `min_build` to the new build number after a bad
+  release — only once that build is live on the App Store.
 - **Offer update**: set `latest_build` to the newest published build. Older
   installs show a soft "Update available" banner atop the menu (still usable);
   leave at `0` to hide the banner.

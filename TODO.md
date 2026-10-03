@@ -30,8 +30,8 @@ Because of that, most cloud things get created **twice** — once in staging, on
 in prod (you'll see "per env" below). The app carries **two**
 `GoogleService-Info.plist` files (a staging one and a prod one) and the
 `Staging`/`Release` build configuration copies in the right one. The things you
-make once and reuse for both are your Apple signing identity and the Sparkle
-key — they're tied to your account, not to a project.
+make once and reuse for both are the Apple App ID and the App Store Connect
+record — they're tied to your account, not to a project.
 
 ---
 
@@ -40,7 +40,7 @@ key — they're tied to your account, not to a project.
 These are the paid/identity things nothing else works without.
 
 - [ ] **Apple Developer membership** active for team `983LBM5U6B`. Then register
-      the app's bundle id `com.alldayidreamaboutsports.mac`. No Push
+      the app's bundle id `com.alldaysports` (explicit, Keychain Sharing). No Push
       Notifications capability is needed — the app polls.
 - [ ] **Subscribe to API-Football "Ultra"** ($29/mo) and copy the API key. This
       is the live-scores data feed the backend polls. It runs year-round now, so
@@ -78,7 +78,7 @@ Everything else (bundle id, buckets, domain) still uses the full name.
       Platform). While it's in "Testing" mode, only 100 people total can ever
       sign in — that's a hard ship-blocker.
 - [ ] **Finish Google OAuth per environment.** You already created the staging
-      iOS-type OAuth client for `com.alldayidreamaboutsports.mac`; its values are
+      iOS-type OAuth client; change its bundle id to `com.alldaysports`. Its values are
       now configured in `app/project.yml`. Add its `CLIENT_ID` as the staging
       Secret Manager secret `google-oauth-client-id` so the backend accepts the
       same sign-ins. For prod, create another OAuth client in the prod project,
@@ -102,8 +102,7 @@ R2 is object storage like an S3 bucket, but Cloudflare serves it through their
 CDN with **zero egress fees** — that's what keeps the bill near $0 even if the
 app blows up (on plain GCP the same traffic could cost hundreds to thousands).
 The app fetches fixtures, live scores, and celebration counts from here whenever
-the menu opens, and downloads ship from here too. Custom domains (`scores.` /
-`download.`) are the reason the domain's DNS lives on Cloudflare.
+the menu opens. The `scores.` custom domains are the reason the domain's DNS lives on Cloudflare.
 
 - [ ] **Run `./infra/setup-r2.sh`** with `CLOUDFLARE_API_TOKEN`,
       `CLOUDFLARE_ACCOUNT_ID`, and `CLOUDFLARE_ZONE_ID` to create the buckets,
@@ -118,12 +117,7 @@ the menu opens, and downloads ship from here too. Custom domains (`scores.` /
       DNS is now on Cloudflare.
 - [ ] **Create an R2 API token** (read+write all four buckets) → save as GCP secrets
       `r2-access-key-id` / `r2-secret-access-key` / `r2-endpoint` so the backend
-      can write score files. Releases upload to R2 from your Mac via
-      `app/scripts/publish.sh` using your own local R2 env file — no GitHub
-      `R2_*` secrets needed.
-- [ ] **After the first release:** add a redirect rule so
-      `download.../latest` always points at the newest DMG (the website's
-      download button links there, so it never goes stale).
+      can write score files.
 
 ## 4. GitHub repo settings
 
@@ -143,27 +137,18 @@ hosts the marketing website on free GitHub Pages.
 - [ ] **Create `staging` + `prod` environments** in repo settings and add the
       secrets/vars listed in the table in `infra/README.md`. This is how CI
       deploys to the right cloud project.
-- [ ] **Add the release secrets** (for building & notarizing the prod app in CI):
-      `GOOGLE_SERVICE_INFO_PRODUCTION_PLIST_B64`,
-      `GOOGLE_OAUTH_PRODUCTION_CLIENT_ID`,
-      `GOOGLE_OAUTH_PRODUCTION_REVERSED_CLIENT_ID`, `MACOS_CERT_P12_B64`,
-      `MACOS_CERT_PASSWORD`, `APPLE_ID`, `APPLE_TEAM_ID`, `APPLE_APP_PASSWORD`.
-      (The Sparkle signing key and R2 creds stay on your Mac.)
+## 5. Mac App Store (one-time) — `app/README.md#mac-app-store`
 
-## 5. Signing & Sparkle (on this Mac — mostly DONE)
+The app ships only through the Mac App Store, built and uploaded from Xcode with
+automatic signing — no certificates to export, no notarization, no CI.
 
-This is the code-signing/auto-update plumbing so macOS trusts the app and it can
-update itself.
-
-- [x] Sparkle EdDSA keypair generated (2026-06-11); public key already in
-      `app/project.yml`.
-- [ ] **Back up the Sparkle private key** (Keychain → "Private key for signing
-      Sparkle updates", or `generate_keys -x`). This key signs every update — if
-      you lose it, *no existing install can ever update again* and you'd have to
-      get everyone to reinstall by hand. It lives in your Keychain (used locally
-      by `publish.sh`), not in CI.
-- [ ] **Export your Developer ID certificate** as a `.p12` → add to CI secrets so
-      CI can sign release builds.
+- [ ] **Register Firebase Apple apps** for `com.alldaysports` in staging and
+      prod, and replace both `GoogleService-Info-*.plist` files.
+- [ ] **Create the App Store Connect record** (New macOS App,
+      `com.alldaysports`): listing, screenshots, privacy labels, demo reviewer
+      account.
+- [ ] **Sign in with Apple** (guideline 4.8): sign-in is Google-only and
+      required, so App Review will likely ask for it.
 
 ## 6. End-to-end test on staging (during any live league match)
 
@@ -196,16 +181,13 @@ Don't ship without watching the whole pipeline work on a real goal. Use a
 
 - [ ] **Redo sections 2–3 for prod** (`dreamaboutsports-prod` + prod
       plist/secrets) and deploy the backend to prod.
-- [ ] **Tag `v1.0.0`** → CI builds the DMG. Download and test it, then
-      `./app/scripts/publish.sh <dmg> --release` to push the appcast + delta
-      updates to the `download.` domain.
-- [ ] **Verify Gatekeeper** on a *clean* Mac: `spctl --assess` should say
-      "Notarized Developer ID" — that's macOS confirming the app is trusted.
-- [ ] **Check the website is live** (public repo): download button works and the
-      privacy page is reachable (the OAuth consent screen links to it).
-- [ ] **Verify the Sparkle appcast** contains the shipped build, and keep Remote
-      Config `min_build` unchanged unless you need to force older installs to
-      update.
+- [ ] **Archive in Xcode and upload** (Product → Archive → Distribute App →
+      App Store Connect), test the build via TestFlight, then submit for review.
+- [ ] **Check the website is live** (public repo): it links to the App Store
+      listing and the privacy page is reachable (the OAuth consent screen links
+      to it).
+- [ ] Keep Remote Config `min_build` unchanged unless you need to force older
+      installs to update — and only raise it once that build is live.
 - [ ] **📣 Announce** — and keep the kill-switch runbook (`infra/README.md`)
       handy during matches.
 
