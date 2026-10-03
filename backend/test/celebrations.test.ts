@@ -83,6 +83,38 @@ describe("CelebrationAggregator", () => {
   });
 });
 
+describe("CelebrationAggregator failures", () => {
+  it("retries a failed publish without re-adding committed taps", async () => {
+    const store = fakeStore();
+    const r2 = fakeR2();
+    r2.putJson.mockRejectedValueOnce(new Error("r2 down"));
+    const agg = new CelebrationAggregator(store, r2 as never, ...ALWAYS_PUBLISH);
+    agg.add(1, "6", 12);
+
+    await agg.flush(); // increment lands, publish fails
+    await agg.flush(); // publish retried alone
+
+    expect(store.addCelebrations).toHaveBeenCalledTimes(1);
+    expect(agg.pending().size).toBe(0);
+    expect(r2.putJson).toHaveBeenCalledTimes(2);
+    await agg.flush();
+    expect(r2.putJson).toHaveBeenCalledTimes(2); // nothing left to publish
+  });
+
+  it("requeues taps whose increment failed", async () => {
+    const store = fakeStore();
+    vi.mocked(store.addCelebrations).mockRejectedValueOnce(new Error("firestore down"));
+    const agg = new CelebrationAggregator(store, fakeR2() as never, ...ALWAYS_PUBLISH);
+    agg.add(1, "6", 12);
+
+    await agg.flush();
+    expect(agg.pending().get(1)).toEqual({ "6": 12 });
+    await agg.flush();
+    expect(store.addCelebrations).toHaveBeenLastCalledWith(1, { "6": 12 });
+    expect(agg.pending().size).toBe(0);
+  });
+});
+
 describe("celebrate input", () => {
   it("accepts only canonical numeric team ids", () => {
     const parse = (teamId: string) => celebrateSchema.safeParse({ fixtureId: 1, teamId, taps: 4 }).success;

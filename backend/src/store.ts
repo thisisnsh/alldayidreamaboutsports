@@ -31,20 +31,18 @@ export class Store {
 
   async addCelebrations(fixtureId: number, counts: Record<string, number>): Promise<void> {
     const shard = Math.floor(Math.random() * CELEBRATION_SHARDS);
-    const ref = this.db
-      .collection("celebrations")
-      .doc(String(fixtureId))
-      .collection("shards")
-      .doc(String(shard));
+    const parent = this.db.collection("celebrations").doc(String(fixtureId));
+    const ref = parent.collection("shards").doc(String(shard));
     const increments: Record<string, FieldValue> = {};
     for (const [team, n] of Object.entries(counts)) {
       increments[team] = FieldValue.increment(n);
     }
-    await ref.set(increments, { merge: true });
-    await this.db
-      .collection("celebrations")
-      .doc(String(fixtureId))
-      .set({ updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+    // One atomic commit: a failure leaves neither write behind, so the caller
+    // can safely retry the whole increment.
+    const batch = this.db.batch();
+    batch.set(ref, increments, { merge: true });
+    batch.set(parent, { updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+    await batch.commit();
   }
 
   async celebrationTotals(fixtureId: number): Promise<Record<string, number>> {
