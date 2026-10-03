@@ -24,7 +24,7 @@ const schedule = new ScheduleService(provider, r2);
 
 celebrations.start();
 
-const app = buildApp({ store, poller, dispatcher, window, catalog, schedule, celebrations, r2 });
+const app = buildApp({ poller, dispatcher, window, catalog, schedule, celebrations, r2 });
 const server = app.listen(env.port, () => {
   log.info("backend_listening", { port: env.port });
 });

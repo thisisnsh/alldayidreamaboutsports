@@ -1,6 +1,6 @@
 import express, { type Express, type NextFunction, type Request, type Response } from "express";
 import { z } from "zod";
-import { requireSchedulerOidc, requireSession, signSession, verifyGoogleIdToken } from "./auth.js";
+import { requireSchedulerOidc } from "./auth.js";
 import type { CatalogService } from "./catalog.js";
 import type { CelebrationAggregator } from "./celebrations.js";
 import { env } from "./env.js";
@@ -9,7 +9,6 @@ import type { Poller } from "./poller.js";
 import { CACHE_CONTROL_LIVE, type R2 } from "./r2.js";
 import { FixedWindowRateLimiter } from "./rateLimit.js";
 import type { ScheduleService } from "./schedule.js";
-import type { Store } from "./store.js";
 import type { Dispatcher, MatchWindow } from "./tasks.js";
 import type { MatchState } from "./types.js";
 import { log } from "./log.js";
@@ -39,7 +38,6 @@ const testEventSchema = z.object({
 });
 
 export interface Deps {
-  store: Store;
   poller: Poller;
   dispatcher: Dispatcher;
   window: MatchWindow;
@@ -130,51 +128,21 @@ export async function probeCacheHealth(
 }
 
 export function buildApp(
-  { store, poller, dispatcher, window, catalog, schedule, celebrations, r2 }: Deps,
+  { poller, dispatcher, window, catalog, schedule, celebrations, r2 }: Deps,
 ): Express {
   const app = express();
-  const signInRateLimiter = new FixedWindowRateLimiter(10, 60_000);
-  const sessionRateLimiter = new FixedWindowRateLimiter(120, 60_000);
+  // The app is anonymous, so celebrations are rate-limited per client IP.
   const celebrationRateLimiter = new FixedWindowRateLimiter(60, 60_000);
   app.use(express.json({ limit: "16kb" }));
 
   // Cloud Run reserves the exact /healthz path; the trailing slash reaches the app.
   app.get("/healthz/", (_req, res) => res.json({ ok: true }));
 
-  app.post("/auth/signin", enforceRateLimit(signInRateLimiter, clientIp), async (req, res) => {
-    try {
-      const idToken = z.object({ idToken: z.string().min(10) }).parse(req.body).idToken;
-      const user = await verifyGoogleIdToken(idToken);
-      await store.upsertUser(user.sub, {
-        name: user.name,
-        email: user.email,
-        photoURL: user.photoURL,
-      });
-      res.json({ token: await signSession(user), profile: user });
-    } catch (err) {
-      res.status(401).json({ error: `sign-in failed: ${(err as Error).message}` });
-    }
-  });
-
-  const requireRateLimitedSession = [
-    requireSession,
-    enforceRateLimit(sessionRateLimiter, (req) => req.user!.sub),
-  ];
-
-  app.post("/celebrate", requireRateLimitedSession, (req: Request, res: Response) => {
-    if (!celebrationRateLimiter.allow(req.user!.sub)) {
-      res.status(429).json({ error: "celebration rate limit exceeded" });
-      return;
-    }
+  app.post("/celebrate", enforceRateLimit(celebrationRateLimiter, clientIp), (req: Request, res: Response) => {
     const parsed = celebrateSchema.safeParse(req.body);
     if (!parsed.success) return void res.status(400).json({ error: parsed.error.message });
     const { fixtureId, teamId, taps } = parsed.data;
     celebrations.add(fixtureId, teamId, taps); // in-memory; flushed on interval
-    res.json({ ok: true });
-  });
-
-  app.delete("/me", requireRateLimitedSession, async (req: Request, res: Response) => {
-    await store.deleteUser(req.user!.sub);
     res.json({ ok: true });
   });
 

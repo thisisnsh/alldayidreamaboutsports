@@ -58,27 +58,7 @@ Until then, deployment caps Cloud Run at 50 instances to bound scaling cost;
 raising that cap trades stronger availability for higher billing exposure.
 Maximum instances does not cap the total bill or downstream-service usage.
 
-## 2. Google OAuth (sign-in) — ⚠️ ship blocker
-
-[Console → APIs & Services → OAuth consent screen](https://console.cloud.google.com/apis/credentials/consent):
-
-- External, app name "All Day I Dream About Sports", domain
-  `alldayidreamaboutsports.com`, privacy policy `https://alldayidreamaboutsports.com/privacy`.
-- Scopes: only `openid`, `email`, `profile` (non-sensitive → no review wait).
-- **Publishing status: In production** — in Testing mode sign-in caps at 100 users.
-- Clients → create client → **iOS type** (used by Google Sign-In for this macOS
-  app), bundle id `com.thisisnsh.alldaysports`, then download its plist.
-  Put its `CLIENT_ID` in the environment's `google-oauth-client-id` Secret
-  Manager secret. Put its `CLIENT_ID` and `REVERSED_CLIENT_ID` in the matching
-  `Staging`/`Release` settings in `app/project.yml`; the reversed value is only
-  the callback URL scheme. Full example: [`app/README.md`](../app/README.md#real-service-configuration).
-
-  ```sh
-  printf '%s' '<CLIENT_ID>' | gcloud secrets versions add google-oauth-client-id \
-    --project=dreamaboutsports-staging --data-file=-
-  ```
-
-## 3. Cloudflare
+## 2. Cloudflare
 
 ```sh
 CLOUDFLARE_API_TOKEN=<token> \
@@ -191,7 +171,7 @@ from a branch" `main`/root, custom domain + HTTPS enforced) — Pages isn't free
 this private repo. `scores-staging.`, `scores.`, `download-staging.`, and
 `download.` -> R2 custom domains (Cloudflare-proxied).
 
-## 4. API-Football
+## 3. API-Football
 
 Subscribe to **Ultra** ($29/mo) at
 [api-football.com/pricing](https://www.api-football.com/pricing). Key → secret
@@ -208,7 +188,7 @@ plus 20 for the schedule sync and 12 for the catalog sync. An average day is
 nearer 22,000. A sixth league does not fit without the Mega plan — watch the
 request counter on the first live weekend.
 
-## 5. Apple (global, once)
+## 4. Apple (global, once)
 
 The app ships only through the Mac App Store and is signed by Xcode's automatic
 signing — no certificates, notarization or signing secrets live in this repo or
@@ -217,12 +197,6 @@ register the explicit App ID `com.thisisnsh.alldaysports` with **Keychain Sharin
 Notifications are not used (the app polls the scores CDN), so no APNs key /
 Cloud Messaging setup is required. App Store Connect setup and the
 archive/upload flow: [`app/README.md`](../app/README.md#mac-app-store).
-
-## 6. Other backend secrets
-
-```sh
-openssl rand -hex 32 | gcloud secrets versions add session-jwt-secret --data-file=-
-```
 
 ## GitHub secrets/vars summary
 

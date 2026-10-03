@@ -1,7 +1,7 @@
 # Backend — one Cloud Run service
 
 TypeScript/Express. Two personalities in one deployable:
-- **Public API** for the app: sign-in, celebrate, account deletion.
+- **Public API** for the app: anonymous `/celebrate`.
 - **Internal fetch** (`/internal/*`): one Cloud Scheduler job hits
   `/internal/dispatch` every minute (OIDC); it enqueues 12 Cloud Tasks spaced 5s
   apart, each calling `/internal/fetch`. A fetch is one range read PER LEAGUE
@@ -30,8 +30,6 @@ npm run dev         # tsx watch (needs env below)
 |---|---|---|
 | `GCP_PROJECT_ID` | deploy flag | Firestore + Cloud Tasks project |
 | `API_FOOTBALL_KEY` | Secret Manager | Ultra plan key |
-| `SESSION_JWT_SECRET` | Secret Manager | `openssl rand -hex 32` |
-| `GOOGLE_OAUTH_CLIENT_ID` | Secret Manager | iOS-type client id (token audience) |
 | `R2_ENDPOINT` / `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` | Secret Manager | R2 S3 API |
 | `R2_BUCKET_SCORES` | deploy var | required environment-specific scores bucket |
 | `SCHEDULER_SA_EMAIL` | optional | default `sports-scheduler@$PROJECT.iam.gserviceaccount.com` |
@@ -49,9 +47,7 @@ Admin SDK credentials.
 | Route | Auth | What |
 |---|---|---|
 | `GET /healthz/` | none | liveness |
-| `POST /auth/signin` | Google ID token | verify → upsert user → session JWT (30d) |
-| `POST /celebrate` | session JWT | `{fixtureId, teamId, taps}` — ONE batched call per goal per user |
-| `DELETE /me` | session JWT | account deletion |
+| `POST /celebrate` | none (per-IP rate limit) | `{fixtureId, teamId, taps}` — ONE batched call per goal per user |
 | `POST /internal/dispatch` | scheduler OIDC | enqueue 12 Cloud Tasks at 5s offsets → `/internal/fetch` |
 | `POST /internal/fetch` | scheduler OIDC | one fetch: read range per league → diff → R2 |
 | `POST /internal/sync-schedule` | scheduler OIDC | every 6h: rewrite `fixtures-{date}.json` for today±1, so the dispatch gate has something to read while the poller sleeps |
@@ -111,14 +107,12 @@ Defaults are a live La Liga Real Madrid–Barcelona fixture; every field in
    would be ~95,000 API calls/day against a 75,000 quota; window-gated, a peak
    Saturday is ~51,900. Do not remove the gate to "simplify" the dispatcher.
 
-`/celebrate` is limited to 60 calls per minute per authenticated user on each
-Cloud Run instance. This is basic abuse protection, not a globally coordinated
+`/celebrate` is limited to 60 calls per minute per client IP on each Cloud Run
+instance. This is basic abuse protection, not a globally coordinated
 quota. At high traffic, enforce an additional edge rate limit with Cloud Armor
 or another gateway in front of Cloud Run.
 
-Sign-in is limited to 10 attempts per minute per client IP, and authenticated
-API routes are limited to 120 calls per minute per user on each Cloud Run
-instance. Deployment caps the service at 50 instances as a scaling-cost
+Deployment caps the service at 50 instances as a scaling-cost
 safeguard. These limits reduce abuse but do not cap the total bill or replace a
 global Cloud Armor rate limit in front of production.
 

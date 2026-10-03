@@ -11,12 +11,6 @@ export const env = {
   get apiFootballKey() {
     return required("API_FOOTBALL_KEY");
   },
-  get sessionJwtSecret() {
-    return required("SESSION_JWT_SECRET");
-  },
-  get googleOauthClientId() {
-    return required("GOOGLE_OAUTH_CLIENT_ID");
-  },
   get r2() {
     return {
       endpoint: required("R2_ENDPOINT"),
