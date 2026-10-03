@@ -36,27 +36,42 @@ const dayISO = (ms: number) => new Date(ms).toISOString().slice(0, 10);
  * lets a warm instance see a newly published or rescheduled kickoff.
  */
 const SCHEDULE_TTL_MS = 10 * 60_000;
+/** How long after kickoff a match file counts as actively polled. */
+const IN_PLAY_MS = 2 * 60 * 60_000;
+
+interface Kickoff { fixtureId: number; at: number }
 
 export class MatchWindow {
-  private kickoffCache = new Map<string, { kickoffs: number[]; loadedAt: number }>();
+  private kickoffCache = new Map<string, { kickoffs: Kickoff[]; loadedAt: number }>();
 
   constructor(private readonly r2: R2 = new R2()) {}
 
   async isOpen(now = Date.now()): Promise<boolean> {
+    const kickoffs = await this.recentKickoffs(now);
+    return kickoffs.some(({ at }) => now >= at - WINDOW_LEAD_MS && now <= at + WINDOW_TAIL_MS);
+  }
+
+  /** Fixtures that kicked off within the last `IN_PLAY_MS` — the match files
+   * clients are polling right now, which the cache-health probe samples. */
+  async inPlayFixtureIds(now = Date.now()): Promise<number[]> {
+    const kickoffs = await this.recentKickoffs(now);
+    return kickoffs.filter(({ at }) => now >= at && now <= at + IN_PLAY_MS).map(({ fixtureId }) => fixtureId);
+  }
+
+  private async recentKickoffs(now: number): Promise<Kickoff[]> {
     const dates = [dayISO(now), dayISO(now - 86_400_000)];
     // Only today and yesterday are ever asked for, so the cache stays at two
     // entries — drop whatever the date roll left behind.
     for (const date of this.kickoffCache.keys()) {
       if (!dates.includes(date)) this.kickoffCache.delete(date);
     }
-    const kickoffs = (await Promise.all(dates.map((date) => this.kickoffs(date, now)))).flat();
-    return kickoffs.some((k) => now >= k - WINDOW_LEAD_MS && now <= k + WINDOW_TAIL_MS);
+    return (await Promise.all(dates.map((date) => this.kickoffs(date, now)))).flat();
   }
 
-  private async kickoffs(date: string, now: number): Promise<number[]> {
+  private async kickoffs(date: string, now: number): Promise<Kickoff[]> {
     const cached = this.kickoffCache.get(date);
     if (cached && now - cached.loadedAt < SCHEDULE_TTL_MS) return cached.kickoffs;
-    let kickoffs: number[] = [];
+    let kickoffs: Kickoff[] = [];
     try {
       const file = await this.r2.getJson<{ matches: MatchState[] }>(`fixtures-${date}.json`);
       // A missing file is a closed window, not an error: it just means nothing
@@ -64,8 +79,8 @@ export class MatchWindow {
       // opens as soon as the schedule sync writes it.
       if (!file) return [];
       kickoffs = file.matches
-        .map((m) => Date.parse(m.kickoffISO))
-        .filter((ms) => Number.isFinite(ms));
+        .map((m) => ({ fixtureId: m.fixtureId, at: Date.parse(m.kickoffISO) }))
+        .filter(({ at }) => Number.isFinite(at));
     } catch (error) {
       // Fail CLOSED. If R2 reads are failing we cannot publish match state
       // either, so polling through it would burn quota for nothing — and a
