@@ -47,7 +47,7 @@ gcloud firestore databases describe --database="(default)" >/dev/null 2>&1 || \
   gcloud firestore databases create --location="$REGION" --type=firestore-native
 
 echo "── Secrets (placeholders — set real values after)"
-for s in api-football-key session-jwt-secret r2-access-key-id r2-secret-access-key r2-endpoint google-oauth-client-id; do
+for s in api-football-key r2-access-key-id r2-secret-access-key r2-endpoint; do
   gcloud secrets describe "$s" >/dev/null 2>&1 || \
     printf 'CHANGE_ME' | gcloud secrets create "$s" --data-file=-
 done
@@ -175,8 +175,7 @@ cat <<EOF
 Manual steps remaining (see infra/README.md):
   1. Firebase: add project in console, publish remoteconfig.template.json
      (no APNs/FCM — push was dropped for polling + CDN)
-  2. OAuth consent screen → External → "In production" (basic scopes only)
-  3. Set real secret values (API-Football key, JWT secret, R2 creds, OAuth client id)
-  4. First deploy: gh workflow run backend-deploy.yml, then rerun this script so
+  2. Set real secret values (API-Football key, R2 creds)
+  3. First deploy: gh workflow run backend-deploy.yml, then rerun this script so
      the scheduler job gets the real service URL
 EOF

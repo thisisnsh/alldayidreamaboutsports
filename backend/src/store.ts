@@ -27,32 +27,6 @@ export class Store {
     this.db = db ?? defaultFirestore();
   }
 
-  // ── Users ──────────────────────────────────────────────────────────────
-
-  private userRef(sub: string) {
-    return this.db.collection("users").doc(sub);
-  }
-
-  async upsertUser(
-    sub: string,
-    profile: { name: string | null; email: string | null; photoURL: string | null },
-  ): Promise<void> {
-    const ref = this.userRef(sub);
-    const snap = await ref.get();
-    await ref.set(
-      {
-        ...profile,
-        ...(snap.exists ? {} : { createdAt: FieldValue.serverTimestamp() }),
-        updatedAt: FieldValue.serverTimestamp(),
-      },
-      { merge: true },
-    );
-  }
-
-  async deleteUser(sub: string): Promise<void> {
-    await this.userRef(sub).delete();
-  }
-
   // ── Celebrations (sharded counters, cumulative per team per match) ──────
 
   async addCelebrations(fixtureId: number, counts: Record<string, number>): Promise<void> {
