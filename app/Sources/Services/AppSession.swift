@@ -388,9 +388,13 @@ final class AppSession: ObservableObject {
             guard ControlPlane.shared.isOperational else { return }
             loaded.insert(key(date))
             for fixture in fetched {
-                // Don't clobber a fixture the live loop is actively polling — the
-                // schedule file can be up to 12h stale on score/status.
-                if fixturesById[fixture.fixtureId]?.needsFrequentRefresh(at: now) == true {
+                // Don't clobber observed match state with a schedule row (always
+                // SCHEDULED / 0-0 by construction): not a fixture the live loop
+                // is actively polling, and never a final result — once a match
+                // is FINISHED it's out of the poll loop, and its matches/{id}
+                // file answers 304, so nothing would ever restore the score.
+                if let existing = fixturesById[fixture.fixtureId],
+                   existing.needsFrequentRefresh(at: now) || existing.status == "FINISHED" {
                     continue
                 }
                 fixturesById[fixture.fixtureId] = fixture
