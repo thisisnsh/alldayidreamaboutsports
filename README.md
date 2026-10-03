@@ -15,7 +15,7 @@ every 5 seconds — one call per league — and writes every match's state to
 Cloudflare R2 as JSON with a 5s edge TTL. Every Mac polls those same cached
 objects. One goal costs us one R2 write however many people are watching, and
 the reads are served by Cloudflare's edge, which is unmetered on a proxied zone.
-Sign-in is Google OAuth verified by our own API.
+The app is anonymous — there is no sign-in.
 
 The poller is **gated on a live match window**: outside
 `[kickoff−30min, kickoff+4h]` for every fixture it knows about, it enqueues no
@@ -27,7 +27,7 @@ is what keeps them inside the API-Football quota.
                      ▼
 API-Football ──▶ Cloud Run backend ──▶ R2 JSON ──▶ Cloudflare CDN
                       │      ▲                          │
-                      ▼      │ /auth /me /celebrate     │ 5s poll
+                      ▼      │ /celebrate               │ 5s poll
                  Firestore   └──────── menu bar apps ◀──┘
 ```
 

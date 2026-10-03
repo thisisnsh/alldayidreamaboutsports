@@ -14,9 +14,6 @@ packages:
   Firebase:
     url: https://github.com/firebase/firebase-ios-sdk
     from: 11.0.0
-  GoogleSignIn:
-    url: https://github.com/google/GoogleSignIn-iOS
-    from: 8.0.0
 
 # Distributed only through the Mac App Store: sandboxed, signed automatically
 # by Xcode (Apple Development to run, Apple Distribution when archived), and
@@ -38,8 +35,6 @@ targets:
         product: FirebaseCrashlytics
       - package: Firebase
         product: FirebaseAnalytics
-      - package: GoogleSignIn
-        product: GoogleSignIn
     settings:
       base:
         PRODUCT_NAME: All Day I Dream About Sports
@@ -55,12 +50,10 @@ targets:
         SWIFT_VERSION: 5.10
         DEAD_CODE_STRIPPING: true
       configs:
-        # Debug = fake services (no sign-in, no network, no API quota).
+        # Debug = fake services (no network, no API quota).
         # Staging/Release = real services in their respective cloud projects.
         Debug:
           SWIFT_ACTIVE_COMPILATION_CONDITIONS: DEBUG DEV_BACKEND
-          GOOGLE_CLIENT_ID: UNUSED_IN_DEBUG
-          GOOGLE_REVERSED_CLIENT_ID: UNUSED_IN_DEBUG
           APP_API_BASE_URL: https://unused.invalid
           # The ONE real read a Debug build makes: catalog.json, so the picker
           # shows the current leagues and squads instead of a hand-maintained
@@ -70,15 +63,11 @@ targets:
           APP_SCORES_BASE_URL: https://scores.alldayidreamaboutsports.com
         Staging:
           SWIFT_ACTIVE_COMPILATION_CONDITIONS: STAGING
-          GOOGLE_CLIENT_ID: 291291942072-cqsmesng18bagi6psv69n5ch4kcnvj2s.apps.googleusercontent.com
-          GOOGLE_REVERSED_CLIENT_ID: com.googleusercontent.apps.291291942072-cqsmesng18bagi6psv69n5ch4kcnvj2s
           GOOGLE_SERVICE_INFO_PLIST: GoogleService-Info-Staging.plist
           # Staging domains deliberately do not point at production.
           APP_API_BASE_URL: https://api-staging.alldayidreamaboutsports.com
           APP_SCORES_BASE_URL: https://scores-staging.alldayidreamaboutsports.com
         Release:
-          GOOGLE_CLIENT_ID: 680190781802-t248eiqmjqaorv3ucok84t1ap9rrgc8q.apps.googleusercontent.com
-          GOOGLE_REVERSED_CLIENT_ID: com.googleusercontent.apps.680190781802-t248eiqmjqaorv3ucok84t1ap9rrgc8q
           GOOGLE_SERVICE_INFO_PLIST: GoogleService-Info-Production.plist
           APP_API_BASE_URL: https://api.alldayidreamaboutsports.com
           APP_SCORES_BASE_URL: https://scores.alldayidreamaboutsports.com
@@ -97,11 +86,6 @@ targets:
         NSHumanReadableCopyright: © 2026 alldayidreamaboutsports.com
         APIBaseURL: $(APP_API_BASE_URL)
         ScoresBaseURL: $(APP_SCORES_BASE_URL)
-        # Google Sign-In. Values are selected by build configuration above.
-        GIDClientID: $(GOOGLE_CLIENT_ID)
-        CFBundleURLTypes:
-          - CFBundleURLSchemes:
-              - $(GOOGLE_REVERSED_CLIENT_ID)
         # HTTPS only — exempt, so App Store Connect skips the export
         # compliance question on every upload.
         ITSAppUsesNonExemptEncryption: false

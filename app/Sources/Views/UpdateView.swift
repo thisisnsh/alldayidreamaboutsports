@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// Forced/optional update window. The menu-bar popover only opens this window
-/// (same as the "Sign in" flow); "Update now" hands off to the App Store.
+/// Forced/optional update window, opened from the menu-bar popover; "Update
+/// now" hands off to the App Store.
 struct UpdateView: View {
     @EnvironmentObject var session: AppSession
     @ObservedObject private var control = ControlPlane.shared

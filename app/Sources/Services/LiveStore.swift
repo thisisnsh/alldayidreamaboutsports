@@ -138,7 +138,7 @@ final class LiveStore {
     /// each live fan match's `matches/{id}.json`, diff/merge the score, fire any
     /// new goal's events, and kick off the celebration refresh on a score move.
     func refreshNow() async {
-        guard session.isSignedIn, ControlPlane.shared.isOperational else { return }
+        guard ControlPlane.shared.isOperational else { return }
         await pollCycle()
     }
 
@@ -157,7 +157,7 @@ final class LiveStore {
     /// Reuses `ingest`, whose baseline guard emits no events on first observation
     /// — so reconciling a long-finished match never replays its goals.
     func reconcileFanMatches(teamIds: Set<Int>? = nil) async {
-        guard session.isSignedIn, ControlPlane.shared.isOperational else { return }
+        guard ControlPlane.shared.isOperational else { return }
         let teams = teamIds ?? session.fanTeamIds
         guard !teams.isEmpty else { return }
         let now = Date()
@@ -172,7 +172,7 @@ final class LiveStore {
 
         var merged = false
         for previous in targets {
-            guard session.isSignedIn, ControlPlane.shared.isOperational else { return }
+            guard ControlPlane.shared.isOperational else { return }
             let current: Fixture
             do {
                 current = try await scores.fetchFixture(fixtureId: previous.fixtureId)
@@ -191,7 +191,7 @@ final class LiveStore {
 
     private func run() async {
         while !Task.isCancelled {
-            if session.isSignedIn, ControlPlane.shared.isOperational {
+            if ControlPlane.shared.isOperational {
                 await session.bootstrapFixturesIfNeeded()
                 // Once per launch, reconcile any already-played fan match the
                 // windowed poll loop won't touch (finished while the app was
@@ -227,7 +227,7 @@ final class LiveStore {
         AppLog.debug(.fixtures, "poll_cycle targets=\(targets.map(\.fixtureId).sorted())")
 
         for previous in targets {
-            guard session.isSignedIn, ControlPlane.shared.isOperational else { return }
+            guard ControlPlane.shared.isOperational else { return }
             let current: Fixture
             do {
                 current = try await scores.fetchFixture(fixtureId: previous.fixtureId)
@@ -242,7 +242,7 @@ final class LiveStore {
                 AppAnalytics.pollFailed(stage: "poll", fixtureId: previous.fixtureId, error: error)
                 continue
             }
-            guard session.isSignedIn, ControlPlane.shared.isOperational else { return }
+            guard ControlPlane.shared.isOperational else { return }
 
             // Read before `ingest` re-stamps the observation: a fixture that
             // re-seeds after a gap fires no goals, so there are no fresh taps to
@@ -275,10 +275,10 @@ final class LiveStore {
         celebrationRefresh[fixtureId] = Task { @MainActor in
             let deadline = Date().addingTimeInterval(Self.celebrationRefreshWindow)
             while !Task.isCancelled, Date() < deadline {
-                guard session.isSignedIn, ControlPlane.shared.isOperational else { break }
+                guard ControlPlane.shared.isOperational else { break }
                 do {
                     let totals = try await scores.fetchCelebrations(fixtureId: fixtureId)
-                    guard session.isSignedIn, ControlPlane.shared.isOperational else { break }
+                    guard ControlPlane.shared.isOperational else { break }
                     session.mergeCelebrationTotals(totals, fixtureId: fixtureId)
                 } catch ScoresError.notModified {
                     // counts unchanged
@@ -291,7 +291,7 @@ final class LiveStore {
             // A newer goal cancelled us and restarted the window — it now owns
             // these teams and the state, and will notify once at the later end.
             guard !Task.isCancelled else { return }
-            if session.isSignedIn, ControlPlane.shared.isOperational {
+            if ControlPlane.shared.isOperational {
                 for teamId in celebrationNotify[fixtureId] ?? [] {
                     OverlayManager.shared.notifyCelebrationCount(fixtureId: fixtureId, teamId: String(teamId))
                 }

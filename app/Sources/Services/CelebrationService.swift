@@ -41,8 +41,7 @@ final class CelebrationService {
     private func flush() {
         guard !targets.isEmpty, taps > 0,
               ControlPlane.shared.celebrationEnabled,
-              ControlPlane.shared.isOperational,
-              AppSession.shared.isSignedIn else {
+              ControlPlane.shared.isOperational else {
             targets = []
             taps = 0
             return
@@ -66,7 +65,7 @@ final class CelebrationService {
         }
         Task {
             for target in batch {
-                guard ControlPlane.shared.isOperational, AppSession.shared.isSignedIn else { return }
+                guard ControlPlane.shared.isOperational else { return }
                 do {
                     try await api.celebrate(fixtureId: target.fixtureId, teamId: target.teamId, taps: count)
                     AppLog.info(.celebrations, "upload_complete fixture_id=\(target.fixtureId) team_id=\(target.teamId) taps=\(count)")

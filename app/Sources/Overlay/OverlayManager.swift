@@ -83,9 +83,6 @@ final class OverlayManager: ObservableObject {
     }
 
     private func enqueue(_ item: NotchItem, isGoal: Bool = false) {
-        // Covers stragglers that bypass EventRouter (celebration count pills
-        // resolving after a sign-out mid-set).
-        guard AppSession.shared.isSignedIn else { return }
         guard goalQueue.allSatisfy({ $0.item.id != item.id }),
               otherQueue.allSatisfy({ $0.item.id != item.id }),
               activeSet.allSatisfy({ $0.id != item.id }) else { return }

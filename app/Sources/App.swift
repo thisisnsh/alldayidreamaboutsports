@@ -17,8 +17,8 @@ struct AllDayIDreamAboutSportsApp: App {
 
         // Separate windows, all without title bars — just the traffic
         // lights over content; headings live in the views themselves.
-        Window("Sign In", id: WindowID.login) {
-            LoginView()
+        Window("Welcome", id: WindowID.welcome) {
+            WelcomeView()
                 .environmentObject(session)
         }
         .windowStyle(.hiddenTitleBar)
@@ -52,7 +52,7 @@ struct AllDayIDreamAboutSportsApp: App {
 }
 
 enum WindowID {
-    static let login = "login"
+    static let welcome = "welcome"
     static let teamPicker = "teamPicker"
     static let settings = "settings"
     static let update = "update"
