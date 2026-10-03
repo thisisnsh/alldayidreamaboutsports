@@ -31,10 +31,14 @@ const dayISO = (ms: number) => new Date(ms).toISOString().slice(0, 10);
  * Yesterday's file is read alongside today's because a 21:00 UTC kickoff runs
  * past midnight into the next UTC day.
  *
- * Cost of the gate: one R2 GET per date per instance per day.
+ * Cost of the gate: one R2 GET per date per instance every `SCHEDULE_TTL_MS`
+ * (a missing file is re-read every minute until it exists). The TTL is what
+ * lets a warm instance see a newly published or rescheduled kickoff.
  */
+const SCHEDULE_TTL_MS = 10 * 60_000;
+
 export class MatchWindow {
-  private kickoffCache = new Map<string, number[]>();
+  private kickoffCache = new Map<string, { kickoffs: number[]; loadedAt: number }>();
 
   constructor(private readonly r2: R2 = new R2()) {}
 
@@ -45,19 +49,21 @@ export class MatchWindow {
     for (const date of this.kickoffCache.keys()) {
       if (!dates.includes(date)) this.kickoffCache.delete(date);
     }
-    const kickoffs = (await Promise.all(dates.map((date) => this.kickoffs(date)))).flat();
+    const kickoffs = (await Promise.all(dates.map((date) => this.kickoffs(date, now)))).flat();
     return kickoffs.some((k) => now >= k - WINDOW_LEAD_MS && now <= k + WINDOW_TAIL_MS);
   }
 
-  private async kickoffs(date: string): Promise<number[]> {
+  private async kickoffs(date: string, now: number): Promise<number[]> {
     const cached = this.kickoffCache.get(date);
-    if (cached) return cached;
+    if (cached && now - cached.loadedAt < SCHEDULE_TTL_MS) return cached.kickoffs;
     let kickoffs: number[] = [];
     try {
       const file = await this.r2.getJson<{ matches: MatchState[] }>(`fixtures-${date}.json`);
       // A missing file is a closed window, not an error: it just means nothing
-      // has published a schedule for that date yet.
-      kickoffs = (file?.matches ?? [])
+      // has published a schedule for that date yet. Not cached, so the window
+      // opens as soon as the schedule sync writes it.
+      if (!file) return [];
+      kickoffs = file.matches
         .map((m) => Date.parse(m.kickoffISO))
         .filter((ms) => Number.isFinite(ms));
     } catch (error) {
@@ -67,7 +73,7 @@ export class MatchWindow {
       log.error("match_window_read_failed", error, { date });
       return [];
     }
-    this.kickoffCache.set(date, kickoffs);
+    this.kickoffCache.set(date, { kickoffs, loadedAt: now });
     log.info("match_window_loaded", { date, kickoffs: kickoffs.length });
     return kickoffs;
   }

@@ -158,8 +158,28 @@ describe("Dispatcher match-window gate", () => {
     expect(createTask).not.toHaveBeenCalled();
   });
 
-  it("caches the schedule read per date — one R2 GET per day, not per minute", async () => {
+  it("opens once a schedule file that was missing gets published", async () => {
+    const files: Record<string, unknown> = {};
+    const { dispatcher } = await dispatcherFor(files);
+
+    expect((await dispatcher.dispatch(Date.parse("2026-08-15T20:00:00Z"))).enqueued).toBe(0);
+    files["fixtures-2026-08-15.json"] = dayWith(KICKOFF);
+    expect((await dispatcher.dispatch(Date.parse("2026-08-15T20:01:00Z"))).enqueued).toBe(12);
+  });
+
+  it("picks up a rescheduled kickoff once the cached read expires", async () => {
+    const files: Record<string, unknown> = { "fixtures-2026-08-15.json": dayWith("2026-08-15T12:00:00Z") };
+    const { dispatcher } = await dispatcherFor(files);
+
+    expect((await dispatcher.dispatch(Date.parse("2026-08-15T18:40:00Z"))).enqueued).toBe(0);
+    files["fixtures-2026-08-15.json"] = dayWith(KICKOFF); // moved to 19:00
+    expect((await dispatcher.dispatch(Date.parse("2026-08-15T18:45:00Z"))).enqueued).toBe(0); // still cached
+    expect((await dispatcher.dispatch(Date.parse("2026-08-15T18:51:00Z"))).enqueued).toBe(12);
+  });
+
+  it("caches the schedule read per date — not one R2 GET per minute", async () => {
     const { dispatcher, getJson } = await dispatcherFor({
+      "fixtures-2026-08-14.json": dayWith(),
       "fixtures-2026-08-15.json": dayWith(KICKOFF),
     });
 
