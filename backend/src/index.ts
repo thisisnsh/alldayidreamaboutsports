@@ -8,6 +8,9 @@ import { buildApp } from "./routes.js";
 import { ScheduleService } from "./schedule.js";
 import { Dispatcher, MatchWindow } from "./tasks.js";
 import { log } from "./log.js";
+import { validateServiceAuthentication } from "./auth.js";
+
+validateServiceAuthentication();
 
 const r2 = new R2();
 const provider = new ApiFootballProvider(env.apiFootballKey);

@@ -1,9 +1,14 @@
 import { once } from "node:events";
 import type { AddressInfo } from "node:net";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { buildApp, type Deps } from "../src/routes.js";
 
 describe("HTTP surface", () => {
+  beforeEach(() => {
+    vi.stubEnv("SERVICE_URL", "https://backend.example.invalid");
+    vi.stubEnv("GCP_PROJECT_ID", "test-project");
+  });
+  afterEach(() => vi.unstubAllEnvs());
   it.each([
     ["GET", "/internal/healthz"],
     ["POST", "/internal/dispatch"],

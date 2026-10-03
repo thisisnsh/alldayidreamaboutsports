@@ -119,3 +119,8 @@ operational routes; `sports-deploy` may only pass the application's health
 check. `secure-backend.sh` removes public invokers and enables the IAM check,
 including on direct `run.app` URLs. Ingress remains reachable for authenticated
 GitHub smoke checks; being on GCP alone does not grant invocation rights.
+
+Service OIDC is not user sign-in. It remains required for scheduler/tasks calls
+and authenticated deployment checks. Startup fails if `SERVICE_URL` is absent
+or is not an HTTPS origin, and request verification fails closed if configuration
+is lost. Never remove audience validation merely because the caller runs on GCP.
