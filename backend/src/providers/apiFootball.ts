@@ -57,6 +57,13 @@ function derivePeriod(short: string, elapsed: number | null): Period {
   }
 }
 
+function hasErrors(errors: unknown): boolean {
+  if (errors == null) return false;
+  if (Array.isArray(errors)) return errors.length > 0;
+  if (typeof errors === "object") return Object.keys(errors).length > 0;
+  return Boolean(errors);
+}
+
 interface ApiLeague {
   league: { id: number; name: string; type: string; logo: string };
   country?: { name: string | null };
@@ -105,6 +112,13 @@ export class ApiFootballProvider implements ScoreProvider {
       });
       if (!res.ok) throw new Error(`API-Football ${path} -> HTTP ${res.status}`);
       const body = (await res.json()) as { response?: T[]; errors?: unknown };
+      // API-Football reports quota/auth/parameter failures as HTTP 200 with
+      // a non-empty `errors` (object or array) and an empty `response`. Taking
+      // that as "no fixtures" would overwrite the published schedule with
+      // empty days, so it must fail the whole pass instead.
+      if (hasErrors(body.errors)) {
+        throw new Error(`API-Football ${path} -> errors: ${JSON.stringify(body.errors).slice(0, 300)}`);
+      }
       if (!Array.isArray(body.response)) {
         throw new Error(`API-Football ${path} -> bad body: ${JSON.stringify(body.errors ?? body).slice(0, 300)}`);
       }
