@@ -1,6 +1,6 @@
 import express, { type Express } from "express";
 import { z } from "zod";
-import { requireSchedulerOidc } from "./auth.js";
+import { requireHealthOidc, requireSchedulerOidc } from "./auth.js";
 import type { CatalogService } from "./catalog.js";
 import { env } from "./env.js";
 import { syntheticPhase } from "./phase.js";
@@ -107,8 +107,7 @@ export function buildApp(
   const app = express();
   app.use(express.json({ limit: "16kb" }));
 
-  // Cloud Run reserves the exact /healthz path; the trailing slash reaches the app.
-  app.get("/healthz/", (_req, res) => res.json({ ok: true }));
+  app.get("/internal/healthz", requireHealthOidc, (_req, res) => res.json({ ok: true }));
 
   // ── Internal (Cloud Scheduler / operators with the scheduler SA) ─────────
 

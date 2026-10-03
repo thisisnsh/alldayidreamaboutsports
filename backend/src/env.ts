@@ -28,6 +28,9 @@ export const env = {
   get serviceUrl() {
     return required("SERVICE_URL"); // public Cloud Run URL; Cloud Tasks targets it
   },
+  get deployServiceAccount() {
+    return process.env.DEPLOY_SA_EMAIL ?? `sports-deploy@${required("GCP_PROJECT_ID")}.iam.gserviceaccount.com`;
+  },
   // CDN hostname for the scores bucket (the §0 cache-only hostname), e.g.
   // https://scores.alldayidreamaboutsports.com. Used by the cache-health probe.
   get scoresDomain() {

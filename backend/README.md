@@ -43,7 +43,7 @@ cloud credentials.
 
 | Route | Auth | What |
 |---|---|---|
-| `GET /healthz/` | none | liveness |
+| `GET /internal/healthz` | scheduler/deploy OIDC | liveness |
 | `POST /internal/dispatch` | scheduler OIDC | enqueue 12 Cloud Tasks at 5s offsets → `/internal/fetch` |
 | `POST /internal/fetch` | scheduler OIDC | one fetch: read range per league → diff → R2 |
 | `POST /internal/sync-schedule` | scheduler OIDC | every 6h: rewrite `fixtures-{date}.json` for today±1, so the dispatch gate has something to read while the poller sleeps |
@@ -113,3 +113,9 @@ after deploying the backend without `/celebrate`.
 Push to `main` (paths `backend/**`) → `backend-deploy.yml` → staging.
 Manual prod: Actions → backend-deploy → run with `environment: prod`.
 First-time setup: `infra/setup-gcp.sh` + `infra/README.md`.
+
+All routes are private behind Cloud Run IAM. `sports-scheduler` invokes the
+operational routes; `sports-deploy` may only pass the application's health
+check. `secure-backend.sh` removes public invokers and enables the IAM check,
+including on direct `run.app` URLs. Ingress remains reachable for authenticated
+GitHub smoke checks; being on GCP alone does not grant invocation rights.

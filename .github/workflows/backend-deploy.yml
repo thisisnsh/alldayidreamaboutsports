@@ -62,7 +62,8 @@ jobs:
             --project "${{ vars.GCP_PROJECT_ID }}" \
             --region "${{ vars.GCP_REGION }}" \
             --service-account "sports-runtime@${{ vars.GCP_PROJECT_ID }}.iam.gserviceaccount.com" \
-            --allow-unauthenticated \
+            --no-allow-unauthenticated \
+            --invoker-iam-check \
             --min-instances 0 \
             --max 50 \
             --max-instances 50 \
@@ -71,11 +72,38 @@ jobs:
             --update-env-vars "^##^GCP_PROJECT_ID=${{ vars.GCP_PROJECT_ID }}##R2_BUCKET_SCORES=${{ vars.R2_BUCKET_SCORES }}##TASKS_QUEUE=live-scores##TASKS_LOCATION=${{ vars.GCP_REGION }}##SCORES_DOMAIN=${SCORES_DOMAIN}##LEAGUE_IDS=${LEAGUE_IDS}" \
             --set-secrets "API_FOOTBALL_KEY=api-football-key:latest,R2_ACCESS_KEY_ID=r2-access-key-id:latest,R2_SECRET_ACCESS_KEY=r2-secret-access-key:latest,R2_ENDPOINT=r2-endpoint:latest"
 
-      - name: Smoke test
+      - name: Restrict invocation and resolve service URL
+        id: service
         run: |
+          bash infra/secure-backend.sh "${{ vars.GCP_PROJECT_ID }}" "${{ vars.GCP_REGION }}"
           URL=$(gcloud run services describe "$SERVICE" \
             --project "${{ vars.GCP_PROJECT_ID }}" \
             --region "${{ vars.GCP_REGION }}" \
             --format 'value(status.url)')
-          echo "Smoke testing $URL/healthz/"
-          curl -fsS "$URL/healthz/"
+          gcloud run services update "$SERVICE" \
+            --project "${{ vars.GCP_PROJECT_ID }}" \
+            --region "${{ vars.GCP_REGION }}" \
+            --update-env-vars "SERVICE_URL=$URL"
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+
+      - name: Authenticate health check
+        id: health-auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
+          token_format: id_token
+          id_token_audience: ${{ steps.service.outputs.url }}
+          id_token_include_email: true
+          create_credentials_file: false
+          export_environment_variables: false
+
+      - name: Smoke test authenticated health
+        env:
+          SERVICE_URL: ${{ steps.service.outputs.url }}
+          ID_TOKEN: ${{ steps.health-auth.outputs.id_token }}
+        run: |
+          curl -fsS --retry 3 --retry-delay 5 \
+            -H "Authorization: Bearer $ID_TOKEN" "$SERVICE_URL/internal/healthz"
+          STATUS=$(curl -sS -o /dev/null -w '%{http_code}' "$SERVICE_URL/internal/healthz")
+          test "$STATUS" = 403 || test "$STATUS" = 401
