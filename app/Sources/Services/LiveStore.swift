@@ -21,6 +21,12 @@ final class LiveStore {
 
     /// Lead time before kickoff at which we start polling a fan match.
     private static let preKickoffLead: TimeInterval = 5 * 60
+    /// How far ahead of a fan match's live window we start holding the App Nap
+    /// assertion. A napped loop's `Task.sleep` can stretch to minutes, so
+    /// taking it only once the window is open would let the first goals slip
+    /// by until the user clicks the menu (which activates the app). Polls in
+    /// this lead have no targets, so they cost nothing on the network.
+    private static let appNapLead: TimeInterval = 30 * 60
     /// Hard cap on the trailing window (in case we never see FINISHED).
     private static let maxLiveWindow: TimeInterval = 3.5 * 60 * 60
     /// After a goal, re-read the celebration total for this long…
@@ -95,16 +101,18 @@ final class LiveStore {
         AppLog.info(.fixtures, "live_loop_stop")
     }
 
-    /// While ≥1 fan match is in its live window, hold a `.background` activity
-    /// assertion so macOS App Nap doesn't throttle/suspend the poll loop's
-    /// `Task.sleep` ticks — the app is an `LSUIElement` accessory app and would
-    /// otherwise nap while idle in the menu bar, freezing live scores. We use
-    /// `.background` (NOT `.idleSystemSleepDisabled`) so the Mac still sleeps
-    /// normally; wake/foreground reconciliation (AppDelegate) recovers after sleep.
+    /// While a fan match is live (or about to be — see `appNapLead`), hold an
+    /// activity assertion so macOS App Nap doesn't throttle/suspend the poll
+    /// loop's `Task.sleep` ticks — the app is an `LSUIElement` accessory app and
+    /// would otherwise nap while idle in the menu bar, freezing live scores
+    /// until the menu is clicked. `.background` doesn't opt out of App Nap;
+    /// `.userInitiatedAllowingIdleSystemSleep` does, while still letting the
+    /// Mac sleep normally — wake/foreground reconciliation (AppDelegate)
+    /// recovers after sleep.
     private func updateAppNapActivity(active: Bool) {
         if active, liveActivity == nil {
             liveActivity = ProcessInfo.processInfo.beginActivity(
-                options: .background, reason: "Polling live fan matches",
+                options: .userInitiatedAllowingIdleSystemSleep, reason: "Polling live fan matches",
             )
             AppLog.info(.fixtures, "app_nap_activity_begin")
         } else if !active, let token = liveActivity {
@@ -218,11 +226,12 @@ final class LiveStore {
     /// refresh celebration totals on a score change, and publish to the session.
     private func pollCycle() async {
         let now = Date()
-        let targets = session.fixtures.filter { fixture in
-            fixture.involves(session.fanTeamIds) && isInLiveWindow(fixture, at: now)
-        }
-        // Defeat App Nap while a fan match is live; release it when none are.
-        updateAppNapActivity(active: !targets.isEmpty)
+        let fanFixtures = session.fixtures.filter { $0.involves(session.fanTeamIds) }
+        let targets = fanFixtures.filter { isInLiveWindow($0, at: now) }
+        // Defeat App Nap while a fan match is live or about to be; release it
+        // when none are.
+        let soon = now.addingTimeInterval(Self.appNapLead)
+        updateAppNapActivity(active: !targets.isEmpty || fanFixtures.contains { isInLiveWindow($0, at: soon) })
         guard !targets.isEmpty else { return }
         AppLog.debug(.fixtures, "poll_cycle targets=\(targets.map(\.fixtureId).sorted())")
 
