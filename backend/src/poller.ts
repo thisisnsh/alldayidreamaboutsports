@@ -111,6 +111,43 @@ function summarizeState(s: MatchState) {
 /** API-Football's `ids` parameter accepts at most 20 fixture ids per request. */
 const ENRICH_BATCH_SIZE = 20;
 
+function idBatches(ids: number[]): number[][] {
+  const batches: number[][] = [];
+  for (let i = 0; i < ids.length; i += ENRICH_BATCH_SIZE) {
+    batches.push(ids.slice(i, i + ENRICH_BATCH_SIZE));
+  }
+  return batches;
+}
+
+/**
+ * A FINISHED row from the range endpoint carries no events, so publishing it
+ * as-is would wipe the scorers, cards and subs the live ticks already
+ * published. Keep the event metadata from the previous state; the score and
+ * status still come from the new row.
+ */
+export function withEventsFrom(previous: MatchState, next: MatchState): MatchState {
+  const team = (prev: MatchState["home"], cur: MatchState["home"]): MatchState["home"] => ({
+    ...cur,
+    yellowCards: prev.yellowCards,
+    redCards: prev.redCards,
+    yellowCardEvents: prev.yellowCardEvents,
+    redCardEvents: prev.redCardEvents,
+    goalEvents: prev.goalEvents,
+    subs: prev.subs,
+  });
+  const merged: MatchState = {
+    ...next,
+    home: team(previous.home, next.home),
+    away: team(previous.away, next.away),
+    varEvents: previous.varEvents ?? next.varEvents,
+  };
+  if (previous.lastGoal) merged.lastGoal = previous.lastGoal;
+  if (next.shootout && next.shootout.kicks.length === 0 && previous.shootout) {
+    merged.shootout = { ...next.shootout, kicks: previous.shootout.kicks };
+  }
+  return merged;
+}
+
 /**
  * One range call per league, run concurrently, concatenated. API-Football's
  * `league` parameter takes a single integer, so this is N calls however it is
@@ -134,10 +171,7 @@ export async function fetchLeagueFixtures(
 
   const liveIds = [...new Set(fixtures.filter(isLive).map((m) => m.fixtureId))];
   if (liveIds.length > 0) {
-    const batches: number[][] = [];
-    for (let i = 0; i < liveIds.length; i += ENRICH_BATCH_SIZE) {
-      batches.push(liveIds.slice(i, i + ENRICH_BATCH_SIZE));
-    }
+    const batches = idBatches(liveIds);
     log.info("poll_enrich_live", { liveFixtureIds: liveIds, batches: batches.length });
     const enriched = (await Promise.all(batches.map((ids) => provider.fixturesByIds(ids)))).flat();
     const byId = new Map(enriched.map((m) => [m.fixtureId, m]));
@@ -228,8 +262,13 @@ export class Poller {
         awayCards: m.away.yellowCards + m.away.redCards,
       })),
     });
-    for (const match of eligible) {
-      const previous = await this.state.load(match.fixtureId);
+    const previousById = new Map(await Promise.all(
+      eligible.map(async (m) => [m.fixtureId, await this.state.load(m.fixtureId)] as const),
+    ));
+    const finals = await this.finalSnapshots(eligible, previousById);
+    for (const fixture of eligible) {
+      const previous = previousById.get(fixture.fixtureId)!;
+      const match = finals.get(fixture.fixtureId) ?? fixture;
       if (previous.state && isRegressiveSnapshot(previous.state, match)) {
         log.warning("match_snapshot_regression_ignored", {
           fixtureId: match.fixtureId,
@@ -275,5 +314,42 @@ export class Poller {
       live: liveCount, durationMs: Date.now() - started,
     });
     return { live: liveCount };
+  }
+
+  /**
+   * The publishable FINISHED snapshots, keyed by fixture id. The range endpoint
+   * has no events, so a match crossing into FINISHED is re-read once through
+   * the ids endpoint for its final scorers/cards; every other FINISHED row (or
+   * a failed detail read) keeps the events already published.
+   */
+  private async finalSnapshots(
+    eligible: MatchState[],
+    previousById: Map<number, { state: MatchState | null }>,
+  ): Promise<Map<number, MatchState>> {
+    const finals = new Map<number, MatchState>();
+    const finished = eligible.filter((m) => m.status === "FINISHED");
+    if (finished.length === 0) return finals;
+
+    const crossing = finished
+      .filter((m) => previousById.get(m.fixtureId)?.state?.status !== "FINISHED")
+      .map((m) => m.fixtureId);
+    if (crossing.length > 0) {
+      try {
+        const detailed = (await Promise.all(
+          idBatches(crossing).map((ids) => this.provider.fixturesByIds(ids)),
+        )).flat();
+        for (const m of detailed) {
+          if (m.status === "FINISHED") finals.set(m.fixtureId, m);
+        }
+        log.info("poll_enrich_finished", { fixtureIds: crossing, enriched: finals.size });
+      } catch (error) {
+        log.error("poll_enrich_finished_failed", error, { fixtureIds: crossing });
+      }
+    }
+    for (const m of finished) {
+      const previous = previousById.get(m.fixtureId)?.state;
+      if (!finals.has(m.fixtureId) && previous) finals.set(m.fixtureId, withEventsFrom(previous, m));
+    }
+    return finals;
   }
 }
