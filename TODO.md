@@ -40,7 +40,7 @@ record — they're tied to your account, not to a project.
 These are the paid/identity things nothing else works without.
 
 - [ ] **Apple Developer membership** active for team `983LBM5U6B`. Then register
-      the app's bundle id `com.alldaysports` (explicit, Keychain Sharing). No Push
+      the app's bundle id `com.thisisnsh.alldaysports` (explicit, Keychain Sharing). No Push
       Notifications capability is needed — the app polls.
 - [ ] **Subscribe to API-Football "Ultra"** ($29/mo) and copy the API key. This
       is the live-scores data feed the backend polls. It runs year-round now, so
@@ -78,7 +78,7 @@ Everything else (bundle id, buckets, domain) still uses the full name.
       Platform). While it's in "Testing" mode, only 100 people total can ever
       sign in — that's a hard ship-blocker.
 - [ ] **Finish Google OAuth per environment.** You already created the staging
-      iOS-type OAuth client; change its bundle id to `com.alldaysports`. Its values are
+      iOS-type OAuth client; change its bundle id to `com.thisisnsh.alldaysports`. Its values are
       now configured in `app/project.yml`. Add its `CLIENT_ID` as the staging
       Secret Manager secret `google-oauth-client-id` so the backend accepts the
       same sign-ins. For prod, create another OAuth client in the prod project,
@@ -142,10 +142,10 @@ hosts the marketing website on free GitHub Pages.
 The app ships only through the Mac App Store, built and uploaded from Xcode with
 automatic signing — no certificates to export, no notarization, no CI.
 
-- [ ] **Register Firebase Apple apps** for `com.alldaysports` in staging and
+- [ ] **Register Firebase Apple apps** for `com.thisisnsh.alldaysports` in staging and
       prod, and replace both `GoogleService-Info-*.plist` files.
 - [ ] **Create the App Store Connect record** (New macOS App,
-      `com.alldaysports`): listing, screenshots, privacy labels, demo reviewer
+      `com.thisisnsh.alldaysports`): listing, screenshots, privacy labels, demo reviewer
       account.
 - [ ] **Sign in with Apple** (guideline 4.8): sign-in is Google-only and
       required, so App Review will likely ask for it.

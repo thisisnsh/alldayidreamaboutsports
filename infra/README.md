@@ -13,7 +13,7 @@ gcloud projects create dreamaboutsports-staging && gcloud billing projects link 
 Then in the [Firebase console](https://console.firebase.google.com):
 
 1. **Add Firebase to the GCP project**, register the macOS app (bundle id
-   `com.alldaysports`), and download `GoogleService-Info.plist`.
+   `com.thisisnsh.alldaysports`), and download `GoogleService-Info.plist`.
    Save it locally as `app/Resources/GoogleService-Info-Staging.plist` or
    `app/Resources/GoogleService-Info-Production.plist`. See
    [`app/README.md`](../app/README.md#real-service-configuration).
@@ -67,7 +67,7 @@ Maximum instances does not cap the total bill or downstream-service usage.
 - Scopes: only `openid`, `email`, `profile` (non-sensitive → no review wait).
 - **Publishing status: In production** — in Testing mode sign-in caps at 100 users.
 - Clients → create client → **iOS type** (used by Google Sign-In for this macOS
-  app), bundle id `com.alldaysports`, then download its plist.
+  app), bundle id `com.thisisnsh.alldaysports`, then download its plist.
   Put its `CLIENT_ID` in the environment's `google-oauth-client-id` Secret
   Manager secret. Put its `CLIENT_ID` and `REVERSED_CLIENT_ID` in the matching
   `Staging`/`Release` settings in `app/project.yml`; the reversed value is only
@@ -213,7 +213,7 @@ request counter on the first live weekend.
 The app ships only through the Mac App Store and is signed by Xcode's automatic
 signing — no certificates, notarization or signing secrets live in this repo or
 in CI. At [developer.apple.com](https://developer.apple.com/account/resources/identifiers/list),
-register the explicit App ID `com.alldaysports` with **Keychain Sharing**. Push
+register the explicit App ID `com.thisisnsh.alldaysports` with **Keychain Sharing**. Push
 Notifications are not used (the app polls the scores CDN), so no APNs key /
 Cloud Messaging setup is required. App Store Connect setup and the
 archive/upload flow: [`app/README.md`](../app/README.md#mac-app-store).

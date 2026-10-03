@@ -1,7 +1,7 @@
 # macOS app
 
 SwiftUI menu bar app, macOS 14+, team `983LBM5U6B`, bundle id
-`com.alldaysports`. Distributed only through the Mac App Store: built, tested,
+`com.thisisnsh.alldaysports`. Distributed only through the Mac App Store: built, tested,
 archived and uploaded from Xcode. The Xcode project is
 generated — never edit the `.xcodeproj`, edit `project.yml` and rerun `xcodegen`.
 
@@ -77,7 +77,7 @@ Each environment needs two files from its Firebase/Google Cloud project:
    as `Resources/GoogleService-Info-Staging.plist` or
    `Resources/GoogleService-Info-Production.plist`.
 2. Google Auth Platform → Clients → create an **iOS-type** OAuth client for
-   bundle id `com.alldaysports`, then download its plist. You do
+   bundle id `com.thisisnsh.alldaysports`, then download its plist. You do
    not add that downloaded OAuth plist to the app. Copy its two values into the
    matching configuration in `project.yml`:
    - `CLIENT_ID` → `GOOGLE_CLIENT_ID`
@@ -116,10 +116,10 @@ use staging Firebase configuration. Both source plists are gitignored.
 
 The app writes structured `debug`, `info`, and `error` entries through Apple's
 unified logging system. In Console.app, select the Mac and filter for subsystem
-`com.alldaysports`, or stream them in Terminal:
+`com.thisisnsh.alldaysports`, or stream them in Terminal:
 
 ```sh
-log stream --level debug --predicate 'subsystem == "com.alldaysports"'
+log stream --level debug --predicate 'subsystem == "com.thisisnsh.alldaysports"'
 ```
 
 Staging builds also send log breadcrumbs to Firebase Crashlytics. Errors are
@@ -158,20 +158,20 @@ every upload.
 ### One-time setup
 
 1. developer.apple.com → Identifiers → **+** → App IDs → App, bundle id
-   `com.alldaysports` (explicit), capability **Keychain Sharing**. No Push
+   `com.thisisnsh.alldaysports` (explicit), capability **Keychain Sharing**. No Push
    Notifications — the app polls.
 2. Firebase console, in **both** `dreamaboutsports-staging` and
-   `dreamaboutsports-prod`: Add app → Apple, bundle id `com.alldaysports`.
+   `dreamaboutsports-prod`: Add app → Apple, bundle id `com.thisisnsh.alldaysports`.
    Download each `GoogleService-Info.plist` over
    `Resources/GoogleService-Info-Staging.plist` /
    `Resources/GoogleService-Info-Production.plist` (Firebase bundle ids can't
    be edited, so the old `com.alldayidreamaboutsports.mac` apps stay behind).
    Remote Config is per project, so it carries over unchanged.
 3. Google Auth Platform → Clients: edit the iOS OAuth client in each project
-   and change its bundle id to `com.alldaysports`. The client IDs stay the same,
+   and change its bundle id to `com.thisisnsh.alldaysports`. The client IDs stay the same,
    so `project.yml` and the backend's `google-oauth-client-id` need no change.
 4. App Store Connect → Apps → **+** → New macOS App with bundle id
-   `com.alldaysports`. Fill in the listing, the privacy labels (Analytics +
+   `com.thisisnsh.alldaysports`. Fill in the listing, the privacy labels (Analytics +
    Crashlytics: usage and diagnostics data, not linked to identity) and a demo
    reviewer account (sign-in is required).
 

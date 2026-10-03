@@ -3,7 +3,7 @@ import Security
 
 /// Minimal Keychain wrapper — only the backend session token lives here.
 enum Keychain {
-    private static let service = "com.alldaysports"
+    private static let service = "com.thisisnsh.alldaysports"
 
     static func set(_ value: String, for key: String) {
         let data = Data(value.utf8)
