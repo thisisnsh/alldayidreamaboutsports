@@ -270,7 +270,7 @@ final class AppSession: ObservableObject {
     /// Emit one `setting_changed` per field that actually changed.
     private func reportSettingsChange(before: PrefSettings, after: PrefSettings) {
         if before.launchAtLogin != after.launchAtLogin {
-            AppAnalytics.settingChanged(.launchAtLogin, enabled: after.launchAtLogin ?? true)
+            AppAnalytics.settingChanged(.launchAtLogin, enabled: after.launchAtLogin ?? false)
         }
         if before.goalCenter != after.goalCenter {
             AppAnalytics.settingChanged(.goalCenter, enabled: after.goalCenter ?? true)

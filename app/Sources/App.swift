@@ -34,14 +34,14 @@ struct AllDayIDreamAboutSportsApp: App {
         .defaultPosition(.center)
 
         Window("Settings", id: WindowID.settings) {
-            SettingsView(updater: appDelegate.updater)
+            SettingsView()
                 .environmentObject(session)
         }
         .windowStyle(.hiddenTitleBar)
         .windowResizability(.contentSize)
 
         Window("Update", id: WindowID.update) {
-            UpdateView(updater: appDelegate.updater)
+            UpdateView()
                 .environmentObject(session)
         }
         .windowStyle(.hiddenTitleBar)

@@ -1,22 +1,14 @@
 import SwiftUI
 
 struct SettingsView: View {
-    let updater: AppUpdater
     @EnvironmentObject var session: AppSession
     @Environment(\.colorScheme) private var scheme
     @State private var launchAtLogin = LaunchAtLogin.isEnabled
-    // Sparkle persists this flag in UserDefaults itself; we just mirror it.
-    @State private var autoCheck = true
     // Local mirror so the SwiftUI content reacts synchronously while the
     // deferred session write updates the application-level AppKit appearance.
     @State private var activeTheme: ThemeChoice = .system
     @ObservedObject private var displayTarget = OverlayDisplayTarget.shared
     private static let screen = "settings"
-    #if APP_STORE
-    private static let launchAtLoginCaption = "Turn this on so you never miss a goal — the app starts silently in the menu bar. It never shows in the Dock; that's how it's designed."
-    #else
-    private static let launchAtLoginCaption = "On by default so you never miss a goal — the app starts silently in the menu bar. It never shows in the Dock; that's how it's designed."
-    #endif
 
     var body: some View {
         ZStack {
@@ -29,7 +21,6 @@ struct SettingsView: View {
         .onAppear {
             AppAnalytics.screenView(Self.screen)
             activeTheme = session.prefs.settings.theme ?? .system
-            autoCheck = updater.automaticallyChecksForUpdates
         }
     }
 
@@ -114,24 +105,11 @@ struct SettingsView: View {
                                 session.updateSettings { $0.launchAtLogin = on }
                             }
                         ))
-                        caption(Self.launchAtLoginCaption)
+                        caption("Turn this on so you never miss a goal — the app starts silently in the menu bar. It never shows in the Dock; that's how it's designed.")
                     }
 
                     SettingsCard("Updates") {
-                        if updater.managesAutomaticChecks {
-                            toggleRow("Automatically check for updates", isOn: Binding(
-                                get: { autoCheck },
-                                set: { on in
-                                    autoCheck = on
-                                    updater.automaticallyChecksForUpdates = on
-                                    // Sparkle owns this flag, so it never passes
-                                    // through `AppSession.updateSettings` and needs
-                                    // reporting from here.
-                                    AppAnalytics.settingChanged(.autoCheckUpdates, enabled: on)
-                                }
-                            ))
-                        }
-                        CheckForUpdatesButton(updater: updater, source: "settings")
+                        CheckForUpdatesButton(source: "settings")
                             .buttonStyle(.cardButton)
                         caption("\(AppEnvironment.profileName) v\(AppEnvironment.appVersion) (Build \(AppEnvironment.buildNumber))")
                     }
@@ -470,25 +448,18 @@ private struct DemoControls: View {
 }
 #endif
 
-/// Same approach as aithing-mac's CheckForUpdatesButton: observe canCheckForUpdates.
+/// Opens the App Store's Updates page.
 struct CheckForUpdatesButton: View {
-    @ObservedObject private var updater: AppUpdater
     /// Which entry point this button is, for `update_check_started`'s `source`
-    /// — the update window's "Update now" runs the same Sparkle check.
-    private let source: String
-
-    init(updater: AppUpdater, source: String) {
-        self.updater = updater
-        self.source = source
-    }
+    /// — the update window's "Update now" runs the same check.
+    let source: String
 
     var body: some View {
         Button {
             AppAnalytics.updateCheckStarted(source: source)
-            updater.checkForUpdates()
+            AppUpdater.checkForUpdates()
         } label: {
             Text("Check for Updates…").frame(maxWidth: .infinity)
         }
-        .disabled(!updater.canCheckForUpdates)
     }
 }

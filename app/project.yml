@@ -17,16 +17,12 @@ packages:
   GoogleSignIn:
     url: https://github.com/google/GoogleSignIn-iOS
     from: 8.0.0
-  Sparkle:
-    url: https://github.com/sparkle-project/Sparkle
-    from: 2.6.0
 
-# Two targets share everything in this template and differ only in how they
-# are signed, sandboxed and updated:
-#   AllDayIDreamAboutSports           Developer ID DMG from the website (Sparkle)
-#   AllDayIDreamAboutSports-AppStore  Mac App Store (sandboxed, no Sparkle)
-targetTemplates:
-  App:
+# Distributed only through the Mac App Store: sandboxed, signed automatically
+# by Xcode (Apple Development to run, Apple Distribution when archived), and
+# updated by the App Store — there is no in-app updater.
+targets:
+  AllDayIDreamAboutSports:
     type: application
     platform: macOS
     sources:
@@ -49,8 +45,12 @@ targetTemplates:
         PRODUCT_NAME: All Day I Dream About Sports
         PRODUCT_BUNDLE_IDENTIFIER: com.alldayidreamaboutsports.mac
         DEVELOPMENT_TEAM: 983LBM5U6B
+        CODE_SIGN_STYLE: Automatic
+        CODE_SIGN_ENTITLEMENTS: App.entitlements
         MARKETING_VERSION: 1.0.0
-        CURRENT_PROJECT_VERSION: 1
+        # Bump for every App Store upload. Remote Config `min_build` /
+        # `latest_build` compare against it. Builds 1–3 were website DMGs.
+        CURRENT_PROJECT_VERSION: 4
         ENABLE_HARDENED_RUNTIME: true
         SWIFT_VERSION: 5.10
         DEAD_CODE_STRIPPING: true
@@ -58,6 +58,7 @@ targetTemplates:
         # Debug = fake services (no sign-in, no network, no API quota).
         # Staging/Release = real services in their respective cloud projects.
         Debug:
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: DEBUG DEV_BACKEND
           GOOGLE_CLIENT_ID: UNUSED_IN_DEBUG
           GOOGLE_REVERSED_CLIENT_ID: UNUSED_IN_DEBUG
           APP_API_BASE_URL: https://unused.invalid
@@ -67,24 +68,22 @@ targetTemplates:
           # public, CDN-cached, read-only file — no auth, no API quota. Point it
           # at production because staging's scores domain is access-protected.
           APP_SCORES_BASE_URL: https://scores.alldayidreamaboutsports.com
-          APP_FEED_URL: https://unused.invalid/appcast.xml
         Staging:
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: STAGING
           GOOGLE_CLIENT_ID: 291291942072-cqsmesng18bagi6psv69n5ch4kcnvj2s.apps.googleusercontent.com
           GOOGLE_REVERSED_CLIENT_ID: com.googleusercontent.apps.291291942072-cqsmesng18bagi6psv69n5ch4kcnvj2s
           GOOGLE_SERVICE_INFO_PLIST: GoogleService-Info-Staging.plist
           # Staging domains deliberately do not point at production.
           APP_API_BASE_URL: https://api-staging.alldayidreamaboutsports.com
           APP_SCORES_BASE_URL: https://scores-staging.alldayidreamaboutsports.com
-          # Staging auto-updates from its own download bucket, never production's.
-          APP_FEED_URL: https://download-staging.alldayidreamaboutsports.com/appcast.xml
         Release:
           GOOGLE_CLIENT_ID: 680190781802-t248eiqmjqaorv3ucok84t1ap9rrgc8q.apps.googleusercontent.com
           GOOGLE_REVERSED_CLIENT_ID: com.googleusercontent.apps.680190781802-t248eiqmjqaorv3ucok84t1ap9rrgc8q
           GOOGLE_SERVICE_INFO_PLIST: GoogleService-Info-Production.plist
           APP_API_BASE_URL: https://api.alldayidreamaboutsports.com
           APP_SCORES_BASE_URL: https://scores.alldayidreamaboutsports.com
-          APP_FEED_URL: https://download.alldayidreamaboutsports.com/appcast.xml
     info:
+      path: Info.plist
       properties:
         CFBundleDisplayName: All Day I Dream About Sports
         # Reference the build settings (not literals) so MARKETING_VERSION /
@@ -103,6 +102,9 @@ targetTemplates:
         CFBundleURLTypes:
           - CFBundleURLSchemes:
               - $(GOOGLE_REVERSED_CLIENT_ID)
+        # HTTPS only — exempt, so App Store Connect skips the export
+        # compliance question on every upload.
+        ITSAppUsesNonExemptEncryption: false
     postBuildScripts:
       - name: Select Firebase configuration
         basedOnDependencyAnalysis: false
@@ -138,75 +140,6 @@ targetTemplates:
             echo "warning: Crashlytics run script not found at $RUN — skipping dSYM upload"
           fi
 
-targets:
-  AllDayIDreamAboutSports:
-    templates: [App]
-    dependencies:
-      - package: Sparkle
-        product: Sparkle
-    settings:
-      base:
-        CODE_SIGN_STYLE: Automatic
-        CODE_SIGN_ENTITLEMENTS: App.entitlements
-      configs:
-        Debug:
-          SWIFT_ACTIVE_COMPILATION_CONDITIONS: DEBUG DEV_BACKEND
-        Staging:
-          SWIFT_ACTIVE_COMPILATION_CONDITIONS: STAGING
-          CODE_SIGN_ENTITLEMENTS: App-Staging.entitlements
-          # Manual Developer ID signing keeps the keychain ACL stable across
-          # rebuilds. Firebase uses the data-protection keychain, so the
-          # keychain-access-groups entitlement must be authorized by this
-          # Developer ID provisioning profile.
-          CODE_SIGN_STYLE: Manual
-          CODE_SIGN_IDENTITY: "Developer ID Application"
-          PROVISIONING_PROFILE_SPECIFIER: 983LBM5U6B.com.alldayidreamaboutsports.mac.3
-        Release:
-          # Manual Developer ID signing — see the Staging note above. This also
-          # matches the archive/CI overrides (app-release.yml), so local Release
-          # builds, CI, and the shipped app all share one stable designated
-          # requirement.
-          CODE_SIGN_STYLE: Manual
-          CODE_SIGN_IDENTITY: "Developer ID Application"
-          PROVISIONING_PROFILE_SPECIFIER: 983LBM5U6B.com.alldayidreamaboutsports.mac.3
-    info:
-      path: Info.plist
-      properties:
-        # Sparkle (same key layout as aithing-mac). Feed URL is per-config so
-        # staging updates from its own bucket; see APP_FEED_URL above.
-        SUFeedURL: $(APP_FEED_URL)
-        SUPublicEDKey: ghiXVL8NcRoV6i/FhLk/bHsoeC0afsLGzFMwHqhpQQ4=
-        SUEnableAutomaticChecks: true
-        SUScheduledCheckInterval: 3600
-        # No silent install: a staged one blocks later feed checks until it lands.
-        SUAllowsAutomaticUpdates: false
-        SUAutomaticallyUpdate: false
-
-  # Mac App Store build. Same bundle id, Firebase apps and OAuth clients as the
-  # DMG; App Store Connect handles distribution and updates, so Sparkle is not
-  # linked at all (its Autoupdate helper would fail App Store validation).
-  # Xcode manages signing: Apple Development to run, Apple Distribution when
-  # you Product → Archive → Distribute App → App Store Connect.
-  AllDayIDreamAboutSports-AppStore:
-    templates: [App]
-    settings:
-      base:
-        CODE_SIGN_STYLE: Automatic
-        CODE_SIGN_ENTITLEMENTS: AppStore.entitlements
-      configs:
-        Debug:
-          SWIFT_ACTIVE_COMPILATION_CONDITIONS: DEBUG DEV_BACKEND APP_STORE
-        Staging:
-          SWIFT_ACTIVE_COMPILATION_CONDITIONS: STAGING APP_STORE
-        Release:
-          SWIFT_ACTIVE_COMPILATION_CONDITIONS: APP_STORE
-    info:
-      path: Info-AppStore.plist
-      properties:
-        # HTTPS only — exempt, so App Store Connect skips the export
-        # compliance question on every upload.
-        ITSAppUsesNonExemptEncryption: false
-
 schemes:
   AllDayIDreamAboutSports:
     build:
@@ -216,18 +149,5 @@ schemes:
       config: Debug
     profile:
       config: Staging
-    archive:
-      config: Release
-
-  AllDayIDreamAboutSports-AppStore:
-    build:
-      targets:
-        AllDayIDreamAboutSports-AppStore: all
-    # Run the real production services so ⌘R exercises the sandbox exactly as
-    # App Review will (sign-in, keychain, network).
-    run:
-      config: Release
-    profile:
-      config: Release
     archive:
       config: Release

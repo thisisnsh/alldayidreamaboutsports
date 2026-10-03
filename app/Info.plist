@@ -33,6 +33,8 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>GIDClientID</key>
 	<string>$(GOOGLE_CLIENT_ID)</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>LSApplicationCategoryType</key>
 	<string>public.app-category.sports</string>
 	<key>LSMinimumSystemVersion</key>
@@ -41,18 +43,6 @@
 	<true/>
 	<key>NSHumanReadableCopyright</key>
 	<string>© 2026 alldayidreamaboutsports.com</string>
-	<key>SUAllowsAutomaticUpdates</key>
-	<false/>
-	<key>SUAutomaticallyUpdate</key>
-	<false/>
-	<key>SUEnableAutomaticChecks</key>
-	<true/>
-	<key>SUFeedURL</key>
-	<string>$(APP_FEED_URL)</string>
-	<key>SUPublicEDKey</key>
-	<string>ghiXVL8NcRoV6i/FhLk/bHsoeC0afsLGzFMwHqhpQQ4=</string>
-	<key>SUScheduledCheckInterval</key>
-	<integer>3600</integer>
 	<key>ScoresBaseURL</key>
 	<string>$(APP_SCORES_BASE_URL)</string>
 </dict>

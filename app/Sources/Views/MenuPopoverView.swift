@@ -305,9 +305,8 @@ struct MenuPopoverView: View {
     }
 
     /// Top-of-menu nudge when a newer build exists. The button opens the same
-    /// Update window the forced path uses — Sparkle needs an activated key
-    /// window (the transient popover has none), so the check runs from there,
-    /// exactly like the "Check for Updates" button in Settings.
+    /// Update window the forced path uses, whose "Update now" opens the App
+    /// Store like the "Check for Updates" button in Settings.
     private var updateBanner: some View {
         Button {
             AppAnalytics.updateBannerTapped()

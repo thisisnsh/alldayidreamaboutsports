@@ -148,7 +148,7 @@ enum AppAnalytics {
         log("update_banner_tapped")
     }
 
-    /// A Sparkle check was asked for. `source`: `settings` or `update_gate`.
+    /// An App Store update check was asked for. `source`: `settings` or `update_gate`.
     static func updateCheckStarted(source: String) {
         log("update_check_started", ["source": source])
     }
@@ -242,7 +242,6 @@ enum AppAnalytics {
         case capsuleSize = "capsule_size"
         case capsulePosition = "capsule_position"
         case notchDropSize = "notch_drop_size"
-        case autoCheckUpdates = "auto_check_updates"
 
         var event: String { "setting_\(rawValue)_changed" }
         var property: String { "pref_\(rawValue)" }
@@ -278,7 +277,7 @@ enum AppAnalytics {
     /// Push the current settings up as user properties (called at launch) so an
     /// install that never opens Settings is still counted in "% with confetti on".
     static func syncSettingProperties(_ s: PrefSettings) {
-        setUserProperty((s.launchAtLogin ?? true) ? "on" : "off", forName: Setting.launchAtLogin.property)
+        setUserProperty((s.launchAtLogin ?? false) ? "on" : "off", forName: Setting.launchAtLogin.property)
         setUserProperty((s.goalCenter ?? true) ? "on" : "off", forName: Setting.goalCenter.property)
         setUserProperty((s.confetti ?? true) ? "on" : "off", forName: Setting.confetti.property)
         setUserProperty((s.confettiSound ?? true) ? "on" : "off", forName: Setting.confettiSound.property)
