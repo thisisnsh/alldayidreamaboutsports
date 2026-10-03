@@ -171,7 +171,7 @@ final class LiveStore {
         let now = Date()
         let targets = session.fixtures.filter { fixture in
             fixture.involves(teams)
-                && fixture.status != "FINISHED" // schedule already terminal — trust it
+                && fixture.status != "FINISHED" && !fixture.isCalledOff // schedule already terminal — trust it
                 && (fixture.kickoff.map { $0 <= now } ?? false) // has kicked off
                 && !isInLiveWindow(fixture, at: now) // pollCycle owns in-window matches
         }
@@ -483,6 +483,9 @@ final class LiveStore {
 
         baseline[current.fixtureId] = current
         baselineObservedAt[current.fixtureId] = now
+        if current.isCalledOff, finished.insert(current.fixtureId).inserted {
+            AppLog.info(.fixtures, "fixture_called_off fixture_id=\(current.fixtureId) raw_status=\(current.rawStatus ?? "")")
+        }
         if current.status == "FINISHED", finished.insert(current.fixtureId).inserted {
             // First time we see this match end — its events will never recur, so
             // drop them from the dedupe store instead of letting it grow forever.
@@ -504,7 +507,7 @@ final class LiveStore {
     /// capped at kickoff+3.5h — driven by the SCHEDULE's kickoff time, never the
     /// fixtures file's possibly-stale cached status (§3 coupling).
     private func isInLiveWindow(_ fixture: Fixture, at now: Date) -> Bool {
-        if finished.contains(fixture.fixtureId) { return false }
+        if finished.contains(fixture.fixtureId) || fixture.isCalledOff { return false }
         guard let kickoff = fixture.kickoff else {
             // No kickoff to key off: fall back to the file's own status.
             return fixture.isLive
