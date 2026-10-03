@@ -13,9 +13,11 @@ import type { Dispatcher, MatchWindow } from "./tasks.js";
 import type { MatchState } from "./types.js";
 import { log } from "./log.js";
 
-const celebrateSchema = z.object({
+export const celebrateSchema = z.object({
   fixtureId: z.number().int().positive(),
-  teamId: z.string().min(1).max(12), // numeric team id, as a string
+  // Numeric team id, as a string. Anything else ("constructor", "__proto__")
+  // would land as an object key in the aggregator and Firestore.
+  teamId: z.string().regex(/^[1-9][0-9]{0,11}$/),
   // One batched request per goal; >200 taps in a 5s window is not a human.
   taps: z.number().int().min(1).max(200),
 });

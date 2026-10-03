@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { CelebrationAggregator } from "../src/celebrations.js";
+import { celebrateSchema } from "../src/routes.js";
 import type { Store } from "../src/store.js";
 
 function fakeStore() {
@@ -79,6 +80,24 @@ describe("CelebrationAggregator", () => {
       { totals: { "6": 48 } },
       "public, max-age=5, stale-while-revalidate=25",
     );
+  });
+});
+
+describe("celebrate input", () => {
+  it("accepts only canonical numeric team ids", () => {
+    const parse = (teamId: string) => celebrateSchema.safeParse({ fixtureId: 1, teamId, taps: 4 }).success;
+    expect(parse("541")).toBe(true);
+    for (const bad of ["constructor", "__proto__", "toString", "0", "06", "-1", "1e3", "", "1234567890123"]) {
+      expect(parse(bad)).toBe(false);
+    }
+  });
+
+  it("never resolves a team id to an inherited property", async () => {
+    const store = fakeStore();
+    const agg = new CelebrationAggregator(store, fakeR2() as never, ...ALWAYS_PUBLISH);
+    agg.add(1, "constructor", 4);
+    await agg.flush();
+    expect(store.addCelebrations).toHaveBeenCalledWith(1, { constructor: 4 });
   });
 });
 
