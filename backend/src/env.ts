@@ -26,7 +26,12 @@ export const env = {
     );
   },
   get serviceUrl() {
-    return required("SERVICE_URL"); // public Cloud Run URL; Cloud Tasks targets it
+    const value = required("SERVICE_URL");
+    const url = new URL(value);
+    if (url.protocol !== "https:" || url.origin !== value) {
+      throw new Error("SERVICE_URL must be an HTTPS origin without a path or trailing slash");
+    }
+    return value; // Cloud Run audience and Cloud Tasks target
   },
   get deployServiceAccount() {
     return process.env.DEPLOY_SA_EMAIL ?? `sports-deploy@${required("GCP_PROJECT_ID")}.iam.gserviceaccount.com`;

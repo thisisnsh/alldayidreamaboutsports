@@ -41,7 +41,21 @@ jobs:
       - name: Validate environment configuration
         run: test -n "${{ vars.R2_BUCKET_SCORES }}"
 
+      - name: Resolve service audience before startup
+        id: audience
+        run: |
+          if ! URL=$(gcloud run services describe "$SERVICE" \
+            --project "${{ vars.GCP_PROJECT_ID }}" --region "${{ vars.GCP_REGION }}" \
+            --format 'value(status.url)' 2>/dev/null); then
+            PROJECT_NUMBER=$(gcloud projects describe "${{ vars.GCP_PROJECT_ID }}" --format 'value(projectNumber)')
+            URL="https://${SERVICE}-${PROJECT_NUMBER}.${{ vars.GCP_REGION }}.run.app"
+          fi
+          test -n "$URL"
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+
       - name: Deploy to Cloud Run
+        env:
+          SERVICE_URL: ${{ steps.audience.outputs.url }}
         run: |
           if [[ "${{ vars.GCP_PROJECT_ID }}" == *staging* ]]; then
             SCORES_DOMAIN="https://scores-staging.alldayidreamaboutsports.com"
@@ -70,7 +84,7 @@ jobs:
             --max-instances 50 \
             --memory 512Mi \
             --cpu 1 \
-            --update-env-vars "^##^GCP_PROJECT_ID=${{ vars.GCP_PROJECT_ID }}##R2_BUCKET_SCORES=${{ vars.R2_BUCKET_SCORES }}##TASKS_QUEUE=live-scores##TASKS_LOCATION=${{ vars.GCP_REGION }}##SCORES_DOMAIN=${SCORES_DOMAIN}##LEAGUE_IDS=${LEAGUE_IDS}" \
+            --update-env-vars "^##^GCP_PROJECT_ID=${{ vars.GCP_PROJECT_ID }}##SERVICE_URL=${SERVICE_URL}##R2_BUCKET_SCORES=${{ vars.R2_BUCKET_SCORES }}##TASKS_QUEUE=live-scores##TASKS_LOCATION=${{ vars.GCP_REGION }}##SCORES_DOMAIN=${SCORES_DOMAIN}##LEAGUE_IDS=${LEAGUE_IDS}" \
             --set-secrets "API_FOOTBALL_KEY=api-football-key:latest,R2_ACCESS_KEY_ID=r2-access-key-id:latest,R2_SECRET_ACCESS_KEY=r2-secret-access-key:latest,R2_ENDPOINT=r2-endpoint:latest"
 
       - name: Restrict invocation and resolve service URL
