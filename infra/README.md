@@ -25,40 +25,20 @@ Then in the [Firebase console](https://console.firebase.google.com):
    The cleanup also removes retired count files, Remote Config parameters, and
    the runtime's obsolete Firestore/Firebase Admin IAM grants.
 
-### Backend API domain
+### Private backend
 
-Cloud Run assigns the backend a stable `*.run.app` service URL after its first
-deployment. The app uses environment-specific custom domains instead:
+The Mac app reads the public scores CDN only. Cloud Scheduler and Cloud Tasks
+call the backend's `run.app` URL using the scheduler service account and an
+OIDC audience equal to that URL. No app API custom domain is needed.
 
-| Environment | App API base URL |
-|---|---|
-| staging | `https://api-staging.alldayidreamaboutsports.com` |
-| prod | `https://api.alldayidreamaboutsports.com` |
+`secure-backend.sh <project> <region>` grants invocation to `sports-scheduler`
+and `sports-deploy`, removes anonymous invokers, and enables Cloud Run IAM.
+The app verifies service identity too: deployment credentials only access
+`GET /internal/healthz`. GitHub obtains a short-lived ID token for its smoke test.
 
-After the first backend deploy, create a Cloud Run domain mapping:
-
-1. Open **Google Cloud Console → Cloud Run → Domain mappings → Add mapping**.
-2. Select `alldayidreamaboutsports-backend` and the appropriate GCP project.
-3. Map `api-staging.alldayidreamaboutsports.com` for staging or
-   `api.alldayidreamaboutsports.com` for production.
-4. Verify ownership of `alldayidreamaboutsports.com` when prompted.
-5. Add the DNS records Google displays to Cloudflare DNS as **DNS only**
-   records. Do not proxy these records through Cloudflare.
-6. Verify:
-
-   ```sh
-   curl -fsS https://api-staging.alldayidreamaboutsports.com/healthz/
-   # or production:
-   curl -fsS https://api.alldayidreamaboutsports.com/healthz/
-   ```
-
-Cloud Run domain mappings are a convenient initial setup but remain a preview
-feature. Before high-volume production traffic, put a global external
-Application Load Balancer and Cloud Armor in front of Cloud Run, then restrict
-Cloud Run ingress so the public `run.app` URL cannot bypass those controls.
-Until then, deployment caps Cloud Run at 50 instances to bound scaling cost;
-raising that cap trades stronger availability for higher billing exposure.
-Maximum instances does not cap the total bill or downstream-service usage.
+All ingress stays addressable to support authenticated GitHub smoke checks;
+unauthenticated requests are denied before reaching the container. Merely
+originating inside GCP does not authenticate a request.
 
 ## 2. Cloudflare
 

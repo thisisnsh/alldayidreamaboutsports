@@ -3,7 +3,7 @@
 | Workflow | Trigger | What |
 |---|---|---|
 | `backend-ci.yml` | PRs + main pushes touching `backend/` | `npm ci`, typecheck, vitest |
-| `backend-deploy.yml` | main pushes touching `backend/` (→ staging); manual dispatch for prod | `gcloud run deploy --source` via Workload Identity Federation, then `/healthz/` smoke test |
+| `backend-deploy.yml` | main pushes touching `backend/` (→ staging); manual dispatch for prod | `gcloud run deploy --source` via Workload Identity Federation, then authenticated `/internal/healthz` and anonymous-denial smoke tests |
 
 The website lives in the separate public repo
 `thisisnsh/alldayidreamaboutsports.com` (GitHub Pages "Deploy from a branch", no

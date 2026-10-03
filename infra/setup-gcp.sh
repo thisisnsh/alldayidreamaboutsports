@@ -59,9 +59,8 @@ SCHEDULER_SA="sports-scheduler@${PROJECT_ID}.iam.gserviceaccount.com"
 gcloud iam service-accounts describe "$SCHEDULER_SA" >/dev/null 2>&1 || \
   gcloud iam service-accounts create sports-scheduler --display-name "Internal OIDC identity"
 # Both the scheduler job and the Cloud Tasks it enqueues authenticate to
-# /internal/* as this SA. The backend verifies this OIDC identity itself (the
-# service is public for the app API), so no run.invoker binding is required —
-# but the audience and email must match the backend's SCHEDULER_SA_EMAIL.
+# /internal/* as this SA. Cloud Run IAM and the backend both verify access;
+# the audience and email must match the configured service identity.
 # The runtime SA enqueues tasks that mint tokens as this SA, so it needs to act
 # as it (serviceAccountUser).
 gcloud iam service-accounts add-iam-policy-binding "$SCHEDULER_SA" \
@@ -146,6 +145,10 @@ PROJECT_NUMBER=$(gcloud projects describe "$PROJECT_ID" --format 'value(projectN
 gcloud iam service-accounts add-iam-policy-binding "$DEPLOY_SA" \
   --role roles/iam.workloadIdentityUser \
   --member "principalSet://iam.googleapis.com/projects/${PROJECT_NUMBER}/locations/global/workloadIdentityPools/github/attribute.repository/thisisnsh/alldayidreamaboutsports" -q >/dev/null
+
+if [[ -n "${SERVICE_URL:-}" ]]; then
+  bash "$(dirname "$0")/secure-backend.sh" "$PROJECT_ID" "$REGION"
+fi
 
 cat <<EOF
 
