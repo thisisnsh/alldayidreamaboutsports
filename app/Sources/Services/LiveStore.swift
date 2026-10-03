@@ -388,8 +388,13 @@ final class LiveStore {
                 )
             }
         } else if isFirstObservation {
-            // Mid-match join: seed once from the snapshot's minute.
-            let seedSeconds = current.minute.map { Double($0) * 60 } ?? Fixture.fixedBaseSeconds(for: period)
+            // Mid-match join: seed once from the snapshot's minute. The backend
+            // clamps `minute` at the half's cap (45/90/105/120) and carries
+            // stoppage in `extra`, so joining at 90+5 must seed 95′, not 90′ —
+            // the same wire reading the Debug demo uses (`noteClockObservation`).
+            // `extra` is clamped to a sane range so a feed glitch can't fling it.
+            let stoppage = min(max(current.extra ?? 0, 0), 30)
+            let seedSeconds = current.minute.map { Double($0 + stoppage) * 60 } ?? Fixture.fixedBaseSeconds(for: period)
             clockAnchor[current.fixtureId] = ClockAnchor(baseSeconds: seedSeconds, anchorDate: now, period: period)
         } else {
             // First time this (already-tracked) fixture is seen running — e.g.
