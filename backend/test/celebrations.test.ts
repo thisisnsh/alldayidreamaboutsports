@@ -115,6 +115,28 @@ describe("CelebrationAggregator failures", () => {
   });
 });
 
+describe("CelebrationAggregator shutdown", () => {
+  it("stop waits for a flush already in flight", async () => {
+    const store = fakeStore();
+    let commit!: () => void;
+    vi.mocked(store.addCelebrations).mockImplementationOnce(
+      () => new Promise<void>((resolve) => { commit = resolve; }),
+    );
+    const agg = new CelebrationAggregator(store, fakeR2() as never, ...ALWAYS_PUBLISH);
+    agg.add(1, "6", 12);
+    void agg.flush(); // batch leaves the buffer, increment pending
+
+    let stopped = false;
+    const stopping = agg.stop().then(() => { stopped = true; });
+    await new Promise((r) => setTimeout(r, 0));
+    expect(stopped).toBe(false);
+
+    commit();
+    await stopping;
+    expect(stopped).toBe(true);
+  });
+});
+
 describe("celebrate input", () => {
   it("accepts only canonical numeric team ids", () => {
     const parse = (teamId: string) => celebrateSchema.safeParse({ fixtureId: 1, teamId, taps: 4 }).success;

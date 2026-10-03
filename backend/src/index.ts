@@ -29,7 +29,12 @@ const server = app.listen(env.port, () => {
   log.info("backend_listening", { port: env.port });
 });
 
-process.on("SIGTERM", async () => {
-  await celebrations.stop(); // flush buffered taps before Cloud Run kills us
-  server.close(() => process.exit(0));
+process.on("SIGTERM", () => {
+  // Stop accepting requests, then drain every accepted tap — including a
+  // flush already in flight — before Cloud Run kills us.
+  const closed = new Promise<void>((resolve) => server.close(() => resolve()));
+  void celebrations.stop()
+    .catch((error) => log.error("celebration_drain_failed", error))
+    .then(() => closed)
+    .then(() => process.exit(0));
 });
