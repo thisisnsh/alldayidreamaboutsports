@@ -226,7 +226,10 @@ final class LiveStore {
     /// refresh celebration totals on a score change, and publish to the session.
     private func pollCycle() async {
         let now = Date()
-        let fanFixtures = session.fixtures.filter { $0.involves(session.fanTeamIds) }
+        session.reprojectIfDayChanged()
+        // The whole working set, not the local-day `fixtures`: a match just past
+        // local midnight must be polled even before anything re-projects.
+        let fanFixtures = session.fanWorkingSet
         let targets = fanFixtures.filter { isInLiveWindow($0, at: now) }
         // Defeat App Nap while a fan match is live or about to be; release it
         // when none are.
