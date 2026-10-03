@@ -1,6 +1,8 @@
 # macOS app
 
-SwiftUI menu bar app, macOS 14+, team `983LBM5U6B`. The Xcode project is
+SwiftUI menu bar app, macOS 14+, team `983LBM5U6B`, bundle id
+`com.alldaysports`. Distributed only through the Mac App Store: built, tested,
+archived and uploaded from Xcode. The Xcode project is
 generated — never edit the `.xcodeproj`, edit `project.yml` and rerun `xcodegen`.
 
 ## Build & run
@@ -62,11 +64,9 @@ picks the implementation — that's the release flag:
 | Backend API (`URLSession` in `APIClient`) | never instantiated — `FakeBackendAPI` |
 | Scores CDN (`URLSession` in `CDNScoresClient`) | never instantiated — `FakeScores` (incl. the kill-switch backup `config.json`) |
 | Remote Config / Crashlytics / Analytics | `GoogleService-Info.plist` absent → Firebase never configured (there is no Messaging — push was dropped for polling + CDN) |
-| Sparkle appcast fetch | updater not started in dev builds (`startingUpdater: false`) |
 | Profile photo (`AsyncImage`) | dev profile has `photoURL: nil` |
 
-Debug builds also skip login-item registration (`LaunchAtLogin`), so your dev
-build never sneaks into Login Items. Nothing in a Debug session reaches the
+Nothing in a Debug session reaches the
 network at all.
 
 ## Real-service configuration
@@ -77,7 +77,7 @@ Each environment needs two files from its Firebase/Google Cloud project:
    as `Resources/GoogleService-Info-Staging.plist` or
    `Resources/GoogleService-Info-Production.plist`.
 2. Google Auth Platform → Clients → create an **iOS-type** OAuth client for
-   bundle id `com.alldayidreamaboutsports.mac`, then download its plist. You do
+   bundle id `com.alldaysports`, then download its plist. You do
    not add that downloaded OAuth plist to the app. Copy its two values into the
    matching configuration in `project.yml`:
    - `CLIENT_ID` → `GOOGLE_CLIENT_ID`
@@ -98,32 +98,14 @@ REVERSED_CLIENT_ID = com.googleusercontent.apps.680190781802-t248eiqmjqaorv3ucok
 ```
 
 Both staging and production values are already configured in `project.yml`. The
-Firebase plists themselves are gitignored, so each must exist locally (and as a
-CI secret) before building — see "CI secrets" below. Regenerate and build the
+Firebase plists themselves are gitignored, so each must exist locally before
+building. Regenerate and build the
 environment you want:
 
 ```sh
 xcodegen
 xcodebuild -scheme AllDayIDreamAboutSports -configuration Staging build
 xcodebuild -scheme AllDayIDreamAboutSports -configuration Release build
-```
-
-### CI secrets
-
-`app-release.yml` builds the `Release` config and so needs the production
-Firebase/OAuth values as GitHub Actions secrets (the plists are gitignored and
-never reach the runner otherwise):
-
-| Secret | Value |
-|---|---|
-| `GOOGLE_SERVICE_INFO_PRODUCTION_PLIST_B64` | base64 of `GoogleService-Info-Production.plist` |
-| `GOOGLE_OAUTH_PRODUCTION_CLIENT_ID` | production `CLIENT_ID` |
-| `GOOGLE_OAUTH_PRODUCTION_REVERSED_CLIENT_ID` | production `REVERSED_CLIENT_ID` |
-
-Regenerate the base64 whenever the plist changes:
-
-```sh
-base64 -i app/Resources/GoogleService-Info-Production.plist | tr -d '\n'
 ```
 
 The build phase copies only the selected environment's Firebase plist into the
@@ -134,10 +116,10 @@ use staging Firebase configuration. Both source plists are gitignored.
 
 The app writes structured `debug`, `info`, and `error` entries through Apple's
 unified logging system. In Console.app, select the Mac and filter for subsystem
-`com.alldayidreamaboutsports.mac`, or stream them in Terminal:
+`com.alldaysports`, or stream them in Terminal:
 
 ```sh
-log stream --level debug --predicate 'subsystem == "com.alldayidreamaboutsports.mac"'
+log stream --level debug --predicate 'subsystem == "com.alldaysports"'
 ```
 
 Staging builds also send log breadcrumbs to Firebase Crashlytics. Errors are
@@ -163,57 +145,60 @@ the build. Neither setting can silently call production.
 
 ## Mac App Store
 
-There are two app targets, generated from one template in `project.yml`:
+The app is sandboxed (`App.entitlements`: app sandbox + outgoing network + the
+Firebase keychain group) and Xcode signs it automatically — Apple Development
+when you run it, Apple Distribution when you archive it for upload. There is no
+in-app updater: the App Store installs updates, so the update gate, the
+"Update available" banner and "Check for Updates…" all open the App Store's
+Updates page (`AppUpdater`). Launch at login starts OFF (guideline 2.4.5 bars
+adding a login item without consent); users switch it on in Settings.
+`ITSAppUsesNonExemptEncryption = NO` skips the export-compliance question on
+every upload.
 
-| Target / scheme | Ships as | Signing | Updates |
-|---|---|---|---|
-| `AllDayIDreamAboutSports` | website DMG (CI, `app-release.yml`) | manual Developer ID | Sparkle |
-| `AllDayIDreamAboutSports-AppStore` | Mac App Store | automatic (Xcode) | the App Store |
+### One-time setup
 
-The App Store target uses the same bundle id, Firebase apps and Google OAuth
-clients. The differences:
+1. developer.apple.com → Identifiers → **+** → App IDs → App, bundle id
+   `com.alldaysports` (explicit), capability **Keychain Sharing**. No Push
+   Notifications — the app polls.
+2. Firebase console, in **both** `dreamaboutsports-staging` and
+   `dreamaboutsports-prod`: Add app → Apple, bundle id `com.alldaysports`.
+   Download each `GoogleService-Info.plist` over
+   `Resources/GoogleService-Info-Staging.plist` /
+   `Resources/GoogleService-Info-Production.plist` (Firebase bundle ids can't
+   be edited, so the old `com.alldayidreamaboutsports.mac` apps stay behind).
+   Remote Config is per project, so it carries over unchanged.
+3. Google Auth Platform → Clients: edit the iOS OAuth client in each project
+   and change its bundle id to `com.alldaysports`. The client IDs stay the same,
+   so `project.yml` and the backend's `google-oauth-client-id` need no change.
+4. App Store Connect → Apps → **+** → New macOS App with bundle id
+   `com.alldaysports`. Fill in the listing, the privacy labels (Analytics +
+   Crashlytics: usage and diagnostics data, not linked to identity) and a demo
+   reviewer account (sign-in is required).
 
-- **Sandboxed** (`AppStore.entitlements`: app sandbox + outgoing network +
-  the Firebase keychain group).
-- **No Sparkle**: it isn't linked, and the build defines `APP_STORE`.
-  `AppUpdater` is what the views talk to. In this build the update gate and
-  "Check for Updates…" open the App Store's Updates page, and the
-  auto-check toggle is hidden.
-- **Launch at login starts OFF**: guideline 2.4.5 bars adding a login item
-  without consent, so only the Settings toggle registers it.
-- `ITSAppUsesNonExemptEncryption = NO`, so uploads skip the export-compliance
-  question.
+### Build, test, release
 
-### Releasing to the App Store
+1. `xcodegen && open AllDayIDreamAboutSports.xcodeproj`
+2. Test: ⌘R runs **Debug** (fake services). Edit Scheme → Run → Build
+   Configuration → **Staging** or **Release** to test the sandboxed app against
+   real services (sign-in, live scores, overlays).
+3. Bump `MARKETING_VERSION` (user-facing version) and `CURRENT_PROJECT_VERSION`
+   (must increase on every upload) in `project.yml`, then rerun `xcodegen`.
+4. **Product → Archive** (archives the Release config), then in Organizer
+   **Distribute App → App Store Connect → Upload**.
+5. In App Store Connect, attach the build to the version and submit for review.
 
-1. One time: in App Store Connect → Apps → **+** → New macOS App, pick bundle
-   id `com.alldayidreamaboutsports.mac`, and fill in the listing, privacy
-   labels (Analytics + Crashlytics: usage and diagnostics data, not linked to
-   identity), and a demo reviewer account (sign-in is required).
-2. `xcodegen && open AllDayIDreamAboutSports.xcodeproj`
-3. Select the **AllDayIDreamAboutSports-AppStore** scheme. ⌘R runs it
-   sandboxed against production, so test sign-in, live scores and overlays
-   here first.
-4. Bump `MARKETING_VERSION` / `CURRENT_PROJECT_VERSION` in `project.yml`
-   (each upload needs a new build number; keep it in step with the DMG tags
-   so `min_build` / `latest_build` mean the same thing in both builds), then
-   rerun `xcodegen`.
-5. **Product → Archive**, then in Organizer **Distribute App → App Store
-   Connect → Upload**. Xcode creates the Apple Distribution certificate and
-   the App Store profile automatically.
-6. In App Store Connect, pick the build for the version and submit it for
-   review.
-
-Only raise `min_build` in Remote Config once the App Store build that clears
-it has been **approved**. Otherwise App Store users get a forced-update gate
-with nothing to update to.
+Remote Config `min_build` / `latest_build` compare against
+`CURRENT_PROJECT_VERSION`. Raise them only once the build that clears them is
+**live** on the App Store — otherwise users get an update prompt with nothing
+to update to. Builds 1–3 were the old website DMGs, so App Store builds start
+at 4.
 
 ## Source map
 
 | Dir | What |
 |---|---|
 | `Sources/App.swift` | window scenes (login, picker, settings, gate) |
-| `Sources/AppDelegate.swift` | transient AppKit menu, Firebase bootstrap (Remote Config + Crashlytics/Analytics — no Messaging), Sparkle updater, reopen handling |
+| `Sources/AppDelegate.swift` | transient AppKit menu, Firebase bootstrap (Remote Config + Crashlytics/Analytics — no Messaging), reopen handling |
 | `Sources/Services/` | session/auth, backend API, local prefs, kill switch (`ControlPlane`), event routing, tap batching |
 | `Sources/Overlay/` | the two overlay panels: full-screen click-through display + small clickable ball; celebration, notch pill, particles |
 | `Sources/Views/` | login, popover, team picker, settings, kill/update gate |
@@ -242,105 +227,3 @@ Key invariants:
 - The published `fixtures` list is fan-filtered. The full day's fixtures — up to
   ~48 across five leagues — stay in the working set for the poll loop, but only
   the user's own are published and written to the local cache.
-
-## Code signing & notarization (one-time setup)
-
-1. **Certificate**: Xcode → Settings → Accounts → team 983LBM5U6B → manage
-   certificates → create "Developer ID Application". The certificate must appear
-   under **My Certificates** in Keychain Access with an expandable private key.
-   Export that complete identity as a password-protected `.p12`; never export or
-   commit the private key separately. Verify the active identity with:
-   ```sh
-   security find-identity -v -p codesigning
-   ```
-2. **Developer ID provisioning profile**: developer.apple.com → Certificates,
-   Identifiers & Profiles → Profiles. Create a Developer ID profile for
-   `com.alldayidreamaboutsports.mac`, selecting the same certificate exported in
-   step 1. The profile must authorize Keychain Sharing. The current profile is
-   named `983LBM5U6B.com.alldayidreamaboutsports.mac.3`, UUID
-   `1b1e1690-0cf1-4173-ba32-259af8429a4d`, and is valid until 2044-07-01.
-3. **GitHub Actions secrets**: encode the P12 and profile without committing
-   either file, then set:
-   - `MACOS_CERT_P12_B64`: base64-encoded P12
-   - `MACOS_CERT_PASSWORD`: P12 export password
-   - `MACOS_PROVISIONING_PROFILE_B64`: base64-encoded `.provisionprofile`
-
-   The release workflow verifies that the profile's certificate fingerprint
-   matches the imported P12 before it builds.
-4. **Notary profile**:
-   ```sh
-   xcrun notarytool store-credentials notary-alldayidreamaboutsports \
-     --apple-id <your-apple-id> --team-id 983LBM5U6B \
-     --password <app-specific-password>   # appleid.apple.com → App-Specific Passwords
-   ```
-
-There is no push capability to set up. The app polls the scores CDN, so it
-needs no Push Notifications entitlement, no APNs auth key, and no Firebase
-Cloud Messaging configuration.
-
-### Rotating the Developer ID certificate
-
-The current CI certificate (`0C64AFF32A40DEF952C231B8721C81E89518D4C0`)
-expires 2027-02-01. Before then:
-
-1. Create a new Developer ID Application certificate in Xcode and export its
-   certificate/private-key identity as a P12.
-2. Regenerate the Developer ID profile using that exact new certificate.
-3. Replace `MACOS_CERT_P12_B64` and `MACOS_PROVISIONING_PROFILE_B64` in GitHub;
-   replace `MACOS_CERT_PASSWORD` too if the P12 password changed.
-4. Update the profile name/UUID in `project.yml`, `ExportOptions.plist`, and the
-   release workflow, then run a release build to exercise all signing checks.
-
-Do **not** revoke an old Developer ID certificate during routine rotation.
-Timestamped releases keep working after certificate expiration, while revocation
-can prevent existing signed releases from installing or launching.
-
-## Sparkle updates
-
-- `SUPublicEDKey` in `project.yml` is the public half of the key generated on
-  this machine (2026-06-11); the private key lives in your login Keychain as
-  "Private key for signing Sparkle updates". The appcast is signed **locally**
-  (`publish.sh` reads the key from the Keychain) — it is no longer a CI secret.
-  **Back it up** — losing it strands every installed copy:
-  ```sh
-  # export for backup (any Sparkle download's generate_keys works)
-  ./bin/generate_keys -x sparkle_private_key
-  ```
-- Feed: `https://download.alldayidreamaboutsports.com/appcast.xml` (R2 bucket
-  `alldayidreamaboutsports-downloads`), checked hourly, auto-installs.
-- Force-update: bump `min_build` in Remote Config; older builds show the
-  blocking gate wired to Sparkle.
-
-## Releasing
-
-CI builds the DMG; the Sparkle appcast + delta generation and the R2 upload are
-**local** (the EdDSA key and R2 creds stay on your machine, not in CI).
-`publish.sh` expects a local Sparkle install with
-`$SPARKLE_HOME/bin/generate_appcast`; it does not download Sparkle.
-
-**Normal flow:**
-1. Tag `v1.0.0.1` → `.github/workflows/app-release.yml` builds the code-signed,
-   notarized, stapled, styled DMG on a macOS runner and uploads it as a
-   **workflow artifact** (no appcast, no R2, no GitHub Release).
-2. Download the artifact, install the DMG, test it.
-3. Publish it:
-   ```sh
-   cp scripts/.publish.env.example scripts/.publish.env
-   # Fill in scripts/.publish.env with R2_* plus Cloudflare purge credentials once.
-
-   ./scripts/publish.sh ~/Downloads/AllDayIDreamAboutSports-1.0.0.dmg \
-     --notes ~/Downloads/AllDayIDreamAboutSports-1.0.0.html \
-     --release
-   # → appcast + deltas (vs prior DMGs) → upload DMG/appcast/deltas/notes to R2
-   ```
-   Then ensure `download.alldayidreamaboutsports.com/latest` redirects to the
-   new DMG.
-
-`publish.sh` defaults to the staging feed and bucket. Use `--release` or
-`CHANNEL=release` only when you are intentionally publishing to production.
-
-The script keeps every shipped DMG in `~/Releases/AllDayIDreamAboutSports` so
-`generate_appcast` can emit delta updates.
-
-Build numbers: CI uses the workflow run number, so `min_build` comparisons stay
-sane.

@@ -10,7 +10,7 @@
     },
     "min_build": {
       "defaultValue": { "value": "1" },
-      "description": "Builds below this are blocked behind a forced Sparkle update."
+      "description": "Builds below this are blocked behind a forced update (opens the Mac App Store). Raise only once that build is live on the App Store."
     },
     "latest_build": {
       "defaultValue": { "value": "0" },
