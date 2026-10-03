@@ -100,6 +100,23 @@ extension ISO8601DateFormatter {
     }()
 }
 
+extension ISO8601DateFormatter {
+    private static let internetDateTime = ISO8601DateFormatter()
+    private static let internetDateTimeFractional: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+
+    /// Parses a wire timestamp with or without fractional seconds. API-Football
+    /// sends `…T20:00:00+00:00`, but JavaScript's `toISOString()` (the staging
+    /// publisher, `/internal/test-event`) sends `…T20:00:00.000Z`, which the
+    /// default formatter rejects — dropping the fixture entirely.
+    static func parseKickoff(_ string: String) -> Date? {
+        internetDateTime.date(from: string) ?? internetDateTimeFractional.date(from: string)
+    }
+}
+
 extension Calendar {
     /// Gregorian calendar pinned to UTC, for deriving the UTC day keys used by
     /// `fixtures-{date}.json`. Day arithmetic must happen in the same zone the
