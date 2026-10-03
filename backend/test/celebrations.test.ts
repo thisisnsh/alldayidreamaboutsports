@@ -149,6 +149,20 @@ describe("CelebrationAggregator sampled publish", () => {
     expect(r2.putJson).not.toHaveBeenCalled();
   });
 
+  it("publishes a sampled-out final batch on the next quiet flush", async () => {
+    const store = fakeStore();
+    const r2 = fakeR2();
+    const agg = new CelebrationAggregator(store, r2 as never, 1500, 1.0, 0.1, () => 0.9);
+    agg.add(1, "6", 12);
+
+    await agg.flush(); // sampled out
+    expect(r2.putJson).not.toHaveBeenCalled();
+    await agg.flush(); // no new taps → the final total publishes
+    expect(r2.putJson).toHaveBeenCalledTimes(1);
+    await agg.flush();
+    expect(r2.putJson).toHaveBeenCalledTimes(1);
+  });
+
   it("reads and publishes when the roll lands under the rate", async () => {
     const store = fakeStore();
     const r2 = fakeR2();
@@ -173,9 +187,12 @@ describe("CelebrationAggregator sampled publish", () => {
     expect(store.addCelebrations).toHaveBeenCalledTimes(2);
     expect(store.addCelebrations).toHaveBeenNthCalledWith(1, 1, { "6": 5 });
     expect(store.addCelebrations).toHaveBeenNthCalledWith(2, 1, { "6": 7 });
-    // Nothing is ever republished, and nothing is left buffered either.
+    // Nothing is republished while taps keep arriving, nothing is left
+    // buffered, and the first quiet flush publishes the final total.
     expect(r2.putJson).not.toHaveBeenCalled();
     expect(agg.pending().size).toBe(0);
+    await agg.flush();
+    expect(r2.putJson).toHaveBeenCalledTimes(1);
   });
 
   it("keeps roughly one flush in ten publishing at the default rate", async () => {

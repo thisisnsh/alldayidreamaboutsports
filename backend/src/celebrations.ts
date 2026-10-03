@@ -76,11 +76,12 @@ export class CelebrationAggregator {
     // per goal. Cloud Run instances are stateless and disposable, so there
     // is nowhere to cache the result — thinning it by probability needs no
     // coordination between instances and still republishes ~2×/second,
-    // which is already faster than the 5s edge TTL can serve. A retry of a
-    // failed publish is never sampled out.
+    // which is already faster than the 5s edge TTL can serve. Only a flush
+    // that brought new taps is sampled: a sampled-out fixture stays in
+    // `unpublished`, so the first quiet flush after its taps stop always
+    // publishes the final total.
     if (sampled && this.random() >= this.publishRate) {
       log.info("celebration_publish_sampled_out", { fixtureId, publishRate: this.publishRate });
-      this.unpublished.delete(fixtureId);
       return;
     }
     try {
