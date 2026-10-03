@@ -3,7 +3,8 @@
 #
 #   ./setup-gcp.sh dreamaboutsports-staging us-central1
 #
-# Prereqs: gcloud CLI authenticated as project owner; billing linked.
+# Prereqs: gcloud authenticated as project owner, gh authenticated for the repo,
+# jq, and billing linked.
 set -euo pipefail
 
 PROJECT_ID="${1:?usage: setup-gcp.sh <project-id> <region>}"
@@ -132,19 +133,13 @@ for role in roles/run.admin roles/run.sourceDeveloper roles/cloudbuild.builds.ed
   gcloud projects add-iam-policy-binding "$PROJECT_ID" \
     --member "serviceAccount:${DEPLOY_SA}" --role "$role" --condition=None -q >/dev/null
 done
-gcloud iam workload-identity-pools describe github --location global >/dev/null 2>&1 || \
-  gcloud iam workload-identity-pools create github --location global --display-name "GitHub"
-gcloud iam workload-identity-pools providers describe github-provider \
-  --location global --workload-identity-pool github >/dev/null 2>&1 || \
-  gcloud iam workload-identity-pools providers create-oidc github-provider \
-    --location global --workload-identity-pool github \
-    --issuer-uri "https://token.actions.githubusercontent.com" \
-    --attribute-mapping "google.subject=assertion.sub,attribute.repository=assertion.repository" \
-    --attribute-condition "assertion.repository == 'thisisnsh/alldayidreamaboutsports'"
+case "$PROJECT_ID" in
+  *-staging) DEPLOY_ENVIRONMENT=staging ;;
+  *-prod) DEPLOY_ENVIRONMENT=prod ;;
+  *) echo "Set up an explicit deployment environment for $PROJECT_ID" >&2; exit 1 ;;
+esac
+bash "$(dirname "$0")/configure-deploy-trust.sh" "$PROJECT_ID" "$DEPLOY_ENVIRONMENT"
 PROJECT_NUMBER=$(gcloud projects describe "$PROJECT_ID" --format 'value(projectNumber)')
-gcloud iam service-accounts add-iam-policy-binding "$DEPLOY_SA" \
-  --role roles/iam.workloadIdentityUser \
-  --member "principalSet://iam.googleapis.com/projects/${PROJECT_NUMBER}/locations/global/workloadIdentityPools/github/attribute.repository/thisisnsh/alldayidreamaboutsports" -q >/dev/null
 
 if [[ -n "${SERVICE_URL:-}" ]]; then
   bash "$(dirname "$0")/secure-backend.sh" "$PROJECT_ID" "$REGION"

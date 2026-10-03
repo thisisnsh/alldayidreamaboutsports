@@ -232,3 +232,18 @@ applies it and reschedules the next fetch. Verify in the app log:
 Lowering the interval multiplies billable Remote Config fetches per install once
 Firebase's usage-based pricing applies. Raise it, don't lower it, unless an
 incident needs faster recovery than the real-time listener provides.
+
+## Deployment trust
+
+Run `bash infra/configure-deploy-trust.sh <project> <staging|prod>` with `gcloud`,
+`gh`, and `jq` available. It reconciles existing providers and IAM bindings.
+GitHub identity must match the immutable repository and owner IDs, `main`,
+`.github/workflows/backend-deploy.yml@refs/heads/main`, and that project's
+exact environment subject. Staging credentials cannot satisfy production trust.
+A token from another branch or workflow is rejected even if it belongs to this
+repository. Renaming the repository requires explicitly reconciling this trust.
+
+In GitHub, restrict both environments to the `main` branch and require a
+production reviewer where the plan supports that protection. GCP conditions
+remain mandatory regardless of GitHub plan. Do not weaken them to unblock a
+feature-branch deploy; merge reviewed changes to `main` instead.
