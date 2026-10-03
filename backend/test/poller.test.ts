@@ -370,7 +370,10 @@ describe("Poller", () => {
     const finished = state(1, now.toISOString(), "FINISHED", {
       secondHalfStartISO: new Date(now.getTime() - 60 * 60 * 1000).toISOString(), // 1h ago
     });
-    const provider = { fixturesForRange: vi.fn().mockResolvedValue([finished]) };
+    const provider = {
+      fixturesForRange: vi.fn().mockResolvedValue([finished]),
+      fixturesByIds: vi.fn().mockResolvedValue([finished]),
+    };
     const stateStore = {
       load: vi.fn().mockResolvedValue({ state: prev, etag: "e1" }),
       save: vi.fn().mockResolvedValue(undefined),
@@ -383,6 +386,61 @@ describe("Poller", () => {
     expect(result).toEqual({ live: 0 });
     expect(stateStore.save).toHaveBeenCalledTimes(1);
     expect(stateStore.save).toHaveBeenCalledWith(finished, "e1");
+  });
+
+  describe("final snapshot events", () => {
+    const now = new Date();
+    const goal = { player: "Scorer", minute: 88, extra: null };
+    const live = state(1, now.toISOString(), "LIVE", {
+      home: { id: 1, name: "A", goals: 1, yellowCards: 1, redCards: 0, yellowCardEvents: [goal], redCardEvents: [], goalEvents: [goal] },
+    });
+    const finishedRow = state(1, now.toISOString(), "FINISHED", {
+      secondHalfStartISO: new Date(now.getTime() - 60 * 60 * 1000).toISOString(),
+      home: { id: 1, name: "A", goals: 1, yellowCards: 0, redCards: 0, yellowCardEvents: [], redCardEvents: [], goalEvents: [] },
+    });
+
+    function pollerWith(previous: MatchState, fixturesByIds: ReturnType<typeof vi.fn>) {
+      const provider = { fixturesForRange: vi.fn().mockResolvedValue([finishedRow]), fixturesByIds };
+      const stateStore = {
+        load: vi.fn().mockResolvedValue({ state: previous, etag: "e1" }),
+        save: vi.fn().mockResolvedValue(undefined),
+      };
+      const r2 = { putJsonIfChanged: vi.fn().mockResolvedValue(undefined) };
+      return { poller: new Poller(provider as never, stateStore as never, r2 as never, seasons(), [39]), stateStore };
+    }
+
+    it("re-reads a match crossing into FINISHED through the ids endpoint", async () => {
+      const detailed = { ...finishedRow, home: { ...live.home } };
+      const fixturesByIds = vi.fn().mockResolvedValue([detailed]);
+      const { poller, stateStore } = pollerWith(live, fixturesByIds);
+
+      await poller.fetchOnce();
+
+      expect(fixturesByIds).toHaveBeenCalledWith([1]);
+      expect(stateStore.save).toHaveBeenCalledWith(detailed, "e1");
+    });
+
+    it("keeps the published events when the detail read fails", async () => {
+      const { poller, stateStore } = pollerWith(live, vi.fn().mockRejectedValue(new Error("quota")));
+
+      await poller.fetchOnce();
+
+      const saved = stateStore.save.mock.calls[0]![0] as MatchState;
+      expect(saved.status).toBe("FINISHED");
+      expect(saved.home.goalEvents).toEqual([goal]);
+      expect(saved.home.yellowCards).toBe(1);
+    });
+
+    it("never overwrites an already-final state with the event-less range row", async () => {
+      const final = { ...finishedRow, home: { ...live.home } };
+      const fixturesByIds = vi.fn();
+      const { poller, stateStore } = pollerWith(final, fixturesByIds);
+
+      await poller.fetchOnce();
+
+      expect(fixturesByIds).not.toHaveBeenCalled();
+      expect(stateStore.save).not.toHaveBeenCalled();
+    });
   });
 
   it("skips SCHEDULED and long-finished fixtures: no R2 read, no save", async () => {
