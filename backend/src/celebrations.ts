@@ -12,6 +12,8 @@ import { log } from "./log.js";
  */
 export class CelebrationAggregator {
   private buffer = new Map<number, Record<string, number>>();
+  /** Fixtures whose shards moved since their totals file was last written. */
+  private unpublished = new Set<number>();
   private timer: NodeJS.Timeout | null = null;
 
   constructor(
@@ -40,35 +42,21 @@ export class CelebrationAggregator {
   }
 
   async flush(): Promise<void> {
-    if (this.buffer.size === 0) return;
+    if (this.buffer.size === 0 && this.unpublished.size === 0) return;
     const batch = this.buffer;
     this.buffer = new Map();
-    log.info("celebration_flush_start", { fixtures: batch.size });
+    log.info("celebration_flush_start", { fixtures: batch.size, unpublished: this.unpublished.size });
+    // ALWAYS increment: this is the half that must not lose a tap. Only a
+    // failed increment goes back in the buffer — a later publish failure must
+    // never re-add counts the shards already hold.
+    const incremented = new Set<number>();
     await Promise.all([...batch].map(async ([fixtureId, counts]) => {
       try {
-        // ALWAYS increment: this is the half that must not lose a tap.
         await this.store.addCelebrations(fixtureId, counts);
-        // Only sometimes read-and-publish. `celebrationTotals` reads all shards,
-        // and at ~30 instances × a flush every 1.5s that is ~19k Firestore reads
-        // per goal. Cloud Run instances are stateless and disposable, so there
-        // is nowhere to cache the result — thinning it by probability needs no
-        // coordination between instances and still republishes ~2×/second,
-        // which is already faster than the 5s edge TTL can serve.
-        if (this.random() >= this.publishRate) {
-          log.info("celebration_publish_sampled_out", { fixtureId, counts, publishRate: this.publishRate });
-          return;
-        }
-        const sampled = await this.store.celebrationTotals(fixtureId);
-        // Scale the sampled (reported) totals up to an estimated global total.
-        const scale = this.sampleRate > 0 ? 1 / this.sampleRate : 1;
-        const totals: Record<string, number> = {};
-        for (const [team, n] of Object.entries(sampled)) {
-          totals[team] = Math.round(n * scale);
-        }
-        await this.r2.putJson(`celebrate/${fixtureId}.json`, { totals }, CACHE_CONTROL_LIVE);
-        log.info("celebration_flush_complete", { fixtureId, counts, sampled, totals });
+        incremented.add(fixtureId);
+        this.unpublished.add(fixtureId);
       } catch (error) {
-        log.error("celebration_flush_failed", error, { fixtureId, counts });
+        log.error("celebration_increment_failed", error, { fixtureId, counts });
         const pending = this.buffer.get(fixtureId) ?? Object.create(null) as Record<string, number>;
         for (const [teamId, taps] of Object.entries(counts)) {
           pending[teamId] = (pending[teamId] ?? 0) + taps;
@@ -76,6 +64,39 @@ export class CelebrationAggregator {
         this.buffer.set(fixtureId, pending);
       }
     }));
+    await Promise.all([...this.unpublished].map((fixtureId) =>
+      this.publish(fixtureId, incremented.has(fixtureId))));
+  }
+
+  /** Read the shards and republish `celebrate/{id}.json`. A failure leaves the
+   * fixture in `unpublished`, so a later flush retries the publish alone. */
+  private async publish(fixtureId: number, sampled: boolean): Promise<void> {
+    // Only sometimes read-and-publish. `celebrationTotals` reads all shards,
+    // and at ~30 instances × a flush every 1.5s that is ~19k Firestore reads
+    // per goal. Cloud Run instances are stateless and disposable, so there
+    // is nowhere to cache the result — thinning it by probability needs no
+    // coordination between instances and still republishes ~2×/second,
+    // which is already faster than the 5s edge TTL can serve. A retry of a
+    // failed publish is never sampled out.
+    if (sampled && this.random() >= this.publishRate) {
+      log.info("celebration_publish_sampled_out", { fixtureId, publishRate: this.publishRate });
+      this.unpublished.delete(fixtureId);
+      return;
+    }
+    try {
+      const reported = await this.store.celebrationTotals(fixtureId);
+      // Scale the sampled (reported) totals up to an estimated global total.
+      const scale = this.sampleRate > 0 ? 1 / this.sampleRate : 1;
+      const totals: Record<string, number> = {};
+      for (const [team, n] of Object.entries(reported)) {
+        totals[team] = Math.round(n * scale);
+      }
+      await this.r2.putJson(`celebrate/${fixtureId}.json`, { totals }, CACHE_CONTROL_LIVE);
+      this.unpublished.delete(fixtureId);
+      log.info("celebration_publish_complete", { fixtureId, reported, totals });
+    } catch (error) {
+      log.error("celebration_publish_failed", error, { fixtureId });
+    }
   }
 
   start(): void {
