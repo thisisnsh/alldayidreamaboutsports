@@ -11,6 +11,14 @@ final class CelebrationService {
     /// One physical click emits 4 mini balls on screen, so it counts as 4
     /// celebrations — keep in sync with MiniBallBursts.ballsPerClick.
     static let tapsPerClick = 4
+    /// Per-request cap, matching the backend's `taps` limit.
+    static let maxTapsPerUpload = 200
+
+    /// The celebrations a number of clicks counts as — the one unit shared by
+    /// the upload and the optimistic local total.
+    static func celebrations(forClicks clicks: Int) -> Int {
+        min(clicks * tapsPerClick, maxTapsPerUpload)
+    }
 
     private var api: BackendAPI { Services.api }
     private var taps = 0
@@ -47,7 +55,7 @@ final class CelebrationService {
             return
         }
         let batch = targets
-        let count = min(taps, 200)
+        let count = min(taps, Self.maxTapsPerUpload)
         targets = []
         taps = 0
         // Sampling: only a sampled fraction of clients POST their real taps; the

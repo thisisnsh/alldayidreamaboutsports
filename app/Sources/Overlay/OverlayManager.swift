@@ -260,7 +260,9 @@ final class OverlayManager: ObservableObject {
     /// show the same final tally instead of a partial, per-client snapshot.
     private func flushTapsAndQueueCounts() {
         let targets = celebrationTargets(for: ballEvents)
-        let taps = tapBursts
+        // tapBursts counts clicks; the upload counts celebrations (4 per click,
+        // capped), so the local total must use the same unit.
+        let taps = CelebrationService.celebrations(forClicks: tapBursts)
         CelebrationService.shared.endWindow()
         guard !targets.isEmpty, taps > 0,
               AppSession.shared.prefs.settings.eventEnabled(.celebration) else { return }
