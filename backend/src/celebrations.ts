@@ -15,6 +15,8 @@ export class CelebrationAggregator {
   /** Fixtures whose shards moved since their totals file was last written. */
   private unpublished = new Set<number>();
   private timer: NodeJS.Timeout | null = null;
+  private flushing: Promise<void> = Promise.resolve();
+  private flushesQueued = 0;
 
   constructor(
     private readonly store: Store,
@@ -41,10 +43,19 @@ export class CelebrationAggregator {
     return this.buffer;
   }
 
-  async flush(): Promise<void> {
-    if (this.buffer.size === 0 && this.unpublished.size === 0) return;
+  /** Flushes run one at a time, so `stop()` can drain whatever is in flight
+   * (its batch has already left the buffer) before the process exits. */
+  flush(): Promise<void> {
+    // Take the batch now: taps that arrive while it waits go to the next one.
     const batch = this.buffer;
     this.buffer = new Map();
+    const run = this.flushing.then(() => this.flushBatch(batch));
+    this.flushing = run.catch(() => undefined);
+    return run;
+  }
+
+  private async flushBatch(batch: Map<number, Record<string, number>>): Promise<void> {
+    if (batch.size === 0 && this.unpublished.size === 0) return;
     log.info("celebration_flush_start", { fixtures: batch.size, unpublished: this.unpublished.size });
     // ALWAYS increment: this is the half that must not lose a tap. Only a
     // failed increment goes back in the buffer — a later publish failure must
@@ -102,13 +113,19 @@ export class CelebrationAggregator {
 
   start(): void {
     if (this.timer) return;
-    this.timer = setInterval(() => void this.flush(), this.flushMs);
+    this.timer = setInterval(() => {
+      // A slow Firestore must not pile a queue of ticks up behind it.
+      if (this.flushesQueued > 0) return;
+      this.flushesQueued++;
+      void this.flush().finally(() => this.flushesQueued--);
+    }, this.flushMs);
     this.timer.unref();
   }
 
   async stop(): Promise<void> {
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
+    // Queued behind any in-flight flush, so that batch commits first.
     await this.flush();
   }
 }
