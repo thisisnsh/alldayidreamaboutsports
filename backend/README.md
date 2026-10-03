@@ -73,12 +73,17 @@ The messages worth knowing:
 | `poll_provider_complete` | one tick finished; carries a per-league fixture count |
 | `match_state_published` | a `matches/{id}.json` actually changed — logs before → after, so a bad publish (wrong score, stuck clock, missing scorer) is auditable |
 | `dispatch_skipped_no_match_window` | the gate is shut; no tasks enqueued, no API calls |
-| `match_window_loaded` | the gate read a fixture file (once per date per instance per day) |
+| `match_window_loaded` | the gate read a fixture file (at most every 10 min per date per instance) |
 | `league_seasons_missing` | a configured league has no season in `catalog.json` and is being skipped — run `/internal/sync-catalog` |
 | `score_decreased` | a per-side goal count dropped (real VAR disallow vs a feed glitch) |
 
-Trigger a test goal on staging — it writes a synthetic `matches/{id}.json`, which
-a polling client picks up exactly as it would a real one:
+Trigger a test goal on staging — it writes a synthetic `matches/{id}.json` plus
+a row for it in today's `fixtures-{date}.json`, so a polling client discovers and
+picks it up exactly as it would a real one. The endpoint refuses to run unless
+`R2_BUCKET_SCORES` is a staging bucket. The schedule file is edge-cached for 12h,
+so a client that already loaded today's copy only sees the new row after a
+manual ↻ once the edge copy refreshes; the row also opens the match window, so
+the poller runs (and spends API quota) for the next four hours:
 
 ```sh
 TOKEN=$(gcloud auth print-identity-token \
