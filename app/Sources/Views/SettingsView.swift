@@ -12,6 +12,11 @@ struct SettingsView: View {
     @State private var activeTheme: ThemeChoice = .system
     @ObservedObject private var displayTarget = OverlayDisplayTarget.shared
     private static let screen = "settings"
+    #if APP_STORE
+    private static let launchAtLoginCaption = "Turn this on so you never miss a goal — the app starts silently in the menu bar. It never shows in the Dock; that's how it's designed."
+    #else
+    private static let launchAtLoginCaption = "On by default so you never miss a goal — the app starts silently in the menu bar. It never shows in the Dock; that's how it's designed."
+    #endif
 
     var body: some View {
         ZStack {
@@ -109,7 +114,7 @@ struct SettingsView: View {
                                 session.updateSettings { $0.launchAtLogin = on }
                             }
                         ))
-                        caption("On by default so you never miss a goal — the app starts silently in the menu bar. It never shows in the Dock; that's how it's designed.")
+                        caption(Self.launchAtLoginCaption)
                     }
 
                     SettingsCard("Updates") {
