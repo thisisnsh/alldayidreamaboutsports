@@ -160,8 +160,8 @@ at 4.
 | `Sources/Views/` | login, popover, team picker, settings, kill/update gate |
 
 Key invariants:
-- Overlay panels use `sharingType = .none` (invisible to screen sharing) and
-  never take focus (`nonactivatingPanel`).
+- Overlay panels use `sharingType = .readOnly`, so they show up in screen
+  sharing and recordings, and never take focus (`nonactivatingPanel`).
 - Two overlay queues feed displayed sets: goal events are selected first, then
   remaining slots fill from non-goals. The visible stack is chronological
   within the selected set, oldest at top and newest at bottom, and shows for
