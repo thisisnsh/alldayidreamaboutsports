@@ -246,6 +246,18 @@ describe("ApiFootballProvider", () => {
     await expect(provider.fixturesForRange(39, 2026, "2026-06-10", "2026-06-12")).rejects.toThrow(/bad key|bad body/);
   });
 
+  it("rejects an HTTP 200 error envelope even when response is an empty array", async () => {
+    const { provider } = providerReturning({ errors: { requests: "quota exceeded" }, response: [] });
+    await expect(provider.fixturesForRange(39, 2026, "2026-06-10", "2026-06-12")).rejects.toThrow(/quota exceeded/);
+  });
+
+  it("accepts the empty errors forms API-Football sends on success", async () => {
+    for (const errors of [[], {}]) {
+      const { provider } = providerReturning({ errors, response: [liveFixture] });
+      await expect(provider.fixturesForRange(39, 2026, "2026-06-10", "2026-06-12")).resolves.toHaveLength(1);
+    }
+  });
+
   it("throws on HTTP errors", async () => {
     const { provider } = providerReturning({}, 429);
     await expect(provider.fixturesForRange(39, 2026, "2026-06-10", "2026-06-12")).rejects.toThrow("HTTP 429");
