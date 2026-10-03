@@ -55,6 +55,18 @@ final class TeamLogoStore: ObservableObject {
         return nil
     }
 
+    /// Re-request every logo whose last load failed, ignoring any cooldown —
+    /// called when the menu opens, so a crest that blanked out (e.g. two
+    /// failures while the network was down after wake) comes back the next
+    /// time the user looks, instead of staying a placeholder for hours.
+    func retryFailed() {
+        let urls = Set(failures.keys).union(coolingUntil.keys)
+        guard !urls.isEmpty else { return }
+        failures = [:]
+        coolingUntil = [:]
+        for url in urls { _ = image(for: url) }
+    }
+
     /// Warm a set of logos ahead of a celebration so they're ready to draw.
     func preload(_ urls: [String]) {
         for url in urls { _ = image(for: url) }
