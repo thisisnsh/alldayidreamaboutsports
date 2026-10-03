@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// The menu bar dropdown: "Fan of" flags, today's fixtures for
-/// followed teams (live scores + celebration counts), and actions.
+/// followed teams (live scores), and actions.
 struct MenuPopoverView: View {
     @EnvironmentObject var session: AppSession
     @ObservedObject private var control = ControlPlane.shared
@@ -426,7 +426,7 @@ private struct FixtureScopePicker: View {
 
 private struct FixtureRow: View {
     let fixture: Fixture
-    /// Whether this row may show live state — score, minute, FT, celebration
+    /// Whether this row may show live state — score, minute, FT
     /// tally. Only "My Teams" can: `LiveStore` polls `session.fixtures` alone,
     /// and `fixtures-{date}.json` is schedule data by construction (goals
     /// zeroed, status forced to SCHEDULED — see `toScheduleRow` in the
@@ -443,7 +443,7 @@ private struct FixtureRow: View {
     private var pinnable: Bool { live && fixture.involves(session.fanTeamIds) }
 
     var body: some View {
-        // The row is hover-only (reveals the celebration tally + the pin
+        // The row is hover-only (reveals the pin
         // affordance) — clicking it no longer navigates anywhere; the FIFA page
         // was rarely what people wanted and stole focus from the menu.
         Button {
@@ -478,27 +478,12 @@ private struct FixtureRow: View {
         }
     }
 
-    /// The description line under the scoreline. At rest it leads with the
-    /// competition — with five leagues in the list, the crests alone don't say
-    /// which one a match belongs to — followed by the stage label. Hovering a
-    /// kicked-off match that has celebrations swaps the whole line for the
-    /// tally, league prefix and all. With nothing to celebrate — before
-    /// kickoff, or while neither team has a tap — hover changes nothing, since
-    /// blanking the line would make the row twitch.
+    /// Competition and stage remain visible while hovering the pin control.
     @ViewBuilder private var subtitle: some View {
-        let totals = session.celebrationTotals[fixture.fixtureId]
-        let home = totals?[String(fixture.home.id)] ?? 0
-        let away = totals?[String(fixture.away.id)] ?? 0
-        let hasCelebrations = live && fixture.status != "SCHEDULED" && (home > 0 || away > 0)
-        if hovering, hasCelebrations {
-            Text("\(home.formattedCompact) vs \(away.formattedCompact) celebrations")
-                .font(.system(size: 10)).opacity(0.6).lineLimit(1)
-        } else {
-            let league = session.leagueName(for: fixture.leagueId)
-            if let text = [league, fixture.stageLabel]
-                .compactMap({ $0 }).joined(separator: " · ").trimmedNonEmpty {
-                Text(text).font(.system(size: 10)).opacity(0.6).lineLimit(1)
-            }
+        let league = session.leagueName(for: fixture.leagueId)
+        if let text = [league, fixture.stageLabel]
+            .compactMap({ $0 }).joined(separator: " · ").trimmedNonEmpty {
+            Text(text).font(.system(size: 10)).opacity(0.6).lineLimit(1)
         }
     }
 

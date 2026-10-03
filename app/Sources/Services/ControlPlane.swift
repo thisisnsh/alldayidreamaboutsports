@@ -11,7 +11,6 @@ struct AnimationParams: Codable {
 
 private let defaultAnimationParams = AnimationParams()
 private let defaultPollSeconds: Double = 5
-private let defaultCelebrationSamplePercent: Double = 1.0
 private let defaultMaxFanTeams = 10
 private let defaultEventStaleMinutes = 3
 /// Bootstrap cadence for the periodic Remote Config fetch, used until the
@@ -38,13 +37,9 @@ final class ControlPlane: ObservableObject {
     /// a soft nudge, not the forced `updateRequired` block. Drives the
     /// "Update available" banner atop the menu.
     @Published var updateAvailable = false
-    @Published var celebrationEnabled = true
     @Published var animationParams = AnimationParams()
     /// Live poll interval in seconds (≈5). Drives LiveStore's loop.
     @Published var pollSeconds: Double = 5
-    /// Probability [0,1] a client reports its real celebration taps. 1.0 =
-    /// everyone reports (exact); lower samples, and the server multiplies back.
-    @Published var celebrationSamplePercent: Double = 1.0
     /// Max number of teams a user can be a fan of. Config-driven so we can raise
     /// it without shipping a build; starts at 10.
     @Published var maxFanTeams: Int = 10
@@ -73,7 +68,6 @@ final class ControlPlane: ObservableObject {
     private var firebaseUpdateAvailable = false
     private var firebaseKillMessage = ""
     private var firebasePollSeconds = defaultPollSeconds
-    private var firebaseCelebrationSamplePercent = defaultCelebrationSamplePercent
     private var firebaseMaxFanTeams = defaultMaxFanTeams
     private var firebaseEventStaleMinutes = defaultEventStaleMinutes
     private var firebaseRemoteConfigFetchSeconds = defaultRemoteConfigFetchSeconds
@@ -96,10 +90,8 @@ final class ControlPlane: ObservableObject {
                 "kill_message": "" as NSString,
                 "min_build": 1 as NSNumber,
                 "latest_build": 0 as NSNumber,
-                "celebration_enabled": true as NSNumber,
                 "animation_params": #"{"pillHoldSeconds":7,"notchStackMax":5}"# as NSString,
                 "poll_seconds": 5 as NSNumber,
-                "celebration_sample_percent": 1.0 as NSNumber,
                 "max_fan_teams": defaultMaxFanTeams as NSNumber,
                 "event_stale_minutes": defaultEventStaleMinutes as NSNumber,
                 "remote_config_fetch_interval_seconds": defaultRemoteConfigFetchSeconds as NSNumber,
@@ -136,11 +128,8 @@ final class ControlPlane: ObservableObject {
     private func apply(_ rc: RemoteConfig) {
         firebaseKillSwitch = rc["kill_switch"].boolValue
         firebaseKillMessage = rc["kill_message"].stringValue
-        celebrationEnabled = rc["celebration_enabled"].boolValue
         let secs = rc["poll_seconds"].numberValue.doubleValue
         firebasePollSeconds = secs >= 1 ? secs : defaultPollSeconds
-        let sample = rc["celebration_sample_percent"].numberValue.doubleValue
-        firebaseCelebrationSamplePercent = (sample > 0 && sample <= 1) ? sample : defaultCelebrationSamplePercent
         let maxFans = rc["max_fan_teams"].numberValue.intValue
         firebaseMaxFanTeams = maxFans >= 1 ? maxFans : defaultMaxFanTeams
         let staleMins = rc["event_stale_minutes"].numberValue.intValue
@@ -163,7 +152,7 @@ final class ControlPlane: ObservableObject {
             animationParams = defaultAnimationParams
         }
         applyEffectiveState()
-        AppLog.info(.remoteConfig, "firebase_state_applied kill_switch=\(firebaseKillSwitch) update_required=\(firebaseUpdateRequired) update_available=\(firebaseUpdateAvailable) celebration_enabled=\(celebrationEnabled) poll_seconds=\(firebasePollSeconds) celebration_sample=\(firebaseCelebrationSamplePercent) max_fan_teams=\(firebaseMaxFanTeams) event_stale_minutes=\(firebaseEventStaleMinutes) rc_fetch_seconds=\(firebaseRemoteConfigFetchSeconds)")
+        AppLog.info(.remoteConfig, "firebase_state_applied kill_switch=\(firebaseKillSwitch) update_required=\(firebaseUpdateRequired) update_available=\(firebaseUpdateAvailable) poll_seconds=\(firebasePollSeconds) max_fan_teams=\(firebaseMaxFanTeams) event_stale_minutes=\(firebaseEventStaleMinutes) rc_fetch_seconds=\(firebaseRemoteConfigFetchSeconds)")
     }
 
     private func applyEffectiveState() {
@@ -174,7 +163,6 @@ final class ControlPlane: ObservableObject {
         updateAvailable = firebaseUpdateAvailable
         killMessage = firebaseKillMessage
         pollSeconds = firebasePollSeconds
-        celebrationSamplePercent = firebaseCelebrationSamplePercent
         maxFanTeams = firebaseMaxFanTeams
         eventStaleMinutes = firebaseEventStaleMinutes
         remoteConfigFetchSeconds = firebaseRemoteConfigFetchSeconds

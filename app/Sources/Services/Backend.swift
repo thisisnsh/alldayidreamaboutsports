@@ -1,6 +1,6 @@
 import Foundation
 
-// The app talks to the outside world only through these two interfaces.
+// The app talks to the outside world only through the scores interface.
 // Debug builds (SWIFT_ACTIVE_COMPILATION_CONDITIONS includes DEV_BACKEND) get
 // fake in-memory implementations: no network, no API quota.
 // Release builds get the real ones. Build either flavor locally:
@@ -8,27 +8,19 @@ import Foundation
 //   xcodebuild -configuration Release  # real
 
 @MainActor
-protocol BackendAPI {
-    func celebrate(fixtureId: Int, teamId: String, taps: Int) async throws
-}
-
-@MainActor
 protocol ScoresProviding {
     func fetchCatalog() async throws -> Catalog
     func fetchFixtures(date: Date) async throws -> [Fixture]
     func fetchFixture(fixtureId: Int) async throws -> Fixture
-    func fetchCelebrations(fixtureId: Int) async throws -> [String: Int]
 }
 
 /// Service locator — the single place where the flavor is decided.
 @MainActor
 enum Services {
     #if DEV_BACKEND
-    static let api: BackendAPI = FakeBackendAPI()
     static let scores: ScoresProviding = FakeScores()
     static let isDev = true
     #else
-    static let api: BackendAPI = APIClient()
     static let scores: ScoresProviding = CDNScoresClient()
     static let isDev = false
     #endif

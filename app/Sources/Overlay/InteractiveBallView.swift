@@ -34,7 +34,7 @@ struct InteractiveBallView: View {
                 .padding(.horizontal, 10)
                 .allowsHitTesting(false)
 
-            Text("Tap the ball to show support")
+            Text("Tap the ball to celebrate")
                 .font(.system(size: 11, weight: .medium, design: .rounded))
                 .foregroundStyle(.white.opacity(0.9))
                 .shadow(radius: 4)

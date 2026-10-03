@@ -54,7 +54,6 @@ enum AppLog {
     /// error may leave the machine, whether as a Crashlytics non-fatal above or
     /// an analytics parameter (`AppAnalytics`). Never `localizedDescription`.
     static func errorLabel(_ error: Error) -> String {
-        if case let APIError.http(code, _) = error { return "http_\(code)" }
         if case ScoresError.notFound = error { return "http_404" }
         if case ScoresError.notModified = error { return "http_304" }
         if let urlError = error as? URLError { return "url_\(urlError.code.rawValue)" }

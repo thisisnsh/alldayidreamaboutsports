@@ -2,8 +2,7 @@
 
 macOS menu bar app for Europe's top five leagues — the Premier League, La Liga,
 Serie A, Bundesliga and Ligue 1. Follow your teams, get live goal celebration
-animations on a transparent overlay, tap the ball to celebrate with fans across
-the globe, and see fixtures at a glance — all from the menu bar.
+animations on a transparent overlay, tap the ball for local animations, and see fixtures at a glance — all from the menu bar.
 
 Website: [alldayidreamaboutsports.com](https://alldayidreamaboutsports.com)
 
@@ -26,16 +25,12 @@ is what keeps them inside the API-Football quota.
                      ┌── 5s tick, only inside a match window
                      ▼
 API-Football ──▶ Cloud Run backend ──▶ R2 JSON ──▶ Cloudflare CDN
-                      │      ▲                          │
-                      ▼      │ /celebrate               │ 5s poll
-                 Firestore   └──────── menu bar apps ◀──┘
+                                                        │ 5s poll
+                                        menu bar apps ◀──┘
 ```
 
-Only `/celebrate` scales with users, at roughly **$17 per 1M concurrent**.
-Everything else scales with *matches*, or with nothing at all — which is why
-the whole bill is ~$55/month at 1M concurrent users. See
-[backend/README.md](backend/README.md) for the cost-critical invariants that
-keep it that way.
+The app reads shared CDN objects. Goal animations and ball taps are local;
+there are no shared celebration counts, user writes, or Firestore dependency.
 
 ## Repo layout
 

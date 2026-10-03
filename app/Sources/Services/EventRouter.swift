@@ -183,7 +183,6 @@ extension MatchEventType {
         case .penaltyKick: "penalty_kicks"
         case .substitution: "substitutions"
         case .varDecision: "var_decisions"
-        case .celebration: "celebrations"
         }
     }
 }
@@ -286,7 +285,6 @@ func pillTitle(for event: MatchEvent) -> [PillSegment] {
         return [.text("\(minute)Sub"), dash, .text("\(onName) ", bold: true), .text(offSuffix)] + teamChip
     case .varDecision:
         return [.text("\(minute)VAR"), dash, .text("\(event.varDetail ?? "Review") ")] + teamChip
-    case .celebration: return [] // never a backend event; counts build their own text
     }
 }
 
@@ -296,8 +294,7 @@ func pillTitle(for event: MatchEvent) -> [PillSegment] {
 func pillSubtitle(for event: MatchEvent) -> [PillSegment]? {
     switch event.type {
     // Every in-match event shows the score row (kickoff reads 0 - 0, which
-    // also gives us the "–" separator instead of a "vs"); only celebrations,
-    // which build their own text, fall through to nil.
+    // also gives us the "–" separator instead of a "vs").
     case .kickoff:
         return [
             .text("\(event.shortName(for: event.homeTeamId)) "),
@@ -352,7 +349,6 @@ func pillIcon(for type: MatchEventType) -> String {
     case .penaltyShootout, .penaltyKick: "target"
     case .substitution: "arrow.left.arrow.right"
     case .varDecision: "video.fill"
-    case .celebration: "party.popper"
     }
 }
 
@@ -370,7 +366,6 @@ func pillIconColor(for type: MatchEventType) -> Color {
     case .kickoff: .green
     case .fullTime: .green
     case .penaltyShootout: .purple
-    case .celebration: .blue
     default: .primary
     }
 }

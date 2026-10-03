@@ -194,7 +194,7 @@ final class OverlayManager: ObservableObject {
     private func startBall(for goals: [MatchEvent]) {
         cancelBallScheduled()
         if ballPhase != .hidden {
-            flushTapsAndQueueCounts()
+            recordTapEngagement()
         }
         // A followed team scored and the celebration actually fired. Skips the
         // Settings preview, whose synthetic event carries fixture 0 — that one
@@ -207,9 +207,6 @@ final class OverlayManager: ObservableObject {
         // The ball is tappable the instant it appears — no separate drop phase.
         // It stays for `pillHoldSeconds`, independent of the notification set.
         ballPhase = .tapping
-        CelebrationService.shared.beginWindow(
-            targets: celebrationTargets(for: ballEvents)
-        )
         showInteractPanel()
         scheduleBall(after: params.pillHoldSeconds) { [self] in finishBall() }
     }
@@ -229,7 +226,7 @@ final class OverlayManager: ObservableObject {
     private func hideBall() {
         guard ballPhase != .hidden else { return }
         cancelBallScheduled()
-        flushTapsAndQueueCounts()
+        recordTapEngagement()
         withAnimation(.easeOut(duration: 0.3)) {
             ballPhase = .hidden
             ballEvents = []
@@ -243,7 +240,7 @@ final class OverlayManager: ObservableObject {
         guard ballPhase != .hidden else { return }
         AppAnalytics.overlayDismissed(reason: "timeout")
         cancelBallScheduled()
-        flushTapsAndQueueCounts()
+        recordTapEngagement()
         fadeOutInteractPanel(duration: 0.35)
         withAnimation(.easeOut(duration: 0.35)) {
             ballPhase = .hidden
@@ -252,62 +249,12 @@ final class OverlayManager: ObservableObject {
         scheduleAmbient(after: 0.4) { [self] in hideInteractPanel() }
     }
 
-    /// The ball window closed: stop the tap counter (CelebrationService POSTs
-    /// the batch) and fold your own taps into the local match total so the menu
-    /// reflects them at once. The on-screen count notification is NOT queued
-    /// here — it fires for every client, tapper or not, when LiveStore's
-    /// post-goal poll window converges (`notifyCelebrationCount`), so all apps
-    /// show the same final tally instead of a partial, per-client snapshot.
-    private func flushTapsAndQueueCounts() {
-        let targets = celebrationTargets(for: ballEvents)
-        // tapBursts counts clicks; the upload counts celebrations (4 per click,
-        // capped), so the local total must use the same unit.
-        let taps = CelebrationService.celebrations(forClicks: tapBursts)
-        CelebrationService.shared.endWindow()
-        guard !targets.isEmpty, taps > 0,
-              AppSession.shared.prefs.settings.eventEnabled(.celebration) else { return }
-
-        // Optimistic: reflect your own taps in the local total now, before any
-        // network round-trip. The 60s poll later max-merges the server total in,
-        // so this never double-counts.
-        for target in targets {
-            AppSession.shared.addLocalCelebrations(taps, teamId: target.teamId, fixtureId: target.fixtureId)
-        }
-    }
-
-    /// One target per (fixture, team): two goals by the same side in one set
-    /// share a single ball, so the taps must upload and count once, not twice.
-    private func celebrationTargets(for events: [MatchEvent]) -> [(fixtureId: Int, teamId: String)] {
-        var seen = Set<String>()
-        return events.compactMap { event in
-            guard event.fixtureId > 0, let teamId = event.teamId,
-                  seen.insert("\(event.fixtureId):\(teamId)").inserted else { return nil }
-            return (fixtureId: event.fixtureId, teamId: String(teamId))
-        }
-    }
-
-    /// Queue the celebration-count notification for one team from the converged
-    /// match total. Driven by LiveStore when the post-goal poll window ends, so
-    /// every client — whether or not it tapped — surfaces the same final tally.
-    func notifyCelebrationCount(fixtureId: Int, teamId: String) {
-        guard AppSession.shared.prefs.settings.eventEnabled(.celebration) else { return }
-        let count = AppSession.shared.celebrationTotals[fixtureId]?[teamId] ?? 0
-        guard count > 0 else { return }
-        let team = TeamCatalog.team(for: Int(teamId) ?? -1, in: AppSession.shared.teams)
-        enqueue(NotchItem(
-            id: "count:\(fixtureId):\(teamId):\(Date().timeIntervalSince1970)",
-            icon: pillIcon(for: .celebration),
-            iconColor: pillIconColor(for: .celebration),
-            // Short code like every other pill; there's no wire name to fall
-            // back on here, so a codeless team keeps its full one.
-            title: [.text("\(count.formattedCompact) celebrations for \(team.code ?? team.name) this match")],
-            subtitle: nil,
-            fanGoal: nil
-        ), isGoal: false)
+    /// Local animation engagement only; taps never leave the app as counts.
+    private func recordTapEngagement() {
+        AppAnalytics.celebrationTap(tapped: tapBursts > 0)
     }
 
     func registerTap() {
-        CelebrationService.shared.registerTap()
         tapBursts += 1
     }
 

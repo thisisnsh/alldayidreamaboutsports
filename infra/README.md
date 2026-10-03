@@ -20,8 +20,10 @@ Then in the [Firebase console](https://console.firebase.google.com):
    Firebase is used for Remote Config only — there is no Cloud Messaging / APNs
    setup (push was dropped in favour of polling + CDN).
 2. **Remote Config** → import `remoteconfig.template.json`, publish.
-3. **Firestore rules** → deploy `firestore.rules` (deny-all; backend uses Admin SDK):
-   `firebase deploy --only firestore:rules`
+3. Firestore is no longer used. Keep existing databases deny-all; retire only
+   the legacy celebration collection with `retire-celebrations.mjs` after deploy.
+   The cleanup also removes retired count files, Remote Config parameters, and
+   the runtime's obsolete Firestore/Firebase Admin IAM grants.
 
 ### Backend API domain
 
@@ -101,7 +103,7 @@ R2 and incurs a Class B operation. Smart Tiered Caching is mandatory —
 ~26 R2 reads/s vs ~600/s — because it absorbs the per-TTL expiry stampede by
 funneling edge misses through a small number of upper-tier data centers.
 
-Object TTLs (plan §3): `matches/*` and `celebrate/*` are
+Object TTLs (plan §3): `matches/*` are
 `public, max-age=5, stale-while-revalidate=25`; `fixtures-*` and `catalog.json`
 are `public, max-age=43200` (12h). The `/internal/cache-health` scheduler job
 (every 5 min) reads `cf-cache-status` and alerts if users start hitting R2 —
@@ -223,7 +225,6 @@ The backend reads its R2 creds from GCP Secret Manager (`r2-*`, via
 - **Offer update**: set `latest_build` to the newest published build. Older
   installs show a soft "Update available" banner atop the menu (still usable);
   leave at `0` to hide the banner.
-- **Celebration cost spike**: `celebration_enabled=false`.
 
 ## Remote Config fetch cadence
 

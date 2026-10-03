@@ -16,7 +16,6 @@ final class AppSession: ObservableObject {
     /// as SCHEDULED / 0-0 by construction): matches outside `fixtures` are
     /// never polled, so they carry a kickoff time and nothing live.
     @Published var todayFixtures: [Fixture] = []
-    @Published var celebrationTotals: [Int: [String: Int]] = [:]
     /// Shows the one-line "the World Cup has ended" note at the top of the
     /// picker. Set once, by `promptLeagueMigrationIfNeeded()`.
     @Published var showsLeagueMigrationNotice = false
@@ -39,7 +38,6 @@ final class AppSession: ObservableObject {
         static let fanTeamIds = "fanTeamIds"
         static let settings = "settings"
         static let fixtures = "cachedFixtures"
-        static let celebrationTotals = "cachedCelebrationTotals"
         /// `"<utc day>:<file date>"` for each schedule file loaded on that UTC
         /// day — the bootstrap is complete once all three of today±1 are in.
         static let fixtureBootstrapDates = "fixtureBootstrapDates"
@@ -72,6 +70,7 @@ final class AppSession: ObservableObject {
         // so picking teams in a Debug build lasts only until the next launch.
         prefs.fanTeamIds = DevConfig.fanTeams
         #endif
+        defaults.removeObject(forKey: "cachedCelebrationTotals")
         applyApplicationTheme()
         AppAnalytics.syncSettingProperties(prefs.settings)
         #if !DEV_BACKEND
@@ -82,10 +81,6 @@ final class AppSession: ObservableObject {
            let stored = try? JSONDecoder().decode([Fixture].self, from: data) {
             fixturesById = Dictionary(uniqueKeysWithValues: stored.map { ($0.fixtureId, $0) })
             publishFixtures()
-        }
-        if let data = defaults.data(forKey: CacheKey.celebrationTotals),
-           let stored = try? JSONDecoder().decode([Int: [String: Int]].self, from: data) {
-            celebrationTotals = stored
         }
         #endif
         Task {
@@ -105,7 +100,7 @@ final class AppSession: ObservableObject {
     // MARK: Control-plane gate
 
     /// The kill switch / forced-update gate: go silent. Close the menu, wipe
-    /// the cached fixtures/scores/celebrations so recovery re-fetches fresh,
+    /// the cached fixtures/scores so recovery re-fetches fresh,
     /// and clear anything on screen. Fan teams and settings are kept.
     func suspendForGate() {
         AppLog.info(.app, "session_suspended_for_gate")
@@ -308,8 +303,7 @@ final class AppSession: ObservableObject {
 
     /// Manual refresh (the menu's ↻ button): force a schedule re-bootstrap, run
     /// one live poll pass now (fetch each live fan match, merge its score, fire
-    /// any goal), then pull the latest celebration totals for fan matches that
-    /// have played (live or finished).
+    /// any new goal).
     func refreshFixtures() async {
         await bootstrapFixturesIfNeeded(force: true)
         #if !DEV_BACKEND
@@ -318,28 +312,6 @@ final class AppSession: ObservableObject {
         await LiveStore.shared.reconcileFanMatches()
         await LiveStore.shared.refreshNow()
         #endif
-        await refreshCelebrationTotals()
-    }
-
-    /// Re-read `celebrate/{id}.json` once for each fan match that is live or
-    /// finished — these are the only fixtures that can have a celebration tally.
-    private func refreshCelebrationTotals() async {
-        guard ControlPlane.shared.isOperational else { return }
-        let targets = fixtures.filter {
-            $0.involves(fanTeamIds) && ($0.isLive || $0.status == "FINISHED")
-        }
-        for fixture in targets {
-            guard ControlPlane.shared.isOperational else { return }
-            do {
-                let totals = try await scores.fetchCelebrations(fixtureId: fixture.fixtureId)
-                guard ControlPlane.shared.isOperational else { return }
-                mergeCelebrationTotals(totals, fixtureId: fixture.fixtureId)
-            } catch ScoresError.notModified {
-                // counts unchanged
-            } catch {
-                AppLog.error(.celebrations, "manual_totals_refresh_failed fixture_id=\(fixture.fixtureId)", error: error)
-            }
-        }
     }
 
     /// The schedule bootstrap: once per day, read `fixtures-{date}.json` for
@@ -459,28 +431,6 @@ final class AppSession: ObservableObject {
         leagues.first { $0.id == leagueId }?.name ?? League.fallbackNames[leagueId]
     }
 
-    /// Optimistically fold the user's own taps into the local total so their
-    /// celebration shows instantly, before the server round-trip. The later
-    /// server merge uses max(), so this never double-counts.
-    func addLocalCelebrations(_ taps: Int, teamId: String, fixtureId: Int) {
-        guard taps > 0 else { return }
-        var cached = celebrationTotals[fixtureId] ?? [:]
-        cached[teamId] = (cached[teamId] ?? 0) + taps
-        celebrationTotals[fixtureId] = cached
-        persistCelebrationCache()
-        AppLog.info(.celebrations, "local_taps_merged fixture_id=\(fixtureId) team_id=\(teamId) taps=\(taps)")
-    }
-
-    func mergeCelebrationTotals(_ totals: [String: Int], fixtureId: Int) {
-        var cached = celebrationTotals[fixtureId] ?? [:]
-        for (teamId, total) in totals {
-            cached[teamId] = max(cached[teamId] ?? 0, total)
-        }
-        celebrationTotals[fixtureId] = cached
-        persistCelebrationCache()
-        AppLog.info(.celebrations, "totals_merged fixture_id=\(fixtureId) totals=\(cached)")
-    }
-
     private func persistFixtureCache() {
         // The wider list: the schedule bootstrap runs once a UTC day, so a
         // relaunch later that day rebuilds the working set from this cache
@@ -490,13 +440,8 @@ final class AppSession: ObservableObject {
         }
     }
 
-    private func persistCelebrationCache() {
-        if let data = try? JSONEncoder().encode(celebrationTotals) {
-            defaults.set(data, forKey: CacheKey.celebrationTotals)
-        }
-    }
 
-    /// Wipe the cached fixtures, live scores, and celebration tallies — the
+    /// Wipe the cached fixtures and live scores — the
     /// in-memory working set, their UserDefaults backing, and the once-per-day
     /// schedule gate — and reset the live-poll baseline and conditional-GET
     /// ETags so the next session re-fetches everything fresh from the CDN (no
@@ -507,9 +452,7 @@ final class AppSession: ObservableObject {
         fixtures = []
         todayFixtures = []
         fixturesById = [:]
-        celebrationTotals = [:]
         defaults.removeObject(forKey: CacheKey.fixtures)
-        defaults.removeObject(forKey: CacheKey.celebrationTotals)
         defaults.removeObject(forKey: CacheKey.fixtureBootstrapDates)
         lastBootstrapAttempt = nil
         ScoresETagStore.shared.clear()

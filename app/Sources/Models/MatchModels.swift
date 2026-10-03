@@ -25,9 +25,6 @@ enum MatchEventType: String, Codable, CaseIterable {
     case penaltyKick = "PENALTY_KICK"
     case substitution = "SUBSTITUTION"
     case varDecision = "VAR_DECISION"
-    // Local-only: the post-goal celebration count pill. Never arrives as a
-    // backend match_event; exists so Settings → Events can toggle it.
-    case celebration = "CELEBRATION"
 }
 
 struct MatchEvent: Identifiable {
@@ -548,8 +545,4 @@ enum ScorelineFormatter {
 
 struct FixturesPayload: Codable {
     let matches: [Fixture]
-}
-
-struct CelebrationTotals: Codable {
-    let totals: [String: Int]
 }

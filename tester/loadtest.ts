@@ -2,7 +2,7 @@
  * Staging-only CDN load generator.
  *
  * Spawns N virtual clients that poll the public scores hostname exactly like the
- * real app (GET matches/{id}.json + celebrate/{id}.json every ~5s, plus today's
+ * real app (GET matches/{id}.json every ~5s, plus today's
  * fixtures file + catalog.json). It records latency and `cf-cache-status` per
  * response and reports a §0 verdict: in steady state ~100% of responses must be
  * served by the edge (HIT/REVALIDATED/STALE/UPDATING), or rejected by the edge
@@ -99,7 +99,7 @@ async function main(): Promise<void> {
   const keys = [
     "catalog.json",
     ...[range.from, today, range.to].map((date) => `fixtures-${date}.json`),
-    ...fixtureIds.flatMap((id) => [`matches/${id}.json`, `celebrate/${id}.json`]),
+    ...fixtureIds.map((id) => `matches/${id}.json`),
   ];
 
   console.log(

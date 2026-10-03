@@ -56,7 +56,6 @@ targets:
         # Staging/Release = real services in their respective cloud projects.
         Debug:
           SWIFT_ACTIVE_COMPILATION_CONDITIONS: DEBUG DEV_BACKEND
-          APP_API_BASE_URL: https://unused.invalid
           # The ONE real read a Debug build makes: catalog.json, so the picker
           # shows the current leagues and squads instead of a hand-maintained
           # list (FakeScores.fetchCatalog; everything else stays faked). It's a
@@ -67,11 +66,9 @@ targets:
           SWIFT_ACTIVE_COMPILATION_CONDITIONS: STAGING
           GOOGLE_SERVICE_INFO_PLIST: GoogleService-Info-Staging.plist
           # Staging domains deliberately do not point at production.
-          APP_API_BASE_URL: https://api-staging.alldayidreamaboutsports.com
           APP_SCORES_BASE_URL: https://scores-staging.alldayidreamaboutsports.com
         Release:
           GOOGLE_SERVICE_INFO_PLIST: GoogleService-Info-Production.plist
-          APP_API_BASE_URL: https://api.alldayidreamaboutsports.com
           APP_SCORES_BASE_URL: https://scores.alldayidreamaboutsports.com
     info:
       path: Info.plist
@@ -86,7 +83,6 @@ targets:
         LSApplicationCategoryType: public.app-category.sports
         LSMinimumSystemVersion: "14.0"
         NSHumanReadableCopyright: © 2026 alldayidreamaboutsports.com
-        APIBaseURL: $(APP_API_BASE_URL)
         ScoresBaseURL: $(APP_SCORES_BASE_URL)
         # Screens are logged by hand (`AppAnalytics.screenView`), and the app
         # has no ads: no automatic screen views, no ad personalization signals.

@@ -89,7 +89,7 @@ describe("R2 cache-control invariant (§0: no write path omits it)", () => {
     for (const cc of [CACHE_CONTROL_LIVE, CACHE_CONTROL_LONG]) {
       const send = vi.fn().mockResolvedValue({});
       const r2 = new R2({ send } as never, "scores");
-      await r2.putJson("celebrate/1.json", { totals: {} }, cc);
+      await r2.putJson("matches/1.json", { fixtureId: 1 }, cc);
       const put = send.mock.calls[0]![0] as PutObjectCommand;
       expect(put.input.CacheControl).toBe(cc);
       expect(put.input.CacheControl).toBeTruthy();

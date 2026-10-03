@@ -18,17 +18,6 @@ case "$PROJECT_ID" in
   *)         SCORES_DOMAIN="https://scores.alldayidreamaboutsports.com" ;;
 esac
 
-# Celebration reporter probability / server multiply-back factor. MUST equal the
-# Remote Config key `celebration_sample_percent` (infra/remoteconfig.template.json),
-# or the server's estimated totals will be wrong. 1.0 = exact (no sampling).
-CELEBRATION_SAMPLE_RATE="1.0"
-
-# Probability that a celebration flush also reads all shards and republishes the
-# totals file. The increment always runs, so no tap is lost — this only thins the
-# read half, which is what Firestore charges for at scale. Lower it if Firestore
-# reads ever surprise us; it is independent of CELEBRATION_SAMPLE_RATE above.
-CELEBRATION_PUBLISH_RATE="0.1"
-
 gcloud config set project "$PROJECT_ID"
 
 echo "── Enabling APIs"
@@ -37,14 +26,9 @@ gcloud services enable \
   cloudbuild.googleapis.com \
   cloudscheduler.googleapis.com \
   cloudtasks.googleapis.com \
-  firestore.googleapis.com \
   secretmanager.googleapis.com \
   firebaseremoteconfig.googleapis.com \
   iamcredentials.googleapis.com
-
-echo "── Firestore (native mode, regional = cheapest reads)"
-gcloud firestore databases describe --database="(default)" >/dev/null 2>&1 || \
-  gcloud firestore databases create --location="$REGION" --type=firestore-native
 
 echo "── Secrets (placeholders — set real values after)"
 for s in api-football-key r2-access-key-id r2-secret-access-key r2-endpoint; do
@@ -57,7 +41,7 @@ echo "── Runtime service account"
 RUNTIME_SA="sports-runtime@${PROJECT_ID}.iam.gserviceaccount.com"
 gcloud iam service-accounts describe "$RUNTIME_SA" >/dev/null 2>&1 || \
   gcloud iam service-accounts create sports-runtime --display-name "Backend runtime"
-for role in roles/datastore.user roles/secretmanager.secretAccessor roles/firebase.sdkAdminServiceAgent roles/cloudtasks.enqueuer; do
+for role in roles/secretmanager.secretAccessor roles/cloudtasks.enqueuer; do
   gcloud projects add-iam-policy-binding "$PROJECT_ID" \
     --member "serviceAccount:${RUNTIME_SA}" --role "$role" --condition=None -q >/dev/null
 done
@@ -133,9 +117,9 @@ if SERVICE_URL=$(gcloud run services describe "$SERVICE" --region "$REGION" --fo
   # cache regression is caught even outside match windows.
   upsert_scheduler_job cache-health '*/5 * * * *' /internal/cache-health
 
-  echo "── Cloud Run env → SERVICE_URL + SCORES_DOMAIN + celebration rates"
+  echo "── Cloud Run env → SERVICE_URL + SCORES_DOMAIN"
   gcloud run services update "$SERVICE" --region "$REGION" \
-    --update-env-vars "SERVICE_URL=${SERVICE_URL},SCORES_DOMAIN=${SCORES_DOMAIN},CELEBRATION_SAMPLE_RATE=${CELEBRATION_SAMPLE_RATE},CELEBRATION_PUBLISH_RATE=${CELEBRATION_PUBLISH_RATE}" >/dev/null
+    --update-env-vars "SERVICE_URL=${SERVICE_URL},SCORES_DOMAIN=${SCORES_DOMAIN}" >/dev/null
 else
   echo "   Cloud Run service not deployed yet — skipping scheduler jobs"
   echo "   Rerun this script after the first deploy to create or update them"

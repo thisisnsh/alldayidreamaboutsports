@@ -5,7 +5,7 @@ against **staging**, without API-Football or the Cloud Scheduler/Tasks pipeline:
 
 - **`loadtest.ts`** — fires N virtual clients at the staging scores CDN and reports
   latency + `cf-cache-status` distribution (proves the edge, not R2, serves files).
-- **`fake-publisher.ts`** — seeds/mutates fake matches and celebration tallies by
+- **`fake-publisher.ts`** — seeds/mutates fake matches by
   writing directly to the staging R2 bucket via the S3 SDK.
 
 These reuse the deployed `R2` class, cache constants, and types from `backend/src/`
@@ -14,7 +14,7 @@ These reuse the deployed `R2` class, cache constants, and types from `backend/sr
 > ⚠️ **Staging only — never production.**
 > - The publisher **refuses to run** unless `R2_BUCKET_SCORES` contains `staging`.
 > - `seed` records every id it writes in `fake-manifest.json` in the bucket, and
->   `advance` / `goal` / `celebrate` / `clear` touch only manifest ids. Ids
+>   `advance` / `goal` / `clear` touch only manifest ids. Ids
 >   default to `900001+`, but real API-Football fixture ids run past that too
 >   (e.g. `1565179`), so the manifest — not the number — is what marks a fake.
 >   `seed` refuses an id whose match file exists and isn't in the manifest.
@@ -86,30 +86,23 @@ Run everything from `tester/`. A typical end-to-end pass:
    curl -i https://<staging-scores-domain>/matches/900001.json   # expect cache-control: ...max-age=5...
    ```
 
-3. **Score a goal** (bumps the match score and the scoring side's tally):
+3. **Score a goal** (updates the match score):
 
    ```sh
    npm run fake -- goal --fixture 900001 --team home
-   curl -s https://<staging-scores-domain>/celebrate/900001.json   # total bumped
    ```
 
-4. **Bump a celebration tally** directly:
-
-   ```sh
-   npm run fake -- celebrate --fixture 900001 --team 2 --count 50
-   ```
-
-5. **Advance a match's state** (e.g. into half-time, then full-time):
+4. **Advance a match's state** (e.g. into half-time, then full-time):
 
    ```sh
    npm run fake -- advance --fixture 900001 --status HT
    npm run fake -- advance --fixture 900001 --status FT
    ```
 
-6. *(Optional)* Launch the macOS app pointed at **staging** and watch a fake LIVE
-   match, the goal overlay, and the celebration tally update from the commands above.
+5. *(Optional)* Launch the macOS app pointed at **staging** and watch a fake LIVE
+   match, the score and local goal overlay update from the commands above.
 
-7. **Load test** the CDN (read-only, public GETs):
+6. **Load test** the CDN (read-only, public GETs):
 
    ```sh
    npm run loadtest -- --fixtures 900001,900002,900003,900004,900005,900006,900007,900008,900009,900010 --clients 200 --duration 60
@@ -119,7 +112,7 @@ Run everything from `tester/`. A typical end-to-end pass:
    HIT/REVALIDATED — the §0 verdict should be ~100% healthy. A high
    MISS/BYPASS/DYNAMIC share flags a broken cache rule.
 
-8. **Clean up** — remove all fakes from R2 and from the fixtures files:
+7. **Clean up** — remove all fakes from R2 and from the fixtures files:
 
    ```sh
    npm run fake -- clear
@@ -129,10 +122,9 @@ Run everything from `tester/`. A typical end-to-end pass:
 
 | Command | Flags | Effect |
 | --- | --- | --- |
-| `seed` | `--count N` `--state SCHEDULED\|LIVE\|HT\|FINISHED[,...]` `[--days -1,0,1]` `[--time HH:MM]` `[--spacing-minutes N]` `[--fixture-start ID]` | Write N `matches/{id}.json` + `celebrate/{id}.json`, ensure `fixtures-{today±1 UTC}.json` exists, and merge schedule rows into the matching UTC fixture files |
+| `seed` | `--count N` `--state SCHEDULED\|LIVE\|HT\|FINISHED[,...]` `[--days -1,0,1]` `[--time HH:MM]` `[--spacing-minutes N]` `[--fixture-start ID]` | Write N `matches/{id}.json`, ensure `fixtures-{today±1 UTC}.json` exists, and merge schedule rows into the matching UTC fixture files |
 | `advance` | `--fixture ID` `--status <rawStatus>` `[--minute N]` | Re-derive phase from a raw status and write the match back |
-| `goal` | `--fixture ID` `--team <home\|away>` `[--count N]` | Increment that side's goals + bump its celebration tally (default +1) |
-| `celebrate` | `--fixture ID` `--team <teamId>` `--count N` | Add N to a team's celebration total |
+| `goal` | `--fixture ID` `--team <home\|away>` | Increment that side's goals |
 | `clear` | — | Delete the manifest's fake objects, prune them from `fixtures-*.json`, and empty the manifest |
 
 ## `loadtest` flags

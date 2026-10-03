@@ -91,7 +91,7 @@ struct MiniBallBursts: View {
 
     @ObservedObject private var logos = TeamLogoStore.shared
 
-    /// Matches CelebrationService.tapsPerClick — one click, 4 balls, 4 counts.
+    /// One click emits four local mini balls.
     static let ballsPerClick = 4
     /// Hard cap so marathon tap sessions can't grow the canvas unbounded.
     private static let maxBalls = 240

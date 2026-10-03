@@ -60,13 +60,6 @@ struct CDNScoresClient: ScoresProviding {
         try await fetch("matches/\(fixtureId).json", as: Fixture.self)
     }
 
-    func fetchCelebrations(fixtureId: Int) async throws -> [String: Int] {
-        do {
-            return try await fetch("celebrate/\(fixtureId).json", as: CelebrationTotals.self).totals
-        } catch ScoresError.notFound {
-            return [:]
-        }
-    }
 }
 
 enum ScoresError: Error {

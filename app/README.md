@@ -16,8 +16,8 @@ xcodebuild -scheme AllDayIDreamAboutSports -configuration Debug build
 
 ## Testing — three build configurations
 
-The app only touches the world through three protocols (`Sources/Services/Backend.swift`):
-`BackendAPI` and `ScoresProviding`. The build configuration
+The app only touches the world through protocol (`Sources/Services/Backend.swift`):
+`ScoresProviding`. The build configuration
 picks the implementation — that's the release flag:
 
 | | `Debug` | `Staging` | `Release` |
@@ -32,8 +32,8 @@ picks the implementation — that's the release flag:
 1. Build & run **Debug** from Xcode (⌘R). You're already following the club sides in `DevConfig.fanTeams` (Liverpool, Man City,
    Arsenal, Inter). The popover shows the demo matchday: Manchester City vs
    Manchester United live, Inter vs Juventus decided on penalties, and two
-   scheduled fixtures. `DevConfig.timeline` starts playing at launch, so pills,
-   celebrations and celebration counts all appear hands-free.
+   scheduled fixtures. `DevConfig.timeline` starts playing at launch, so pills and
+   local goal animations all appear hands-free.
 
    Every demo side is a club, so a fresh Debug run does NOT trip the one-time
    "the World Cup has ended" migration prompt. To exercise that, put a World Cup
@@ -49,16 +49,13 @@ picks the implementation — that's the release flag:
    simulated events run through the real EventRouter/Overlay pipeline, exactly
    as a state change polled from the scores CDN would; `Settings → Celebration
    → Preview animation` fires one on demand.
-4. Tap the ball during the window; the fake `/celebrate` logs and accumulates,
-   and the count text reflects it (POST → GET round-trip, all in memory).
-   Each click counts as 4 celebrations and lands 4 mini balls on the bottom
-   edge of the screen.
+4. Tap the ball during the window for local mini-ball animations. No taps are
+   uploaded and no shared count is displayed.
 
 **Why Debug needs no backend** (each network path, and what disables it):
 
 | Path | In Debug |
 |---|---|
-| Backend API (`URLSession` in `APIClient`) | never instantiated — `FakeBackendAPI` |
 | Scores CDN (`URLSession` in `CDNScoresClient`) | never instantiated — `FakeScores` |
 | Remote Config / Crashlytics / Analytics | `GoogleService-Info.plist` absent → Firebase never configured (there is no Messaging — push was dropped for polling + CDN) |
 
@@ -153,11 +150,11 @@ at 4.
 
 | Dir | What |
 |---|---|
-| `Sources/App.swift` | window scenes (login, picker, settings, gate) |
+| `Sources/App.swift` | window scenes (welcome, picker, settings, gate) |
 | `Sources/AppDelegate.swift` | transient AppKit menu, Firebase bootstrap (Remote Config + Crashlytics/Analytics — no Messaging), reopen handling |
-| `Sources/Services/` | session/auth, backend API, local prefs, kill switch (`ControlPlane`), event routing, tap batching |
+| `Sources/Services/` | local prefs, scores CDN, kill switch (`ControlPlane`), event routing |
 | `Sources/Overlay/` | the two overlay panels: full-screen click-through display + small clickable ball; celebration, notch pill, particles |
-| `Sources/Views/` | login, popover, team picker, settings, kill/update gate |
+| `Sources/Views/` | welcome, popover, team picker, settings, kill/update gate |
 
 Key invariants:
 - Overlay panels use `sharingType = .readOnly`, so they show up in screen
@@ -169,17 +166,15 @@ Key invariants:
   one shared center-ball celebration only when their goal pill reaches the
   displayed set; closing the ball does not dismiss or pause queued
   notifications.
-- Celebration taps are batched: ONE `/celebrate` request per celebrated
-  team, sent when the ball disappears.
+- Ball taps only animate on the current Mac. No upload or global count exists.
 - `ControlPlane` gates everything; `kill_switch`/`min_build` come from Remote
   Config (real-time) only — there is no CDN `config.json` backup.
 - Fixture date files bootstrap and persist the daily schedule once. Only
   followed-team `matches/{fixtureId}.json` objects inside their live window are
   polled — from kickoff−5min (`LiveStore.preKickoffLead`) until FINISHED, capped
   at 3.5h. The backend publishes those objects from kickoff−5min too, so the
-  two ends agree and no client 404s its way to kickoff. Finished fixtures and
-  celebration totals remain in the local cache; celebration totals refresh only
-  when the cached and newly fetched scores differ.
+  two ends agree and no client 404s its way to kickoff. Finished fixtures remain
+  in the local cache.
 - The published `fixtures` list is fan-filtered. The full day's fixtures — up to
   ~48 across five leagues — stay in the working set for the poll loop, but only
   the user's own are published and written to the local cache.

@@ -359,7 +359,7 @@ extension MatchEventType {
     static let settingsOrder: [MatchEventType] = [
         .kickoff, .goal, .goalCancelled, .varDecision, .yellowCard, .redCard,
         .substitution, .halfTime, .extraTime, .penaltyShootout, .penaltyKick,
-        .fullTime, .celebration,
+        .fullTime,
     ]
 
     var displayName: String {
@@ -377,7 +377,6 @@ extension MatchEventType {
         case .extraTime: "Extra time"
         case .penaltyShootout: "Penalty shootout"
         case .penaltyKick: "Penalty kicks"
-        case .celebration: "Celebrations"
         }
     }
 }
