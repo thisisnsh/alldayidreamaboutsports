@@ -27,7 +27,8 @@ export class CelebrationAggregator {
   ) {}
 
   add(fixtureId: number, teamId: string, taps: number): void {
-    const counts = this.buffer.get(fixtureId) ?? {};
+    // Null prototype: a team id can never resolve to an inherited property.
+    const counts = this.buffer.get(fixtureId) ?? Object.create(null) as Record<string, number>;
     counts[teamId] = (counts[teamId] ?? 0) + taps;
     this.buffer.set(fixtureId, counts);
     log.info("celebration_buffered", { fixtureId, teamId, taps, pendingFixtures: this.buffer.size });
@@ -68,7 +69,7 @@ export class CelebrationAggregator {
         log.info("celebration_flush_complete", { fixtureId, counts, sampled, totals });
       } catch (error) {
         log.error("celebration_flush_failed", error, { fixtureId, counts });
-        const pending = this.buffer.get(fixtureId) ?? {};
+        const pending = this.buffer.get(fixtureId) ?? Object.create(null) as Record<string, number>;
         for (const [teamId, taps] of Object.entries(counts)) {
           pending[teamId] = (pending[teamId] ?? 0) + taps;
         }
