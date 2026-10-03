@@ -161,6 +161,53 @@ settings. They target the `api-staging` and `scores-staging` custom domains,
 respectively. Finish the staging Cloud Run domain mapping and DNS before using
 the build. Neither setting can silently call production.
 
+## Mac App Store
+
+There are two app targets, generated from one template in `project.yml`:
+
+| Target / scheme | Ships as | Signing | Updates |
+|---|---|---|---|
+| `AllDayIDreamAboutSports` | website DMG (CI, `app-release.yml`) | manual Developer ID | Sparkle |
+| `AllDayIDreamAboutSports-AppStore` | Mac App Store | automatic (Xcode) | the App Store |
+
+The App Store target uses the same bundle id, Firebase apps and Google OAuth
+clients. The differences:
+
+- **Sandboxed** (`AppStore.entitlements`: app sandbox + outgoing network +
+  the Firebase keychain group).
+- **No Sparkle**: it isn't linked, and the build defines `APP_STORE`.
+  `AppUpdater` is what the views talk to. In this build the update gate and
+  "Check for Updates…" open the App Store's Updates page, and the
+  auto-check toggle is hidden.
+- **Launch at login starts OFF**: guideline 2.4.5 bars adding a login item
+  without consent, so only the Settings toggle registers it.
+- `ITSAppUsesNonExemptEncryption = NO`, so uploads skip the export-compliance
+  question.
+
+### Releasing to the App Store
+
+1. One time: in App Store Connect → Apps → **+** → New macOS App, pick bundle
+   id `com.alldayidreamaboutsports.mac`, and fill in the listing, privacy
+   labels (Analytics + Crashlytics: usage and diagnostics data, not linked to
+   identity), and a demo reviewer account (sign-in is required).
+2. `xcodegen && open AllDayIDreamAboutSports.xcodeproj`
+3. Select the **AllDayIDreamAboutSports-AppStore** scheme. ⌘R runs it
+   sandboxed against production, so test sign-in, live scores and overlays
+   here first.
+4. Bump `MARKETING_VERSION` / `CURRENT_PROJECT_VERSION` in `project.yml`
+   (each upload needs a new build number; keep it in step with the DMG tags
+   so `min_build` / `latest_build` mean the same thing in both builds), then
+   rerun `xcodegen`.
+5. **Product → Archive**, then in Organizer **Distribute App → App Store
+   Connect → Upload**. Xcode creates the Apple Distribution certificate and
+   the App Store profile automatically.
+6. In App Store Connect, pick the build for the version and submit it for
+   review.
+
+Only raise `min_build` in Remote Config once the App Store build that clears
+it has been **approved**. Otherwise App Store users get a forced-update gate
+with nothing to update to.
+
 ## Source map
 
 | Dir | What |
