@@ -6,7 +6,8 @@ import type { CelebrationAggregator } from "./celebrations.js";
 import { env } from "./env.js";
 import { syntheticPhase } from "./phase.js";
 import type { Poller } from "./poller.js";
-import { CACHE_CONTROL_LIVE, type R2 } from "./r2.js";
+import { toScheduleRow } from "./poller.js";
+import { CACHE_CONTROL_LIVE, CACHE_CONTROL_LONG, type R2 } from "./r2.js";
 import { FixedWindowRateLimiter } from "./rateLimit.js";
 import type { ScheduleService } from "./schedule.js";
 import type { Dispatcher, MatchWindow } from "./tasks.js";
@@ -215,6 +216,10 @@ export function buildApp(
   // E2E without push: write a synthetic matches/{id}.json so a polling client
   // picks it up and the existing overlay/diff path fires off the file change.
   app.post("/internal/test-event", requireSchedulerOidc, async (req, res) => {
+    // It writes schedule rows too, so it must never touch production data.
+    if (!/staging/i.test(env.r2.scoresBucket)) {
+      return void res.status(403).json({ error: "test-event is staging-only" });
+    }
     const parsed = testEventSchema.safeParse(req.body ?? {});
     if (!parsed.success) return void res.status(400).json({ error: parsed.error.message });
     const d = parsed.data;
@@ -243,6 +248,14 @@ export function buildApp(
       varEvents: [],
     };
     await r2.putJson(`matches/${d.fixtureId}.json`, state, CACHE_CONTROL_LIVE);
+    // Clients discover which match files to poll from the schedule, so the
+    // fixture needs a row in today's file too — otherwise only a client that
+    // already tracks this id ever sees the event.
+    const scheduleKey = `fixtures-${now.slice(0, 10)}.json`;
+    const schedule = (await r2.getJson<{ matches: MatchState[] }>(scheduleKey)) ?? { matches: [] };
+    const matches = schedule.matches.filter((m) => m.fixtureId !== d.fixtureId);
+    matches.push(toScheduleRow(state));
+    await r2.putJson(scheduleKey, { matches }, CACHE_CONTROL_LONG);
     log.info("test_event_complete", { fixtureId: d.fixtureId, rawStatus: d.rawStatus });
     res.json({ ok: true, fixtureId: d.fixtureId });
   });
