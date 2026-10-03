@@ -57,6 +57,10 @@ final class EventRouter {
         if handled.count > 500 { handled.removeFirst(250) }
         seenEventIds = handled
 
+        if event.type == .goalCancelled {
+            applyGoalCancellation(event)
+        }
+
         let settings = AppSession.shared.prefs.settings
         guard settings.eventEnabled(event.type) else {
             AppLog.info(.fixtures, "event_rejected event_id=\(event.eventId) reason=event_disabled type=\(event.type.rawValue)")
@@ -109,20 +113,21 @@ final class EventRouter {
         // next displayed set; followed-team goals start the center celebration
         // only once their goal pill reaches that set.
         OverlayManager.shared.submit(event, isFanGoal: isFanGoal)
+    }
 
-        // A goal was taken back — stop celebrating it.
-        if event.type == .goalCancelled {
-            OverlayManager.shared.cancelGoal(fixtureId: event.fixtureId, teamId: event.teamId)
-            // Un-dedupe the matching GOAL id (ids are deterministic). If the goal
-            // is re-awarded — a real VAR reversal, or the feed self-correcting a
-            // transient drop on the next poll — MatchDiff re-emits GOAL and the
-            // pill actually shows, instead of the dedupe silently swallowing it.
-            let goalId = event.eventId.replacingOccurrences(of: ":GOAL_CANCELLED:", with: ":GOAL:")
-            if goalId != event.eventId, let idx = seenEventIds.firstIndex(of: goalId) {
-                var ids = seenEventIds
-                ids.remove(at: idx)
-                seenEventIds = ids
-            }
+    /// A goal was taken back — stop celebrating it, and un-dedupe the matching
+    /// GOAL id (ids are deterministic). If the goal is re-awarded — a real VAR
+    /// reversal, or the feed self-correcting a transient drop on the next poll —
+    /// MatchDiff re-emits GOAL and the pill actually shows, instead of the
+    /// dedupe silently swallowing it. This is state, not presentation, so it
+    /// runs even when the "Goal disallowed" pill itself is muted.
+    private func applyGoalCancellation(_ event: MatchEvent) {
+        OverlayManager.shared.cancelGoal(fixtureId: event.fixtureId, teamId: event.teamId)
+        let goalId = event.eventId.replacingOccurrences(of: ":GOAL_CANCELLED:", with: ":GOAL:")
+        if goalId != event.eventId, let idx = seenEventIds.firstIndex(of: goalId) {
+            var ids = seenEventIds
+            ids.remove(at: idx)
+            seenEventIds = ids
         }
     }
 }
