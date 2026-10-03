@@ -24,6 +24,10 @@ final class AppSession: ObservableObject {
     private var scores: ScoresProviding { Services.scores }
     private let defaults = AppDefaults.shared
     private var isBootstrappingFixtures = false
+    /// Last automatic bootstrap attempt, so a failing date is retried about
+    /// once a minute instead of on every 5s poll pass.
+    private var lastBootstrapAttempt: Date?
+    private static let bootstrapRetryInterval: TimeInterval = 60
     /// Working set of fixtures keyed by id — the live poll loop merges into this
     /// and `publishFixtures()` projects the visible, sorted list into `fixtures`.
     private var fixturesById: [Int: Fixture] = [:]
@@ -36,7 +40,9 @@ final class AppSession: ObservableObject {
         static let settings = "settings"
         static let fixtures = "cachedFixtures"
         static let celebrationTotals = "cachedCelebrationTotals"
-        static let fixtureBootstrapDay = "fixtureBootstrapDay"
+        /// `"<utc day>:<file date>"` for each schedule file loaded on that UTC
+        /// day — the bootstrap is complete once all three of today±1 are in.
+        static let fixtureBootstrapDates = "fixtureBootstrapDates"
         static let leagueMigrationPrompted = "leagueMigrationPrompted"
     }
 
@@ -339,39 +345,48 @@ final class AppSession: ObservableObject {
     /// The schedule bootstrap: once per day, read `fixtures-{date}.json` for
     /// today±1 (12h TTL) for kickoff times + which fan matches play. Live scores
     /// are never read from here — that's the poll loop's job. Never overwrites a
-    /// live-polled fixture with a (possibly stale) schedule row.
+    /// live-polled fixture with a (possibly stale) schedule row. Each date is
+    /// tracked on its own: one that failed is retried (at most once a minute)
+    /// until it loads, even when its neighbours already did.
     func bootstrapFixturesIfNeeded(force: Bool = false) async {
         guard ControlPlane.shared.isOperational, !isBootstrappingFixtures else { return }
         let now = Date()
         let bootstrapDay = ISO8601DateFormatter.dateOnly.string(from: now)
-        if !force, defaults.string(forKey: CacheKey.fixtureBootstrapDay) == bootstrapDay {
-            return
-        }
-        isBootstrappingFixtures = true
-        defer { isBootstrappingFixtures = false }
-
         // UTC: the fixtures-{date}.json keys are UTC days, so the today±1 math
         // must be UTC too — the local calendar can pick the wrong day near
         // midnight/DST and miss the +1 (or -1) file.
         let calendar = Calendar.utc
-        AppLog.info(.fixtures, "bootstrap_start cached=\(fixturesById.count) fan_teams=\(fanTeamIds.sorted())")
         let dates = [-1, 0, 1].compactMap { calendar.date(byAdding: .day, value: $0, to: now) }
-        var loadedAny = false
-        for date in dates {
+        let key = { (date: Date) in "\(bootstrapDay):\(ISO8601DateFormatter.dateOnly.string(from: date))" }
+        // Only entries from today's UTC bootstrap count: a new day re-reads all three.
+        var loaded = Set(defaults.stringArray(forKey: CacheKey.fixtureBootstrapDates) ?? [])
+            .filter { $0.hasPrefix("\(bootstrapDay):") }
+        let pending = force ? dates : dates.filter { !loaded.contains(key($0)) }
+        guard !pending.isEmpty else { return }
+        if !force, let last = lastBootstrapAttempt,
+           now.timeIntervalSince(last) < Self.bootstrapRetryInterval {
+            return
+        }
+        lastBootstrapAttempt = now
+        isBootstrappingFixtures = true
+        defer { isBootstrappingFixtures = false }
+
+        AppLog.info(.fixtures, "bootstrap_start cached=\(fixturesById.count) fan_teams=\(fanTeamIds.sorted()) pending=\(pending.count)")
+        for date in pending {
             guard ControlPlane.shared.isOperational else { return }
             let fetched: [Fixture]
             do {
                 fetched = try await scores.fetchFixtures(date: date)
                 AppLog.info(.fixtures, "date_bootstrap_complete date=\(ISO8601DateFormatter.dateOnly.string(from: date)) fixtures=\(fetched.count)")
             } catch ScoresError.notModified {
-                loadedAny = true
+                loaded.insert(key(date))
                 continue
             } catch {
                 AppLog.error(.fixtures, "date_bootstrap_failed date=\(ISO8601DateFormatter.dateOnly.string(from: date))", error: error)
                 continue
             }
             guard ControlPlane.shared.isOperational else { return }
-            loadedAny = true
+            loaded.insert(key(date))
             for fixture in fetched {
                 // Don't clobber a fixture the live loop is actively polling — the
                 // schedule file can be up to 12h stale on score/status.
@@ -381,11 +396,9 @@ final class AppSession: ObservableObject {
                 fixturesById[fixture.fixtureId] = fixture
             }
         }
-        if loadedAny {
-            defaults.set(bootstrapDay, forKey: CacheKey.fixtureBootstrapDay)
-        }
+        defaults.set(loaded.sorted(), forKey: CacheKey.fixtureBootstrapDates)
         publishFixtures()
-        AppLog.info(.fixtures, "bootstrap_complete fixtures=\(fixturesById.count)")
+        AppLog.info(.fixtures, "bootstrap_complete fixtures=\(fixturesById.count) loaded_dates=\(loaded.count)")
     }
 
     /// Merge one freshly-polled live fixture into the working set. Called by
@@ -493,7 +506,8 @@ final class AppSession: ObservableObject {
         celebrationTotals = [:]
         defaults.removeObject(forKey: CacheKey.fixtures)
         defaults.removeObject(forKey: CacheKey.celebrationTotals)
-        defaults.removeObject(forKey: CacheKey.fixtureBootstrapDay)
+        defaults.removeObject(forKey: CacheKey.fixtureBootstrapDates)
+        lastBootstrapAttempt = nil
         ScoresETagStore.shared.clear()
         LiveStore.shared.resetBaseline()
         AppLog.info(.fixtures, "match_cache_cleared")
