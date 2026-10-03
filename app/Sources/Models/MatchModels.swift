@@ -392,7 +392,7 @@ struct Fixture: Codable, Identifiable, Hashable {
     var isCalledOff: Bool {
         status == "OTHER" && ["PST", "CANC", "ABD", "AWD", "WO"].contains(rawStatus ?? "")
     }
-    var kickoff: Date? { ISO8601DateFormatter().date(from: kickoffISO) }
+    var kickoff: Date? { ISO8601DateFormatter.parseKickoff(kickoffISO) }
     var score: Score { Score(home: home.goals, away: away.goals) }
 
     /// Minute at which stoppage begins for a running period (the clock caps
