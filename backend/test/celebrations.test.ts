@@ -115,6 +115,21 @@ describe("CelebrationAggregator failures", () => {
   });
 });
 
+describe("CelebrationAggregator persistence acknowledgement", () => {
+  it("resolves add() only once its taps are incremented", async () => {
+    const store = fakeStore();
+    vi.mocked(store.addCelebrations).mockRejectedValueOnce(new Error("firestore down"));
+    const agg = new CelebrationAggregator(store, fakeR2() as never, ...ALWAYS_PUBLISH);
+    let persisted = false;
+    void agg.add(1, "6", 4).then(() => { persisted = true; });
+
+    await agg.flush(); // increment fails → still waiting, on the retry
+    expect(persisted).toBe(false);
+    await agg.flush();
+    expect(persisted).toBe(true);
+  });
+});
+
 describe("CelebrationAggregator shutdown", () => {
   it("stop waits for a flush already in flight", async () => {
     const store = fakeStore();
