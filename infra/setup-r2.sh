@@ -351,7 +351,7 @@ configure_cloudflare_zone() {
 
 require_tool npx
 
-# public scores buckets: fixtures-*.json, matches/*.json, celebrate/*.json, catalog.json, config.json
+# public scores buckets: fixtures-*.json, matches/*.json, celebrate/*.json, catalog.json
 create_bucket alldayidreamaboutsports-staging-scores
 create_bucket alldayidreamaboutsports-scores
 # downloads buckets: app DMGs + appcast.xml (Sparkle feed). Staging gets its

@@ -64,5 +64,4 @@ The landing page + privacy policy live in the separate **public** repo
 The app ships only through the Mac App Store, straight from Xcode: Product →
 Archive → Distribute App → App Store Connect. No CI, no DMG. See
 [app/README.md](app/README.md#mac-app-store). Kill switch and forced updates are
-driven by Firebase Remote Config (`kill_switch`, `min_build`) with an R2
-`config.json` backup.
+driven by Firebase Remote Config (`kill_switch`, `min_build`).

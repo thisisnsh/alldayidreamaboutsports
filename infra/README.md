@@ -212,11 +212,12 @@ The backend reads its R2 creds from GCP Secret Manager (`r2-*`, via
 ## Kill switch runbook
 
 - **Kill**: Firebase console → Remote Config → `kill_switch=true` → Publish.
-  Running apps lock within seconds (real-time RC). Backup if Firebase is down:
-  upload `{"killSwitch":true,"message":"..."}` as `config.json` to `alldayidreamaboutsports-scores`.
-- **Recover**: publish `kill_switch=false` in Firebase and clear `killSwitch`
-  from the R2 `config.json` (or set it to `false`) if the backup was used.
-  The app stays killed until every source that enabled the switch clears it.
+  Running apps lock within seconds (real-time RC). Remote Config is the only
+  source: there is no R2 `config.json` fallback (the app stopped reading it in
+  the polling+CDN pivot), so uploading one does nothing. If Firebase itself is
+  down, the remaining levers are server-side — e.g. stop publishing
+  `matches/*` by pausing the `dispatch-live-scores` scheduler job.
+- **Recover**: publish `kill_switch=false` in Firebase.
 - **Force update**: set `min_build` to the new build number after a bad
   release — only once that build is live on the App Store.
 - **Offer update**: set `latest_build` to the newest published build. Older
