@@ -49,6 +49,15 @@ export interface Deps {
   r2: R2;
 }
 
+/** Longest a /celebrate response waits for its taps to reach Firestore. */
+const CELEBRATE_HOLD_MS = 10_000;
+
+function settledWithin(work: Promise<void>, ms: number): Promise<void> {
+  let timer: NodeJS.Timeout | undefined;
+  const timeout = new Promise<void>((resolve) => { timer = setTimeout(resolve, ms); });
+  return Promise.race([work, timeout]).finally(() => clearTimeout(timer));
+}
+
 function clientIp(req: Request): string {
   const forwarded = req.headers["x-forwarded-for"];
   const values = (Array.isArray(forwarded) ? forwarded : forwarded?.split(",")) ?? [];
@@ -140,11 +149,15 @@ export function buildApp(
   // Cloud Run reserves the exact /healthz path; the trailing slash reaches the app.
   app.get("/healthz/", (_req, res) => res.json({ ok: true }));
 
-  app.post("/celebrate", enforceRateLimit(celebrationRateLimiter, clientIp), (req: Request, res: Response) => {
+  app.post("/celebrate", enforceRateLimit(celebrationRateLimiter, clientIp), async (req: Request, res: Response) => {
     const parsed = celebrateSchema.safeParse(req.body);
     if (!parsed.success) return void res.status(400).json({ error: parsed.error.message });
     const { fixtureId, teamId, taps } = parsed.data;
-    celebrations.add(fixtureId, teamId, taps); // in-memory; flushed on interval
+    // Batched in memory, but the response waits for the flush that persists
+    // these taps: the open request is what keeps CPU allocated to this
+    // instance (request-based billing) until the flush timer has run. Bounded
+    // so a Firestore outage can't hold requests open; the batch still retries.
+    await settledWithin(celebrations.add(fixtureId, teamId, taps), CELEBRATE_HOLD_MS);
     res.json({ ok: true });
   });
 

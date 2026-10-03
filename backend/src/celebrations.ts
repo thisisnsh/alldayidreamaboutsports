@@ -14,6 +14,8 @@ export class CelebrationAggregator {
   private buffer = new Map<number, Record<string, number>>();
   /** Fixtures whose shards moved since their totals file was last written. */
   private unpublished = new Set<number>();
+  /** Resolvers for the `add()` calls whose taps are still in `buffer`. */
+  private waiting = new Map<number, Array<() => void>>();
   private timer: NodeJS.Timeout | null = null;
   private flushing: Promise<void> = Promise.resolve();
   private flushesQueued = 0;
@@ -30,12 +32,19 @@ export class CelebrationAggregator {
     private readonly random: () => number = Math.random,
   ) {}
 
-  add(fixtureId: number, teamId: string, taps: number): void {
+  /** Buffer taps. Resolves once the flush carrying them has incremented the
+   * shards — `/celebrate` holds its response on this, because with Cloud
+   * Run's request-based CPU allocation an instance only gets CPU while a
+   * request is open, so an idle flush timer is not guaranteed to run. */
+  add(fixtureId: number, teamId: string, taps: number): Promise<void> {
     // Null prototype: a team id can never resolve to an inherited property.
     const counts = this.buffer.get(fixtureId) ?? Object.create(null) as Record<string, number>;
     counts[teamId] = (counts[teamId] ?? 0) + taps;
     this.buffer.set(fixtureId, counts);
     log.info("celebration_buffered", { fixtureId, teamId, taps, pendingFixtures: this.buffer.size });
+    return new Promise((resolve) => {
+      this.waiting.set(fixtureId, [...(this.waiting.get(fixtureId) ?? []), resolve]);
+    });
   }
 
   /** Visible for tests. */
@@ -48,13 +57,18 @@ export class CelebrationAggregator {
   flush(): Promise<void> {
     // Take the batch now: taps that arrive while it waits go to the next one.
     const batch = this.buffer;
+    const waiters = this.waiting;
     this.buffer = new Map();
-    const run = this.flushing.then(() => this.flushBatch(batch));
+    this.waiting = new Map();
+    const run = this.flushing.then(() => this.flushBatch(batch, waiters));
     this.flushing = run.catch(() => undefined);
     return run;
   }
 
-  private async flushBatch(batch: Map<number, Record<string, number>>): Promise<void> {
+  private async flushBatch(
+    batch: Map<number, Record<string, number>>,
+    waiters: Map<number, Array<() => void>>,
+  ): Promise<void> {
     if (batch.size === 0 && this.unpublished.size === 0) return;
     log.info("celebration_flush_start", { fixtures: batch.size, unpublished: this.unpublished.size });
     // ALWAYS increment: this is the half that must not lose a tap. Only a
@@ -66,6 +80,7 @@ export class CelebrationAggregator {
         await this.store.addCelebrations(fixtureId, counts);
         incremented.add(fixtureId);
         this.unpublished.add(fixtureId);
+        for (const resolve of waiters.get(fixtureId) ?? []) resolve();
       } catch (error) {
         log.error("celebration_increment_failed", error, { fixtureId, counts });
         const pending = this.buffer.get(fixtureId) ?? Object.create(null) as Record<string, number>;
@@ -73,6 +88,8 @@ export class CelebrationAggregator {
           pending[teamId] = (pending[teamId] ?? 0) + taps;
         }
         this.buffer.set(fixtureId, pending);
+        // The requests wait on the retry, not on this failed attempt.
+        this.waiting.set(fixtureId, [...(this.waiting.get(fixtureId) ?? []), ...(waiters.get(fixtureId) ?? [])]);
       }
     }));
     await Promise.all([...this.unpublished].map((fixtureId) =>
