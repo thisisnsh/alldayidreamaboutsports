@@ -1,15 +1,11 @@
 import SwiftUI
 
-/// Forced-update window. The menu-bar popover only opens this window (same as
-/// the "Sign in" flow); the actual update check runs from here. The popover is
-/// a transient panel with no key window for Sparkle to attach its update UI to,
-/// so for an accessory app the check appeared to "do nothing" — a real,
-/// activated window fixes that.
+/// Forced/optional update window. The menu-bar popover only opens this window
+/// (same as the "Sign in" flow); "Update now" hands off to the App Store.
 struct UpdateView: View {
     @EnvironmentObject var session: AppSession
     @ObservedObject private var control = ControlPlane.shared
     @Environment(\.dismiss) private var dismiss
-    let updater: AppUpdater
     private static let screen = "update_gate"
 
     var body: some View {
@@ -46,7 +42,7 @@ struct UpdateView: View {
                 .opacity(0.8)
             Button {
                 AppAnalytics.updateCheckStarted(source: "update_gate")
-                updater.checkForUpdates()
+                AppUpdater.checkForUpdates()
             } label: {
                 Label("Update now", systemImage: "arrow.down.circle")
             }

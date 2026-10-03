@@ -11,19 +11,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // `openWindow(.login)` sits queued until the first utility view renders
     // (i.e. until the user clicks the status item).
     private var windowOpenerHost: NSWindow?
-    #if APP_STORE
-    let updater = AppUpdater()
-    #else
-    // Dev builds never start Sparkle: the scheduled appcast fetch is a network
-    // hit, and a Debug build registering for auto-updates is wrong anyway.
-    #if DEV_BACKEND
-    private static let startsUpdater = false
-    #else
-    private static let startsUpdater = true
-    #endif
-
-    let updater = AppUpdater(startingUpdater: AppDelegate.startsUpdater)
-    #endif
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Disk-backed HTTP cache so team/league logos (API CDN) download once and
@@ -50,12 +37,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         #if DEV_BACKEND
         // Bypassed sign-in means we're already in; play the deterministic
         // demo timeline (DevConfig.timeline) so animations can be eyeballed
-        // hands-free. Don't register a Debug build as a login item.
+        // hands-free.
         if DevConfig.autostart {
             DemoEngine.shared.start()
         }
         #else
-        LaunchAtLogin.registerByDefault()
         // Opening the app always surfaces the login window. Signed out, it's the
         // sign-in prompt; signed in, it shows the account ("Signed in as …") with
         // the sign-in button disabled.

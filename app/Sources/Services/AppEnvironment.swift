@@ -26,8 +26,6 @@ enum AppEnvironment {
         return "Debug"
         #elseif STAGING
         return "Staging"
-        #elseif APP_STORE
-        return "App Store"
         #else
         return "Release"
         #endif
