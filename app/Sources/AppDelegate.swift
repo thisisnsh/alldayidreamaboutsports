@@ -183,6 +183,7 @@ final class MenuPopoverController: NSObject, NSPopoverDelegate {
         if ControlPlane.shared.updateAvailable {
             AppAnalytics.updateAvailableShown()
         }
+        TeamLogoStore.shared.retryFailed()
         startRefreshing()
     }
 
