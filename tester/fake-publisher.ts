@@ -8,8 +8,11 @@
  * live overlay / celebration UI end-to-end without API-Football or the Cloud
  * Scheduler/Tasks pipeline.
  *
- * Fake fixtures use a reserved fixture id range (900001+) but real API-Football
- * league/team ids, so they are safe to purge while still resolving catalog logos.
+ * Fake fixtures default to ids from 900001 up, but what makes an id "fake" is the
+ * seed manifest (`fake-manifest.json` in the bucket), not the number: real
+ * API-Football ids run past 900001 too (e.g. 1565179), so only ids this tool
+ * seeded are ever mutated, deleted or pruned. They use real league/team ids so
+ * catalog logos still resolve.
  *
  *   npm run fake -- seed --count 3 --state LIVE
  *   npm run fake -- advance --fixture 900001 --status HT
@@ -28,9 +31,31 @@ import { toScheduleRow, utcPollRange } from "../backend/src/poller.js";
 import { CACHE_CONTROL_LIVE, CACHE_CONTROL_LONG, R2 } from "../backend/src/r2.js";
 import type { CardEvent, MatchState, TeamScore } from "../backend/src/types.js";
 
-/** Fake fixtures live at/above this id so they never collide with real matches. */
-const RESERVED_ID_MIN = 900001;
-const isFakeId = (id: number) => id >= RESERVED_ID_MIN;
+/** Default first id for `seed`. Real fixtures can share this range — the
+ * manifest, not the id, is what marks a fixture as fake. */
+const DEFAULT_FIXTURE_START = 900001;
+
+/** Every fixture id `seed` wrote, so `clear` and the mutators touch only those. */
+const MANIFEST_KEY = "fake-manifest.json";
+
+interface Manifest {
+  fixtureIds: number[];
+}
+
+async function loadManifest(r2: R2): Promise<Set<number>> {
+  const file = await r2.getJson<Manifest>(MANIFEST_KEY);
+  return new Set(file?.fixtureIds ?? []);
+}
+
+async function saveManifest(r2: R2, ids: Set<number>): Promise<void> {
+  await r2.putJson(MANIFEST_KEY, { fixtureIds: [...ids].sort((a, b) => a - b) }, "no-store");
+}
+
+async function assertSeeded(r2: R2, fixtureId: number): Promise<void> {
+  if (!(await loadManifest(r2)).has(fixtureId)) {
+    throw new Error(`--fixture ${fixtureId} was not seeded by this tool (not in ${MANIFEST_KEY})`);
+  }
+}
 
 // A league the app actually follows, so a seeded fixture is a fan match for
 // someone testing with the default club picks. League 1 (the World Cup) is
@@ -175,14 +200,15 @@ async function ensurePollRangeFixtureFiles(r2: R2): Promise<void> {
 }
 
 /** Splice a fresh set of fake matches into the UTC fixture files (long TTL). */
-async function mergeFixtures(r2: R2, fakes: MatchState[]): Promise<void> {
+async function mergeFixtures(r2: R2, fakes: MatchState[], seeded: Set<number>): Promise<void> {
   await ensurePollRangeFixtureFiles(r2);
   const dates = new Set([...pollRangeDates(), ...fakes.map((m) => m.kickoffISO.slice(0, 10))]);
   for (const date of dates) {
     const key = fixturesKey(date);
     const current = (await r2.getJson<FixturesFile>(key)) ?? { matches: [] };
     const byId = new Map<number, MatchState>();
-    for (const m of current.matches) if (!isFakeId(m.fixtureId)) byId.set(m.fixtureId, m);
+    // Drop only rows this tool seeded (earlier runs + this one); real rows stay.
+    for (const m of current.matches) if (!seeded.has(m.fixtureId)) byId.set(m.fixtureId, m);
     for (const m of fakes.filter((m) => m.kickoffISO.slice(0, 10) === date)) {
       byId.set(m.fixtureId, toScheduleRow(m));
     }
@@ -211,13 +237,13 @@ async function loadMatch(r2: R2, fixtureId: number): Promise<MatchState> {
 
 async function seed(r2: R2, args: Map<string, string>): Promise<void> {
   const count = Number(args.get("count") ?? 3);
-  const fixtureStart = Number(args.get("fixture-start") ?? RESERVED_ID_MIN);
+  const fixtureStart = Number(args.get("fixture-start") ?? DEFAULT_FIXTURE_START);
   const dayOffsets = parseDayOffsets(args.get("days") ?? "0");
   const kickoffTime = args.get("time") ?? "18:00";
   const spacingMinutes = Number(args.get("spacing-minutes") ?? 120);
   if (!Number.isInteger(count) || count < 1) throw new Error("--count must be a positive integer");
-  if (!Number.isInteger(fixtureStart) || fixtureStart < RESERVED_ID_MIN) {
-    throw new Error(`--fixture-start must be an integer >= ${RESERVED_ID_MIN}`);
+  if (!Number.isInteger(fixtureStart) || fixtureStart < 1) {
+    throw new Error("--fixture-start must be a positive integer");
   }
   if (!Number.isFinite(spacingMinutes) || spacingMinutes < 0) {
     throw new Error("--spacing-minutes must be a non-negative number");
@@ -230,6 +256,19 @@ async function seed(r2: R2, args: Map<string, string>): Promise<void> {
       throw new Error(`Unknown --state "${s}". Use ${Object.keys(STATE_TO_RAW).join("|")}.`);
     }
   }
+
+  // Never overwrite a match file this tool didn't write: refuse an id that
+  // already exists in the bucket unless the manifest says it's ours.
+  const seeded = await loadManifest(r2);
+  for (let i = 0; i < count; i++) {
+    const fixtureId = fixtureStart + i;
+    if (!seeded.has(fixtureId) && (await r2.getJson(`matches/${fixtureId}.json`))) {
+      throw new Error(`matches/${fixtureId}.json already exists and was not seeded by this tool — pick another --fixture-start`);
+    }
+  }
+  // Record the ids before writing anything, so a half-finished seed is still clearable.
+  for (let i = 0; i < count; i++) seeded.add(fixtureStart + i);
+  await saveManifest(r2, seeded);
 
   const fakes: MatchState[] = [];
   for (let i = 0; i < count; i++) {
@@ -262,7 +301,7 @@ async function seed(r2: R2, args: Map<string, string>): Promise<void> {
         `${home.name} ${home.id} vs ${away.name} ${away.id}) + celebrate/${fixtureId}.json`,
     );
   }
-  await mergeFixtures(r2, fakes);
+  await mergeFixtures(r2, fakes, seeded);
   console.log(`merged ${fakes.length} fake match(es) into UTC fixture files`);
 }
 
@@ -270,7 +309,7 @@ async function advance(r2: R2, args: Map<string, string>): Promise<void> {
   const fixtureId = Number(args.get("fixture"));
   const raw = args.get("status");
   if (!fixtureId || !raw) throw new Error("advance needs --fixture ID --status <rawStatus>");
-  if (!isFakeId(fixtureId)) throw new Error(`--fixture ${fixtureId} is not in the reserved fake range`);
+  await assertSeeded(r2, fixtureId);
 
   const match = await loadMatch(r2, fixtureId);
   const minute = args.has("minute") ? Number(args.get("minute")) : match.minute;
@@ -292,7 +331,7 @@ async function goal(r2: R2, args: Map<string, string>): Promise<void> {
   if (!fixtureId || (side !== "home" && side !== "away")) {
     throw new Error("goal needs --fixture ID --team <home|away>");
   }
-  if (!isFakeId(fixtureId)) throw new Error(`--fixture ${fixtureId} is not in the reserved fake range`);
+  await assertSeeded(r2, fixtureId);
 
   const match = await loadMatch(r2, fixtureId);
   const team = match[side];
@@ -321,7 +360,7 @@ async function celebrate(r2: R2, args: Map<string, string>): Promise<void> {
   const teamId = args.get("team");
   const count = Number(args.get("count") ?? 1);
   if (!fixtureId || !teamId) throw new Error("celebrate needs --fixture ID --team <teamId> --count N");
-  if (!isFakeId(fixtureId)) throw new Error(`--fixture ${fixtureId} is not in the reserved fake range`);
+  await assertSeeded(r2, fixtureId);
 
   const key = `celebrate/${fixtureId}.json`;
   const file = (await r2.getJson<{ totals: Record<string, number> }>(key)) ?? { totals: {} };
@@ -349,12 +388,13 @@ async function clear(r2: R2): Promise<void> {
   const s3 = rawS3();
   const bucket = env.r2.scoresBucket;
 
-  // Delete reserved-range matches/ + celebrate/ objects.
+  // Delete the matches/ + celebrate/ objects of manifest ids only.
+  const seeded = await loadManifest(r2);
   const objectKeys: string[] = [];
   for (const prefix of ["matches/", "celebrate/"]) {
     for (const key of await listKeys(s3, prefix)) {
       const id = Number(key.replace(prefix, "").replace(/\.json$/, ""));
-      if (isFakeId(id)) objectKeys.push(key);
+      if (seeded.has(id)) objectKeys.push(key);
     }
   }
   for (const key of objectKeys) {
@@ -366,12 +406,13 @@ async function clear(r2: R2): Promise<void> {
   for (const key of await listKeys(s3, "fixtures-")) {
     const file = await r2.getJson<FixturesFile>(key);
     if (!file) continue;
-    const kept = file.matches.filter((m) => !isFakeId(m.fixtureId));
+    const kept = file.matches.filter((m) => !seeded.has(m.fixtureId));
     if (kept.length !== file.matches.length) {
       await r2.putJson(key, { matches: kept }, CACHE_CONTROL_LONG);
       console.log(`pruned ${file.matches.length - kept.length} fake(s) from ${key}`);
     }
   }
+  await saveManifest(r2, new Set());
   console.log(`cleared ${objectKeys.length} fake object(s)`);
 }
 

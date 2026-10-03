@@ -13,9 +13,12 @@ These reuse the deployed `R2` class, cache constants, and types from `backend/sr
 
 > ⚠️ **Staging only — never production.**
 > - The publisher **refuses to run** unless `R2_BUCKET_SCORES` contains `staging`.
-> - Fake fixtures use a reserved id range (`900001+`) so they can never collide
->   with real matches and are trivially purged with `clear`.
-> - Fake fixtures keep the reserved fixture ids, but use real API-Football ids for
+> - `seed` records every id it writes in `fake-manifest.json` in the bucket, and
+>   `advance` / `goal` / `celebrate` / `clear` touch only manifest ids. Ids
+>   default to `900001+`, but real API-Football fixture ids run past that too
+>   (e.g. `1565179`), so the manifest — not the number — is what marks a fake.
+>   `seed` refuses an id whose match file exists and isn't in the manifest.
+> - Fake fixtures use real API-Football ids for
 >   La Liga (`140`) and teams such as Real Madrid (`541`), Barcelona (`529`),
 >   Atletico Madrid (`530`) and Sevilla (`536`) — a league the app actually
 >   follows, so a seeded fixture is a fan match for anyone testing with the
@@ -130,7 +133,7 @@ Run everything from `tester/`. A typical end-to-end pass:
 | `advance` | `--fixture ID` `--status <rawStatus>` `[--minute N]` | Re-derive phase from a raw status and write the match back |
 | `goal` | `--fixture ID` `--team <home\|away>` `[--count N]` | Increment that side's goals + bump its celebration tally (default +1) |
 | `celebrate` | `--fixture ID` `--team <teamId>` `--count N` | Add N to a team's celebration total |
-| `clear` | — | Delete all reserved-range fake objects and prune them from `fixtures-*.json` |
+| `clear` | — | Delete the manifest's fake objects, prune them from `fixtures-*.json`, and empty the manifest |
 
 ## `loadtest` flags
 
