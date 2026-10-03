@@ -1,8 +1,7 @@
-import Sparkle
 import SwiftUI
 
 /// Forced-update window. The menu-bar popover only opens this window (same as
-/// the "Sign in" flow); the actual Sparkle check runs from here. The popover is
+/// the "Sign in" flow); the actual update check runs from here. The popover is
 /// a transient panel with no key window for Sparkle to attach its update UI to,
 /// so for an accessory app the check appeared to "do nothing" — a real,
 /// activated window fixes that.
@@ -10,7 +9,7 @@ struct UpdateView: View {
     @EnvironmentObject var session: AppSession
     @ObservedObject private var control = ControlPlane.shared
     @Environment(\.dismiss) private var dismiss
-    let updater: SPUUpdater
+    let updater: AppUpdater
     private static let screen = "update_gate"
 
     var body: some View {

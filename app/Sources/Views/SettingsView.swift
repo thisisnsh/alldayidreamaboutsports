@@ -1,8 +1,7 @@
-import Sparkle
 import SwiftUI
 
 struct SettingsView: View {
-    let updater: SPUUpdater
+    let updater: AppUpdater
     @EnvironmentObject var session: AppSession
     @Environment(\.colorScheme) private var scheme
     @State private var launchAtLogin = LaunchAtLogin.isEnabled
@@ -114,17 +113,19 @@ struct SettingsView: View {
                     }
 
                     SettingsCard("Updates") {
-                        toggleRow("Automatically check for updates", isOn: Binding(
-                            get: { autoCheck },
-                            set: { on in
-                                autoCheck = on
-                                updater.automaticallyChecksForUpdates = on
-                                // Sparkle owns this flag, so it never passes
-                                // through `AppSession.updateSettings` and needs
-                                // reporting from here.
-                                AppAnalytics.settingChanged(.autoCheckUpdates, enabled: on)
-                            }
-                        ))
+                        if updater.managesAutomaticChecks {
+                            toggleRow("Automatically check for updates", isOn: Binding(
+                                get: { autoCheck },
+                                set: { on in
+                                    autoCheck = on
+                                    updater.automaticallyChecksForUpdates = on
+                                    // Sparkle owns this flag, so it never passes
+                                    // through `AppSession.updateSettings` and needs
+                                    // reporting from here.
+                                    AppAnalytics.settingChanged(.autoCheckUpdates, enabled: on)
+                                }
+                            ))
+                        }
                         CheckForUpdatesButton(updater: updater, source: "settings")
                             .buttonStyle(.cardButton)
                         caption("\(AppEnvironment.profileName) v\(AppEnvironment.appVersion) (Build \(AppEnvironment.buildNumber))")
@@ -466,16 +467,14 @@ private struct DemoControls: View {
 
 /// Same approach as aithing-mac's CheckForUpdatesButton: observe canCheckForUpdates.
 struct CheckForUpdatesButton: View {
-    @ObservedObject private var model: CheckForUpdatesModel
-    private let updater: SPUUpdater
+    @ObservedObject private var updater: AppUpdater
     /// Which entry point this button is, for `update_check_started`'s `source`
     /// — the update window's "Update now" runs the same Sparkle check.
     private let source: String
 
-    init(updater: SPUUpdater, source: String) {
+    init(updater: AppUpdater, source: String) {
         self.updater = updater
         self.source = source
-        self.model = CheckForUpdatesModel(updater: updater)
     }
 
     var body: some View {
@@ -485,15 +484,6 @@ struct CheckForUpdatesButton: View {
         } label: {
             Text("Check for Updates…").frame(maxWidth: .infinity)
         }
-        .disabled(!model.canCheckForUpdates)
-    }
-}
-
-final class CheckForUpdatesModel: ObservableObject {
-    @Published var canCheckForUpdates = false
-
-    init(updater: SPUUpdater) {
-        updater.publisher(for: \.canCheckForUpdates)
-            .assign(to: &$canCheckForUpdates)
+        .disabled(!updater.canCheckForUpdates)
     }
 }

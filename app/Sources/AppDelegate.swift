@@ -1,7 +1,6 @@
 import AppKit
 import FirebaseCore
 import GoogleSignIn
-import Sparkle
 import SwiftUI
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -12,6 +11,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // `openWindow(.login)` sits queued until the first utility view renders
     // (i.e. until the user clicks the status item).
     private var windowOpenerHost: NSWindow?
+    #if APP_STORE
+    let updater = AppUpdater()
+    #else
     // Dev builds never start Sparkle: the scheduled appcast fetch is a network
     // hit, and a Debug build registering for auto-updates is wrong anyway.
     #if DEV_BACKEND
@@ -20,12 +22,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private static let startsUpdater = true
     #endif
 
-    // Same pattern as aithing-mac: one standard updater for the whole app.
-    let updaterController = SPUStandardUpdaterController(
-        startingUpdater: AppDelegate.startsUpdater,
-        updaterDelegate: nil,
-        userDriverDelegate: nil
-    )
+    let updater = AppUpdater(startingUpdater: AppDelegate.startsUpdater)
+    #endif
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Disk-backed HTTP cache so team/league logos (API CDN) download once and
