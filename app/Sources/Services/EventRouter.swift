@@ -59,6 +59,12 @@ final class EventRouter {
 
         if event.type == .goalCancelled {
             applyGoalCancellation(event)
+        } else if event.type == .goal {
+            // Symmetric with the cancellation below: a goal (re-)awarded at this
+            // score frees its GOAL_CANCELLED id, so a second disallow at the
+            // same score — 0→1→0→1→0 — isn't swallowed as a duplicate, which
+            // would also leave the GOAL id stuck and drop the next 1.
+            forgetEventId(event.eventId.replacingOccurrences(of: ":GOAL:", with: ":GOAL_CANCELLED:"))
         }
 
         let settings = AppSession.shared.prefs.settings
@@ -123,12 +129,14 @@ final class EventRouter {
     /// runs even when the "Goal disallowed" pill itself is muted.
     private func applyGoalCancellation(_ event: MatchEvent) {
         OverlayManager.shared.cancelGoal(fixtureId: event.fixtureId, teamId: event.teamId)
-        let goalId = event.eventId.replacingOccurrences(of: ":GOAL_CANCELLED:", with: ":GOAL:")
-        if goalId != event.eventId, let idx = seenEventIds.firstIndex(of: goalId) {
-            var ids = seenEventIds
-            ids.remove(at: idx)
-            seenEventIds = ids
-        }
+        forgetEventId(event.eventId.replacingOccurrences(of: ":GOAL_CANCELLED:", with: ":GOAL:"))
+    }
+
+    private func forgetEventId(_ id: String) {
+        guard let idx = seenEventIds.firstIndex(of: id) else { return }
+        var ids = seenEventIds
+        ids.remove(at: idx)
+        seenEventIds = ids
     }
 }
 
