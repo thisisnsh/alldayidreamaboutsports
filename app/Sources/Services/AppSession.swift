@@ -27,6 +27,9 @@ final class AppSession: ObservableObject {
     /// Working set of fixtures keyed by id — the live poll loop merges into this
     /// and `publishFixtures()` projects the visible, sorted list into `fixtures`.
     private var fixturesById: [Int: Fixture] = [:]
+    /// The local day `publishFixtures()` last projected for — see
+    /// `reprojectIfDayChanged()`.
+    private var projectedDay: Date?
 
     private enum CacheKey {
         static let fanTeamIds = "fanTeamIds"
@@ -399,6 +402,7 @@ final class AppSession: ObservableObject {
     func publishFixtures() {
         let calendar = Calendar.current
         let now = Date()
+        projectedDay = calendar.startOfDay(for: now)
         todayFixtures = fixturesById.values
             .filter { fixture in
                 fixture.kickoff.map { calendar.isDate($0, inSameDayAs: now) } == true
@@ -407,6 +411,24 @@ final class AppSession: ObservableObject {
             .sorted { ($0.kickoff ?? .distantFuture) < ($1.kickoff ?? .distantFuture) }
         fixtures = todayFixtures.filter { $0.involves(fanTeamIds) }
         persistFixtureCache()
+    }
+
+    /// The visible lists are a projection onto the LOCAL day, but the schedule
+    /// bootstrap is gated on the UTC day — so crossing local midnight inside one
+    /// UTC day re-projects nothing on its own. The poll loop calls this every
+    /// pass so the new day's rows (already in the working set) show up.
+    func reprojectIfDayChanged() {
+        guard projectedDay != Calendar.current.startOfDay(for: Date()) else { return }
+        AppLog.info(.fixtures, "fixtures_reprojected reason=local_day_changed")
+        publishFixtures()
+    }
+
+    /// Every followed-team fixture in the working set (today±1 UTC), whatever
+    /// local day it falls on. The poll loop picks its targets from here by
+    /// kickoff window, not from the day-filtered `fixtures` the menu shows.
+    var fanWorkingSet: [Fixture] {
+        let fans = fanTeamIds
+        return fixturesById.values.filter { $0.involves(fans) }
     }
 
     /// Is there any football on today at all, fan teams or not? The menu needs
