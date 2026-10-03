@@ -13,7 +13,7 @@ configs:
 packages:
   Firebase:
     url: https://github.com/firebase/firebase-ios-sdk
-    from: 11.0.0
+    from: 12.0.0
 
 # Distributed only through the Mac App Store: sandboxed, signed automatically
 # by Xcode (Apple Development to run, Apple Distribution when archived), and
@@ -33,8 +33,10 @@ targets:
         product: FirebaseRemoteConfig
       - package: Firebase
         product: FirebaseCrashlytics
+      # Core = no ad-ID support: nothing to declare as tracking on the App
+      # Store and no ATT prompt.
       - package: Firebase
-        product: FirebaseAnalytics
+        product: FirebaseAnalyticsCore
     settings:
       base:
         PRODUCT_NAME: All Day I Dream About Sports
@@ -86,6 +88,11 @@ targets:
         NSHumanReadableCopyright: © 2026 alldayidreamaboutsports.com
         APIBaseURL: $(APP_API_BASE_URL)
         ScoresBaseURL: $(APP_SCORES_BASE_URL)
+        # Screens are logged by hand (`AppAnalytics.screenView`), and the app
+        # has no ads: no automatic screen views, no ad personalization signals.
+        FirebaseAutomaticScreenReportingEnabled: false
+        GOOGLE_ANALYTICS_DEFAULT_ALLOW_AD_PERSONALIZATION_SIGNALS: false
+        GOOGLE_ANALYTICS_IDFV_COLLECTION_ENABLED: false
         # HTTPS only — exempt, so App Store Connect skips the export
         # compliance question on every upload.
         ITSAppUsesNonExemptEncryption: false
@@ -114,7 +121,10 @@ targets:
         basedOnDependencyAnalysis: false
         inputFiles:
           - ${DWARF_DSYM_FOLDER_PATH}/${DWARF_DSYM_FILE_NAME}
-          - $(TARGET_BUILD_DIR)/$(INFOPLIST_PATH)
+          - ${DWARF_DSYM_FOLDER_PATH}/${DWARF_DSYM_FILE_NAME}/Contents/Resources/DWARF/${PRODUCT_NAME}
+          - ${DWARF_DSYM_FOLDER_PATH}/${DWARF_DSYM_FILE_NAME}/Contents/Info.plist
+          - $(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/GoogleService-Info.plist
+          - $(TARGET_BUILD_DIR)/$(EXECUTABLE_PATH)
         script: |
           if [ "${CONFIGURATION}" = "Debug" ]; then exit 0; fi
           RUN="${BUILD_DIR%/Build/*}/SourcePackages/checkouts/firebase-ios-sdk/Crashlytics/run"

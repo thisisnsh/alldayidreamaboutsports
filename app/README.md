@@ -94,10 +94,13 @@ unified logging system. In Console.app, select the Mac and filter for subsystem
 log stream --level debug --predicate 'subsystem == "com.thisisnsh.alldaysports"'
 ```
 
-Staging builds also send log breadcrumbs to Firebase Crashlytics. Errors are
-recorded as non-fatal Crashlytics issues, where their preceding debug/info
-breadcrumbs are visible. Release builds explicitly disable Crashlytics
-collection. Crashlytics is not a live arbitrary-log viewer; use Console.app or
+Crashlytics collects crashes and non-fatal errors in both Staging and Release
+(never Debug); errors go up scrubbed to a coarse label. Every analytics event
+is also a Crashlytics breadcrumb, and Staging additionally sends every log line
+as one. Analytics is Firebase `FirebaseAnalyticsCore` — no ad ID, no automatic
+screen views, no ad personalization signals — so App Store Connect's privacy
+labels are just usage + diagnostics data, not linked to identity and not used
+for tracking. Crashlytics is not a live arbitrary-log viewer; use Console.app or
 `log stream` for the complete live stream.
 
 ## Mac App Store
