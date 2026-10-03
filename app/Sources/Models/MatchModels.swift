@@ -387,6 +387,11 @@ struct Fixture: Codable, Identifiable, Hashable {
 
     var id: Int { fixtureId }
     var isLive: Bool { status == "LIVE" || status == "HALF_TIME" }
+    /// Postponed / cancelled / abandoned / awarded / walkover: the match is not
+    /// (or no longer) being played, so there is nothing left to poll.
+    var isCalledOff: Bool {
+        status == "OTHER" && ["PST", "CANC", "ABD", "AWD", "WO"].contains(rawStatus ?? "")
+    }
     var kickoff: Date? { ISO8601DateFormatter().date(from: kickoffISO) }
     var score: Score { Score(home: home.goals, away: away.goals) }
 
@@ -462,6 +467,15 @@ struct Fixture: Codable, Identifiable, Hashable {
             switch status {
             case "HALF_TIME": return "HT"
             case "FINISHED": return "FT"
+            case "OTHER":
+                switch rawStatus {
+                case "PST": return "Postponed"
+                case "CANC": return "Cancelled"
+                case "ABD": return "Abandoned"
+                case "SUSP": return "Suspended"
+                case "AWD", "WO": return "Awarded"
+                default: return timeFormatter()
+                }
             case "LIVE":
                 if let minute { return foldedLabel(minute) }
                 return "LIVE"

@@ -58,12 +58,31 @@ export function isRecentlyFinished(match: MatchState, now = Date.now()): boolean
   return now - Date.parse(match.kickoffISO) < FINISHED_AFTER_KO_MS;
 }
 
+/** Provider codes for a match that will not be (or stopped being) played:
+ * postponed, cancelled, abandoned, technical loss, walkover. */
+export const CALLED_OFF_RAW_STATUSES = new Set(["PST", "CANC", "ABD", "AWD", "WO"]);
+
+/**
+ * A match the provider moved to a non-playing status (OTHER: postponed,
+ * cancelled, abandoned, suspended, ...) around its kickoff. Its state file
+ * must still be published, or clients keep the last LIVE snapshot and free-run
+ * the clock until their time cap.
+ */
+export function isRecentlyInterrupted(match: MatchState, now = Date.now()): boolean {
+  if (match.status !== "OTHER") return false;
+  const sinceKickoff = now - Date.parse(match.kickoffISO);
+  return sinceKickoff >= -STARTING_SOON_MS && sinceKickoff < FINISHED_AFTER_KO_MS;
+}
+
 // `fixtures-{date}.json` is served with a 12h edge TTL, so it must carry ONLY
 // schedule/bootstrap data — kickoff time, teams, stage. Baking live status/
 // minute/score into it lets Cloudflare freeze a mid-match snapshot at the edge
 // for up to 12h (the app then shows e.g. a stuck "86′"), and rewrites the
 // long-TTL object on every live tick. Live data flows solely via matches/*.json.
+// The one status it does carry is "called off" (postponed/cancelled/...): that
+// is schedule data, stable for hours, and must not read as an ordinary kickoff.
 export function toScheduleRow(m: MatchState): MatchState {
+  const calledOff = m.status === "OTHER" && CALLED_OFF_RAW_STATUSES.has(m.rawStatus);
   const schedTeam = (t: MatchState["home"]): MatchState["home"] => ({
     id: t.id,
     name: t.name,
@@ -82,11 +101,11 @@ export function toScheduleRow(m: MatchState): MatchState {
     round: m.round,
     kickoffISO: m.kickoffISO,
     secondHalfStartISO: null,
-    status: "SCHEDULED",
-    rawStatus: "NS",
+    status: calledOff ? "OTHER" : "SCHEDULED",
+    rawStatus: calledOff ? m.rawStatus : "NS",
     minute: null,
     extra: null,
-    period: "PRE",
+    period: calledOff ? "OTHER" : "PRE",
     running: false,
     home: schedTeam(m.home),
     away: schedTeam(m.away),
@@ -243,7 +262,8 @@ export class Poller {
     const liveCount = fixtures.filter(isLive).length;
     log.info("poll_provider_complete", { fixtures: fixtures.length, live: liveCount, byLeague });
 
-    const eligible = fixtures.filter((m) => isStartingSoon(m) || isLive(m) || isRecentlyFinished(m));
+    const eligible = fixtures.filter((m) =>
+      isStartingSoon(m) || isLive(m) || isRecentlyFinished(m) || isRecentlyInterrupted(m));
     // Fixture date files are schedule/bootstrap data. Live changes are served
     // from matches/*.json, so fixtures always use the long edge TTL.
     await publishScheduleFiles(this.r2, fixtures, range);

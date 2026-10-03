@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
-  fetchLeagueFixtures, isLive, isRecentlyFinished, isRegressiveSnapshot, isStartingSoon,
+  fetchLeagueFixtures, isLive, isRecentlyFinished, isRecentlyInterrupted, isRegressiveSnapshot, isStartingSoon,
   partitionFixtures, Poller, toScheduleRow, utcPollRange,
 } from "../src/poller.js";
 import type { LeagueSeasons } from "../src/catalog.js";
@@ -581,6 +581,40 @@ describe("isStartingSoon", () => {
     expect(isStartingSoon(state(2, "2026-06-14T19:40:00Z"), now)).toBe(false);
     expect(isStartingSoon(state(3, "2026-06-14T20:00:45Z", "LIVE"), now)).toBe(false);
     expect(isStartingSoon(state(4, "2026-06-14T20:00:45Z", "FINISHED"), now)).toBe(false);
+  });
+});
+
+describe("interrupted matches", () => {
+  const now = Date.parse("2026-06-14T20:00:00Z");
+  const other = (kickoffISO: string, rawStatus: string) =>
+    state(1, kickoffISO, "OTHER", { rawStatus, period: "OTHER" });
+
+  it("publishes an abandoned/suspended/postponed match around its kickoff", () => {
+    expect(isRecentlyInterrupted(other("2026-06-14T19:00:00Z", "ABD"), now)).toBe(true);
+    expect(isRecentlyInterrupted(other("2026-06-14T19:30:00Z", "SUSP"), now)).toBe(true);
+    expect(isRecentlyInterrupted(other("2026-06-14T20:03:00Z", "PST"), now)).toBe(true);
+  });
+
+  it("ignores old or far-off ones, and every other status", () => {
+    expect(isRecentlyInterrupted(other("2026-06-14T15:00:00Z", "ABD"), now)).toBe(false);
+    expect(isRecentlyInterrupted(other("2026-06-14T21:00:00Z", "PST"), now)).toBe(false);
+    expect(isRecentlyInterrupted(state(1, "2026-06-14T19:00:00Z", "LIVE"), now)).toBe(false);
+  });
+
+  it("lets a LIVE state move to an interrupted one", () => {
+    expect(isRegressiveSnapshot(
+      state(1, "2026-06-14T19:00:00Z", "LIVE"),
+      other("2026-06-14T19:00:00Z", "ABD"),
+    )).toBe(false);
+  });
+
+  it("keeps a called-off status in the schedule row, but not a suspension", () => {
+    expect(toScheduleRow(other("2026-06-14T19:00:00Z", "PST"))).toMatchObject({
+      status: "OTHER", rawStatus: "PST", period: "OTHER",
+    });
+    expect(toScheduleRow(other("2026-06-14T19:00:00Z", "SUSP"))).toMatchObject({
+      status: "SCHEDULED", rawStatus: "NS", period: "PRE",
+    });
   });
 });
 
