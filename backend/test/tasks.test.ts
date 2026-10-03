@@ -177,6 +177,17 @@ describe("Dispatcher match-window gate", () => {
     expect((await dispatcher.dispatch(Date.parse("2026-08-15T18:51:00Z"))).enqueued).toBe(12);
   });
 
+  it("lists the fixtures in play for the cache-health probe", async () => {
+    const { MatchWindow } = await import("../src/tasks.js");
+    const getJson = vi.fn(async (key: string) => ({
+      "fixtures-2026-08-15.json": dayWith("2026-08-15T19:00:00Z", "2026-08-15T21:00:00Z", "2026-08-15T12:00:00Z"),
+    } as Record<string, unknown>)[key] ?? null);
+    const window = new MatchWindow({ getJson } as never);
+
+    // 20:00: fixture 0 is in play, 1 hasn't kicked off, 2 ended hours ago.
+    expect(await window.inPlayFixtureIds(Date.parse("2026-08-15T20:00:00Z"))).toEqual([0]);
+  });
+
   it("caches the schedule read per date — not one R2 GET per minute", async () => {
     const { dispatcher, getJson } = await dispatcherFor({
       "fixtures-2026-08-14.json": dayWith(),

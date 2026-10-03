@@ -30,6 +30,13 @@ describe("probeCacheHealth (§0 cf-cache-status probe)", () => {
     expect(result.probes.map((p) => p.cacheStatus)).toEqual(["HIT", "HIT", "HIT"]);
   });
 
+  it("flags an edge-cached HTTP failure even when cf-cache-status is HIT", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(response("HIT", 404));
+    const result = await probeCacheHealth("https://scores.example.com", [], fetchMock as never);
+    expect(result.ok).toBe(false);
+    expect(result.unhealthy[0]).toMatchObject({ key: "catalog.json", httpStatus: 404, cacheStatus: "HIT" });
+  });
+
   it("treats HIT/REVALIDATED/STALE/UPDATING as healthy", async () => {
     const statuses = ["HIT", "REVALIDATED", "STALE", "UPDATING"];
     const fetchMock = vi.fn()

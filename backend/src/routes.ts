@@ -134,7 +134,8 @@ export async function probeCacheHealth(
       return { key, httpStatus: 0, cacheStatus: "ERROR", attempts: ["ERROR"], error: (err as Error).message };
     }
   }));
-  const unhealthy = probes.filter((p) => !HEALTHY_CACHE_STATUS.has(p.cacheStatus));
+  // An edge-cached 404/5xx is still a failure: clients get no data from it.
+  const unhealthy = probes.filter((p) => p.httpStatus !== 200 || !HEALTHY_CACHE_STATUS.has(p.cacheStatus));
   return { ok: unhealthy.length === 0, probes, unhealthy };
 }
 
@@ -260,7 +261,12 @@ export function buildApp(
     // Wednesday. The warm file (catalog.json) is still probed year-round —
     // a cache regression must be caught even when no football is on.
     const windowOpen = await window.isOpen();
-    const fixtureIds = windowOpen ? body.data.fixtureIds : [];
+    // The scheduler job sends no ids, so sample the in-play matches from the
+    // schedule itself — the live files are what §0 is really about.
+    const requested = body.data.fixtureIds.length > 0
+      ? body.data.fixtureIds
+      : windowOpen ? (await window.inPlayFixtureIds()).slice(0, 64) : [];
+    const fixtureIds = windowOpen ? requested : [];
     if (!windowOpen && body.data.fixtureIds.length > 0) {
       log.info("cache_health_matches_skipped", { requested: body.data.fixtureIds.length });
     }
