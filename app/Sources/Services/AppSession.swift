@@ -133,6 +133,10 @@ final class AppSession: ObservableObject {
         for removed in before.subtracting(after) {
             AppAnalytics.teamUnfollow(teamId: removed, fanCount: ids.count)
         }
+        // `fixtures` is fan-filtered and is what the poll loop reads, so
+        // re-project it now — otherwise a newly-followed team's live match
+        // isn't polled until something else happens to republish.
+        publishFixtures()
         // A newly-followed team's match may have already finished today — the
         // windowed poll loop won't pick it up once past kickoff+3.5h, so do a
         // one-shot reconcile against the per-match files for just these teams.
