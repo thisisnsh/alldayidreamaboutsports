@@ -2,12 +2,11 @@ import AppKit
 import Foundation
 import SwiftUI
 
-/// Central app state: identity, local prefs, team catalog, and today's fixtures.
+/// Central app state: local prefs, team catalog, and today's fixtures.
 @MainActor
 final class AppSession: ObservableObject {
     static let shared = AppSession()
 
-    @Published var profile: Profile?
     @Published var prefs: AppPrefs = .empty
     @Published var leagues: [League] = []
     @Published var teamsByLeague: [Int: [Team]] = TeamCatalog.fallbackByLeague
@@ -18,12 +17,10 @@ final class AppSession: ObservableObject {
     /// never polled, so they carry a kickoff time and nothing live.
     @Published var todayFixtures: [Fixture] = []
     @Published var celebrationTotals: [Int: [String: Int]] = [:]
-    @Published var signInError: String?
     /// Shows the one-line "the World Cup has ended" note at the top of the
     /// picker. Set once, by `promptLeagueMigrationIfNeeded()`.
     @Published var showsLeagueMigrationNotice = false
 
-    private var api: BackendAPI { Services.api }
     private var scores: ScoresProviding { Services.scores }
     private let defaults = AppDefaults.shared
     private var isBootstrappingFixtures = false
@@ -40,7 +37,6 @@ final class AppSession: ObservableObject {
         static let leagueMigrationPrompted = "leagueMigrationPrompted"
     }
 
-    var isSignedIn: Bool { profile != nil }
     /// Every catalog team, flattened — for id→team lookups across leagues.
     var allTeams: [Team] { teamsByLeague.values.flatMap { $0 } }
     /// Alias used by the overlay/menu lookups (`TeamCatalog.team(for:in:)`).
@@ -59,17 +55,6 @@ final class AppSession: ObservableObject {
 
     func bootstrap() {
         AppLog.info(.app, "session_bootstrap_start")
-        #if DEV_BACKEND
-        // Sign-in bypass: already signed in before the first frame. Profile
-        // comes from Dev/DevConfig.swift.
-        profile = DevConfig.profile
-        #else
-        if let data = defaults.data(forKey: "profile"),
-           let stored = try? JSONDecoder().decode(Profile.self, from: data),
-           Keychain.get("sessionToken") != nil {
-            profile = stored
-        }
-        #endif
         loadLocalPrefs()
         #if DEV_BACKEND
         // DevConfig is the single source of truth for who you follow in a demo
@@ -105,100 +90,26 @@ final class AppSession: ObservableObject {
         // its live window — no menu, no push.
         LiveStore.shared.start()
         #endif
-        AppLog.info(.app, "session_bootstrap_complete signed_in=\(isSignedIn) fan_teams=\(fanTeamIds.sorted()) cached_fixtures=\(fixtures.count)")
+        AppLog.info(.app, "session_bootstrap_complete fan_teams=\(fanTeamIds.sorted()) cached_fixtures=\(fixtures.count)")
     }
 
-    // MARK: Sign in / out
+    // MARK: Control-plane gate
 
-    func signInWithGoogle(presenting window: NSWindow?) {
-        guard ControlPlane.shared.isOperational else {
-            signInError = "Sign-in is unavailable while the app is temporarily disabled."
-            AppAnalytics.signInFailed(stage: "control_plane")
-            return
-        }
-        signInError = nil
-        Task {
-            // Which leg we're on, so a failure says whether it was the Google
-            // sheet or our backend that turned us away.
-            var stage = "google"
-            do {
-                let idToken = try await Services.google.signIn(presenting: window)
-                guard ControlPlane.shared.isOperational else {
-                    Services.google.signOut()
-                    AppAnalytics.signInFailed(stage: "control_plane")
-                    return
-                }
-                stage = "backend"
-                let response = try await api.signIn(googleIdToken: idToken)
-                guard ControlPlane.shared.isOperational else {
-                    Services.google.signOut()
-                    AppAnalytics.signInFailed(stage: "control_plane")
-                    return
-                }
-                Keychain.set(response.token, for: "sessionToken")
-                profile = response.profile
-                persist(profile: response.profile)
-                AppAnalytics.signInSuccess()
-                await refreshCatalog()
-                AppLog.info(.app, "sign_in_complete fan_teams=\(fanTeamIds.sorted())")
-            } catch {
-                signInError = error.localizedDescription
-                AppAnalytics.signInFailed(stage: stage, error: error)
-                AppLog.error(.app, "sign_in_failed", error: error)
-            }
-        }
-    }
-
-    func signOut() {
-        clearSession(showLogin: true)
-    }
-
-    /// `showLogin` is false for control-plane gates, which are shown the next
-    /// time the menu opens.
-    func clearSession(showLogin: Bool) {
-        AppLog.info(.app, "session_clear show_login=\(showLogin)")
-        // `showLogin` is exactly the user-vs-gate distinction: the Sign out
-        // button re-presents the login window, a control-plane gate doesn't.
-        // Only report when there was a session to end — the gate path also runs
-        // for an install that was already signed out.
-        if isSignedIn {
-            AppAnalytics.signOut(reason: showLogin ? "user" : "control_plane")
-        }
+    /// The kill switch / forced-update gate: go silent. Close the menu, wipe
+    /// the cached fixtures/scores/celebrations so recovery re-fetches fresh,
+    /// and clear anything on screen. Fan teams and settings are kept.
+    func suspendForGate() {
+        AppLog.info(.app, "session_suspended_for_gate")
         stopAllActivity()
-        Services.google.signOut()
-        Keychain.delete("sessionToken")
-        defaults.removeObject(forKey: "profile")
-        profile = nil
-        // Signed out = silent: wipe the cached fixtures/scores/celebrations so
-        // the next session re-fetches fresh, and clear anything on screen. Fan
-        // teams/settings stay in UserDefaults until app data goes.
         clearMatchCache()
         OverlayManager.shared.dismissAll()
         PinnedCapsuleManager.shared.closeAll()
-        if showLogin {
-            // Tear down Settings (or whatever utility window prompted the
-            // sign-out) before re-presenting the login window, so the user
-            // lands on a clean Sign In rather than a stack of stale windows.
-            closeUtilityWindows(titles: ["Become a Fan", "Settings", "Update"])
-            openWindow(WindowID.login)
-        }
     }
 
     /// Closes the menu (killing its refresh timer). Leaves ControlPlane polling
     /// so the app can recover from a remote gate.
     func stopAllActivity() {
         MenuPopoverController.shared.close()
-    }
-
-    func deleteAccount() async {
-        do {
-            try await api.deleteAccount()
-            AppAnalytics.accountDeleted()
-            AppLog.info(.app, "account_delete_complete")
-        } catch {
-            AppLog.error(.app, "account_delete_failed", error: error)
-        }
-        signOut()
     }
 
     // MARK: Prefs
@@ -322,17 +233,11 @@ final class AppSession: ObservableObject {
         }
     }
 
-    private func persist(profile: Profile) {
-        if let data = try? JSONEncoder().encode(profile) {
-            defaults.set(data, forKey: "profile")
-        }
-    }
-
     // MARK: Data refresh
 
     func refreshCatalog() async {
-        guard isSignedIn, ControlPlane.shared.isOperational else {
-            AppLog.debug(.catalog, "refresh_skipped signed_in=\(isSignedIn) operational=\(ControlPlane.shared.isOperational)")
+        guard ControlPlane.shared.isOperational else {
+            AppLog.debug(.catalog, "refresh_skipped operational=\(ControlPlane.shared.isOperational)")
             return
         }
         AppLog.info(.catalog, "refresh_start")
@@ -343,8 +248,8 @@ final class AppSession: ObservableObject {
             AppLog.error(.catalog, "refresh_failed", error: error)
             return
         }
-        guard isSignedIn, ControlPlane.shared.isOperational, !catalog.leagues.isEmpty else {
-            AppLog.info(.catalog, "refresh_discarded signed_in=\(isSignedIn) operational=\(ControlPlane.shared.isOperational) leagues=\(catalog.leagues.count)")
+        guard ControlPlane.shared.isOperational, !catalog.leagues.isEmpty else {
+            AppLog.info(.catalog, "refresh_discarded operational=\(ControlPlane.shared.isOperational) leagues=\(catalog.leagues.count)")
             return
         }
         leagues = catalog.leagues
@@ -406,15 +311,15 @@ final class AppSession: ObservableObject {
     /// Re-read `celebrate/{id}.json` once for each fan match that is live or
     /// finished — these are the only fixtures that can have a celebration tally.
     private func refreshCelebrationTotals() async {
-        guard isSignedIn, ControlPlane.shared.isOperational else { return }
+        guard ControlPlane.shared.isOperational else { return }
         let targets = fixtures.filter {
             $0.involves(fanTeamIds) && ($0.isLive || $0.status == "FINISHED")
         }
         for fixture in targets {
-            guard isSignedIn, ControlPlane.shared.isOperational else { return }
+            guard ControlPlane.shared.isOperational else { return }
             do {
                 let totals = try await scores.fetchCelebrations(fixtureId: fixture.fixtureId)
-                guard isSignedIn, ControlPlane.shared.isOperational else { return }
+                guard ControlPlane.shared.isOperational else { return }
                 mergeCelebrationTotals(totals, fixtureId: fixture.fixtureId)
             } catch ScoresError.notModified {
                 // counts unchanged
@@ -429,7 +334,7 @@ final class AppSession: ObservableObject {
     /// are never read from here — that's the poll loop's job. Never overwrites a
     /// live-polled fixture with a (possibly stale) schedule row.
     func bootstrapFixturesIfNeeded(force: Bool = false) async {
-        guard isSignedIn, ControlPlane.shared.isOperational, !isBootstrappingFixtures else { return }
+        guard ControlPlane.shared.isOperational, !isBootstrappingFixtures else { return }
         let now = Date()
         let bootstrapDay = ISO8601DateFormatter.dateOnly.string(from: now)
         if !force, defaults.string(forKey: CacheKey.fixtureBootstrapDay) == bootstrapDay {
@@ -446,7 +351,7 @@ final class AppSession: ObservableObject {
         let dates = [-1, 0, 1].compactMap { calendar.date(byAdding: .day, value: $0, to: now) }
         var loadedAny = false
         for date in dates {
-            guard isSignedIn, ControlPlane.shared.isOperational else { return }
+            guard ControlPlane.shared.isOperational else { return }
             let fetched: [Fixture]
             do {
                 fetched = try await scores.fetchFixtures(date: date)
@@ -458,7 +363,7 @@ final class AppSession: ObservableObject {
                 AppLog.error(.fixtures, "date_bootstrap_failed date=\(ISO8601DateFormatter.dateOnly.string(from: date))", error: error)
                 continue
             }
-            guard isSignedIn, ControlPlane.shared.isOperational else { return }
+            guard ControlPlane.shared.isOperational else { return }
             loadedAny = true
             for fixture in fetched {
                 // Don't clobber a fixture the live loop is actively polling — the
@@ -553,8 +458,8 @@ final class AppSession: ObservableObject {
     /// schedule gate — and reset the live-poll baseline and conditional-GET
     /// ETags so the next session re-fetches everything fresh from the CDN (no
     /// 304s against now-dropped data). Fan teams and settings are preserved.
-    /// Called on sign-out and the kill-switch/forced-update gate (both via
-    /// `clearSession`), and on quit (`applicationWillTerminate`).
+    /// Called by the kill-switch/forced-update gate (`suspendForGate`) and on
+    /// quit (`applicationWillTerminate`).
     func clearMatchCache() {
         fixtures = []
         todayFixtures = []

@@ -5,7 +5,7 @@ import Foundation
 // Fake service layer for development: compiled only when DEV_BACKEND is set
 // (Debug builds). GETs return seeded hardcoded data; POSTs mutate that data in
 // memory, so round-trips behave like the real system — without touching the
-// network, your API-Football quota, or Google sign-in. Each parallel match's
+// network or your API-Football quota. Each parallel match's
 // score is walked through DevConfig.timeline by DemoEngine, so what the popover
 // shows always matches the events that have fired.
 
@@ -210,24 +210,7 @@ final class FakeStore {
 }
 
 @MainActor
-final class FakeGoogleAuth: GoogleAuthProviding {
-    func signIn(presenting window: NSWindow?) async throws -> String {
-        try? await Task.sleep(for: .milliseconds(300)) // feel like a network hop
-        return "fake-google-id-token"
-    }
-
-    func signOut() {}
-}
-
-@MainActor
 final class FakeBackendAPI: BackendAPI {
-    func signIn(googleIdToken: String) async throws -> SignInResponse {
-        SignInResponse(
-            token: "dev-session-token",
-            profile: DevConfig.profile
-        )
-    }
-
     func celebrate(fixtureId: Int, teamId: String, taps: Int) async throws {
         try? await Task.sleep(for: .milliseconds(250)) // feel like a network hop
         // POST appends to the fake data — visible on the next GET.
@@ -235,10 +218,6 @@ final class FakeBackendAPI: BackendAPI {
         NSLog("🧪 FakeBackend: +%d celebrations for %@ in fixture %d (total %d)",
               taps, teamId, fixtureId,
               FakeStore.shared.celebrations[fixtureId]?[teamId] ?? 0)
-    }
-
-    func deleteAccount() async throws {
-        FakeStore.shared.celebrations = [:]
     }
 }
 

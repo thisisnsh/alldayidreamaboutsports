@@ -1,10 +1,9 @@
 import AppKit
 import SwiftUI
 
-/// Loads remote images as `NSImage`s — team and league crests, and the signed-in
-/// profile photo — memoized in memory and shared app-wide (the picker/menu via
-/// `CachedTeamLogo` and `CachedProfilePhoto`, and the Canvas-drawn celebration
-/// surfaces). Bumps `version` when a load finishes, success or failure, so
+/// Loads remote images as `NSImage`s — team and league crests — memoized in
+/// memory and shared app-wide (the picker/menu via `CachedTeamLogo`, and the
+/// Canvas-drawn celebration surfaces). Bumps `version` when a load finishes, success or failure, so
 /// observers repaint and a rendered fallback gets one retry. Network/disk
 /// caching is handled by `URLCache.shared` (configured in AppDelegate), so this
 /// never re-downloads an image already fetched elsewhere in the app.

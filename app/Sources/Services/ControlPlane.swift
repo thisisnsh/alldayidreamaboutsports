@@ -187,8 +187,8 @@ final class ControlPlane: ObservableObject {
             // template is re-applied on every fetch and every listener update.
             if !wasKilled { AppAnalytics.controlPlaneGate("kill_switch") }
             OverlayManager.shared.dismissAll()
-            if !wasKilled || AppSession.shared.isSignedIn {
-                AppSession.shared.clearSession(showLogin: false)
+            if !wasKilled {
+                AppSession.shared.suspendForGate()
             }
             closeUtilityWindows()
             return
@@ -196,15 +196,11 @@ final class ControlPlane: ObservableObject {
         if updateRequired {
             if !wasUpdateRequired { AppAnalytics.controlPlaneGate("update_required") }
             OverlayManager.shared.dismissAll()
-            if !wasUpdateRequired || AppSession.shared.isSignedIn {
-                AppSession.shared.clearSession(showLogin: false)
+            if !wasUpdateRequired {
+                AppSession.shared.suspendForGate()
             }
             closeUtilityWindows()
             return
-        } else {
-            if wasKilled || wasUpdateRequired {
-                AppSession.shared.signInError = nil
-            }
         }
         // A lowered max_fan_teams must shrink an already-too-long fan list, not
         // just block future adds. Operational path only (kill/update return above).

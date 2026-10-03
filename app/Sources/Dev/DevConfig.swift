@@ -25,20 +25,6 @@ import Foundation
 
 @MainActor
 enum DevConfig {
-    /// You are signed in as this user before the first frame renders —
-    /// no login window, no Google, no Keychain.
-    static let profile = Profile(
-        sub: "dev-user",
-        email: "john@doe.com",
-        name: "John Doe",
-        photoURL: profilePhoto
-    )
-
-    /// The dev profile photo, loaded the same way a real Google photo is — any
-    /// URL `TeamLogoStore` can fetch works here, including a local
-    /// `file:///Users/you/me.jpg` if you'd rather not hit the network.
-    private static let profilePhoto = "https://avatars.githubusercontent.com/u/32385519?v=4"
-
     /// Teams you follow, as API team ids: MCI 50, ARS 42, Real Madrid 541,
     /// Bayern 157. A goal by ANY of these runs the full celebration; everyone
     /// else's goals are notch pills. This picks exactly three of the six demo

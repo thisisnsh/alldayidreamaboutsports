@@ -1,12 +1,5 @@
 import Foundation
 
-struct Profile: Codable, Equatable {
-    let sub: String
-    let email: String?
-    let name: String?
-    let photoURL: String?
-}
-
 struct AppPrefs: Equatable {
     var fanTeamIds: [String]
     var settings: PrefSettings
@@ -38,11 +31,6 @@ struct PrefSettings: Codable, Equatable {
     var notchDropSize: CapsuleSize?
 }
 
-struct SignInResponse: Codable {
-    let token: String
-    let profile: Profile
-}
-
 enum APIError: LocalizedError {
     case http(Int, String)
     var errorDescription: String? {
@@ -51,25 +39,21 @@ enum APIError: LocalizedError {
     }
 }
 
-/// Real BackendAPI: thin client for the Cloud Run backend. Session token
-/// comes from Keychain.
+/// Real BackendAPI: thin client for the Cloud Run backend. Anonymous — the
+/// backend rate-limits by client IP.
 @MainActor
 struct APIClient: BackendAPI {
     var base: URL = AppEnvironment.apiBase
 
-    private func request(_ path: String, method: String = "GET", body: Encodable? = nil,
-                         authorized: Bool = true) async throws -> Data {
+    private func request(_ path: String, method: String = "GET", body: Encodable? = nil) async throws -> Data {
         var req = URLRequest(url: base.appending(path: path))
         req.httpMethod = method
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        if authorized, let token = Keychain.get("sessionToken") {
-            req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        }
         if let body {
             req.httpBody = try JSONEncoder().encode(body)
         }
         let started = ContinuousClock.now
-        AppLog.debug(.api, "request_start method=\(method) host=\(req.url?.host ?? "unknown") path=\(path) authorized=\(authorized)")
+        AppLog.debug(.api, "request_start method=\(method) host=\(req.url?.host ?? "unknown") path=\(path)")
         do {
             let (data, response) = try await URLSession.shared.data(for: req)
             let status = (response as? HTTPURLResponse)?.statusCode ?? 0
@@ -88,20 +72,9 @@ struct APIClient: BackendAPI {
         }
     }
 
-    func signIn(googleIdToken: String) async throws -> SignInResponse {
-        struct Body: Encodable { let idToken: String }
-        let data = try await request("/auth/signin", method: "POST",
-                                     body: Body(idToken: googleIdToken), authorized: false)
-        return try JSONDecoder().decode(SignInResponse.self, from: data)
-    }
-
     func celebrate(fixtureId: Int, teamId: String, taps: Int) async throws {
         struct Body: Encodable { let fixtureId: Int; let teamId: String; let taps: Int }
         _ = try await request("/celebrate", method: "POST",
                               body: Body(fixtureId: fixtureId, teamId: teamId, taps: taps))
-    }
-
-    func deleteAccount() async throws {
-        _ = try await request("/me", method: "DELETE")
     }
 }

@@ -18,7 +18,7 @@ no Push Notifications capability, and no Firebase Cloud Messaging to configure.
 
 You build the app in three flavors:
 
-- **Debug** — fake/offline (no sign-in, no network, no API quota). For local
+- **Debug** — fake/offline (no network, no API quota). For local
   UI work. This is what you get from a plain Xcode run.
 - **Staging** — real services, but pointed at a throwaway
   `dreamaboutsports-staging` cloud project. This is the build you use for the
@@ -74,20 +74,7 @@ Everything else (bundle id, buckets, domain) still uses the full name.
       toggles) you can flip without shipping an update.
 - [ ] **Deploy** `infra/firestore.rules` (they deny all direct access — the app
       only ever talks to the backend, never the database directly).
-- [ ] **Push the OAuth consent screen to "In production"** (in Google Auth
-      Platform). While it's in "Testing" mode, only 100 people total can ever
-      sign in — that's a hard ship-blocker.
-- [ ] **Finish Google OAuth per environment.** You already created the staging
-      iOS-type OAuth client; change its bundle id to `com.thisisnsh.alldaysports`. Its values are
-      now configured in `app/project.yml`. Add its `CLIENT_ID` as the staging
-      Secret Manager secret `google-oauth-client-id` so the backend accepts the
-      same sign-ins. For prod, create another OAuth client in the prod project,
-      put its `CLIENT_ID` in the prod backend secret, and replace the two
-      production placeholders in `app/project.yml`. `REVERSED_CLIENT_ID` is not
-      a secret: it is the callback URL scheme that lets Google reopen the app.
-      See [app/README.md](app/README.md#real-service-configuration) for the exact
-      values and build commands.
-- [ ] **Set the real secret values:** `api-football-key`, `session-jwt-secret`
+- [ ] **Set the real secret values:** `api-football-key`
       (generate with `openssl rand -hex 32`), and the three R2 keys (you'll have
       those after section 3). Secrets are how the backend gets credentials
       without hard-coding them.
@@ -102,7 +89,8 @@ R2 is object storage like an S3 bucket, but Cloudflare serves it through their
 CDN with **zero egress fees** — that's what keeps the bill near $0 even if the
 app blows up (on plain GCP the same traffic could cost hundreds to thousands).
 The app fetches fixtures, live scores, and celebration counts from here whenever
-the menu opens. The `scores.` custom domains are the reason the domain's DNS lives on Cloudflare.
+the menu opens. The `scores.` custom domains are the reason the domain's DNS
+lives on Cloudflare.
 
 - [ ] **Run `./infra/setup-r2.sh`** with `CLOUDFLARE_API_TOKEN`,
       `CLOUDFLARE_ACCOUNT_ID`, and `CLOUDFLARE_ZONE_ID` to create the buckets,
@@ -145,10 +133,7 @@ automatic signing — no certificates to export, no notarization, no CI.
 - [ ] **Register Firebase Apple apps** for `com.thisisnsh.alldaysports` in staging and
       prod, and replace both `GoogleService-Info-*.plist` files.
 - [ ] **Create the App Store Connect record** (New macOS App,
-      `com.thisisnsh.alldaysports`): listing, screenshots, privacy labels, demo reviewer
-      account.
-- [ ] **Sign in with Apple** (guideline 4.8): sign-in is Google-only and
-      required, so App Review will likely ask for it.
+      `com.thisisnsh.alldaysports`): listing, screenshots, privacy labels.
 
 ## 6. End-to-end test on staging (during any live league match)
 
@@ -158,7 +143,7 @@ Don't ship without watching the whole pipeline work on a real goal. Use a
 - [ ] **Deploy the backend to staging:** `gh workflow run backend-deploy.yml`,
       then re-run `setup-gcp.sh` so the match scheduler gets the real deployed
       URL.
-- [ ] **Sign in** on a staging build and follow both teams that are playing.
+- [ ] **Follow both teams that are playing** on a staging build.
 - [ ] **Inject a test goal** (steps in `backend/README.md`) → the celebration
       should fire, and tapping it should round-trip a count back to the backend.
 - [ ] **Then watch a real goal:** it should land < 30s behind the TV broadcast,
@@ -184,8 +169,7 @@ Don't ship without watching the whole pipeline work on a real goal. Use a
 - [ ] **Archive in Xcode and upload** (Product → Archive → Distribute App →
       App Store Connect), test the build via TestFlight, then submit for review.
 - [ ] **Check the website is live** (public repo): it links to the App Store
-      listing and the privacy page is reachable (the OAuth consent screen links
-      to it).
+      listing and the privacy page is reachable.
 - [ ] Keep Remote Config `min_build` unchanged unless you need to force older
       installs to update — and only raise it once that build is live.
 - [ ] **📣 Announce** — and keep the kill-switch runbook (`infra/README.md`)

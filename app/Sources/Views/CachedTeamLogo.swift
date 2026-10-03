@@ -32,30 +32,3 @@ struct CachedTeamLogo: View {
             .padding(size * 0.1)
     }
 }
-
-/// The signed-in user's profile photo, on the same `TeamLogoStore` backing as
-/// `CachedTeamLogo` — so it gets the same retry-then-back-off recovery instead
-/// of `AsyncImage`'s drop-on-teardown, which left the menu and Settings showing
-/// a permanent person glyph. Frame and circular clip live here so the two call
-/// sites can't drift apart.
-struct CachedProfilePhoto: View {
-    let url: String?
-    var size: CGFloat = 36
-
-    @ObservedObject private var store = TeamLogoStore.shared
-
-    var body: some View {
-        Group {
-            if let url, let image = store.image(for: url) {
-                Image(nsImage: image).resizable().scaledToFit()
-            } else {
-                Image(systemName: "person.crop.circle.fill")
-                    .resizable()
-                    .scaledToFit()
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .frame(width: size, height: size)
-        .clipShape(Circle())
-    }
-}

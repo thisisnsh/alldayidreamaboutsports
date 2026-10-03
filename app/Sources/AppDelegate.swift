@@ -1,6 +1,5 @@
 import AppKit
 import FirebaseCore
-import GoogleSignIn
 import SwiftUI
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -8,7 +7,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // Invisible SwiftUI host kept alive for the whole process so the
     // `WindowOpener` bridge (`@Environment(\.openWindow)`) is captured at launch
     // — before the user touches the menu bar. Without it, a launch-time
-    // `openWindow(.login)` sits queued until the first utility view renders
+    // `openWindow(.welcome)` sits queued until the first utility view renders
     // (i.e. until the user clicks the status item).
     private var windowOpenerHost: NSWindow?
 
@@ -35,18 +34,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         installWindowOpenerBridge()
 
         #if DEV_BACKEND
-        // Bypassed sign-in means we're already in; play the deterministic
-        // demo timeline (DevConfig.timeline) so animations can be eyeballed
-        // hands-free.
+        // Play the deterministic demo timeline (DevConfig.timeline) so
+        // animations can be eyeballed hands-free.
         if DevConfig.autostart {
             DemoEngine.shared.start()
         }
         #else
-        // Opening the app always surfaces the login window. Signed out, it's the
-        // sign-in prompt; signed in, it shows the account ("Signed in as …") with
-        // the sign-in button disabled.
+        // Opening the app surfaces something: the team picker until the user
+        // follows a team (an empty app is a dead app), then the welcome window
+        // that points at the menu bar icon.
         if ControlPlane.shared.isOperational {
-            openWindow(WindowID.login)
+            openWindow(AppSession.shared.fanTeamIds.isEmpty ? WindowID.teamPicker : WindowID.welcome)
         }
         #endif
 
@@ -81,12 +79,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         windowOpenerHost = host
     }
 
-    func application(_ application: NSApplication, open urls: [URL]) {
-        for url in urls {
-            GIDSignIn.sharedInstance.handle(url)
-        }
-    }
-
     // Foreground (e.g. the user clicks into the app): same recovery as wake —
     // the loop may have been App-Napped while idle in the menu bar.
     func applicationDidBecomeActive(_ notification: Notification) {
@@ -95,7 +87,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// After idle/sleep the LiveStore `Task.sleep` loop may be throttled or
     /// suspended and the Remote Config socket dead. Refresh the control plane,
-    /// then (if signed in + operational) reconcile any finished-while-suspended
+    /// then (if operational) reconcile any finished-while-suspended
     /// fan match and run one immediate poll pass. `reconcileFanMatches` is the
     /// only path that can un-stick a past-window match; `refreshNow` covers
     /// in-window ones.
@@ -104,7 +96,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return
         #else
         ControlPlane.shared.refreshRemoteConfig(ignoreCache: true)
-        guard AppSession.shared.isSignedIn, ControlPlane.shared.isOperational else { return }
+        guard ControlPlane.shared.isOperational else { return }
         Task {
             await LiveStore.shared.reconcileFanMatches()
             await LiveStore.shared.refreshNow()
@@ -129,7 +121,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // should surface something useful.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
         guard ControlPlane.shared.isOperational else { return false }
-        openWindow(WindowID.login)
+        openWindow(AppSession.shared.fanTeamIds.isEmpty ? WindowID.teamPicker : WindowID.welcome)
         return false
     }
 }
@@ -178,14 +170,9 @@ final class MenuPopoverController: NSObject, NSPopoverDelegate {
         NSApp.activate(ignoringOtherApps: true)
         // No Remote Config fetch here: ControlPlane owns the only periodic loop,
         // so opening the menu (or leaving it open) can't raise fetch frequency.
-        // The soft "Update available" banner adds a row atop the compact
-        // signed-out menu; give it the headroom so it isn't clipped.
-        let updateBannerPad = ControlPlane.shared.updateAvailable ? 64 : 0
         popover.contentSize = NSSize(
             width: 320,
-            height: AppSession.shared.isSignedIn
-                ? 520
-                : (ControlPlane.shared.killSwitch || ControlPlane.shared.updateRequired ? 300 : 200 + updateBannerPad)
+            height: ControlPlane.shared.killSwitch || ControlPlane.shared.updateRequired ? 300 : 520
         )
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
         button.highlight(true)
@@ -218,7 +205,7 @@ final class MenuPopoverController: NSObject, NSPopoverDelegate {
         // Live scores flow continuously from LiveStore (always-on poll loop) —
         // opening the menu just nudges a schedule refresh for immediate
         // freshness. The control plane refreshes on its own cadence.
-        if AppSession.shared.isSignedIn, ControlPlane.shared.isOperational {
+        if ControlPlane.shared.isOperational {
             Task { await AppSession.shared.refreshFixtures() }
         }
         // .transient doesn't reliably close the popover on outside clicks for
@@ -242,7 +229,7 @@ final class MenuPopoverController: NSObject, NSPopoverDelegate {
 
 /// SwiftUI utility windows are separate scenes, but maintenance should live
 /// only in the menu bar popover.
-func closeUtilityWindows(titles: Set<String> = ["Sign In", "Become a Fan", "Settings"]) {
+func closeUtilityWindows(titles: Set<String> = ["Welcome", "Become a Fan", "Settings"]) {
     for window in NSApp.windows where titles.contains(window.title) {
         window.close()
     }
@@ -252,11 +239,11 @@ func closeUtilityWindows(titles: Set<String> = ["Sign In", "Become a Fan", "Sett
 func openWindow(_ id: String) {
     DispatchQueue.main.async {
         if ControlPlane.shared.killSwitch,
-           [WindowID.login, WindowID.teamPicker, WindowID.settings].contains(id) {
+           [WindowID.welcome, WindowID.teamPicker, WindowID.settings].contains(id) {
             return
         }
         if ControlPlane.shared.updateRequired,
-           [WindowID.login, WindowID.teamPicker, WindowID.settings].contains(id) {
+           [WindowID.welcome, WindowID.teamPicker, WindowID.settings].contains(id) {
             return
         }
         NSApp.activate(ignoringOtherApps: true)
@@ -276,7 +263,7 @@ func openWindow(_ id: String) {
 /// Window titles keyed by scene id, so AppKit can find a just-opened SwiftUI
 /// window in `NSApp.windows` (which exposes title, not scene id).
 private let windowTitleByID: [String: String] = [
-    WindowID.login: "Sign In",
+    WindowID.welcome: "Welcome",
     WindowID.teamPicker: "Become a Fan",
     WindowID.settings: "Settings",
 ]

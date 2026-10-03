@@ -17,21 +17,19 @@ xcodebuild -scheme AllDayIDreamAboutSports -configuration Debug build
 ## Testing — three build configurations
 
 The app only touches the world through three protocols (`Sources/Services/Backend.swift`):
-`GoogleAuthProviding`, `BackendAPI`, `ScoresProviding`. The build configuration
+`BackendAPI` and `ScoresProviding`. The build configuration
 picks the implementation — that's the release flag:
 
 | | `Debug` | `Staging` | `Release` |
 |---|---|---|---|
 | Services | fake/offline | `dreamaboutsports-staging` | `dreamaboutsports-prod` |
-| Sign-in | bypassed as "Dev Fan" | staging Google OAuth | production Google OAuth |
 | Firebase config | none | `GoogleService-Info-Staging.plist` | `GoogleService-Info-Production.plist` |
 | Backend/data | in-memory seed data | staging URLs from `project.yml` | production URLs from `project.yml` |
 | Intended use | normal Xcode development | end-to-end testing | shipped app |
 
 **Day-to-day dev loop:**
 
-1. Build & run **Debug** from Xcode (⌘R). No sign-in — you're already "Dev Fan"
-   following the club sides in `DevConfig.fanTeams` (Liverpool, Man City,
+1. Build & run **Debug** from Xcode (⌘R). You're already following the club sides in `DevConfig.fanTeams` (Liverpool, Man City,
    Arsenal, Inter). The popover shows the demo matchday: Manchester City vs
    Manchester United live, Inter vs Juventus decided on penalties, and two
    scheduled fixtures. `DevConfig.timeline` starts playing at launch, so pills,
@@ -41,8 +39,8 @@ picks the implementation — that's the release flag:
    "the World Cup has ended" migration prompt. To exercise that, put a World Cup
    team id in `DevConfig.fanTeams` and delete the `leagueMigrationPrompted`
    default.
-2. **Everything is a code knob in `Sources/Dev/DevConfig.swift`**: the fake
-   profile, the fan-team list, the deterministic timeline itself, autostart,
+2. **Everything is a code knob in `Sources/Dev/DevConfig.swift`**: the fan-team
+   list, the deterministic timeline itself, autostart,
    looping, and the two warm-up passes (`showcaseAtStart`, `clockWalkAtStart`).
    The fixtures those beats play out on, and the fake catalog behind the picker,
    live next door in `Sources/Dev/FakeBackend.swift`. Edit, ⌘R, observe.
@@ -60,47 +58,21 @@ picks the implementation — that's the release flag:
 
 | Path | In Debug |
 |---|---|
-| Google sign-in (`GIDSignIn`) | never invoked — `FakeGoogleAuth`, and bootstrap bypasses the flow entirely |
 | Backend API (`URLSession` in `APIClient`) | never instantiated — `FakeBackendAPI` |
 | Scores CDN (`URLSession` in `CDNScoresClient`) | never instantiated — `FakeScores` (incl. the kill-switch backup `config.json`) |
 | Remote Config / Crashlytics / Analytics | `GoogleService-Info.plist` absent → Firebase never configured (there is no Messaging — push was dropped for polling + CDN) |
-| Profile photo (`AsyncImage`) | dev profile has `photoURL: nil` |
 
-Nothing in a Debug session reaches the
-network at all.
+Nothing in a Debug session reaches the network except that one `catalog.json`
+read.
 
 ## Real-service configuration
 
-Each environment needs two files from its Firebase/Google Cloud project:
-
-1. Firebase console → macOS app → download `GoogleService-Info.plist`. Save it
-   as `Resources/GoogleService-Info-Staging.plist` or
-   `Resources/GoogleService-Info-Production.plist`.
-2. Google Auth Platform → Clients → create an **iOS-type** OAuth client for
-   bundle id `com.thisisnsh.alldaysports`, then download its plist. You do
-   not add that downloaded OAuth plist to the app. Copy its two values into the
-   matching configuration in `project.yml`:
-   - `CLIENT_ID` → `GOOGLE_CLIENT_ID`
-   - `REVERSED_CLIENT_ID` → `GOOGLE_REVERSED_CLIENT_ID`
-
-The reversed client ID is not another credential. It is the same client ID
-rearranged into a macOS URL scheme so Google can return control to the app after
-browser sign-in. The OAuth plists for both environments:
-
-```text
-# staging (dreamaboutsports-staging)
-CLIENT_ID          = 291291942072-cqsmesng18bagi6psv69n5ch4kcnvj2s.apps.googleusercontent.com
-REVERSED_CLIENT_ID = com.googleusercontent.apps.291291942072-cqsmesng18bagi6psv69n5ch4kcnvj2s
-
-# production (dreamaboutsports-prod)
-CLIENT_ID          = 680190781802-t248eiqmjqaorv3ucok84t1ap9rrgc8q.apps.googleusercontent.com
-REVERSED_CLIENT_ID = com.googleusercontent.apps.680190781802-t248eiqmjqaorv3ucok84t1ap9rrgc8q
-```
-
-Both staging and production values are already configured in `project.yml`. The
-Firebase plists themselves are gitignored, so each must exist locally before
-building. Regenerate and build the
-environment you want:
+Each environment needs its Firebase config: Firebase console → Apple app
+`com.thisisnsh.alldaysports` → download `GoogleService-Info.plist`, and save it
+as `Resources/GoogleService-Info-Staging.plist` or
+`Resources/GoogleService-Info-Production.plist`.
+The plists are gitignored, so each must exist locally before building.
+Regenerate and build the environment you want:
 
 ```sh
 xcodegen
@@ -128,21 +100,6 @@ breadcrumbs are visible. Release builds explicitly disable Crashlytics
 collection. Crashlytics is not a live arbitrary-log viewer; use Console.app or
 `log stream` for the complete live stream.
 
-The backend must accept the same client ID as the app. Add each environment's
-`CLIENT_ID` to its GCP Secret Manager secret:
-
-```sh
-printf '%s' '<CLIENT_ID>' | gcloud secrets versions add google-oauth-client-id \
-  --project=dreamaboutsports-staging --data-file=-
-```
-
-Use `dreamaboutsports-prod` and the production client ID for production.
-
-`Staging` also has separate `APP_API_BASE_URL` and `APP_SCORES_BASE_URL` build
-settings. They target the `api-staging` and `scores-staging` custom domains,
-respectively. Finish the staging Cloud Run domain mapping and DNS before using
-the build. Neither setting can silently call production.
-
 ## Mac App Store
 
 The app is sandboxed (`App.entitlements`: app sandbox + outgoing network + the
@@ -167,20 +124,16 @@ every upload.
    `Resources/GoogleService-Info-Production.plist` (Firebase bundle ids can't
    be edited, so the old `com.alldayidreamaboutsports.mac` apps stay behind).
    Remote Config is per project, so it carries over unchanged.
-3. Google Auth Platform → Clients: edit the iOS OAuth client in each project
-   and change its bundle id to `com.thisisnsh.alldaysports`. The client IDs stay the same,
-   so `project.yml` and the backend's `google-oauth-client-id` need no change.
-4. App Store Connect → Apps → **+** → New macOS App with bundle id
+3. App Store Connect → Apps → **+** → New macOS App with bundle id
    `com.thisisnsh.alldaysports`. Fill in the listing, the privacy labels (Analytics +
-   Crashlytics: usage and diagnostics data, not linked to identity) and a demo
-   reviewer account (sign-in is required).
+   Crashlytics: usage and diagnostics data, not linked to identity).
 
 ### Build, test, release
 
 1. `xcodegen && open AllDayIDreamAboutSports.xcodeproj`
 2. Test: ⌘R runs **Debug** (fake services). Edit Scheme → Run → Build
    Configuration → **Staging** or **Release** to test the sandboxed app against
-   real services (sign-in, live scores, overlays).
+   real services (live scores, celebrations, overlays).
 3. Bump `MARKETING_VERSION` (user-facing version) and `CURRENT_PROJECT_VERSION`
    (must increase on every upload) in `project.yml`, then rerun `xcodegen`.
 4. **Product → Archive** (archives the Release config), then in Organizer

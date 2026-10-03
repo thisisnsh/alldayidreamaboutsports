@@ -4,16 +4,15 @@ import FirebaseAnalytics
 #endif
 
 /// Anonymous product analytics via Firebase Analytics (free, unlimited, and
-/// anonymous — it identifies an *app instance* by a random id, never the Google
-/// sign-in identity). App version, OS version, device model, first_open and
+/// anonymous — it identifies an *app instance* by a random id; the app has no
+/// accounts). App version, OS version, device model, first_open and
 /// session counts are collected automatically; this layer adds the product, UI
 /// and pipeline events we actually want to learn from (do people follow teams?
 /// do they tap celebrations? which settings do they toggle? did the goal reach
 /// the screen?).
 ///
 /// ANONYMITY IS THE CONTRACT: `Analytics.setUserID` is deliberately never
-/// called, and no event carries an email, a Google `sub`, a team or player
-/// name, or an error's `localizedDescription` (which can carry a URL with a
+/// called, and no event carries a team or player name, or an error's `localizedDescription` (which can carry a URL with a
 /// token in it). Identity in this file is numeric ids and coarse labels only —
 /// if you are about to add anything else, that is the line you are crossing.
 ///
@@ -85,20 +84,7 @@ enum AppAnalytics {
     // and both the total and the split are worth having — `app_quit`'s
     // `source`, `update_check_started`'s `source`. A control whose click is
     // already reported by the thing it triggers gets no event of its own:
-    // Settings' "Sign out" is `sign_out reason=user`, and "Preview animation"
-    // is `celebration_preview`.
-
-    /// The menu's "Sign in" — opens the login window; the attempt itself is
-    /// `sign_in_started`.
-    static func loginOpened() {
-        log("login_opened")
-    }
-
-    /// The Google button on the login window, fired before the sheet opens, so
-    /// this is the denominator `sign_in_success` / `sign_in_failed` divide.
-    static func signInStarted() {
-        log("sign_in_started")
-    }
+    // "Preview animation" is `celebration_preview`.
 
     static func teamPickerOpened() {
         log("team_picker_opened")
@@ -119,8 +105,8 @@ enum AppAnalytics {
     }
 
     /// Every Quit in the app. `source` says which one, since they are otherwise
-    /// the same action: `menu_signed_out`, `menu_kill_switch`,
-    /// `menu_update_required`, `settings`, `update_gate`.
+    /// the same action: `menu_kill_switch`, `menu_update_required`,
+    /// `settings`, `update_gate`.
     static func appQuit(source: String) {
         log("app_quit", ["source": source])
     }
@@ -285,31 +271,6 @@ enum AppAnalytics {
         setUserProperty((s.capsuleSize ?? .medium).rawValue, forName: Setting.capsuleSize.property)
         setUserProperty((s.capsulePosition ?? .top).rawValue, forName: Setting.capsulePosition.property)
         setUserProperty((s.notchDropSize ?? .medium).rawValue, forName: Setting.notchDropSize.property)
-    }
-
-    // MARK: Sign-in funnel
-
-    static func signInSuccess() {
-        log("sign_in_success", ["method": "google"])
-    }
-
-    /// `stage` says which leg failed: the Google sheet, our backend, or a
-    /// control-plane gate that closed mid-flow. `reason` is a coarse label —
-    /// never the error's message.
-    static func signInFailed(stage: String, error: Error? = nil) {
-        var parameters: [String: Any] = ["stage": stage]
-        if let error { parameters["reason"] = AppLog.errorLabel(error) }
-        log("sign_in_failed", parameters)
-    }
-
-    /// `reason: user` for the Sign out button, `control_plane` for a kill
-    /// switch / forced-update gate.
-    static func signOut(reason: String) {
-        log("sign_out", ["reason": reason])
-    }
-
-    static func accountDeleted() {
-        log("account_deleted", [:])
     }
 
     // MARK: Live-scores pipeline

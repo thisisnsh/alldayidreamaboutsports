@@ -36,10 +36,6 @@ struct SettingsView: View {
 
             ScrollView {
                 VStack(spacing: 14) {
-                    if let profile = session.profile {
-                        profileCard(profile)
-                    }
-
                     #if DEV_BACKEND
                     Text("🧪 dev session — fake backend, hardcoded data, scripted demo")
                         .font(.caption2)
@@ -134,32 +130,6 @@ struct SettingsView: View {
                     Rectangle()
                 }
             )
-        }
-    }
-
-    // MARK: Profile
-
-    /// Account header card: who you're signed in as, plus the sign-out and
-    /// quit actions that used to live in the menu bar dropdown.
-    private func profileCard(_ profile: Profile) -> some View {
-        SettingsCard("Account") {
-            HStack(spacing: 12) {
-                CachedProfilePhoto(url: profile.photoURL, size: 44)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(profile.name ?? "Fan")
-                        .font(.system(size: 14, weight: .semibold))
-                        .lineLimit(1)
-                    Text(profile.email ?? "")
-                        .font(.caption)
-                        .opacity(0.7)
-                        .lineLimit(1)
-                }
-                Spacer()
-                // No event here either: this is the only user path into
-                // `clearSession`, which reports it as `sign_out reason=user`.
-                Button("Sign out") { session.signOut() }
-                    .buttonStyle(.cardButton)
-            }
         }
     }
 

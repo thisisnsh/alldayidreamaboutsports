@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// The menu bar dropdown: profile, "Fan of" flags, today's fixtures for
+/// The menu bar dropdown: "Fan of" flags, today's fixtures for
 /// followed teams (live scores + celebration counts), and actions.
 struct MenuPopoverView: View {
     @EnvironmentObject var session: AppSession
@@ -30,18 +30,14 @@ struct MenuPopoverView: View {
                 if control.updateAvailable {
                     updateBanner
                 }
-                if let profile = session.profile {
-                    header(profile)
-                    if !session.fanTeams.isEmpty {
-                        fanOfRow
-                    }
-                    Divider()
-                    fixturesSection
-                    Divider()
-                    actions
-                } else {
-                    signedOut
+                header
+                if !session.fanTeams.isEmpty {
+                    fanOfRow
                 }
+                Divider()
+                fixturesSection
+                Divider()
+                actions
             }
         }
         .padding(16)
@@ -51,13 +47,12 @@ struct MenuPopoverView: View {
         .appTheme(session.prefs.settings.theme ?? .system)
     }
 
-    private func header(_ profile: Profile) -> some View {
+    private var header: some View {
         HStack(spacing: 10) {
-            CachedProfilePhoto(url: profile.photoURL, size: 36)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(profile.name ?? "Fan").font(.system(size: 14, weight: .semibold))
-                Text(profile.email ?? "").font(.caption).opacity(0.7)
-            }
+            Image(systemName: "soccerball")
+                .font(.system(size: 22))
+                .frame(width: 36, height: 36)
+            Text("All Day I Dream About Sports").font(.system(size: 14, weight: .semibold))
             Spacer()
         }
     }
@@ -213,9 +208,9 @@ struct MenuPopoverView: View {
         .font(.system(size: 13))
     }
 
-    /// The three Quit buttons in this menu are the same action from three
-    /// different states — signed out, kill switch, forced update — so they share
-    /// the one event and are told apart by `source`.
+    /// The Quit buttons in this menu are the same action from two different
+    /// states — kill switch, forced update — so they share the one event and
+    /// are told apart by `source`.
     private func quit(source: String) {
         AppAnalytics.appQuit(source: source)
         NSApp.terminate(nil)
@@ -252,25 +247,6 @@ struct MenuPopoverView: View {
             s.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? s
         }
         return URL(string: "mailto:\(AppEnvironment.supportEmail)?subject=\(encode(subject))&body=\(encode(body))")!
-    }
-
-    private var signedOut: some View {
-        VStack(spacing: 10) {
-            Text("⚽ Sign in to follow your teams")
-                .font(.system(size: 13, weight: .medium))
-            Button("Sign in") {
-                AppAnalytics.loginOpened()
-                dismissMenu()
-                openWindow(id: WindowID.login)
-                NSApp.activate(ignoringOtherApps: true)
-            }
-            .buttonStyle(.primaryPill)
-            Button("Quit") { quit(source: "menu_signed_out") }
-                .buttonStyle(.hoverHighlight)
-                .font(.caption)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 8)
     }
 
     private var maintenance: some View {
