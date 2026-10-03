@@ -275,10 +275,14 @@ final class OverlayManager: ObservableObject {
         }
     }
 
+    /// One target per (fixture, team): two goals by the same side in one set
+    /// share a single ball, so the taps must upload and count once, not twice.
     private func celebrationTargets(for events: [MatchEvent]) -> [(fixtureId: Int, teamId: String)] {
-        events.compactMap { event in
-            guard event.fixtureId > 0 else { return nil }
-            return event.teamId.map { (fixtureId: event.fixtureId, teamId: String($0)) }
+        var seen = Set<String>()
+        return events.compactMap { event in
+            guard event.fixtureId > 0, let teamId = event.teamId,
+                  seen.insert("\(event.fixtureId):\(teamId)").inserted else { return nil }
+            return (fixtureId: event.fixtureId, teamId: String(teamId))
         }
     }
 
