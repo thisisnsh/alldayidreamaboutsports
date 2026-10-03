@@ -59,7 +59,7 @@ picks the implementation — that's the release flag:
 | Path | In Debug |
 |---|---|
 | Backend API (`URLSession` in `APIClient`) | never instantiated — `FakeBackendAPI` |
-| Scores CDN (`URLSession` in `CDNScoresClient`) | never instantiated — `FakeScores` (incl. the kill-switch backup `config.json`) |
+| Scores CDN (`URLSession` in `CDNScoresClient`) | never instantiated — `FakeScores` |
 | Remote Config / Crashlytics / Analytics | `GoogleService-Info.plist` absent → Firebase never configured (there is no Messaging — push was dropped for polling + CDN) |
 
 Nothing in a Debug session reaches the network except that one `catalog.json`
@@ -171,8 +171,8 @@ Key invariants:
   notifications.
 - Celebration taps are batched: ONE `/celebrate` request per celebrated
   team, sent when the ball disappears.
-- `ControlPlane` gates everything; `kill_switch`/`min_build` from Remote Config
-  (real-time) with `config.json` on the scores CDN as backup.
+- `ControlPlane` gates everything; `kill_switch`/`min_build` come from Remote
+  Config (real-time) only — there is no CDN `config.json` backup.
 - Fixture date files bootstrap and persist the daily schedule once. Only
   followed-team `matches/{fixtureId}.json` objects inside their live window are
   polled — from kickoff−5min (`LiveStore.preKickoffLead`) until FINISHED, capped
