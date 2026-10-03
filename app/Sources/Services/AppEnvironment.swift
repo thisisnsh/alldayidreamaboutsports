@@ -57,7 +57,7 @@ enum FirebaseConfigured {
 enum AppDefaults {
     #if DEV_BACKEND
     static let shared: UserDefaults =
-        UserDefaults(suiteName: "com.alldaysports.dev") ?? .standard
+        UserDefaults(suiteName: "com.thisisnsh.alldaysports.dev") ?? .standard
     #else
     static let shared: UserDefaults = .standard
     #endif

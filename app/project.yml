@@ -1,6 +1,6 @@
 name: AllDayIDreamAboutSports
 options:
-  bundleIdPrefix: com.alldaysports
+  bundleIdPrefix: com.thisisnsh
   deploymentTarget:
     macOS: "14.0"
   createIntermediateGroups: true
@@ -43,7 +43,7 @@ targets:
     settings:
       base:
         PRODUCT_NAME: All Day I Dream About Sports
-        PRODUCT_BUNDLE_IDENTIFIER: com.alldaysports
+        PRODUCT_BUNDLE_IDENTIFIER: com.thisisnsh.alldaysports
         DEVELOPMENT_TEAM: 983LBM5U6B
         CODE_SIGN_STYLE: Automatic
         CODE_SIGN_ENTITLEMENTS: App.entitlements

@@ -15,7 +15,7 @@ enum AppLog {
         case remoteConfig
     }
 
-    private static let subsystem = Bundle.main.bundleIdentifier ?? "com.alldaysports"
+    private static let subsystem = Bundle.main.bundleIdentifier ?? "com.thisisnsh.alldaysports"
 
     static func debug(_ category: Category, _ message: String) {
         write(.debug, category: category, message: message)
