@@ -41,6 +41,8 @@ final class LiveStore {
     private static let maxObservationGap: TimeInterval = 2 * 60
 
     private var loopTask: Task<Void, Never>?
+    /// The poll pass currently running, if any — see `pollCycle`.
+    private var pollInFlight: Task<Void, Never>?
     /// Per-fixture celebration refresh loops; a goal kicks one off (see
     /// `refreshCelebrations`). Cancelled on sign-out / loop stop.
     private var celebrationRefresh: [Int: Task<Void, Never>] = [:]
@@ -222,9 +224,25 @@ final class LiveStore {
         }
     }
 
+    /// One poll pass at a time. The loop, wake/foreground recovery and the
+    /// menu's ↻ can all ask for one, and MainActor doesn't serialize across the
+    /// fetch awaits — two interleaved passes could ingest an OLDER snapshot
+    /// after a newer one, rolling the score back into a fake GOAL_CANCELLED. A
+    /// caller arriving mid-pass just waits for that pass instead.
+    private func pollCycle() async {
+        if let inFlight = pollInFlight {
+            await inFlight.value
+            return
+        }
+        let pass = Task { @MainActor in await self.runPollCycle() }
+        pollInFlight = pass
+        await pass.value
+        pollInFlight = nil
+    }
+
     /// One poll pass: read each fan match in its live window, diff, fire events,
     /// refresh celebration totals on a score change, and publish to the session.
-    private func pollCycle() async {
+    private func runPollCycle() async {
         let now = Date()
         session.reprojectIfDayChanged()
         // The whole working set, not the local-day `fixtures`: a match just past
