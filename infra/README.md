@@ -260,3 +260,23 @@ This guard is not a global cost cap: distributed traffic and nonexistent match
 IDs still need monitoring. Configure Cloudflare R2 operations/billing alerts
 for the account, and verify delivery to an operator. The application cannot
 verify account billing alerts with its bucket-scoped S3 credentials.
+
+## Resource-scoped backend IAM
+
+`setup-gcp.sh` grants the runtime read access only to its four named secrets.
+Deployment can act as the runtime and default Cloud Build identity, and manage
+source objects only in the project's regional `run-sources` bucket. It no longer
+grants project-wide Secret Accessor, Service Account User, or Storage Admin.
+
+For existing projects, review the read-only plan first:
+
+```sh
+bash infra/scope-backend-iam.sh dreamaboutsports-staging us-central1 --plan
+bash infra/scope-backend-iam.sh dreamaboutsports-staging us-central1 --apply
+```
+
+The script preflights required resources and adds replacements before removing
+legacy unconditional grants. It preserves conditional and unrelated bindings.
+Test a staging source deployment before applying the same migration to prod.
+If using a custom build service account instead of the project's default, adapt
+the build identity resolution before applying this script.
