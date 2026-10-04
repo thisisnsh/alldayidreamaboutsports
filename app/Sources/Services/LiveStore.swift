@@ -1,7 +1,7 @@
 import Foundation
 
 /// The always-on live poll loop. Replaces the menu-only refresh timer and FCM's
-/// background role: whenever the app is up, signed in, operational, and ≥1 fan
+/// background role: whenever the app is up and ≥1 fan
 /// match is in its live window, this polls each such match's `matches/{id}.json`
 /// (5s TTL) every `pollSeconds` (±~15% jitter) — NOT gated on the
 /// menu being open. Diffs each fixture against its previous observation and
@@ -136,7 +136,6 @@ final class LiveStore {
     /// each live fan match's `matches/{id}.json`, diff/merge the score, fire any
     /// new goal's events.
     func refreshNow() async {
-        guard ControlPlane.shared.isOperational else { return }
         await pollCycle()
     }
 
@@ -155,7 +154,6 @@ final class LiveStore {
     /// Reuses `ingest`, whose baseline guard emits no events on first observation
     /// — so reconciling a long-finished match never replays its goals.
     func reconcileFanMatches(teamIds: Set<Int>? = nil) async {
-        guard ControlPlane.shared.isOperational else { return }
         let teams = teamIds ?? session.fanTeamIds
         guard !teams.isEmpty else { return }
         let now = Date()
@@ -170,8 +168,7 @@ final class LiveStore {
 
         var merged = false
         for previous in targets {
-            guard ControlPlane.shared.isOperational else { return }
-            let current: Fixture
+                let current: Fixture
             do {
                 current = try await scores.fetchFixture(fixtureId: previous.fixtureId)
             } catch ScoresError.notModified {
@@ -189,21 +186,16 @@ final class LiveStore {
 
     private func run() async {
         while !Task.isCancelled {
-            if ControlPlane.shared.isOperational {
-                await session.bootstrapFixturesIfNeeded()
-                // Once per launch, reconcile any already-played fan match the
-                // windowed poll loop won't touch (finished while the app was
-                // closed). Independent of the bootstrap gate so it also fires
-                // after a crash relaunch where the schedule cache survived.
-                if !didReconcileThisLaunch {
-                    await reconcileFanMatches()
-                    didReconcileThisLaunch = true
-                }
-                await pollCycle()
-            } else {
-                // Signed out / gated: hold no power assertion while we idle-spin.
-                updateAppNapActivity(active: false)
+            await session.bootstrapFixturesIfNeeded()
+            // Once per launch, reconcile any already-played fan match the
+            // windowed poll loop won't touch (finished while the app was
+            // closed). Independent of the bootstrap gate so it also fires
+            // after a crash relaunch where the schedule cache survived.
+            if !didReconcileThisLaunch {
+                await reconcileFanMatches()
+                didReconcileThisLaunch = true
             }
+            await pollCycle()
             // ±~15% jitter so a fleet of clients doesn't hit the same 5s boundary.
             let base = Self.pollSeconds
             let jitter = base * Double.random(in: -0.15 ... 0.15)
@@ -245,8 +237,7 @@ final class LiveStore {
         AppLog.debug(.fixtures, "poll_cycle targets=\(targets.map(\.fixtureId).sorted())")
 
         for previous in targets {
-            guard ControlPlane.shared.isOperational else { return }
-            let current: Fixture
+                let current: Fixture
             do {
                 current = try await scores.fetchFixture(fixtureId: previous.fixtureId)
             } catch ScoresError.notModified {
@@ -260,8 +251,7 @@ final class LiveStore {
                 AppAnalytics.pollFailed(stage: "poll", fixtureId: previous.fixtureId, error: error)
                 continue
             }
-            guard ControlPlane.shared.isOperational else { return }
-
+    
             ingest(current)
         }
         session.publishFixtures()

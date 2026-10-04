@@ -12,7 +12,6 @@ enum AppLog {
         case fcm
         case fixtures
         case prefs
-        case remoteConfig
     }
 
     private static let subsystem = Bundle.main.bundleIdentifier ?? "com.thisisnsh.alldaysports"

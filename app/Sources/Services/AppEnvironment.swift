@@ -40,7 +40,7 @@ enum AppEnvironment {
     }
 }
 
-/// Whether a Firebase config plist is bundled. Gates Remote Config + Crashlytics
+/// Whether a Firebase config plist is bundled. Gates Analytics + Crashlytics
 /// (dev builds gitignore the plist). Firebase is no longer used for messaging.
 enum FirebaseConfigured {
     static var isConfigured: Bool {

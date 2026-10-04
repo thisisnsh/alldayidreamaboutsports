@@ -150,19 +150,6 @@ final class PinnedCapsuleManager: ObservableObject {
         AppLog.info(.app, "capsule_unpinned fixture_id=\(fixtureId)")
     }
 
-    /// Tear every capsule down (sign-out / kill switch).
-    func closeAll() {
-        for panel in panels.values { panel.orderOut(nil) }
-        panels.removeAll()
-        capsuleFrames.removeAll()
-        displayAssignments.removeAll()
-        order.removeAll()
-        pinnedFixtureIds.removeAll()
-        hoveredFixtureId = nil
-        hoverTimer?.invalidate()
-        hoverTimer = nil
-    }
-
     // MARK: Stack membership
 
     func fixtureIds(on displayID: CGDirectDisplayID) -> [Int] {

@@ -30,8 +30,6 @@ targets:
           - "GoogleService-Info*.plist"
     dependencies:
       - package: Firebase
-        product: FirebaseRemoteConfig
-      - package: Firebase
         product: FirebaseCrashlytics
       # Core = no ad-ID support: nothing to declare as tracking on the App
       # Store and no ATT prompt.
@@ -45,8 +43,7 @@ targets:
         CODE_SIGN_STYLE: Automatic
         CODE_SIGN_ENTITLEMENTS: App.entitlements
         MARKETING_VERSION: 1.0.0
-        # Bump for every App Store upload. Remote Config `min_build` /
-        # `latest_build` compare against it. Builds 1–3 were website DMGs.
+        # Bump for every App Store upload. Builds 1–3 were website DMGs.
         CURRENT_PROJECT_VERSION: 4
         ENABLE_HARDENED_RUNTIME: true
         SWIFT_VERSION: 5.10

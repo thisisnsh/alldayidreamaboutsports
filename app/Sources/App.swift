@@ -39,15 +39,6 @@ struct AllDayIDreamAboutSportsApp: App {
         }
         .windowStyle(.hiddenTitleBar)
         .windowResizability(.contentSize)
-
-        Window("Update", id: WindowID.update) {
-            UpdateView()
-                .environmentObject(session)
-        }
-        .windowStyle(.hiddenTitleBar)
-        .windowResizability(.contentSize)
-        .defaultPosition(.center)
-
     }
 }
 
@@ -55,5 +46,4 @@ enum WindowID {
     static let welcome = "welcome"
     static let teamPicker = "teamPicker"
     static let settings = "settings"
-    static let update = "update"
 }

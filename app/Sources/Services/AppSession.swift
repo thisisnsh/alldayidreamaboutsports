@@ -97,21 +97,7 @@ final class AppSession: ObservableObject {
         AppLog.info(.app, "session_bootstrap_complete fan_teams=\(fanTeamIds.sorted()) cached_fixtures=\(fixtures.count)")
     }
 
-    // MARK: Control-plane gate
-
-    /// The kill switch / forced-update gate: go silent. Close the menu, wipe
-    /// the cached fixtures/scores so recovery re-fetches fresh,
-    /// and clear anything on screen. Fan teams and settings are kept.
-    func suspendForGate() {
-        AppLog.info(.app, "session_suspended_for_gate")
-        stopAllActivity()
-        clearMatchCache()
-        OverlayManager.shared.dismissAll()
-        PinnedCapsuleManager.shared.closeAll()
-    }
-
-    /// Closes the menu (killing its refresh timer). Leaves ControlPlane polling
-    /// so the app can recover from a remote gate.
+    /// Closes the menu (killing its refresh timer).
     func stopAllActivity() {
         MenuPopoverController.shared.close()
     }
@@ -226,10 +212,6 @@ final class AppSession: ObservableObject {
     // MARK: Data refresh
 
     func refreshCatalog() async {
-        guard ControlPlane.shared.isOperational else {
-            AppLog.debug(.catalog, "refresh_skipped operational=\(ControlPlane.shared.isOperational)")
-            return
-        }
         AppLog.info(.catalog, "refresh_start")
         let catalog: Catalog
         do {
@@ -238,8 +220,8 @@ final class AppSession: ObservableObject {
             AppLog.error(.catalog, "refresh_failed", error: error)
             return
         }
-        guard ControlPlane.shared.isOperational, !catalog.leagues.isEmpty else {
-            AppLog.info(.catalog, "refresh_discarded operational=\(ControlPlane.shared.isOperational) leagues=\(catalog.leagues.count)")
+        guard !catalog.leagues.isEmpty else {
+            AppLog.info(.catalog, "refresh_discarded leagues=0")
             return
         }
         leagues = catalog.leagues
@@ -303,7 +285,7 @@ final class AppSession: ObservableObject {
     /// tracked on its own: one that failed is retried (at most once a minute)
     /// until it loads, even when its neighbours already did.
     func bootstrapFixturesIfNeeded(force: Bool = false) async {
-        guard ControlPlane.shared.isOperational, !isBootstrappingFixtures else { return }
+        guard !isBootstrappingFixtures else { return }
         let now = Date()
         let bootstrapDay = ISO8601DateFormatter.dateOnly.string(from: now)
         // UTC: the fixtures-{date}.json keys are UTC days, so the today±1 math
@@ -327,7 +309,6 @@ final class AppSession: ObservableObject {
 
         AppLog.info(.fixtures, "bootstrap_start cached=\(fixturesById.count) fan_teams=\(fanTeamIds.sorted()) pending=\(pending.count)")
         for date in pending {
-            guard ControlPlane.shared.isOperational else { return }
             let fetched: [Fixture]
             do {
                 fetched = try await scores.fetchFixtures(date: date)
@@ -339,7 +320,6 @@ final class AppSession: ObservableObject {
                 AppLog.error(.fixtures, "date_bootstrap_failed date=\(ISO8601DateFormatter.dateOnly.string(from: date))", error: error)
                 continue
             }
-            guard ControlPlane.shared.isOperational else { return }
             loaded.insert(key(date))
             for fixture in fetched {
                 // Don't clobber observed match state with a schedule row (always
@@ -428,8 +408,7 @@ final class AppSession: ObservableObject {
     /// schedule gate — and reset the live-poll baseline and conditional-GET
     /// ETags so the next session re-fetches everything fresh from the CDN (no
     /// 304s against now-dropped data). Fan teams and settings are preserved.
-    /// Called by the kill-switch/forced-update gate (`suspendForGate`) and on
-    /// quit (`applicationWillTerminate`).
+    /// Called on quit (`applicationWillTerminate`).
     func clearMatchCache() {
         fixtures = []
         todayFixtures = []

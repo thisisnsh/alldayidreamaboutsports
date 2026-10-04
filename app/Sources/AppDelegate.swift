@@ -18,17 +18,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Firebase config is optional in dev builds (plist is gitignored).
         // Live scores arrive by polling (LiveStore) — Firebase is kept solely
-        // for Remote Config (the control plane) and Crashlytics. No FCM/APNs.
+        // for Analytics and Crashlytics. No FCM/APNs.
         if Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist") != nil {
             FirebaseApp.configure()
             AppAnalytics.configureAppMetadata()
             AppAnalytics.appOpen()
             AppLog.configureFirebaseCollection()
         } else {
-            AppLog.info(.app, "firebase_unconfigured remote_config_disabled")
+            AppLog.info(.app, "firebase_unconfigured")
         }
 
-        ControlPlane.shared.start()
         AppSession.shared.bootstrap()
         menuController.install()
         installWindowOpenerBridge()
@@ -43,9 +42,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Opening the app surfaces something: the team picker until the user
         // follows a team (an empty app is a dead app), then the welcome window
         // that points at the menu bar icon.
-        if ControlPlane.shared.isOperational {
-            openWindow(AppSession.shared.fanTeamIds.isEmpty ? WindowID.teamPicker : WindowID.welcome)
-        }
+        openWindow(AppSession.shared.fanTeamIds.isEmpty ? WindowID.teamPicker : WindowID.welcome)
         #endif
 
         // Recover live polling after system sleep: App Nap + sleep suspend the
@@ -86,17 +83,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     /// After idle/sleep the LiveStore `Task.sleep` loop may be throttled or
-    /// suspended and the Remote Config socket dead. Refresh the control plane,
-    /// then (if operational) reconcile any finished-while-suspended
-    /// fan match and run one immediate poll pass. `reconcileFanMatches` is the
+    /// suspended. Reconcile any finished-while-suspended fan match and run one
+    /// immediate poll pass. `reconcileFanMatches` is the
     /// only path that can un-stick a past-window match; `refreshNow` covers
     /// in-window ones.
     @MainActor private func recoverLivePolling() {
         #if DEV_BACKEND
         return
         #else
-        ControlPlane.shared.refreshRemoteConfig(ignoreCache: true)
-        guard ControlPlane.shared.isOperational else { return }
         Task {
             await LiveStore.shared.reconcileFanMatches()
             await LiveStore.shared.refreshNow()
@@ -114,13 +108,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // removals in clearMatchCache() are lost and the next launch reads the
         // stale cache back. synchronize() blocks until the writes hit disk.
         AppDefaults.shared.synchronize()
-        ControlPlane.shared.stop()
     }
 
     // App is invisible except the menu bar — reopening from Finder/Spotlight
     // should surface something useful.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
-        guard ControlPlane.shared.isOperational else { return false }
         openWindow(AppSession.shared.fanTeamIds.isEmpty ? WindowID.teamPicker : WindowID.welcome)
         return false
     }
@@ -168,21 +160,12 @@ final class MenuPopoverController: NSObject, NSPopoverDelegate {
     func showMenu() {
         guard let button = statusItem.button, button.window != nil, !popover.isShown else { return }
         NSApp.activate(ignoringOtherApps: true)
-        // No Remote Config fetch here: ControlPlane owns the only periodic loop,
-        // so opening the menu (or leaving it open) can't raise fetch frequency.
-        popover.contentSize = NSSize(
-            width: 320,
-            height: ControlPlane.shared.killSwitch || ControlPlane.shared.updateRequired ? 300 : 520
-        )
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
         button.highlight(true)
         // Fired here, not from the SwiftUI body: the hosting controller is built
         // once at `install()` and reused, so `.onAppear` never fires per open.
         menuOpenedAt = Date()
         AppAnalytics.screenView(MenuPopoverView.screen)
-        if ControlPlane.shared.updateAvailable {
-            AppAnalytics.updateAvailableShown()
-        }
         TeamLogoStore.shared.retryFailed()
         startRefreshing()
     }
@@ -205,10 +188,8 @@ final class MenuPopoverController: NSObject, NSPopoverDelegate {
     private func startRefreshing() {
         // Live scores flow continuously from LiveStore (always-on poll loop) —
         // opening the menu just nudges a schedule refresh for immediate
-        // freshness. The control plane refreshes on its own cadence.
-        if ControlPlane.shared.isOperational {
-            Task { await AppSession.shared.refreshFixtures() }
-        }
+        // freshness.
+        Task { await AppSession.shared.refreshFixtures() }
         // .transient doesn't reliably close the popover on outside clicks for
         // accessory-policy apps on macOS Sequoia+, so we add our own monitor.
         eventMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
@@ -222,31 +203,11 @@ final class MenuPopoverController: NSObject, NSPopoverDelegate {
             eventMonitor = nil
         }
     }
-
-    /// Control-plane recovery: the menu no longer drives a fixture timer (the
-    /// always-on poll loop does), so there's nothing to restart here.
-    func controlPlaneDidChange() {}
-}
-
-/// SwiftUI utility windows are separate scenes, but maintenance should live
-/// only in the menu bar popover.
-func closeUtilityWindows(titles: Set<String> = ["Welcome", "Become a Fan", "Settings"]) {
-    for window in NSApp.windows where titles.contains(window.title) {
-        window.close()
-    }
 }
 
 /// Opens a SwiftUI `Window` scene by id from AppKit contexts.
 func openWindow(_ id: String) {
     DispatchQueue.main.async {
-        if ControlPlane.shared.killSwitch,
-           [WindowID.welcome, WindowID.teamPicker, WindowID.settings].contains(id) {
-            return
-        }
-        if ControlPlane.shared.updateRequired,
-           [WindowID.welcome, WindowID.teamPicker, WindowID.settings].contains(id) {
-            return
-        }
         NSApp.activate(ignoringOtherApps: true)
         if let url = URL(string: "alldayidreamaboutsports://\(id)") {
             _ = url // reserved for deep links
