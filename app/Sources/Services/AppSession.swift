@@ -79,7 +79,7 @@ final class AppSession: ObservableObject {
         // reel (or an older DevConfig) sitting in "All Teams".
         if let data = defaults.data(forKey: CacheKey.fixtures),
            let stored = try? JSONDecoder().decode([Fixture].self, from: data) {
-            fixturesById = Dictionary(uniqueKeysWithValues: stored.map { ($0.fixtureId, $0) })
+            fixturesById = Dictionary(stored.map { ($0.fixtureId, $0) }, uniquingKeysWith: { _, last in last })
             publishFixtures()
         }
         #endif
@@ -212,7 +212,7 @@ final class AppSession: ObservableObject {
         AppLog.info(.catalog, "refresh_start")
         let catalog: Catalog
         do {
-            catalog = try await scores.fetchCatalog()
+            catalog = try await scores.fetchCatalog().validated()
         } catch {
             AppLog.error(.catalog, "refresh_failed", error: error)
             return

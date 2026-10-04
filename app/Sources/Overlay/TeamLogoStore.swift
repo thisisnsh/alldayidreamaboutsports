@@ -1,4 +1,5 @@
 import AppKit
+import ImageIO
 import SwiftUI
 
 /// Loads remote images as `NSImage`s — team and league crests — memoized in
@@ -114,7 +115,16 @@ final class TeamLogoStore: ObservableObject {
     private static let failureCooldown: TimeInterval = 6 * 3600
 
     private static func load(_ url: URL) async -> NSImage? {
-        guard let (data, _) = try? await URLSession.shared.data(from: url) else { return nil }
-        return NSImage(data: data)
+        guard let (data, response) = try? await RemoteData.load(
+            URLRequest(url: url), maxBytes: 1024 * 1024, hosts: ["media.api-sports.io"]
+        ), (response as? HTTPURLResponse)?.statusCode == 200,
+           let source = CGImageSourceCreateWithData(data as CFData, [kCGImageSourceShouldCache: false] as CFDictionary),
+           CGImageSourceGetCount(source) == 1,
+           let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+           let width = properties[kCGImagePropertyPixelWidth] as? Int,
+           let height = properties[kCGImagePropertyPixelHeight] as? Int,
+           width > 0, height > 0, width <= 2048, height <= 2048,
+           let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else { return nil }
+        return NSImage(cgImage: image, size: NSSize(width: width, height: height))
     }
 }

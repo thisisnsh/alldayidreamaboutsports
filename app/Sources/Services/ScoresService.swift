@@ -18,7 +18,8 @@ struct CDNScoresClient: ScoresProviding {
         let started = ContinuousClock.now
         AppLog.debug(.cdn, "request_start host=\(url.host ?? "unknown") path=\(path)")
         do {
-            let (data, response) = try await URLSession.shared.data(for: req)
+            let (data, response) = try await RemoteData.load(req, maxBytes: 4 * 1024 * 1024,
+                                                             hosts: [AppEnvironment.scoresBase.host!.lowercased()])
             let http = response as? HTTPURLResponse
             let status = http?.statusCode
             let duration = started.duration(to: .now).milliseconds
@@ -48,7 +49,7 @@ struct CDNScoresClient: ScoresProviding {
     }
 
     func fetchCatalog() async throws -> Catalog {
-        try await fetch("catalog.json", as: Catalog.self)
+        try await fetch("catalog.json", as: Catalog.self).validated()
     }
 
     func fetchFixtures(date: Date) async throws -> [Fixture] {

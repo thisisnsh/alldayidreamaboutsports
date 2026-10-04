@@ -68,6 +68,18 @@ struct Catalog: Codable {
     let leagues: [League]
     let teams: [String: [Team]]
 
+    enum ValidationError: Error { case duplicateLeague, duplicateTeam, excessiveRows }
+
+    func validated() throws -> Catalog {
+        guard leagues.count <= 100, teams.count <= 100,
+              teams.values.allSatisfy({ $0.count <= 500 }) else { throw ValidationError.excessiveRows }
+        guard Set(leagues.map(\.id)).count == leagues.count else { throw ValidationError.duplicateLeague }
+        for rows in teams.values {
+            guard Set(rows.map(\.id)).count == rows.count else { throw ValidationError.duplicateTeam }
+        }
+        return self
+    }
+
     func teams(for leagueId: Int) -> [Team] {
         teams[String(leagueId)] ?? []
     }
