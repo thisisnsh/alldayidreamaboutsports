@@ -41,10 +41,8 @@ echo "── Runtime service account"
 RUNTIME_SA="sports-runtime@${PROJECT_ID}.iam.gserviceaccount.com"
 gcloud iam service-accounts describe "$RUNTIME_SA" >/dev/null 2>&1 || \
   gcloud iam service-accounts create sports-runtime --display-name "Backend runtime"
-for role in roles/cloudtasks.enqueuer; do
-  gcloud projects add-iam-policy-binding "$PROJECT_ID" \
-    --member "serviceAccount:${RUNTIME_SA}" --role "$role" --condition=None -q >/dev/null
-done
+gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+  --member "serviceAccount:${RUNTIME_SA}" --role roles/cloudtasks.enqueuer --condition=None -q >/dev/null
 
 echo "── Cloud Tasks queue (fan-out target for the live-score dispatcher)"
 gcloud tasks queues describe live-scores --location "$REGION" >/dev/null 2>&1 || \
