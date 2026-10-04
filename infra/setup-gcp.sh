@@ -41,7 +41,7 @@ echo "── Runtime service account"
 RUNTIME_SA="sports-runtime@${PROJECT_ID}.iam.gserviceaccount.com"
 gcloud iam service-accounts describe "$RUNTIME_SA" >/dev/null 2>&1 || \
   gcloud iam service-accounts create sports-runtime --display-name "Backend runtime"
-for role in roles/secretmanager.secretAccessor roles/cloudtasks.enqueuer; do
+for role in roles/cloudtasks.enqueuer; do
   gcloud projects add-iam-policy-binding "$PROJECT_ID" \
     --member "serviceAccount:${RUNTIME_SA}" --role "$role" --condition=None -q >/dev/null
 done
@@ -128,10 +128,17 @@ echo "── Workload Identity Federation for GitHub Actions deploys"
 DEPLOY_SA="sports-deploy@${PROJECT_ID}.iam.gserviceaccount.com"
 gcloud iam service-accounts describe "$DEPLOY_SA" >/dev/null 2>&1 || \
   gcloud iam service-accounts create sports-deploy --display-name "GitHub Actions deploy"
-for role in roles/run.admin roles/run.sourceDeveloper roles/cloudbuild.builds.editor roles/iam.serviceAccountUser roles/serviceusage.serviceUsageConsumer roles/storage.admin; do
+for role in roles/run.admin roles/run.sourceDeveloper roles/cloudbuild.builds.editor roles/serviceusage.serviceUsageConsumer; do
   gcloud projects add-iam-policy-binding "$PROJECT_ID" \
     --member "serviceAccount:${DEPLOY_SA}" --role "$role" --condition=None -q >/dev/null
 done
+# Precreate the source-upload bucket so deployment needs no project-wide storage admin.
+SOURCE_BUCKET="gs://run-sources-${PROJECT_ID}-${REGION}"
+if ! gcloud storage buckets describe "$SOURCE_BUCKET" >/dev/null 2>&1; then
+  gcloud storage buckets create "$SOURCE_BUCKET" --project "$PROJECT_ID" --location "$REGION" \
+    --uniform-bucket-level-access
+fi
+bash "$(dirname "$0")/scope-backend-iam.sh" "$PROJECT_ID" "$REGION" --apply
 case "$PROJECT_ID" in
   *-staging) DEPLOY_ENVIRONMENT=staging ;;
   *-prod) DEPLOY_ENVIRONMENT=prod ;;
