@@ -49,7 +49,7 @@ struct CDNScoresClient: ScoresProviding {
     }
 
     func fetchCatalog() async throws -> Catalog {
-        try await fetch("catalog.json", as: Catalog.self).validated()
+        try await fetch("catalog.json", as: Catalog.self)
     }
 
     func fetchFixtures(date: Date) async throws -> [Fixture] {
@@ -79,7 +79,7 @@ final class ScoresETagStore {
     func etag(for path: String) -> String? { etags[path] }
     func set(_ etag: String, for path: String) { etags[path] = etag }
     /// Drop every cached ETag so the next read is a full 200 (not a 304 with no
-    /// body) — required after the cached fixtures/celebrations are wiped.
+    /// body) — required after the cached fixtures are wiped.
     func clear() { etags.removeAll() }
 }
 

@@ -52,7 +52,7 @@ picks the implementation — that's the release flag:
 | Path | In Debug |
 |---|---|
 | Scores CDN (`URLSession` in `CDNScoresClient`) | never instantiated — `FakeScores` |
-| Crashlytics / Analytics | `GoogleService-Info.plist` absent → Firebase never configured (there is no Messaging — push was dropped for polling + CDN) |
+| Crashlytics / Analytics | `GoogleService-Info.plist` absent → Firebase never configured |
 
 Nothing in a Debug session reaches the network except that one `catalog.json`
 read.
@@ -142,7 +142,7 @@ Builds 1–3 were the old website DMGs, so App Store builds start at 4.
 | Dir | What |
 |---|---|
 | `Sources/App.swift` | window scenes (welcome, picker, settings) |
-| `Sources/AppDelegate.swift` | transient AppKit menu, Firebase bootstrap (Crashlytics/Analytics — no Messaging or Remote Config), reopen handling |
+| `Sources/AppDelegate.swift` | transient AppKit menu, Firebase bootstrap (Crashlytics/Analytics), reopen handling |
 | `Sources/Services/` | local prefs, scores CDN, live polling, event routing |
 | `Sources/Overlay/` | the two overlay panels: full-screen click-through display + small clickable ball; celebration, notch pill, particles |
 | `Sources/Views/` | welcome, popover, team picker, settings |
@@ -191,6 +191,3 @@ the keychain access group in `App.entitlements` with your own values. Real-servi
 builds also need your own Firebase plists and scores URLs. Debug uses fake match
 state but reads the public production catalog and API-Sports logos; switch
 `FakeScores.fetchCatalog()` to `hardcodedCatalog` for a fixed catalog snapshot.
-
-The app contains no bundled audio or sound preference. Existing saved sound
-preferences are ignored when decoded, while other preferences are preserved.

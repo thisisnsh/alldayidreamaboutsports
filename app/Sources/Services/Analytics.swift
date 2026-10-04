@@ -344,8 +344,7 @@ enum AppAnalytics {
         let line = "analytics_event name=\(name)\(rendered.isEmpty ? "" : " \(rendered)")"
         // Mirror every event — product, UI and pipeline — into the Crashlytics
         // breadcrumb trail, so a crash report carries the last few things the
-        // user did. CueCard does this per button click; doing it here covers
-        // the whole event set for one call site.
+        // user did. Doing it here covers the whole event set for one call site.
         AppLog.breadcrumb(line)
         AppLog.debug(.app, line)
     }

@@ -17,9 +17,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         URLCache.shared = URLCache(memoryCapacity: 16 << 20, diskCapacity: 64 << 20)
 
         // Firebase config is optional in dev builds (plist is gitignored).
-        // Live scores arrive by polling (LiveStore) — Firebase is kept solely
-        // for Analytics and Crashlytics. No FCM/APNs.
-        if Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist") != nil {
+        // It is used solely for Analytics and Crashlytics.
+        if FirebaseConfigured.isConfigured {
             FirebaseApp.configure()
             AppAnalytics.configureAppMetadata()
             AppAnalytics.appOpen()
@@ -209,9 +208,6 @@ final class MenuPopoverController: NSObject, NSPopoverDelegate {
 func openWindow(_ id: String) {
     DispatchQueue.main.async {
         NSApp.activate(ignoringOtherApps: true)
-        if let url = URL(string: "alldayidreamaboutsports://\(id)") {
-            _ = url // reserved for deep links
-        }
         // SwiftUI exposes scene opening via EnvironmentValues; from AppKit we
         // go through the shared opener installed by RootWindowOpener.
         WindowOpener.shared.open(id)

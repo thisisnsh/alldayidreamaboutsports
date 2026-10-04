@@ -5,11 +5,8 @@ import OSLog
 enum AppLog {
     enum Category: String {
         case app
-        case api
         case cdn
         case catalog
-        case celebrations
-        case fcm
         case fixtures
         case prefs
     }
@@ -31,9 +28,8 @@ enum AppLog {
         write(.error, category: category, message: detail)
         // Non-fatals report from Release too (Staging and Release both), because
         // a non-fatal is exactly the signal a shipped app otherwise lacks. What
-        // goes up is SCRUBBED: `localizedDescription` can carry the failing URL
-        // — session token in the query — or the signed-in email, and the coarse
-        // label is enough to tell a 404 from a timeout.
+        // goes up is SCRUBBED: `localizedDescription` can carry the failing URL,
+        // and the coarse label is enough to tell a 404 from a timeout.
         #if !DEV_BACKEND
         guard FirebaseConfigured.isConfigured else { return }
         let scrubbed = error.map { "\(message) error=\(errorLabel($0))" } ?? message
@@ -72,8 +68,7 @@ enum AppLog {
         #endif
     }
 
-    /// Crash reporting is on for both shipped configurations. It used to be
-    /// staging-only, which meant no crash in the ACTUAL app had ever reported.
+    /// Crash reporting is on for both shipped configurations.
     /// Debug stays off: a `DEV_BACKEND` build normally has no Firebase plist at
     /// all, and a developer's own crashes are not data.
     static func configureFirebaseCollection() {

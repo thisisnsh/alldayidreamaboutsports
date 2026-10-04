@@ -543,7 +543,7 @@ struct PinnedCapsuleView: View {
     /// in the club's full name and the capsule widens to fit. `contentTransition`
     /// cross-fades the two rather than snapping mid-slide.
     private func teamLabel(_ team: ScoreboardTeam, full: Bool) -> some View {
-        Text(full ? team.name : TeamCatalog.shortName(for: team.id, in: session.teams, fallback: team.name))
+        Text(full ? team.name : TeamCatalog.shortName(for: team.id, in: session.allTeams, fallback: team.name))
             .font(.system(size: metrics.nameFont, design: .rounded))
             .lineLimit(1)
             .contentTransition(.opacity)
@@ -641,7 +641,7 @@ struct PinnedCapsuleView: View {
     }
 
     private func logo(_ id: Int) -> String {
-        TeamCatalog.team(for: id, in: session.teams).logo
+        TeamCatalog.team(for: id, in: session.allTeams).logo
     }
 
     private func scoreText(_ fixture: Fixture) -> String {

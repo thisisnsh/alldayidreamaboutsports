@@ -2,7 +2,6 @@ import Foundation
 
 enum AppEnvironment {
     static let scoresBase = configuredURL("ScoresBaseURL")
-    static let website = URL(string: "https://alldayidreamaboutsports.com")!
     static let supportEmail = "hello@thisisnsh.com"
 
     static var buildNumber: Int {
@@ -43,7 +42,7 @@ enum AppEnvironment {
 }
 
 /// Whether a Firebase config plist is bundled. Gates Analytics + Crashlytics
-/// (dev builds gitignore the plist). Firebase is no longer used for messaging.
+/// (dev builds gitignore the plist).
 enum FirebaseConfigured {
     static var isConfigured: Bool {
         Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist") != nil

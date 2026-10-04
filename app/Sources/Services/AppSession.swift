@@ -42,8 +42,6 @@ final class AppSession: ObservableObject {
 
     /// Every catalog team, flattened — for id→team lookups across leagues.
     var allTeams: [Team] { teamsByLeague.values.flatMap { $0 } }
-    /// Alias used by the overlay/menu lookups (`TeamCatalog.team(for:in:)`).
-    var teams: [Team] { allTeams }
     var fanTeamIds: Set<Int> { Set(prefs.fanTeamIds.compactMap(Int.init)) }
     var fanTeams: [Team] {
         prefs.fanTeamIds.compactMap(Int.init).map { TeamCatalog.team(for: $0, in: allTeams) }
@@ -81,7 +79,7 @@ final class AppSession: ObservableObject {
         }
         #if !DEV_BACKEND
         // Always-on live polling: one loop, running whenever a fan match is in
-        // its live window — no menu, no push.
+        // its live window, menu open or not.
         LiveStore.shared.start()
         #endif
         AppLog.info(.app, "session_bootstrap_complete fan_teams=\(fanTeamIds.sorted()) cached_fixtures=\(fixtures.count)")
