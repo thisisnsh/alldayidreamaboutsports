@@ -33,7 +33,9 @@ enum AppEnvironment {
     private static func configuredURL(_ key: String) -> URL {
         guard let value = Bundle.main.object(forInfoDictionaryKey: key) as? String,
               let url = URL(string: value),
-              url.scheme == "https" else {
+              url.scheme == "https", url.host != nil,
+              url.user == nil, url.password == nil,
+              url.port == nil || url.port == 443 else {
             fatalError("Missing or invalid \(key) build setting")
         }
         return url
