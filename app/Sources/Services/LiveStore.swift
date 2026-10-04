@@ -3,7 +3,7 @@ import Foundation
 /// The always-on live poll loop. Replaces the menu-only refresh timer and FCM's
 /// background role: whenever the app is up, signed in, operational, and ≥1 fan
 /// match is in its live window, this polls each such match's `matches/{id}.json`
-/// (5s TTL) every `ControlPlane.pollSeconds` (±~15% jitter) — NOT gated on the
+/// (5s TTL) every `pollSeconds` (±~15% jitter) — NOT gated on the
 /// menu being open. Diffs each fixture against its previous observation and
 /// fires the resulting events through `EventRouter` → `OverlayManager`.
 ///
@@ -19,6 +19,8 @@ import Foundation
 final class LiveStore {
     static let shared = LiveStore()
 
+    /// Live poll interval — matches the `matches/{id}.json` 5s TTL.
+    private static let pollSeconds: TimeInterval = 5
     /// Lead time before kickoff at which we start polling a fan match.
     private static let preKickoffLead: TimeInterval = 5 * 60
     /// How far ahead of a fan match's live window we start holding the App Nap
@@ -203,7 +205,7 @@ final class LiveStore {
                 updateAppNapActivity(active: false)
             }
             // ±~15% jitter so a fleet of clients doesn't hit the same 5s boundary.
-            let base = max(1, ControlPlane.shared.pollSeconds)
+            let base = Self.pollSeconds
             let jitter = base * Double.random(in: -0.15 ... 0.15)
             let interval = max(1, base + jitter)
             try? await Task.sleep(for: .seconds(interval))

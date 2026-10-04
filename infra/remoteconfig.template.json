@@ -24,18 +24,6 @@
       },
       "description": "Newest published build. Builds below this get a soft 'Update available' banner atop the menu (not blocked). 0 = no banner."
     },
-    "poll_seconds": {
-      "defaultValue": {
-        "value": "5"
-      },
-      "description": "Live-score poll interval (matches the matches/*.json TTL). App adds ±15% jitter."
-    },
-    "animation_params": {
-      "defaultValue": {
-        "value": "{\"pillHoldSeconds\":7,\"notchStackMax\":5}"
-      },
-      "description": "Tune animation feel without shipping a build."
-    },
     "max_fan_teams": {
       "defaultValue": {
         "value": "10"
@@ -47,12 +35,6 @@
         "value": "300"
       },
       "description": "Periodic fetch interval in seconds. Range: 60–86400; default: 300. Startup and foreground fetch immediately. Lower values increase billable fetches."
-    },
-    "event_stale_minutes": {
-      "defaultValue": {
-        "value": "3"
-      },
-      "description": "VAR-only staleness tolerance in minutes. Late VAR decisions beyond this threshold are suppressed; goals, cards, and substitutions are not."
     }
   }
 }

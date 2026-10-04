@@ -17,6 +17,11 @@ final class EventRouter {
         set { AppDefaults.shared.set(newValue, forKey: "handledEventIds") }
     }
 
+    /// Out-of-order staleness tolerance (minutes). A VAR event whose incident
+    /// minute is more than this behind the greatest minute we've ALREADY
+    /// notified for a fixture is a late/backfilled decision and is suppressed.
+    private static let eventStaleMinutes = 3
+
     /// Greatest incident minute we've already surfaced per fixture — the
     /// high-water mark for the out-of-order staleness guard. In-memory is enough:
     /// a restart reseeds LiveStore's baseline (which emits nothing), so there's
@@ -87,7 +92,7 @@ final class EventRouter {
         // Out-of-order staleness guard. An event's minute is API-Football's
         // incident minute, and the feed can inject a VAR outcome minutes after
         // the fact — surfacing a "67′" pill while play is at 79′. Suppress a
-        // guarded event (VAR only) whose minute falls more than the configured
+        // guarded event (VAR only) whose minute falls more than the
         // tolerance behind the greatest minute we've ALREADY notified for this
         // fixture. Non-guarded / minute-less events pass through, and every
         // minute-bearing event (goals, cards, subs) raises the mark.
@@ -97,7 +102,7 @@ final class EventRouter {
             // avoids an Int.min underflow when a guarded event lands first).
             if event.type.isStalenessGuarded,
                let mark = maxNotifiedMinute[event.fixtureId],
-               mark - absMin > ControlPlane.shared.eventStaleMinutes {
+               mark - absMin > Self.eventStaleMinutes {
                 AppLog.info(.fixtures, "event_rejected event_id=\(event.eventId) reason=stale_out_of_order event_min=\(absMin) max_notified=\(mark)")
                 // Is the staleness guard eating real goals? Only this can tell us.
                 AppAnalytics.eventDropped(reason: "stale_minute", type: event.type.rawValue)
