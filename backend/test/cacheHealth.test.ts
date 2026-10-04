@@ -17,15 +17,15 @@ describe("probeCacheHealth (§0 cf-cache-status probe)", () => {
     expect(result.ok).toBe(true);
     expect(fetchMock).toHaveBeenCalledWith(
       "https://scores.example.com/catalog.json",
-      { method: "GET" },
+      expect.objectContaining({ method: "GET", signal: expect.any(AbortSignal), redirect: "error" }),
     );
     expect(fetchMock).toHaveBeenCalledWith(
       "https://scores.example.com/matches/101.json",
-      { method: "GET" },
+      expect.objectContaining({ method: "GET", signal: expect.any(AbortSignal), redirect: "error" }),
     );
     expect(fetchMock).toHaveBeenCalledWith(
       "https://scores.example.com/matches/202.json",
-      { method: "GET" },
+      expect.objectContaining({ method: "GET", signal: expect.any(AbortSignal), redirect: "error" }),
     );
     expect(result.probes.map((p) => p.cacheStatus)).toEqual(["HIT", "HIT", "HIT"]);
   });
@@ -98,7 +98,7 @@ describe("probeCacheHealth (§0 cf-cache-status probe)", () => {
     await probeCacheHealth("scores.example.com", [], fetchMock as never);
     expect(fetchMock).toHaveBeenCalledWith(
       "https://scores.example.com/catalog.json",
-      { method: "GET" },
+      expect.objectContaining({ method: "GET", signal: expect.any(AbortSignal), redirect: "error" }),
     );
   });
 });

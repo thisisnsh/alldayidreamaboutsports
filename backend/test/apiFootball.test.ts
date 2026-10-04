@@ -31,7 +31,7 @@ describe("ApiFootballProvider", () => {
 
     expect(fetchMock).toHaveBeenCalledWith(
       "https://v3.football.api-sports.io/fixtures?league=39&season=2026&from=2026-06-10&to=2026-06-12&timezone=UTC",
-      { headers: { "x-apisports-key": "key" } },
+      { headers: { "x-apisports-key": "key" }, signal: expect.any(AbortSignal), redirect: "error" },
     );
     expect(match).toMatchObject({
       fixtureId: 555,
@@ -271,11 +271,11 @@ describe("ApiFootballProvider", () => {
 
     expect(fetchMock).toHaveBeenNthCalledWith(1,
       "https://v3.football.api-sports.io/fixtures?league=140&season=2026&from=2026-08-14&to=2026-08-16&timezone=UTC",
-      { headers: { "x-apisports-key": "key" } },
+      { headers: { "x-apisports-key": "key" }, signal: expect.any(AbortSignal), redirect: "error" },
     );
     expect(fetchMock).toHaveBeenNthCalledWith(2,
       "https://v3.football.api-sports.io/fixtures?league=78&season=2025&from=2026-08-14&to=2026-08-16&timezone=UTC",
-      { headers: { "x-apisports-key": "key" } },
+      { headers: { "x-apisports-key": "key" }, signal: expect.any(AbortSignal), redirect: "error" },
     );
   });
 
@@ -297,7 +297,7 @@ describe("ApiFootballProvider", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock).toHaveBeenCalledWith(
       "https://v3.football.api-sports.io/fixtures?ids=555-556-557",
-      { headers: { "x-apisports-key": "key" } },
+      { headers: { "x-apisports-key": "key" }, signal: expect.any(AbortSignal), redirect: "error" },
     );
     expect(match).toMatchObject({
       fixtureId: 555,

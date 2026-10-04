@@ -95,7 +95,7 @@ describe("ApiFootballProvider.teamsForLeague", () => {
     const teams = await provider.teamsForLeague(39, 2025);
     expect(fetchMock).toHaveBeenCalledWith(
       "https://v3.football.api-sports.io/teams?league=39&season=2025",
-      { headers: { "x-apisports-key": "key" } },
+      { headers: { "x-apisports-key": "key" }, signal: expect.any(AbortSignal), redirect: "error" },
     );
     expect(teams[0]).toEqual({
       id: 50, code: "MCI", name: "Manchester City", country: "England", logo: "50.png", leagueId: 39,

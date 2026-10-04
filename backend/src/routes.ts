@@ -1,4 +1,4 @@
-import express, { type Express } from "express";
+import express, { type Express, type RequestHandler, type ErrorRequestHandler } from "express";
 import { z } from "zod";
 import { requireHealthOidc, requireSchedulerOidc } from "./auth.js";
 import type { CatalogService } from "./catalog.js";
@@ -75,9 +75,9 @@ export async function probeCacheHealth(
     const url = `${base}/${key}`;
     try {
       const probe = async () => {
-        const r = await fetchImpl(url, { method: "GET" });
+        const r = await fetchImpl(url, { method: "GET", signal: AbortSignal.timeout(10_000), redirect: "error" });
         const cacheStatus = (r.headers.get("cf-cache-status") ?? "UNKNOWN").toUpperCase();
-        await r.arrayBuffer().catch(() => undefined); // drain so the socket is reusable
+        await r.body?.cancel(); // headers are sufficient; never buffer an unbounded probe body
         return { httpStatus: r.status, cacheStatus };
       };
 
@@ -101,10 +101,16 @@ export async function probeCacheHealth(
   return { ok: unhealthy.length === 0, probes, unhealthy };
 }
 
+/** Express 4 does not forward rejected handler promises. */
+const asyncRoute = (handler: RequestHandler): RequestHandler => (req, res, next) => {
+  Promise.resolve().then(() => handler(req, res, next)).catch(next);
+};
+
 export function buildApp(
   { poller, dispatcher, window, catalog, schedule, r2 }: Deps,
 ): Express {
   const app = express();
+  app.disable("x-powered-by");
   app.use(express.json({ limit: "16kb" }));
 
   app.get("/internal/healthz", requireHealthOidc, (_req, res) => res.json({ ok: true }));
@@ -113,55 +119,55 @@ export function buildApp(
 
   // Once a minute (Cloud Scheduler): fan the minute out into staggered Cloud
   // Tasks so the cadence is sub-minute without any request sleeping.
-  app.post("/internal/dispatch", requireSchedulerOidc, async (_req, res) => {
+  app.post("/internal/dispatch", requireSchedulerOidc, asyncRoute(async (_req, res) => {
     try {
       const result = await dispatcher.dispatch();
       res.json(result);
     } catch (err) {
       log.error("dispatch_failed", err);
-      res.status(500).json({ error: (err as Error).message });
+      res.status(500).json({ error: "internal server error" });
     }
-  });
+  }));
 
   // Single fetch per request (Cloud Tasks worker). Returns immediately so the
   // CPU is billed only for the actual read, not for sleeping between polls.
-  app.post("/internal/fetch", requireSchedulerOidc, async (_req, res) => {
+  app.post("/internal/fetch", requireSchedulerOidc, asyncRoute(async (_req, res) => {
     try {
       const result = await poller.fetchOnce();
       res.json(result);
     } catch (err) {
       log.error("fetch_failed", err);
-      res.status(500).json({ error: (err as Error).message });
+      res.status(500).json({ error: "internal server error" });
     }
-  });
+  }));
 
   // Every 6h: refresh fixtures-{date}.json for today±1. Runs independently of
   // the live tick — the dispatcher gate reads these files to decide whether to
   // open a match window, so they cannot depend on the gated job to write them.
-  app.post("/internal/sync-schedule", requireSchedulerOidc, async (_req, res) => {
+  app.post("/internal/sync-schedule", requireSchedulerOidc, asyncRoute(async (_req, res) => {
     try {
       const result = await schedule.sync();
       res.json(result);
     } catch (err) {
       log.error("sync_schedule_failed", err);
-      res.status(500).json({ error: (err as Error).message });
+      res.status(500).json({ error: "internal server error" });
     }
-  });
+  }));
 
   // Daily: refresh leagues + teams (with logos) from the API → catalog.json.
-  app.post("/internal/sync-catalog", requireSchedulerOidc, async (_req, res) => {
+  app.post("/internal/sync-catalog", requireSchedulerOidc, asyncRoute(async (_req, res) => {
     try {
       const result = await catalog.sync();
       res.json(result);
     } catch (err) {
       log.error("sync_catalog_failed", err);
-      res.status(500).json({ error: (err as Error).message });
+      res.status(500).json({ error: "internal server error" });
     }
-  });
+  }));
 
   // E2E without push: write a synthetic matches/{id}.json so a polling client
   // picks it up and the existing overlay/diff path fires off the file change.
-  app.post("/internal/test-event", requireSchedulerOidc, async (req, res) => {
+  app.post("/internal/test-event", requireSchedulerOidc, asyncRoute(async (req, res) => {
     // It writes schedule rows too, so it must never touch production data.
     if (!/staging/i.test(env.r2.scoresBucket)) {
       return void res.status(403).json({ error: "test-event is staging-only" });
@@ -204,13 +210,13 @@ export function buildApp(
     await r2.putJson(scheduleKey, { matches }, CACHE_CONTROL_LONG);
     log.info("test_event_complete", { fixtureId: d.fixtureId, rawStatus: d.rawStatus });
     res.json({ ok: true, fixtureId: d.fixtureId });
-  });
+  }));
 
   // §0 enforcement probe (Cloud Scheduler every 5 min): GET a warm file +
   // each live matches/{id}.json on the scores hostname and read `cf-cache-status`.
   // Steady-state must be HIT/REVALIDATED (a lone MISS at a 5s boundary is fine);
   // sustained MISS/BYPASS/DYNAMIC means the cache is broken → users would hit R2.
-  app.post("/internal/cache-health", requireSchedulerOidc, async (req, res) => {
+  app.post("/internal/cache-health", requireSchedulerOidc, asyncRoute(async (req, res) => {
     const body = z.object({ fixtureIds: z.array(z.number().int()).max(64).default([]) })
       .safeParse(req.body ?? {});
     if (!body.success) return void res.status(400).json({ error: body.error.message });
@@ -240,7 +246,15 @@ export function buildApp(
     }
     log.info("cache_health_ok", { probed: result.probes.length, windowOpen });
     res.json({ ...result, windowOpen });
-  });
+  }));
 
+  const handleError: ErrorRequestHandler = (error, req, res, next) => {
+    if (res.headersSent) return next(error);
+    const status = error?.type === "entity.too.large" ? 413
+      : error?.type === "entity.parse.failed" ? 400 : 500;
+    if (status === 500) log.error("request_failed", error, { path: req.path });
+    res.status(status).json({ error: status === 500 ? "internal server error" : "invalid request body" });
+  };
+  app.use(handleError);
   return app;
 }

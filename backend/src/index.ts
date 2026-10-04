@@ -1,6 +1,6 @@
 import { CloudTasksClient } from "@google-cloud/tasks";
 import { CatalogService } from "./catalog.js";
-import { env } from "./env.js";
+import { env, validateEnvironment } from "./env.js";
 import { Poller } from "./poller.js";
 import { ApiFootballProvider } from "./providers/apiFootball.js";
 import { R2, R2MatchStateStore } from "./r2.js";
@@ -11,6 +11,7 @@ import { log } from "./log.js";
 import { validateServiceAuthentication } from "./auth.js";
 
 validateServiceAuthentication();
+validateEnvironment();
 
 const r2 = new R2();
 const provider = new ApiFootballProvider(env.apiFootballKey);
