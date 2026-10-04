@@ -8,9 +8,6 @@ import { log } from "./log.js";
  * league's season is over — see `CatalogLeague.ended`). Adding a league here
  * (and flipping `active`) is the only change needed to support it — teams,
  * logos and current-season detection all come from the API.
- *
- * The World Cup stays listed but inactive: archived rather than deleted, so a
- * saved national team still resolves to a name and crest.
  */
 export interface SupportedLeague {
   id: number;
@@ -23,7 +20,6 @@ export const SUPPORTED_LEAGUES: SupportedLeague[] = [
   { id: 135, active: true }, // Serie A
   { id: 78, active: true }, // Bundesliga
   { id: 61, active: true }, // Ligue 1
-  { id: 1, active: false }, // FIFA World Cup — archived; keep after active leagues
 ];
 
 export interface CatalogLeague {
@@ -35,7 +31,7 @@ export interface CatalogLeague {
   country: string | null;
   active: boolean;
   scheduled: boolean;
-  /** True when the league's season is over — archived, never polled. */
+  /** True when the league's current season is over. */
   ended: boolean;
   season: number | null;
 }

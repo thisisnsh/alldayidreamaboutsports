@@ -112,11 +112,11 @@ describe("CatalogService", () => {
         id,
         name: `League ${id}`,
         logo: `${id}.png`,
-        type: id === 1 ? "Cup" : "League",
-        country: id === 1 ? "World" : "England",
+        type: "League",
+        country: "England",
         season: id === 61 ? null : 2026, // pretend Ligue 1 (61) has nothing scheduled
         scheduled: id !== 61,
-        ended: id === 1, // the archived World Cup
+        ended: false,
       })),
       teamsForLeague: vi.fn(async (leagueId: number): Promise<CatalogTeam[]> => [
         { id: leagueId * 10, code: "X", name: "Team", country: "C", logo: "t.png", leagueId },
@@ -131,22 +131,15 @@ describe("CatalogService", () => {
 
     const payload = await svc.build();
 
-    // The picker preserves catalog order, so active leagues come first and the
-    // archived World Cup stays available at the bottom for existing fans.
-    expect(payload.leagues.map((league) => league.id)).toEqual([39, 140, 135, 78, 61, 1]);
-
-    // The World Cup is archived: listed, inactive, ended — but still scheduled,
-    // so its teams stay resolvable for anyone still following a national side.
-    expect(payload.leagues.find((l) => l.id === 1)).toMatchObject({
-      active: false, ended: true, scheduled: true, season: 2026, country: "World",
-    });
+    // The picker preserves catalog order.
+    expect(payload.leagues.map((league) => league.id)).toEqual([39, 140, 135, 78, 61]);
     expect(payload.leagues.find((l) => l.id === 39)).toMatchObject({
       active: true, ended: false, scheduled: true, country: "England",
     });
     expect(payload.leagues.find((l) => l.id === 61)).toMatchObject({ active: true, scheduled: false, season: null });
 
     // Scheduled leagues get teams; the not-scheduled one is empty and never fetched.
-    expect(payload.teams["1"]).toHaveLength(1);
+    expect(payload.teams["39"]).toHaveLength(1);
     expect(payload.teams["61"]).toEqual([]);
     expect(provider.teamsForLeague).not.toHaveBeenCalledWith(61, expect.anything());
   });
@@ -159,6 +152,6 @@ describe("CatalogService", () => {
     const result = await svc.sync();
 
     expect(r2.putJson).toHaveBeenCalledWith("catalog.json", expect.objectContaining({ leagues: expect.any(Array) }), "public, max-age=43200");
-    expect(result).toEqual({ leagues: 6, teams: 5 }); // 5 scheduled leagues × 1 team each
+    expect(result).toEqual({ leagues: 5, teams: 4 }); // 4 scheduled leagues × 1 team each
   });
 });

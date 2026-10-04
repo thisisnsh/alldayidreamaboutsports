@@ -34,11 +34,6 @@ picks the implementation — that's the release flag:
    Manchester United live, Inter vs Juventus decided on penalties, and two
    scheduled fixtures. `DevConfig.timeline` starts playing at launch, so pills and
    local goal animations all appear hands-free.
-
-   Every demo side is a club, so a fresh Debug run does NOT trip the one-time
-   "the World Cup has ended" migration prompt. To exercise that, put a World Cup
-   team id in `DevConfig.fanTeams` and delete the `leagueMigrationPrompted`
-   default.
 2. **Everything is a code knob in `Sources/Dev/DevConfig.swift`**: the fan-team
    list, the deterministic timeline itself, autostart,
    looping, and the two warm-up passes (`showcaseAtStart`, `clockWalkAtStart`).

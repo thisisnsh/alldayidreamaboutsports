@@ -240,8 +240,7 @@ final class FakeScores: ScoresProviding {
     /// want a catalog that never changes. A trimmed snapshot of the live
     /// `catalog.json` (fetched 29 Aug 2026): the five club leagues the app
     /// follows, each with its best-known sides — including every team the demo
-    /// timeline fields — plus the archived World Cup, which is what exercises
-    /// the picker's "Ended" section. Ids, codes and names are the real ones, so
+    /// timeline fields. Ids, codes and names are the real ones, so
     /// crests and short labels resolve exactly as they do in production.
     static let hardcodedCatalog: Catalog = {
         func team(_ id: Int, _ name: String, _ code: String, _ league: Int) -> Team {
@@ -251,17 +250,15 @@ final class FakeScores: ScoresProviding {
         return Catalog(
             leagues: [
                 League(id: 39, name: "Premier League", logo: leagueLogo(39), country: "England",
-                       active: true, scheduled: true, season: 2026),
+                       active: true, scheduled: true, season: 2026, ended: false),
                 League(id: 140, name: "La Liga", logo: leagueLogo(140), country: "Spain",
-                       active: true, scheduled: true, season: 2026),
+                       active: true, scheduled: true, season: 2026, ended: false),
                 League(id: 135, name: "Serie A", logo: leagueLogo(135), country: "Italy",
-                       active: true, scheduled: true, season: 2026),
+                       active: true, scheduled: true, season: 2026, ended: false),
                 League(id: 78, name: "Bundesliga", logo: leagueLogo(78), country: "Germany",
-                       active: true, scheduled: true, season: 2026),
+                       active: true, scheduled: true, season: 2026, ended: false),
                 League(id: 61, name: "Ligue 1", logo: leagueLogo(61), country: "France",
-                       active: true, scheduled: true, season: 2026),
-                League(id: 1, name: "World Cup", logo: leagueLogo(1), country: "World",
-                       active: false, scheduled: true, season: 2026, ended: true),
+                       active: true, scheduled: true, season: 2026, ended: false),
             ],
             teams: [
                 "39": [
@@ -286,12 +283,6 @@ final class FakeScores: ScoresProviding {
                 "61": [
                     team(85, "Paris Saint Germain", "PSG", 61), team(81, "Marseille", "MAR", 61),
                     team(80, "Lyon", "LYO", 61), team(91, "Monaco", "MON", 61),
-                ],
-                "1": [
-                    team(6,  "Brazil",    "BRA", 1), team(26, "Argentina", "ARG", 1),
-                    team(2,  "France",    "FRA", 1), team(10, "England",   "ENG", 1),
-                    team(9,  "Spain",     "ESP", 1), team(25, "Germany",   "GER", 1),
-                    team(27, "Portugal",  "POR", 1), team(2384, "USA",     "USA", 1),
                 ],
             ],
         )

@@ -48,7 +48,7 @@ struct RemoteDataTests {
             preconditionFailure("oversized Content-Length accepted")
         } catch RemoteData.Failure.tooLarge {}
 
-        let league = League(id: 39, name: "League", logo: "", active: true, scheduled: true, season: 2026)
+        let league = League(id: 39, name: "League", logo: "", country: nil, active: true, scheduled: true, season: 2026, ended: false)
         do {
             _ = try Catalog(leagues: [league, league], teams: [:]).validated()
             preconditionFailure("duplicate league accepted")
