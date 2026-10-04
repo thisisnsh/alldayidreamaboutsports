@@ -115,8 +115,7 @@ every upload.
    `dreamaboutsports-prod`: Add app → Apple, bundle id `com.thisisnsh.alldaysports`.
    Download each `GoogleService-Info.plist` over
    `Resources/GoogleService-Info-Staging.plist` /
-   `Resources/GoogleService-Info-Production.plist` (Firebase bundle ids can't
-   be edited, so the old `com.alldayidreamaboutsports.mac` apps stay behind).
+   `Resources/GoogleService-Info-Production.plist`.
 3. App Store Connect → Apps → **+** → New macOS App with bundle id
    `com.thisisnsh.alldaysports`. Fill in the listing, the privacy labels (Analytics +
    Crashlytics: usage and diagnostics data, not linked to identity).
@@ -135,7 +134,6 @@ every upload.
 
 Older builds can't be forced to update, so keep the CDN JSON contract
 backward-compatible (additive fields; breaking changes under a new path).
-Builds 1–3 were the old website DMGs, so App Store builds start at 4.
 
 ## Source map
 
