@@ -17,10 +17,10 @@ Then in the [Firebase console](https://console.firebase.google.com):
    Save it locally as `app/Resources/GoogleService-Info-Staging.plist` or
    `app/Resources/GoogleService-Info-Production.plist`. See
    [`app/README.md`](../app/README.md#real-service-configuration).
-   Firebase is used for Remote Config only — there is no Cloud Messaging / APNs
-   setup (push was dropped in favour of polling + CDN).
-2. **Remote Config** → import `remoteconfig.template.json`, publish.
-3. Firestore is no longer used. Keep existing databases deny-all; retire only
+   Firebase is used for Analytics and Crashlytics only — there is no Remote
+   Config and no Cloud Messaging / APNs setup (push was dropped in favour of
+   polling + CDN).
+2. Firestore is no longer used. Keep existing databases deny-all; retire only
    the legacy celebration collection with `retire-celebrations.mjs` after deploy.
    The cleanup also removes retired count files, Remote Config parameters, and
    the runtime's obsolete Firestore/Firebase Admin IAM grants.
@@ -191,47 +191,26 @@ There are no app secrets in GitHub: the app is built and uploaded from Xcode.
 The backend reads its R2 creds from GCP Secret Manager (`r2-*`, via
 `backend-deploy.yml`).
 
-## Kill switch runbook
+## Emergency-stop runbook
 
-- **Kill**: Firebase console → Remote Config → `kill_switch=true` → Publish.
-  Running apps lock within seconds (real-time RC). Remote Config is the only
-  source: there is no R2 `config.json` fallback (the app stopped reading it in
-  the polling+CDN pivot), so uploading one does nothing. If Firebase itself is
-  down, the remaining levers are server-side — e.g. stop publishing
-  `matches/*` by pausing the `dispatch-live-scores` scheduler job.
-- **Recover**: publish `kill_switch=false` in Firebase.
-- **Force update**: set `min_build` to the new build number after a bad
-  release — only once that build is live on the App Store.
-- **Offer update**: set `latest_build` to the newest published build. Older
-  installs show a soft "Update available" banner atop the menu (still usable);
-  leave at `0` to hide the banner.
+The app has no remote switches — it only reads the scores CDN, so the levers
+are server-side.
 
-## Remote Config fetch cadence
-
-`remote_config_fetch_interval_seconds` controls how often a running app forces a
-periodic Remote Config fetch. Default **300 s (5 min)**; accepted range **60 –
-86400 s**. Missing, malformed, non-finite, zero, negative or out-of-range values
-fall back to 300 s, so a bad edit can't create a tight billing loop or switch
-refreshes off. The app also carries a local 300 s bootstrap default it uses
-until the template's value has been fetched.
-
-The interval only governs the *periodic* loop, which one app-wide task owns (the
-menu bar popover has no Remote Config timer — opening it or leaving it open does
-not change fetch frequency):
-
-- **Startup** fetches immediately.
-- **Foreground / wake** fetches immediately (`applicationDidBecomeActive`).
-- **Real-time invalidations** stay enabled, so a publish still lands within
-  seconds without waiting for the next periodic fetch.
-
-Publishing a new value takes effect without a restart — the real-time listener
-applies it and reschedules the next fetch. Verify in the app log:
-`firebase_state_applied … rc_fetch_seconds=300` and
-`periodic_fetch_scheduled interval_seconds=300`.
-
-Lowering the interval multiplies billable Remote Config fetches per install once
-Firebase's usage-based pricing applies. Raise it, don't lower it, unless an
-incident needs faster recovery than the real-time listener provides.
+- **Stop notifications** (keep the app usable): pause the live poller.
+  `matches/*` stop changing, so the app keeps showing the last scores but no
+  new events fire.
+  ```sh
+  gcloud scheduler jobs pause dispatch-live-scores --location=us-central1
+  ```
+  Recover with `gcloud scheduler jobs resume …`.
+- **Stop the app**: in the Cloudflare dashboard, add a WAF custom rule on the
+  zone that blocks the scores hostname (`scores.alldayidreamaboutsports.com`
+  for prod). WAF runs before the cache, so cached objects are blocked too.
+  Every fetch fails, and the app goes quiet: no scores, no events, failures
+  logged once per fixture per session. Recover by disabling the rule.
+- **Old builds**: there is no forced update. Keep CDN JSON changes additive;
+  put a breaking schema change under a new path (e.g. `v2/`) so older builds
+  keep reading the old files.
 
 ## Deployment trust
 

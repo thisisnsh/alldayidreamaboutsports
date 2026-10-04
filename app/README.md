@@ -57,7 +57,7 @@ picks the implementation — that's the release flag:
 | Path | In Debug |
 |---|---|
 | Scores CDN (`URLSession` in `CDNScoresClient`) | never instantiated — `FakeScores` |
-| Remote Config / Crashlytics / Analytics | `GoogleService-Info.plist` absent → Firebase never configured (there is no Messaging — push was dropped for polling + CDN) |
+| Crashlytics / Analytics | `GoogleService-Info.plist` absent → Firebase never configured (there is no Messaging — push was dropped for polling + CDN) |
 
 Nothing in a Debug session reaches the network except that one `catalog.json`
 read.
@@ -105,9 +105,8 @@ for tracking. Crashlytics is not a live arbitrary-log viewer; use Console.app or
 The app is sandboxed (`App.entitlements`: app sandbox + outgoing network + the
 Firebase keychain group) and Xcode signs it automatically — Apple Development
 when you run it, Apple Distribution when you archive it for upload. There is no
-in-app updater: the App Store installs updates, so the update gate, the
-"Update available" banner and "Check for Updates…" all open the App Store's
-Updates page (`AppUpdater`). Launch at login starts OFF (guideline 2.4.5 bars
+in-app updater and no forced update: the App Store installs updates, and
+Settings' "Check for Updates…" opens its Updates page (`AppUpdater`). Launch at login starts OFF (guideline 2.4.5 bars
 adding a login item without consent); users switch it on in Settings.
 `ITSAppUsesNonExemptEncryption = NO` skips the export-compliance question on
 every upload.
@@ -123,7 +122,6 @@ every upload.
    `Resources/GoogleService-Info-Staging.plist` /
    `Resources/GoogleService-Info-Production.plist` (Firebase bundle ids can't
    be edited, so the old `com.alldayidreamaboutsports.mac` apps stay behind).
-   Remote Config is per project, so it carries over unchanged.
 3. App Store Connect → Apps → **+** → New macOS App with bundle id
    `com.thisisnsh.alldaysports`. Fill in the listing, the privacy labels (Analytics +
    Crashlytics: usage and diagnostics data, not linked to identity).
@@ -140,21 +138,19 @@ every upload.
    **Distribute App → App Store Connect → Upload**.
 5. In App Store Connect, attach the build to the version and submit for review.
 
-Remote Config `min_build` / `latest_build` compare against
-`CURRENT_PROJECT_VERSION`. Raise them only once the build that clears them is
-**live** on the App Store — otherwise users get an update prompt with nothing
-to update to. Builds 1–3 were the old website DMGs, so App Store builds start
-at 4.
+Older builds can't be forced to update, so keep the CDN JSON contract
+backward-compatible (additive fields; breaking changes under a new path).
+Builds 1–3 were the old website DMGs, so App Store builds start at 4.
 
 ## Source map
 
 | Dir | What |
 |---|---|
-| `Sources/App.swift` | window scenes (welcome, picker, settings, gate) |
-| `Sources/AppDelegate.swift` | transient AppKit menu, Firebase bootstrap (Remote Config + Crashlytics/Analytics — no Messaging), reopen handling |
-| `Sources/Services/` | local prefs, scores CDN, kill switch (`ControlPlane`), event routing |
+| `Sources/App.swift` | window scenes (welcome, picker, settings) |
+| `Sources/AppDelegate.swift` | transient AppKit menu, Firebase bootstrap (Crashlytics/Analytics — no Messaging or Remote Config), reopen handling |
+| `Sources/Services/` | local prefs, scores CDN, live polling, event routing |
 | `Sources/Overlay/` | the two overlay panels: full-screen click-through display + small clickable ball; celebration, notch pill, particles |
-| `Sources/Views/` | welcome, popover, team picker, settings, kill/update gate |
+| `Sources/Views/` | welcome, popover, team picker, settings |
 
 Key invariants:
 - Overlay panels use `sharingType = .readOnly`, so they show up in screen
@@ -167,8 +163,9 @@ Key invariants:
   displayed set; closing the ball does not dismiss or pause queued
   notifications.
 - Ball taps only animate on the current Mac. No upload or global count exists.
-- `ControlPlane` gates everything; `kill_switch`/`min_build` come from Remote
-  Config (real-time) only — there is no CDN `config.json` backup.
+- No remote config: poll interval, overlay timing and the VAR staleness
+  window are constants, and fans can follow any number of teams. The
+  emergency stop is server-side (`infra/README.md`).
 - Fixture date files bootstrap and persist the daily schedule once. Only
   followed-team `matches/{fixtureId}.json` objects inside their live window are
   polled — from kickoff−5min (`LiveStore.preKickoffLead`) until FINISHED, capped
