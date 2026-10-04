@@ -232,6 +232,13 @@ cache-fragmenting headers (including Origin), unsupported methods, and unrelated
 paths before R2. This deliberately excludes browser cross-origin consumers;
 review that policy before exposing a browser API.
 
+Object paths are checked in their original, unnormalized form: `catalog.json`,
+`fixtures-YYYY-MM-DD.json` (numeric year, month 01–12, day 01–31), and
+`matches/{id}.json` (1–16 ASCII digits, positive, no leading zeros). Encoded
+spellings, nested paths, and other malformed names are rejected. These checks
+validate the date format and ranges, not calendar validity or object existence.
+The expression uses substring and byte removal rather than a paid regex operator.
+
 Preview without credentials:
 
 ```sh

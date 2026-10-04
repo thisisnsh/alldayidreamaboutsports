@@ -104,6 +104,12 @@ Defaults are a live La Liga Real Madrid–Barcelona fixture; every field in
    Saturday is ~51,900. Do not remove the gate to "simplify" the dispatcher.
 
 There is no user-write API, aggregation queue, or Firestore dependency.
+Before any match or fixture object reaches R2, the publisher validates numeric
+bounds, timeline sizes, and object IDs. Malformed snapshots fail the write and
+leave the last published object intact, protecting older clients too. Upstream
+API responses are limited to 8 MiB of decoded bytes and 2,048 rows; redirects
+remain disabled. The native app independently validates received data.
+
 Legacy data cleanup: `node infra/retire-celebrations.mjs --project <project>`
 from the repository root previews old Firestore/R2 data; add `--apply` only
 after deploying the backend without `/celebrate`.

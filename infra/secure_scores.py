@@ -16,12 +16,32 @@ FRAGMENT_HEADERS = ("origin", "x-http-method-override", "x-http-method", "x-meth
                     "x-rewrite-url", "forwarded")
 
 
+def canonical_path_expression():
+    # Inspect the original spelling so URL normalization cannot admit encoded
+    # digits, dot segments, or repeated slashes as alternate cache keys.
+    # substring/remove_bytes work without the paid `matches` regex operator.
+    # https://developers.cloudflare.com/ruleset-engine/rules-language/functions/
+    path = "raw.http.request.uri.path"
+    months = " ".join(json.dumps(f"{month:02}") for month in range(1, 13))
+    days = " ".join(json.dumps(f"{day:02}") for day in range(1, 32))
+    fixtures = (f'(starts_with({path}, "/fixtures-") and ends_with({path}, ".json") '
+                f'and len({path}) eq 25 '
+                f'and remove_bytes(substring({path}, 10, 14), "0123456789") eq "" '
+                f'and substring({path}, 10, 14) ne "0000" '
+                f'and substring({path}, 14, 15) eq "-" '
+                f'and substring({path}, 15, 17) in {{{months}}} '
+                f'and substring({path}, 17, 18) eq "-" '
+                f'and substring({path}, 18, 20) in {{{days}}})')
+    matches = (f'(starts_with({path}, "/matches/") and ends_with({path}, ".json") '
+               f'and len({path}) ge 15 and len({path}) le 30 '
+               f'and substring({path}, 9, 10) ne "0" '
+               f'and remove_bytes(substring({path}, 9, -5), "0123456789") eq "")')
+    return f'({path} eq "/catalog.json" or {fixtures} or {matches})'
+
+
 def rule():
     hosts = " ".join(json.dumps(host) for host in HOSTS)
-    path = "http.request.uri.path"
-    allowed = (f'({path} eq "/catalog.json" or '
-               f'(starts_with({path}, "/fixtures-") and ends_with({path}, ".json") and len({path}) eq 25) or '
-               f'(starts_with({path}, "/matches/") and ends_with({path}, ".json") and len({path}) le 40))')
+    allowed = canonical_path_expression()
     bad_headers = " or ".join(f'len(http.request.headers["{h}"]) gt 0' for h in FRAGMENT_HEADERS)
     return {
         "ref": REF, "description": "Block noncanonical scores requests before R2",

@@ -380,6 +380,38 @@ struct Fixture: Codable, Identifiable, Hashable {
         away = try c.decode(ScoreboardTeam.self, forKey: .away)
         shootout = try c.decodeIfPresent(Shootout.self, forKey: .shootout)
         varEvents = try c.decodeIfPresent([VarRecord].self, forKey: .varEvents) ?? []
+        guard hasValidBounds else {
+            throw DecodingError.dataCorrupted(.init(
+                codingPath: decoder.codingPath, debugDescription: "Match values exceed supported bounds"
+            ))
+        }
+    }
+
+    /// Generous football limits, enforced for both network and persisted JSON.
+    /// Also checked before processing fixtures constructed without a decoder.
+    var hasValidBounds: Bool {
+        func validTime(_ minute: Int?, _ extra: Int?) -> Bool {
+            (minute.map { (0...300).contains($0) } ?? true)
+                && (extra.map { (0...60).contains($0) } ?? true)
+        }
+        func validTeam(_ team: ScoreboardTeam) -> Bool {
+            guard (0...100).contains(team.goals), (0...100).contains(team.yellowCards),
+                  (0...100).contains(team.redCards), team.goalEvents.count <= 100,
+                  team.yellowCardEvents.count <= 100, team.redCardEvents.count <= 100,
+                  team.subs.count <= 100 else { return false }
+            return team.goalEvents.allSatisfy { validTime($0.minute, $0.extra) }
+                && team.yellowCardEvents.allSatisfy { validTime($0.minute, $0.extra) }
+                && team.redCardEvents.allSatisfy { validTime($0.minute, $0.extra) }
+                && team.subs.allSatisfy { validTime($0.minute, $0.extra) }
+        }
+        guard validTime(minute, extra), validTeam(home), validTeam(away),
+              varEvents.count <= 100,
+              varEvents.allSatisfy({ validTime($0.minute, $0.extra) }) else { return false }
+        if let shootout {
+            guard (0...100).contains(shootout.home), (0...100).contains(shootout.away),
+                  shootout.kicks.count <= 200 else { return false }
+        }
+        return true
     }
 
     var id: Int { fixtureId }
@@ -541,4 +573,16 @@ enum ScorelineFormatter {
 
 struct FixturesPayload: Codable {
     let matches: [Fixture]
+
+    private enum CodingKeys: String, CodingKey { case matches }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        matches = try container.decode([Fixture].self, forKey: .matches)
+        guard matches.count <= 512 else {
+            throw DecodingError.dataCorrupted(.init(
+                codingPath: decoder.codingPath, debugDescription: "Too many fixtures"
+            ))
+        }
+    }
 }

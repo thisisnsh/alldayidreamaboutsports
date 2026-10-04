@@ -10,7 +10,11 @@ import Foundation
 /// replayed. This function additionally guards `prev == nil && FINISHED`, which
 /// mirrors the backend (a deleted/never-written state for an over match).
 enum MatchDiff {
+    /// An implausible burst updates the score without flooding local overlays.
+    static let maxEventsPerDiff = 64
+
     static func diff(prev: Fixture?, next: Fixture) -> [MatchEvent] {
+        guard next.hasValidBounds, prev?.hasValidBounds ?? true else { return [] }
         // No previous state for an already-over match: nothing to replay.
         if prev == nil, next.status == "FINISHED" { return [] }
 
@@ -96,6 +100,7 @@ enum MatchDiff {
                 if kick.teamId == next.home.id { penHome += 1 } else { penAway += 1 }
             }
             if i < prevKicks { continue } // already published
+            guard events.count < maxEventsPerDiff else { return [] }
             events.append(make(
                 .penaltyKick,
                 idSuffix: String(i + 1),
@@ -115,6 +120,7 @@ enum MatchDiff {
             if after > before {
                 var g = before + 1
                 while g <= after {
+                    guard events.count < maxEventsPerDiff else { return [] }
                     let goalEv = team.goalEvents.indices.contains(g - 1) ? team.goalEvents[g - 1] : nil
                     events.append(make(
                         .goal,
@@ -135,6 +141,7 @@ enum MatchDiff {
             if before > after {
                 var g = before
                 while g > after {
+                    guard events.count < maxEventsPerDiff else { return [] }
                     events.append(make(
                         .goalCancelled,
                         idSuffix: "\(team.id):\(g)",
@@ -157,6 +164,7 @@ enum MatchDiff {
             for kind in cardKinds {
                 var c = kind.before + 1
                 while c <= kind.count {
+                    guard events.count < maxEventsPerDiff else { return [] }
                     let cardEv = kind.events.indices.contains(c - 1) ? kind.events[c - 1] : nil
                     events.append(make(
                         kind.type,
@@ -177,6 +185,7 @@ enum MatchDiff {
             let before = side == .home ? (prev?.home.subs.count ?? 0) : (prev?.away.subs.count ?? 0)
             var s = before + 1
             while s <= team.subs.count {
+                guard events.count < maxEventsPerDiff else { return [] }
                 let sub = team.subs[s - 1]
                 events.append(make(
                     .substitution,
@@ -196,6 +205,7 @@ enum MatchDiff {
         let beforeVar = prev?.varEvents.count ?? 0
         var v = beforeVar + 1
         while v <= next.varEvents.count {
+            guard events.count < maxEventsPerDiff else { return [] }
             let decision = next.varEvents[v - 1]
             events.append(make(
                 .varDecision,

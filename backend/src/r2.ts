@@ -1,6 +1,7 @@
 import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { env } from "./env.js";
 import type { MatchState } from "./types.js";
+import { assertSafeScoreObject } from "./scoreValidation.js";
 
 export interface VersionedMatchState {
   state: MatchState | null;
@@ -47,6 +48,7 @@ export class R2 {
    * string (e.g. `CACHE_CONTROL_LIVE` / `CACHE_CONTROL_LONG`).
    */
   async putJson(key: string, value: unknown, cacheControl: string): Promise<void> {
+    assertSafeScoreObject(key, value);
     await this.client.send(
       new PutObjectCommand({
         Bucket: this.bucket,
@@ -127,6 +129,7 @@ export class R2MatchStateStore {
 
   async save(state: MatchState, etag: string | null): Promise<void> {
     const key = this.key(state.fixtureId);
+    assertSafeScoreObject(key, state);
     try {
       const response = await this.client.send(new PutObjectCommand({
         Bucket: this.bucket,
