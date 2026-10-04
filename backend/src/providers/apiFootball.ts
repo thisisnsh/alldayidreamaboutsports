@@ -109,6 +109,8 @@ export class ApiFootballProvider implements ScoreProvider {
     try {
       const res = await this.fetchImpl(`${BASE}${path}`, {
         headers: { "x-apisports-key": this.apiKey },
+        signal: AbortSignal.timeout(10_000),
+        redirect: "error",
       });
       if (!res.ok) throw new Error(`API-Football ${path} -> HTTP ${res.status}`);
       const body = (await res.json()) as { response?: T[]; errors?: unknown };
