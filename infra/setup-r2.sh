@@ -365,6 +365,7 @@ done
 
 if [[ -n "${CLOUDFLARE_API_TOKEN:-}" || -n "${CLOUDFLARE_ACCOUNT_ID:-}" || -n "${CLOUDFLARE_ZONE_ID:-}" ]]; then
   configure_cloudflare_zone
+  python3 "$(dirname "$0")/secure_scores.py" --apply
   cat <<EOF
 ✅ Cloudflare R2/CDN setup complete.
 
