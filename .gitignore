@@ -30,3 +30,7 @@ app/scripts/node_modules/
 # Web
 web/dist/
 .wrangler/
+
+# Python infrastructure checks
+__pycache__/
+*.pyc

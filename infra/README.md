@@ -226,3 +226,37 @@ In GitHub, restrict both environments to the `main` branch and require a
 production reviewer where the plan supports that protection. GCP conditions
 remain mandatory regardless of GitHub plan. Do not weaken them to unblock a
 feature-branch deploy; merge reviewed changes to `main` instead.
+
+## Scores request guard
+
+The scores CDN serves canonical GET/HEAD JSON paths only. Native app requests
+need no query string or Origin header. `secure_scores.py` blocks query strings,
+cache-fragmenting headers (including Origin), unsupported methods, and unrelated
+paths before R2. This deliberately excludes browser cross-origin consumers;
+review that policy before exposing a browser API.
+
+Preview without credentials:
+
+```sh
+python3 infra/secure_scores.py --plan
+python3 -m unittest discover -s infra/test -v
+```
+
+Apply with `CLOUDFLARE_ZONE_ID` and a `CLOUDFLARE_API_TOKEN` granting **Zone WAF
+Edit** on this zone in your local environment:
+
+```sh
+python3 infra/secure_scores.py --apply
+```
+
+The script inserts/updates only its managed rule, before skip rules, and reads
+it back. Existing emergency blocks and unrelated rules remain intact. Full R2
+setup also applies this guard. Verify canonical `/catalog.json` returns 200 and
+warms to HIT, while a query variant and an `Origin` header receive 403. Test
+both score hosts in their intended access context; staging Access may reject
+requests first. Never run a production load test to check this.
+
+This guard is not a global cost cap: distributed traffic and nonexistent match
+IDs still need monitoring. Configure Cloudflare R2 operations/billing alerts
+for the account, and verify delivery to an operator. The application cannot
+verify account billing alerts with its bucket-scoped S3 credentials.
