@@ -1,7 +1,6 @@
 import Foundation
 
-/// The always-on live poll loop. Replaces the menu-only refresh timer and FCM's
-/// background role: whenever the app is up and ≥1 fan
+/// The always-on live poll loop: whenever the app is up and ≥1 fan
 /// match is in its live window, this polls each such match's `matches/{id}.json`
 /// (5s TTL) every `pollSeconds` (±~15% jitter) — NOT gated on the
 /// menu being open. Diffs each fixture against its previous observation and
@@ -66,8 +65,8 @@ final class LiveStore {
     private var clockAnchor: [Int: ClockAnchor] = [:]
     /// Fixtures whose match file has reported FINISHED (stop polling them).
     private var finished: Set<Int> = []
-    /// One-shot launch reconciliation guard — see `reconcileFanMatches`. Reset on
-    /// sign-out so the next signed-in session reconciles afresh.
+    /// One-shot launch reconciliation guard — see `reconcileFanMatches`. Reset
+    /// with the baseline when the match cache is cleared.
     private var didReconcileThisLaunch = false
     /// App Nap opt-out, held ONLY while ≥1 fan match is in its live window (see
     /// `updateAppNapActivity`). nil = no live window / not asserting.
@@ -113,8 +112,8 @@ final class LiveStore {
         }
     }
 
-    /// Drop the diff baseline (e.g. on sign-out) so the next observation seeds
-    /// fresh and never replays events across an account switch.
+    /// Drop the diff baseline (when the match cache is cleared) so the next
+    /// observation seeds fresh and never replays old events.
     func resetBaseline() {
         baseline = [:]
         baselineObservedAt = [:]

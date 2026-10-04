@@ -198,7 +198,7 @@ enum PillSegment {
 
 @MainActor
 private func teamLogo(_ id: Int) -> String {
-    TeamCatalog.team(for: id, in: AppSession.shared.teams).logo
+    TeamCatalog.team(for: id, in: AppSession.shared.allTeams).logo
 }
 
 extension MatchEvent {
@@ -212,7 +212,7 @@ extension MatchEvent {
     /// payload's full name when there's none. Pills are one line hanging off
     /// the notch, so they always take the compact form.
     @MainActor func shortName(for teamId: Int) -> String {
-        TeamCatalog.shortName(for: teamId, in: AppSession.shared.teams, fallback: wireName(for: teamId))
+        TeamCatalog.shortName(for: teamId, in: AppSession.shared.allTeams, fallback: wireName(for: teamId))
     }
 }
 
@@ -315,8 +315,6 @@ func pillSubtitle(for event: MatchEvent) -> [PillSegment]? {
             .text(scoreline),
             .text(" \(event.shortName(for: event.awayTeamId))"),
         ]
-    default:
-        return nil
     }
 }
 

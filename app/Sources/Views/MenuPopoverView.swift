@@ -416,10 +416,10 @@ private struct FixtureRow: View {
     }
 
     private func logo(_ id: Int) -> String {
-        TeamCatalog.team(for: id, in: session.teams).logo
+        TeamCatalog.team(for: id, in: session.allTeams).logo
     }
 
     private func shortName(_ team: ScoreboardTeam) -> String {
-        TeamCatalog.shortName(for: team.id, in: session.teams, fallback: team.name)
+        TeamCatalog.shortName(for: team.id, in: session.allTeams, fallback: team.name)
     }
 }

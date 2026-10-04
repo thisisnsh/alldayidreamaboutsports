@@ -41,7 +41,7 @@ private struct BallScene: View {
     @EnvironmentObject var overlay: OverlayManager
 
     private var teams: [Team] {
-        events.compactMap { $0.teamId }.map { TeamCatalog.team(for: $0, in: AppSession.shared.teams) }
+        events.compactMap { $0.teamId }.map { TeamCatalog.team(for: $0, in: AppSession.shared.allTeams) }
     }
 
     var body: some View {
@@ -94,18 +94,6 @@ struct BallView: View {
                     )
                     .shadow(color: .black.opacity(0.35), radius: 10, y: 4)
             )
-        }
-    }
-}
-
-extension Int {
-    /// 2_340_000 → "2.3M", 12_400 → "12.4K"
-    var formattedCompact: String {
-        let n = Double(self)
-        switch n {
-        case 1_000_000...: return String(format: "%.1fM", n / 1_000_000)
-        case 1_000...: return String(format: "%.1fK", n / 1_000)
-        default: return String(self)
         }
     }
 }

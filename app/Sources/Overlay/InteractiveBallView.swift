@@ -16,7 +16,7 @@ struct InteractiveBallView: View {
         var seen = Set<Int>()
         return overlay.ballEvents.compactMap { event in
             guard let teamId = event.teamId, seen.insert(teamId).inserted else { return nil }
-            return (TeamCatalog.team(for: teamId, in: AppSession.shared.teams), event.wireName(for: teamId))
+            return (TeamCatalog.team(for: teamId, in: AppSession.shared.allTeams), event.wireName(for: teamId))
         }
     }
 

@@ -291,7 +291,7 @@ final class FakeScores: ScoresProviding {
 
 /// Plays DevConfig.timeline: a fixed list of (seconds-after-start → event)
 /// beats, fired through the real EventRouter → OverlayManager pipeline exactly
-/// as an FCM push would be. Deterministic — same show, same timing, every run.
+/// as a polled state change would be. Deterministic — same show, same timing, every run.
 /// Settings → Developer drives it by hand (Play / Stop / Restart).
 @MainActor
 final class DemoEngine: ObservableObject {
