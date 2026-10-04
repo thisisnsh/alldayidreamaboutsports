@@ -24,12 +24,6 @@
       },
       "description": "Newest published build. Builds below this get a soft 'Update available' banner atop the menu (not blocked). 0 = no banner."
     },
-    "max_fan_teams": {
-      "defaultValue": {
-        "value": "10"
-      },
-      "description": "Max teams a user can be a fan of. Raise without shipping a build. Starts at 10."
-    },
     "remote_config_fetch_interval_seconds": {
       "defaultValue": {
         "value": "300"

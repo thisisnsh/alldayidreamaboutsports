@@ -2,7 +2,6 @@ import FirebaseRemoteConfig
 import Foundation
 import SwiftUI
 
-private let defaultMaxFanTeams = 10
 /// Bootstrap cadence for the periodic Remote Config fetch, used until the
 /// template supplies its own value. It never delays startup — the initial fetch
 /// still goes out immediately; this only schedules the *next* one while that
@@ -27,9 +26,6 @@ final class ControlPlane: ObservableObject {
     /// a soft nudge, not the forced `updateRequired` block. Drives the
     /// "Update available" banner atop the menu.
     @Published var updateAvailable = false
-    /// Max number of teams a user can be a fan of. Config-driven so we can raise
-    /// it without shipping a build; starts at 10.
-    @Published var maxFanTeams: Int = 10
     /// Effective interval between periodic forced Remote Config fetches. The
     /// app-wide loop below is the only periodic owner — the menu has none.
     @Published private(set) var remoteConfigFetchSeconds: Double = defaultRemoteConfigFetchSeconds
@@ -48,7 +44,6 @@ final class ControlPlane: ObservableObject {
     private var firebaseUpdateRequired = false
     private var firebaseUpdateAvailable = false
     private var firebaseKillMessage = ""
-    private var firebaseMaxFanTeams = defaultMaxFanTeams
     private var firebaseRemoteConfigFetchSeconds = defaultRemoteConfigFetchSeconds
 
     func start() {
@@ -69,7 +64,6 @@ final class ControlPlane: ObservableObject {
                 "kill_message": "" as NSString,
                 "min_build": 1 as NSNumber,
                 "latest_build": 0 as NSNumber,
-                "max_fan_teams": defaultMaxFanTeams as NSNumber,
                 "remote_config_fetch_interval_seconds": defaultRemoteConfigFetchSeconds as NSNumber,
             ])
             // Apply the last activated values before session bootstrap can let
@@ -104,8 +98,6 @@ final class ControlPlane: ObservableObject {
     private func apply(_ rc: RemoteConfig) {
         firebaseKillSwitch = rc["kill_switch"].boolValue
         firebaseKillMessage = rc["kill_message"].stringValue
-        let maxFans = rc["max_fan_teams"].numberValue.intValue
-        firebaseMaxFanTeams = maxFans >= 1 ? maxFans : defaultMaxFanTeams
         // Missing/malformed values arrive as 0 here, so the range check covers
         // them alongside non-finite and out-of-range edits.
         let fetchSecs = rc["remote_config_fetch_interval_seconds"].numberValue.doubleValue
@@ -118,7 +110,7 @@ final class ControlPlane: ObservableObject {
         let latestBuild = rc["latest_build"].numberValue.intValue
         firebaseUpdateAvailable = latestBuild > 0 && AppEnvironment.buildNumber < latestBuild
         applyEffectiveState()
-        AppLog.info(.remoteConfig, "firebase_state_applied kill_switch=\(firebaseKillSwitch) update_required=\(firebaseUpdateRequired) update_available=\(firebaseUpdateAvailable) max_fan_teams=\(firebaseMaxFanTeams) rc_fetch_seconds=\(firebaseRemoteConfigFetchSeconds)")
+        AppLog.info(.remoteConfig, "firebase_state_applied kill_switch=\(firebaseKillSwitch) update_required=\(firebaseUpdateRequired) update_available=\(firebaseUpdateAvailable) rc_fetch_seconds=\(firebaseRemoteConfigFetchSeconds)")
     }
 
     private func applyEffectiveState() {
@@ -128,7 +120,6 @@ final class ControlPlane: ObservableObject {
         updateRequired = firebaseUpdateRequired
         updateAvailable = firebaseUpdateAvailable
         killMessage = firebaseKillMessage
-        maxFanTeams = firebaseMaxFanTeams
         remoteConfigFetchSeconds = firebaseRemoteConfigFetchSeconds
         // Ahead of the kill/update returns below: a killed or blocked install
         // still has to keep fetching to hear that it has been recovered.
@@ -154,9 +145,6 @@ final class ControlPlane: ObservableObject {
             closeUtilityWindows()
             return
         }
-        // A lowered max_fan_teams must shrink an already-too-long fan list, not
-        // just block future adds. Operational path only (kill/update return above).
-        AppSession.shared.enforceFanTeamCap()
         MenuPopoverController.shared.controlPlaneDidChange()
     }
 

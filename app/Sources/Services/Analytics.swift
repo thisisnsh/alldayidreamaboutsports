@@ -165,12 +165,6 @@ enum AppAnalytics {
         log("league_unfollow_all", ["league_id": leagueId, "count": count])
     }
 
-    /// The picker's "you're at the cap" banner went up — how often the fan cap
-    /// is actually reached.
-    static func capWarningShown(max: Int) {
-        log("cap_warning_shown", ["max": max])
-    }
-
     // MARK: Celebrations
 
     /// Did the user tap the celebration while it was up? Just the yes/no signal.

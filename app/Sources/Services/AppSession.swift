@@ -118,13 +118,7 @@ final class AppSession: ObservableObject {
 
     // MARK: Prefs
 
-    func setFanTeams(_ rawIds: [String]) {
-        // Defensive cap (config-driven): the picker already blocks over-adding.
-        let maxFans = ControlPlane.shared.maxFanTeams
-        let ids = rawIds.count > maxFans ? Array(rawIds.prefix(maxFans)) : rawIds
-        if ids.count != rawIds.count {
-            AppLog.info(.prefs, "fan_teams_capped raw=\(rawIds.count) max=\(maxFans)")
-        }
+    func setFanTeams(_ ids: [String]) {
         AppLog.info(.prefs, "fan_teams_changed old=\(prefs.fanTeamIds.sorted()) new=\(ids.sorted())")
         let before = Set(prefs.fanTeamIds)
         let after = Set(ids)
@@ -148,18 +142,6 @@ final class AppSession: ObservableObject {
         if !addedTeamIds.isEmpty {
             Task { await LiveStore.shared.reconcileFanMatches(teamIds: addedTeamIds) }
         }
-    }
-
-    /// Re-apply the fan-team cap to the already-stored list. Called when Remote
-    /// Config changes `max_fan_teams`: if the user follows more teams than the
-    /// (possibly newly-lowered) cap allows, drop the trailing extras locally.
-    /// Trailing = most-recently-added (picks are appended), so the oldest picks
-    /// are kept. No-op when already within the cap.
-    func enforceFanTeamCap() {
-        let maxFans = ControlPlane.shared.maxFanTeams
-        guard prefs.fanTeamIds.count > maxFans else { return }
-        AppLog.info(.prefs, "fan_teams_cap_enforced count=\(prefs.fanTeamIds.count) max=\(maxFans)")
-        setFanTeams(Array(prefs.fanTeamIds.prefix(maxFans)))
     }
 
     /// Settings are device-local and never sent to the backend. The anonymous
