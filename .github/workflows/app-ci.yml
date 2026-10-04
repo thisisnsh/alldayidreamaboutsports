@@ -1,0 +1,24 @@
+name: app-ci
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - run: brew install xcodegen
+      - run: bash app/scripts/test-security.sh
+      - run: xcodegen
+        working-directory: app
+      - name: Build the contributor configuration with locked dependencies
+        working-directory: app
+        run: >-
+          xcodebuild -scheme AllDayIDreamAboutSports -configuration Debug
+          -onlyUsePackageVersionsFromResolvedFile -disableAutomaticPackageResolution
+          CODE_SIGNING_ALLOWED=NO build
