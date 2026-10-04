@@ -3,7 +3,7 @@ name: backend-deploy
 on:
   push:
     branches: [main]
-    paths: ["backend/**", "infra/*.sh", ".github/workflows/backend-deploy.yml"]
+    paths: ["backend/**", "infra/*.sh", ".github/workflows/backend-deploy.yml", ".github/workflows/backend-ci.yml"]
   workflow_dispatch:
     inputs:
       environment:
@@ -16,10 +16,15 @@ concurrency: backend-deploy-${{ inputs.environment || 'staging' }}
 
 permissions:
   contents: read
-  id-token: write # Workload Identity Federation — no JSON keys in secrets
 
 jobs:
+  verify:
+    uses: ./.github/workflows/backend-ci.yml
   deploy:
+    needs: verify
+    permissions:
+      contents: read
+      id-token: write # Granted only after this commit passes verification.
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment || 'staging' }}
@@ -28,8 +33,14 @@ jobs:
       #   GCP_PROJECT_ID  e.g. dreamaboutsports-staging / dreamaboutsports-prod
       #   GCP_REGION      e.g. us-central1
       SERVICE: alldayidreamaboutsports-backend
+      GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+      GCP_REGION: ${{ vars.GCP_REGION }}
+      R2_BUCKET_SCORES: ${{ vars.R2_BUCKET_SCORES }}
+      LEAGUE_IDS: ${{ vars.LEAGUE_IDS || '39,140,135,78,61' }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
 
       - uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2
         with:
@@ -39,16 +50,16 @@ jobs:
       - uses: google-github-actions/setup-gcloud@e427ad8a34f8676edf47cf7d7925499adf3eb74f # v2
 
       - name: Validate environment configuration
-        run: test -n "${{ vars.R2_BUCKET_SCORES }}"
+        run: test -n "${R2_BUCKET_SCORES}"
 
       - name: Resolve service audience before startup
         id: audience
         run: |
           if ! URL=$(gcloud run services describe "$SERVICE" \
-            --project "${{ vars.GCP_PROJECT_ID }}" --region "${{ vars.GCP_REGION }}" \
+            --project "${GCP_PROJECT_ID}" --region "${GCP_REGION}" \
             --format 'value(status.url)' 2>/dev/null); then
-            PROJECT_NUMBER=$(gcloud projects describe "${{ vars.GCP_PROJECT_ID }}" --format 'value(projectNumber)')
-            URL="https://${SERVICE}-${PROJECT_NUMBER}.${{ vars.GCP_REGION }}.run.app"
+            PROJECT_NUMBER=$(gcloud projects describe "${GCP_PROJECT_ID}" --format 'value(projectNumber)')
+            URL="https://${SERVICE}-${PROJECT_NUMBER}.${GCP_REGION}.run.app"
           fi
           test -n "$URL"
           echo "url=$URL" >> "$GITHUB_OUTPUT"
@@ -57,7 +68,7 @@ jobs:
         env:
           SERVICE_URL: ${{ steps.audience.outputs.url }}
         run: |
-          if [[ "${{ vars.GCP_PROJECT_ID }}" == *staging* ]]; then
+          if [[ "${GCP_PROJECT_ID}" == *staging* ]]; then
             SCORES_DOMAIN="https://scores-staging.alldayidreamaboutsports.com"
           else
             SCORES_DOMAIN="https://scores.alldayidreamaboutsports.com"
@@ -66,7 +77,6 @@ jobs:
           # NOT set here — they resolve per-league from catalog.json, so the
           # August rollover needs no deploy. Override per environment with the
           # LEAGUE_IDS GitHub variable.
-          LEAGUE_IDS="${{ vars.LEAGUE_IDS || '39,140,135,78,61' }}"
           # NOTE: --update-env-vars splits entries on commas, so a value that
           # CONTAINS commas (LEAGUE_IDS) has to change the delimiter. The
           # leading ^##^ tells gcloud to split on ## instead; without it,
@@ -74,9 +84,9 @@ jobs:
           # and the deploy fails with "Bad syntax for dict arg: [140]".
           gcloud run deploy "$SERVICE" \
             --source backend \
-            --project "${{ vars.GCP_PROJECT_ID }}" \
-            --region "${{ vars.GCP_REGION }}" \
-            --service-account "sports-runtime@${{ vars.GCP_PROJECT_ID }}.iam.gserviceaccount.com" \
+            --project "${GCP_PROJECT_ID}" \
+            --region "${GCP_REGION}" \
+            --service-account "sports-runtime@${GCP_PROJECT_ID}.iam.gserviceaccount.com" \
             --no-allow-unauthenticated \
             --invoker-iam-check \
             --min-instances 0 \
@@ -84,20 +94,20 @@ jobs:
             --max-instances 50 \
             --memory 512Mi \
             --cpu 1 \
-            --update-env-vars "^##^GCP_PROJECT_ID=${{ vars.GCP_PROJECT_ID }}##SERVICE_URL=${SERVICE_URL}##R2_BUCKET_SCORES=${{ vars.R2_BUCKET_SCORES }}##TASKS_QUEUE=live-scores##TASKS_LOCATION=${{ vars.GCP_REGION }}##SCORES_DOMAIN=${SCORES_DOMAIN}##LEAGUE_IDS=${LEAGUE_IDS}" \
+            --update-env-vars "^##^GCP_PROJECT_ID=${GCP_PROJECT_ID}##SERVICE_URL=${SERVICE_URL}##R2_BUCKET_SCORES=${R2_BUCKET_SCORES}##TASKS_QUEUE=live-scores##TASKS_LOCATION=${GCP_REGION}##SCORES_DOMAIN=${SCORES_DOMAIN}##LEAGUE_IDS=${LEAGUE_IDS}" \
             --set-secrets "API_FOOTBALL_KEY=api-football-key:latest,R2_ACCESS_KEY_ID=r2-access-key-id:latest,R2_SECRET_ACCESS_KEY=r2-secret-access-key:latest,R2_ENDPOINT=r2-endpoint:latest"
 
       - name: Restrict invocation and resolve service URL
         id: service
         run: |
-          bash infra/secure-backend.sh "${{ vars.GCP_PROJECT_ID }}" "${{ vars.GCP_REGION }}"
+          bash infra/secure-backend.sh "${GCP_PROJECT_ID}" "${GCP_REGION}"
           URL=$(gcloud run services describe "$SERVICE" \
-            --project "${{ vars.GCP_PROJECT_ID }}" \
-            --region "${{ vars.GCP_REGION }}" \
+            --project "${GCP_PROJECT_ID}" \
+            --region "${GCP_REGION}" \
             --format 'value(status.url)')
           gcloud run services update "$SERVICE" \
-            --project "${{ vars.GCP_PROJECT_ID }}" \
-            --region "${{ vars.GCP_REGION }}" \
+            --project "${GCP_PROJECT_ID}" \
+            --region "${GCP_REGION}" \
             --update-env-vars "SERVICE_URL=$URL"
           echo "url=$URL" >> "$GITHUB_OUTPUT"
 
