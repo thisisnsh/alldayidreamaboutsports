@@ -11,10 +11,11 @@ Actions are pinned to commit SHAs. Dependabot proposes npm and Actions updates.
 Fork PR verification has read-only permissions and receives no deployment
 identity. Original icon assets are GPL-3.0-only; no audio is bundled.
 
-Before accepting outside contributions, configure GitHub main protection with
-required backend, app, and secret checks, review requirements, and no force
-pushes. Keep prod restricted to main and require an appropriate deployment
-reviewer, and require approval before running workflows from outside forks.
+Outside pull requests are not accepted (see CONTRIBUTING.md), but forks can
+still open them. Configure GitHub main protection with required backend, app,
+and secret checks and no force pushes. Keep prod restricted to main, require a
+deployment reviewer, and require approval before running workflows from
+outside forks.
 These account settings are separate from committed workflow files; verify the
 exact check names from the first workflow runs before making them required.
 

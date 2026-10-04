@@ -65,4 +65,5 @@ app has no remote config. To stop it in an emergency, cut CDN access — see the
 
 Original source code and bundled app icons are licensed under
 [GPL-3.0-only](LICENSE). See [third-party notices](THIRD_PARTY_NOTICES.md),
-[contributor setup](CONTRIBUTING.md), and the [security reporting policy](SECURITY.md).
+[contribution policy](CONTRIBUTING.md) (issues welcome; outside pull requests
+are not accepted), and the [security reporting policy](SECURITY.md).

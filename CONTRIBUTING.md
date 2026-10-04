@@ -1,15 +1,18 @@
 # Contributing
 
-Original code and bundled app icons are licensed under GPL-3.0-only; see
-[LICENSE](LICENSE) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
-Contributions must be yours to submit under those terms. Do not add credentials,
-unlicensed media, or production fixtures containing private data.
+This project is open source but **not open to outside contributions**. Pull
+requests from people other than the maintainer will be closed without review.
+The app ships through the Mac App Store, and keeping every line under a single
+copyright holder is what keeps that distribution compatible with the GPL.
 
-Use a topic branch and submit a focused pull request explaining the behavior
-change and validation. Security reports belong in the private channel described
-in [SECURITY.md](SECURITY.md).
+You are welcome to:
 
-## Local checks
+- Open an issue for a bug or an idea.
+- Fork it and change it however you like under [GPL-3.0-only](LICENSE); see
+  [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for what the license covers.
+- Report security problems privately as described in [SECURITY.md](SECURITY.md).
+
+## Running it yourself
 
 Use Node 24 and macOS 14+ with Xcode for the native app:
 
@@ -26,11 +29,9 @@ bash app/scripts/test-security.sh
 ```
 
 The unsigned Debug build needs no private Firebase plist. Follow the reproducible
-build instructions in [app/README.md](app/README.md). Review and commit package
-lockfiles with dependency changes. Use your own cloud projects and signing
-identity for a fork; do not point write or load-test tools at production.
+build instructions in [app/README.md](app/README.md). A fork needs its own cloud
+projects, API-Football key, signing identity and bundle id; do not point write
+or load-test tools at this project's production services.
 
 Backend deployments must pass the reusable verification workflow for the exact
-commit. Maintainers should protect main, require review/checks, and restrict the
-production environment before accepting outside contributions. Fork pull
-requests must never receive deployment credentials.
+commit. Fork pull requests never receive deployment credentials.
