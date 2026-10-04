@@ -14,10 +14,9 @@ identity. Original icon assets are GPL-3.0-only; no audio is bundled.
 Before accepting outside contributions, configure GitHub main protection with
 required backend, app, and secret checks, review requirements, and no force
 pushes. Keep prod restricted to main and require an appropriate deployment
-reviewer. These account settings are separate from committed workflow files;
-the current private-repository plan returned HTTP 403 for branch protection.
-Enable the controls when the plan supports them or when publishing, and verify
-the exact check names from the first workflow runs before making them required.
+reviewer, and require approval before running workflows from outside forks.
+These account settings are separate from committed workflow files; verify the
+exact check names from the first workflow runs before making them required.
 
 The macOS release is still archived/uploaded manually from Xcode; CI never
 uploads to the App Store. Deployment secrets/variables are documented in

@@ -2,8 +2,10 @@
 
 Security fixes target the current main branch and the latest released app.
 
-Please report suspected vulnerabilities privately to **hello@thisisnsh.com**
-with the subject “All Day I Dream About Sports security report”. Include the
+Please report suspected vulnerabilities privately, either through GitHub's
+**Report a vulnerability** button on this repository's Security tab or by email
+to **hello@thisisnsh.com** with the subject “All Day I Dream About Sports
+security report”. Include the
 version/commit, affected component, reproduction steps, and expected impact.
 Do not publish credentials or personal data in issues or pull requests.
 

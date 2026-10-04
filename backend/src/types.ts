@@ -1,6 +1,6 @@
 /**
  * Stable global team identity = API-Football's numeric team id (never null,
- * unique across leagues). Used as the celebration counter key.
+ * unique across leagues).
  */
 export type TeamId = number;
 
