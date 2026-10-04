@@ -27,3 +27,7 @@ tester/.staging.env
 # Python infrastructure checks
 __pycache__/
 *.pyc
+
+# Local-only tool state and publish credentials
+.wrangler/
+app/scripts/.publish.env
