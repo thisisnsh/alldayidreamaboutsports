@@ -1,0 +1,10 @@
+[extend]
+useDefault = true
+
+# Historical Sparkle verification keys are public, not signing credentials.
+[[allowlists]]
+description = "Sparkle public verification key in historical XcodeGen configuration"
+condition = "AND"
+paths = ['^app/project\.yml$']
+regexTarget = "match"
+regexes = ['SUPublicEDKey: [A-Za-z0-9+/=]+']

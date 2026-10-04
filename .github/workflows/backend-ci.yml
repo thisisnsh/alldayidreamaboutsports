@@ -1,25 +1,32 @@
 name: backend-ci
 
 on:
+  workflow_call:
   pull_request:
-    paths: ["backend/**", ".github/workflows/backend-ci.yml"]
   push:
     branches: [main]
-    paths: ["backend/**", ".github/workflows/backend-ci.yml"]
+
+permissions:
+  contents: read
 
 jobs:
   test:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: backend
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 24
           cache: npm
-          cache-dependency-path: backend/package-lock.json
-      - run: npm ci
-      - run: npm run typecheck
-      - run: npm test
+          cache-dependency-path: |
+            backend/package-lock.json
+            tester/package-lock.json
+      - run: npm ci --ignore-scripts
+        working-directory: backend
+      - run: npm run typecheck && npm test && npm run build && npm audit --audit-level=low
+        working-directory: backend
+      - run: npm ci --ignore-scripts && npm run typecheck && npm audit --audit-level=low
+        working-directory: tester
+      - run: python3 -m unittest discover -s infra/test -v
