@@ -4,6 +4,7 @@ options:
   deploymentTarget:
     macOS: "14.0"
   createIntermediateGroups: true
+  postGenCommand: bash scripts/restore-package-lock.sh
 
 configs:
   Debug: debug
@@ -13,7 +14,7 @@ configs:
 packages:
   Firebase:
     url: https://github.com/firebase/firebase-ios-sdk
-    from: 12.0.0
+    exactVersion: 12.19.2
 
 # Distributed only through the Mac App Store: sandboxed, signed automatically
 # by Xcode (Apple Development to run, Apple Distribution when archived), and
