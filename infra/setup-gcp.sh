@@ -28,7 +28,6 @@ gcloud services enable \
   cloudscheduler.googleapis.com \
   cloudtasks.googleapis.com \
   secretmanager.googleapis.com \
-  firebaseremoteconfig.googleapis.com \
   iamcredentials.googleapis.com
 
 echo "── Secrets (placeholders — set real values after)"
@@ -155,8 +154,8 @@ cat <<EOF
   var    R2_BUCKET_SCORES               = environment's public scores bucket
 
 Manual steps remaining (see infra/README.md):
-  1. Firebase: add project in console, publish remoteconfig.template.json
-     (no APNs/FCM — push was dropped for polling + CDN)
+  1. Firebase: add project in console, register the macOS app
+     (Analytics + Crashlytics only — no Remote Config, no APNs/FCM)
   2. Set real secret values (API-Football key, R2 creds)
   3. First deploy: gh workflow run backend-deploy.yml, then rerun this script so
      the scheduler job gets the real service URL

@@ -53,8 +53,8 @@ These are the paid/identity things nothing else works without.
 
 ## 2. Google Cloud + Firebase — do staging first, then repeat for prod — `infra/README.md`
 
-This is the backend brain: a project that runs polling and
-the remote on/off switches (Remote Config). You'll run
+This is the backend brain: a project that runs polling, plus Firebase for
+anonymous analytics and crash reports. You'll run
 this whole section twice. **Note the short project name:** GCP caps project ids at
 30 characters and `alldayidreamaboutsports-staging` is 31 — one too long — so we
 use the shorter `dreamaboutsports-` prefix for the GCP project id only.
@@ -69,9 +69,6 @@ Everything else (bundle id, buckets, domain) still uses the full name.
       `app/Resources/GoogleService-Info-Staging.plist`. This file points at
       `dreamaboutsports-staging`; the build now includes it only in `Staging`.
       Repeat for prod later as `GoogleService-Info-Production.plist`.
-- [ ] **Import + publish** `infra/remoteconfig.template.json` in Remote Config.
-      These are the live switches (kill switch, minimum build, animation
-      settings) you can flip without shipping an update.
 - [ ] **Retire legacy celebration data** with `infra/retire-celebrations.mjs`
       after deploying the backend without shared counts.
 - [ ] **Set the real secret values:** `api-football-key`
@@ -146,11 +143,9 @@ Don't ship without watching the whole pipeline work on a real goal. Use a
       should fire, and tapping the ball should animate locally without an upload.
 - [ ] **Then watch a real goal:** it should land < 30s behind the TV broadcast,
       the event pill should show, and the popover score should reconcile.
-- [ ] **Test the kill switch:** flip `kill_switch=true` in Remote Config → a
-      running app should lock within seconds; flip it back and it recovers. This
-      is your emergency "turn it off" button during matches.
-- [ ] **Test the update gate:** set `min_build` above the current build → the
-      "please update" gate should appear; reset it afterward.
+- [ ] **Test the emergency stop:** block the staging scores hostname with a
+      Cloudflare WAF rule → a running app should go quiet without errors on
+      screen; disable the rule and it recovers (`infra/README.md`).
 - [ ] **Test the notch pill** on a notched Mac *and* on an external / non-notch
       display, since the layout differs.
 - [ ] **Watch the dispatch gate open and close.** `/internal/dispatch` should
@@ -168,9 +163,7 @@ Don't ship without watching the whole pipeline work on a real goal. Use a
       App Store Connect), test the build via TestFlight, then submit for review.
 - [ ] **Check the website is live** (public repo): it links to the App Store
       listing and the privacy page is reachable.
-- [ ] Keep Remote Config `min_build` unchanged unless you need to force older
-      installs to update — and only raise it once that build is live.
-- [ ] **📣 Announce** — and keep the kill-switch runbook (`infra/README.md`)
+- [ ] **📣 Announce** — and keep the emergency-stop runbook (`infra/README.md`)
       handy during matches.
 
 ## Post-MVP (cut from v1, revisit after launch)
