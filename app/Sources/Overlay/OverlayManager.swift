@@ -66,8 +66,10 @@ final class OverlayManager: ObservableObject {
         }
     }
 
-    private var params: AnimationParams { ControlPlane.shared.animationParams }
-    private var setSize: Int { max(1, params.notchStackMax) }
+    /// How long each notification set (and the ball with it) stays on screen.
+    private let pillHoldSeconds: TimeInterval = 7
+    /// Notification set size — how many pills display at once.
+    private let setSize = 5
 
     // MARK: Intake — two queues, goals prioritized for selection
 
@@ -172,7 +174,7 @@ final class OverlayManager: ObservableObject {
         if settings.goalCenter ?? true, !fanGoals.isEmpty {
             startBall(for: fanGoals)
         }
-        scheduleLifecycle(after: params.pillHoldSeconds) { [self] in endSet() }
+        scheduleLifecycle(after: pillHoldSeconds) { [self] in endSet() }
     }
 
     /// Natural expiry: the whole set leaves, then the next set follows.
@@ -208,7 +210,7 @@ final class OverlayManager: ObservableObject {
         // It stays for `pillHoldSeconds`, independent of the notification set.
         ballPhase = .tapping
         showInteractPanel()
-        scheduleBall(after: params.pillHoldSeconds) { [self] in finishBall() }
+        scheduleBall(after: pillHoldSeconds) { [self] in finishBall() }
     }
 
     /// Ball ✕ — only the ball goes; the notification set stays.

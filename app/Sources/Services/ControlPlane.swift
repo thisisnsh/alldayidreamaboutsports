@@ -2,17 +2,7 @@ import FirebaseRemoteConfig
 import Foundation
 import SwiftUI
 
-struct AnimationParams: Codable {
-    /// How long each notification set (and the ball with it) stays on screen.
-    var pillHoldSeconds: Double = 7
-    /// Notification set size — how many pills display at once.
-    var notchStackMax: Int = 5
-}
-
-private let defaultAnimationParams = AnimationParams()
-private let defaultPollSeconds: Double = 5
 private let defaultMaxFanTeams = 10
-private let defaultEventStaleMinutes = 3
 /// Bootstrap cadence for the periodic Remote Config fetch, used until the
 /// template supplies its own value. It never delays startup — the initial fetch
 /// still goes out immediately; this only schedules the *next* one while that
@@ -37,18 +27,9 @@ final class ControlPlane: ObservableObject {
     /// a soft nudge, not the forced `updateRequired` block. Drives the
     /// "Update available" banner atop the menu.
     @Published var updateAvailable = false
-    @Published var animationParams = AnimationParams()
-    /// Live poll interval in seconds (≈5). Drives LiveStore's loop.
-    @Published var pollSeconds: Double = 5
     /// Max number of teams a user can be a fan of. Config-driven so we can raise
     /// it without shipping a build; starts at 10.
     @Published var maxFanTeams: Int = 10
-    /// Out-of-order staleness tolerance (minutes). A VAR event whose incident
-    /// minute is more than this behind the greatest minute we've ALREADY notified
-    /// for a fixture is a late/backfilled "past" decision (api-football injects it
-    /// minutes after the fact) and is suppressed. Config-driven so we can tune it
-    /// without shipping a build. See EventRouter's staleness guard.
-    @Published var eventStaleMinutes: Int = 3
     /// Effective interval between periodic forced Remote Config fetches. The
     /// app-wide loop below is the only periodic owner — the menu has none.
     @Published private(set) var remoteConfigFetchSeconds: Double = defaultRemoteConfigFetchSeconds
@@ -67,9 +48,7 @@ final class ControlPlane: ObservableObject {
     private var firebaseUpdateRequired = false
     private var firebaseUpdateAvailable = false
     private var firebaseKillMessage = ""
-    private var firebasePollSeconds = defaultPollSeconds
     private var firebaseMaxFanTeams = defaultMaxFanTeams
-    private var firebaseEventStaleMinutes = defaultEventStaleMinutes
     private var firebaseRemoteConfigFetchSeconds = defaultRemoteConfigFetchSeconds
 
     func start() {
@@ -90,10 +69,7 @@ final class ControlPlane: ObservableObject {
                 "kill_message": "" as NSString,
                 "min_build": 1 as NSNumber,
                 "latest_build": 0 as NSNumber,
-                "animation_params": #"{"pillHoldSeconds":7,"notchStackMax":5}"# as NSString,
-                "poll_seconds": 5 as NSNumber,
                 "max_fan_teams": defaultMaxFanTeams as NSNumber,
-                "event_stale_minutes": defaultEventStaleMinutes as NSNumber,
                 "remote_config_fetch_interval_seconds": defaultRemoteConfigFetchSeconds as NSNumber,
             ])
             // Apply the last activated values before session bootstrap can let
@@ -128,12 +104,8 @@ final class ControlPlane: ObservableObject {
     private func apply(_ rc: RemoteConfig) {
         firebaseKillSwitch = rc["kill_switch"].boolValue
         firebaseKillMessage = rc["kill_message"].stringValue
-        let secs = rc["poll_seconds"].numberValue.doubleValue
-        firebasePollSeconds = secs >= 1 ? secs : defaultPollSeconds
         let maxFans = rc["max_fan_teams"].numberValue.intValue
         firebaseMaxFanTeams = maxFans >= 1 ? maxFans : defaultMaxFanTeams
-        let staleMins = rc["event_stale_minutes"].numberValue.intValue
-        firebaseEventStaleMinutes = staleMins >= 0 ? staleMins : defaultEventStaleMinutes
         // Missing/malformed values arrive as 0 here, so the range check covers
         // them alongside non-finite and out-of-range edits.
         let fetchSecs = rc["remote_config_fetch_interval_seconds"].numberValue.doubleValue
@@ -145,14 +117,8 @@ final class ControlPlane: ObservableObject {
         firebaseUpdateRequired = minBuild > 0 && AppEnvironment.buildNumber < minBuild
         let latestBuild = rc["latest_build"].numberValue.intValue
         firebaseUpdateAvailable = latestBuild > 0 && AppEnvironment.buildNumber < latestBuild
-        if let data = rc["animation_params"].stringValue.data(using: .utf8),
-           let params = try? JSONDecoder().decode(AnimationParams.self, from: data) {
-            animationParams = params
-        } else {
-            animationParams = defaultAnimationParams
-        }
         applyEffectiveState()
-        AppLog.info(.remoteConfig, "firebase_state_applied kill_switch=\(firebaseKillSwitch) update_required=\(firebaseUpdateRequired) update_available=\(firebaseUpdateAvailable) poll_seconds=\(firebasePollSeconds) max_fan_teams=\(firebaseMaxFanTeams) event_stale_minutes=\(firebaseEventStaleMinutes) rc_fetch_seconds=\(firebaseRemoteConfigFetchSeconds)")
+        AppLog.info(.remoteConfig, "firebase_state_applied kill_switch=\(firebaseKillSwitch) update_required=\(firebaseUpdateRequired) update_available=\(firebaseUpdateAvailable) max_fan_teams=\(firebaseMaxFanTeams) rc_fetch_seconds=\(firebaseRemoteConfigFetchSeconds)")
     }
 
     private func applyEffectiveState() {
@@ -162,9 +128,7 @@ final class ControlPlane: ObservableObject {
         updateRequired = firebaseUpdateRequired
         updateAvailable = firebaseUpdateAvailable
         killMessage = firebaseKillMessage
-        pollSeconds = firebasePollSeconds
         maxFanTeams = firebaseMaxFanTeams
-        eventStaleMinutes = firebaseEventStaleMinutes
         remoteConfigFetchSeconds = firebaseRemoteConfigFetchSeconds
         // Ahead of the kill/update returns below: a killed or blocked install
         // still has to keep fetching to hear that it has been recovered.
