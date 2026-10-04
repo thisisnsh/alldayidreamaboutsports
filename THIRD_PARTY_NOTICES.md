@@ -2,7 +2,7 @@
 
 The project's original source code and the seven app-icon PNGs under
 `app/Resources/Assets.xcassets/AppIcon.appiconset/` are provided under
-**GPL-3.0-only**. Copyright © 2026 thisisnsh and contributors. The maintainer
+**GPL-3.0-only**. Copyright © 2026 thisisnsh. The maintainer
 confirmed ownership of those icons. See [LICENSE](LICENSE) for the license text.
 The bundled confetti audio and its playback code have been removed.
 
