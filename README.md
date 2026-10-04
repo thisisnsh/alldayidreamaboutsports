@@ -37,7 +37,7 @@ there are no shared celebration counts, user writes, or Firestore dependency.
 | Dir | What | Docs |
 |---|---|---|
 | `app/` | macOS app (SwiftUI, macOS 14+, XcodeGen) | [app/README.md](app/README.md) — build, test, Mac App Store release |
-| `backend/` | Cloud Run service: poller + public API (TypeScript) | [backend/README.md](backend/README.md) — endpoints, env, deploy |
+| `backend/` | Cloud Run service: poller + internal API (TypeScript) | [backend/README.md](backend/README.md) — endpoints, env, deploy |
 | `infra/` | GCP/R2 setup scripts, Firestore rules | [infra/README.md](infra/README.md) — one-time cloud setup, emergency-stop runbook |
 | `.github/` | CI: backend test/deploy | [.github/README.md](.github/README.md) — workflow overview |
 
@@ -57,7 +57,13 @@ The landing page + privacy policy live in the separate **public** repo
 ## Release
 
 The app ships only through the Mac App Store, straight from Xcode: Product →
-Archive → Distribute App → App Store Connect. No CI, no DMG. See
+Archive → Distribute App → App Store Connect. No release CI, no DMG. See
 [app/README.md](app/README.md#mac-app-store). The App Store handles updates; the
 app has no remote config. To stop it in an emergency, cut CDN access — see the
 [emergency-stop runbook](infra/README.md#emergency-stop-runbook).
+
+## License and contributions
+
+Original source code and bundled app icons are licensed under
+[GPL-3.0-only](LICENSE). See [third-party notices](THIRD_PARTY_NOTICES.md),
+[contributor setup](CONTRIBUTING.md), and the [security reporting policy](SECURITY.md).
