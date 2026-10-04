@@ -3,7 +3,9 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "engines": { "node": ">=22" },
+  "engines": {
+    "node": ">=22"
+  },
   "description": "Staging-only dev tooling: CDN load-test + fake event publisher. Never point at production.",
   "scripts": {
     "loadtest": "tsx --env-file=.staging.env loadtest.ts",
@@ -17,5 +19,6 @@
     "@types/node": "^24.0.0",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0"
-  }
+  },
+  "license": "GPL-3.0-only"
 }

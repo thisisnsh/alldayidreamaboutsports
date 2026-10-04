@@ -175,3 +175,27 @@ Key invariants:
 - The published `fixtures` list is fan-filtered. The full day's fixtures — up to
   ~48 across five leagues — stay in the working set for the poll loop, but only
   the user's own are published and written to the local cache.
+
+## Reproducible contributor checks
+
+`xcodegen` restores the tracked `Package.resolved` into the generated project.
+Firebase is pinned to the reviewed version. To update dependencies, change the
+pin in `project.yml`, resolve deliberately, copy the new generated lockfile to
+`app/Package.resolved`, and review both changes together.
+
+```sh
+bash scripts/test-security.sh
+xcodegen
+xcodebuild -scheme AllDayIDreamAboutSports -configuration Debug \
+  -onlyUsePackageVersionsFromResolvedFile -disableAutomaticPackageResolution \
+  CODE_SIGNING_ALLOWED=NO build
+```
+
+For signed forks, replace `DEVELOPMENT_TEAM`, `PRODUCT_BUNDLE_IDENTIFIER`, and
+the keychain access group in `App.entitlements` with your own values. Real-service
+builds also need your own Firebase plists and scores URLs. Debug uses fake match
+state but reads the public production catalog and API-Sports logos; switch
+`FakeScores.fetchCatalog()` to `hardcodedCatalog` for a fixed catalog snapshot.
+
+The app contains no bundled audio or sound preference. Existing saved sound
+preferences are ignored when decoded, while other preferences are preserved.
