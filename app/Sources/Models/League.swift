@@ -3,7 +3,7 @@ import Foundation
 /// A competition in the catalog. `active` = users can follow its teams now;
 /// everything else shows in the picker as "Coming soon". `scheduled` = it has
 /// an ongoing or upcoming season (so it has teams); false → "Not scheduled".
-/// `ended` = its season is over — archived, still listed, never polled.
+/// `ended` = its current season is over.
 struct League: Codable, Identifiable, Hashable {
     let id: Int
     let name: String
@@ -13,39 +13,7 @@ struct League: Codable, Identifiable, Hashable {
     let active: Bool
     let scheduled: Bool
     let season: Int?
-    /// Absent from catalogs published before the multi-league switch, which is
-    /// why it decodes as optional: a stale catalog.json must not fail to parse
-    /// and leave the picker empty.
-    private let endedFlag: Bool?
-
-    /// True when the competition is over. The World Cup stays in the catalog
-    /// after the final so a saved national team keeps its name and crest.
-    var ended: Bool { endedFlag ?? false }
-
-    init(
-        id: Int,
-        name: String,
-        logo: String,
-        country: String? = nil,
-        active: Bool,
-        scheduled: Bool,
-        season: Int?,
-        ended: Bool = false
-    ) {
-        self.id = id
-        self.name = name
-        self.logo = logo
-        self.country = country
-        self.active = active
-        self.scheduled = scheduled
-        self.season = season
-        self.endedFlag = ended
-    }
-
-    private enum CodingKeys: String, CodingKey {
-        case id, name, logo, country, active, scheduled, season
-        case endedFlag = "ended"
-    }
+    let ended: Bool
 
     /// Names for the supported competitions, for the moment before catalog.json
     /// lands (the menu labels every fixture row with its league, and the
@@ -57,7 +25,6 @@ struct League: Codable, Identifiable, Hashable {
         135: "Serie A",
         78: "Bundesliga",
         61: "Ligue 1",
-        1: "World Cup",
     ]
 }
 

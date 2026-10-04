@@ -39,10 +39,6 @@ struct TeamPickerView: View {
                 .padding(.leading, 16)
                 .padding(.top, 8)
 
-            if session.showsLeagueMigrationNotice {
-                migrationNotice
-            }
-
             HStack {
                 Image(systemName: "magnifyingglass").opacity(0.5)
                 TextField("Search teams", text: $query)
@@ -79,23 +75,6 @@ struct TeamPickerView: View {
         }
     }
 
-    /// Shown once, to someone whose only saved teams are World Cup sides. Their
-    /// picks are not being taken away — the note says so, because the "Ended"
-    /// badge below would otherwise read as exactly that.
-    private var migrationNotice: some View {
-        HStack(alignment: .top, spacing: 8) {
-            Image(systemName: "sparkles").font(.system(size: 12)).opacity(0.7)
-            Text("The World Cup has ended — pick a club side to follow. Your national teams stay saved for 2030.")
-                .font(.system(size: 12))
-                .fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 0)
-        }
-        .padding(10)
-        .background(RoundedRectangle(cornerRadius: 10).fill(Color.primary.opacity(0.06)))
-        .padding(.horizontal, 16)
-        .padding(.top, 10)
-    }
-
     private var fanOfStrip: some View {
         HStack(spacing: 8) {
             Text("Fan of").font(.system(size: 13, weight: .semibold))
@@ -127,8 +106,7 @@ struct TeamPickerView: View {
 private enum LeagueState {
     /// Under way.
     case live
-    /// Over — its teams stay listed, and stay pickable for anyone who wants to
-    /// keep a national side on the shelf.
+    /// Its current season is over — teams stay listed and pickable.
     case ended
     /// Known about, not launched yet.
     case comingSoon

@@ -16,9 +16,6 @@ final class AppSession: ObservableObject {
     /// as SCHEDULED / 0-0 by construction): matches outside `fixtures` are
     /// never polled, so they carry a kickoff time and nothing live.
     @Published var todayFixtures: [Fixture] = []
-    /// Shows the one-line "the World Cup has ended" note at the top of the
-    /// picker. Set once, by `promptLeagueMigrationIfNeeded()`.
-    @Published var showsLeagueMigrationNotice = false
 
     private var scores: ScoresProviding { Services.scores }
     private let defaults = AppDefaults.shared
@@ -41,18 +38,12 @@ final class AppSession: ObservableObject {
         /// `"<utc day>:<file date>"` for each schedule file loaded on that UTC
         /// day — the bootstrap is complete once all three of today±1 are in.
         static let fixtureBootstrapDates = "fixtureBootstrapDates"
-        static let leagueMigrationPrompted = "leagueMigrationPrompted"
     }
 
     /// Every catalog team, flattened — for id→team lookups across leagues.
     var allTeams: [Team] { teamsByLeague.values.flatMap { $0 } }
     /// Alias used by the overlay/menu lookups (`TeamCatalog.team(for:in:)`).
     var teams: [Team] { allTeams }
-    /// The leagues users can follow today (the top five); the rest are "Coming
-    /// soon" or, for a finished competition, "Ended".
-    var activeLeagueIds: Set<Int> { Set(leagues.filter(\.active).map(\.id)) }
-    /// Leagues that are over — still listed, teams still resolvable, never polled.
-    var endedLeagueIds: Set<Int> { Set(leagues.filter(\.ended).map(\.id)) }
     var fanTeamIds: Set<Int> { Set(prefs.fanTeamIds.compactMap(Int.init)) }
     var fanTeams: [Team] {
         prefs.fanTeamIds.compactMap(Int.init).map { TeamCatalog.team(for: $0, in: allTeams) }
@@ -70,7 +61,6 @@ final class AppSession: ObservableObject {
         // so picking teams in a Debug build lasts only until the next launch.
         prefs.fanTeamIds = DevConfig.fanTeams
         #endif
-        defaults.removeObject(forKey: "cachedCelebrationTotals")
         applyApplicationTheme()
         AppAnalytics.syncSettingProperties(prefs.settings)
         #if !DEV_BACKEND
@@ -226,40 +216,6 @@ final class AppSession: ObservableObject {
             uniqueKeysWithValues: catalog.leagues.map { ($0.id, catalog.teams(for: $0.id)) },
         )
         AppLog.info(.catalog, "refresh_complete leagues=\(leagues.count) teams=\(allTeams.count)")
-        promptLeagueMigrationIfNeeded()
-    }
-
-    /// Once, on the first catalog refresh after the top-five switch: if every
-    /// team the user follows belongs to a competition that has ended (i.e. they
-    /// only ever followed World Cup sides), open the picker so they can pick a
-    /// club. The national teams stay saved — they become followable again in
-    /// 2030 without the user re-picking — and the notice explains why.
-    private func promptLeagueMigrationIfNeeded() {
-        guard !defaults.bool(forKey: CacheKey.leagueMigrationPrompted) else { return }
-        // Wait for a catalog that actually knows which leagues have ended.
-        let ended = endedLeagueIds
-        guard !ended.isEmpty, !activeLeagueIds.isEmpty else { return }
-        let followed = fanTeamIds
-        guard !followed.isEmpty else {
-            // Nothing followed: there is nothing to migrate and no story to
-            // tell. Burn the flag anyway so it can never fire later.
-            defaults.set(true, forKey: CacheKey.leagueMigrationPrompted)
-            return
-        }
-        // Only when EVERY followed team we can place is in an ended competition.
-        // A user who already follows a club has nothing to be told. Ids the
-        // catalog cannot place are skipped rather than counted as clubs — one
-        // stale id must not silently suppress the whole prompt.
-        let leagueOfTeam = Dictionary(
-            allTeams.map { ($0.id, $0.leagueId) }, uniquingKeysWith: { first, _ in first },
-        )
-        let placed = followed.compactMap { leagueOfTeam[$0] }
-        let allEnded = !placed.isEmpty && placed.allSatisfy(ended.contains)
-        defaults.set(true, forKey: CacheKey.leagueMigrationPrompted)
-        guard allEnded else { return }
-        AppLog.info(.prefs, "league_migration_prompt fan_teams=\(followed.sorted())")
-        showsLeagueMigrationNotice = true
-        openWindow(WindowID.teamPicker)
     }
 
     /// Manual refresh (the menu's ↻ button): force a schedule re-bootstrap, run

@@ -326,9 +326,8 @@ private struct FixtureRow: View {
     private var pinnable: Bool { live && fixture.involves(session.fanTeamIds) }
 
     var body: some View {
-        // The row is hover-only (reveals the pin
-        // affordance) — clicking it no longer navigates anywhere; the FIFA page
-        // was rarely what people wanted and stole focus from the menu.
+        // The row is hover-only: it reveals the pin affordance and does not
+        // navigate anywhere.
         Button {
         } label: {
             HStack(alignment: .center, spacing: 6) {
