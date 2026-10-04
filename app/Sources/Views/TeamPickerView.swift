@@ -8,13 +8,7 @@ import SwiftUI
 /// every toggle.
 struct TeamPickerView: View {
     @EnvironmentObject var session: AppSession
-    /// Observed, not just read through `session`, so the "n of 10" counter
-    /// follows a Remote Config change to `max_fan_teams` while the window is
-    /// open.
-    @ObservedObject private var control = ControlPlane.shared
     @State private var query = ""
-    @State private var showsCapWarning = false
-    @State private var capWarningTask: Task<Void, Never>?
     private static let screen = "team_picker"
 
     var body: some View {
@@ -65,7 +59,7 @@ struct TeamPickerView: View {
                         let leagueTeams = teams(for: league)
                         // While searching, hide leagues with no matches.
                         if query.isEmpty || !leagueTeams.isEmpty {
-                            LeagueSection(league: league, teams: leagueTeams, onCapReached: flashCapWarning)
+                            LeagueSection(league: league, teams: leagueTeams)
                         }
                     }
                 }
@@ -82,47 +76,6 @@ struct TeamPickerView: View {
 
             Divider()
             fanOfStrip
-        }
-        // Floats over the grid just above the "Fan of" strip — next to the
-        // count it's about, and without pushing the sections around as it
-        // comes and goes.
-        .overlay(alignment: .bottom) {
-            if showsCapWarning {
-                capWarning
-                    .padding(.bottom, 60)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
-        }
-    }
-
-    /// Says why a pick didn't take, then gets out of the way. Raised by a tile
-    /// tap or a "Follow all" that can't fit everything; three seconds is long
-    /// enough to read one line and short enough not to need dismissing.
-    private var capWarning: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "exclamationmark.triangle.fill")
-            Text("You can follow up to \(control.maxFanTeams) teams — unfollow one to add another")
-        }
-        .font(.system(size: 12, weight: .medium))
-        .foregroundStyle(.white)
-        .padding(.horizontal, 14)
-        .padding(.vertical, 9)
-        .background(Capsule().fill(Color.red))
-        .shadow(color: .black.opacity(0.2), radius: 8, y: 2)
-    }
-
-    private func flashCapWarning() {
-        // How often the fan cap is actually hit — a tile tap or a "Follow all"
-        // that couldn't fit everything.
-        AppAnalytics.capWarningShown(max: control.maxFanTeams)
-        withAnimation(.easeOut(duration: 0.2)) { showsCapWarning = true }
-        // Re-raising restarts the three seconds rather than stacking a second
-        // countdown that hides the banner early.
-        capWarningTask?.cancel()
-        capWarningTask = Task {
-            try? await Task.sleep(for: .seconds(3))
-            guard !Task.isCancelled else { return }
-            withAnimation(.easeIn(duration: 0.2)) { showsCapWarning = false }
         }
     }
 
@@ -158,11 +111,11 @@ struct TeamPickerView: View {
                 }
             }
             Spacer()
-            // Always shown, empty selection included: "0 of 10" tells you the
-            // cap before you've picked anything, which is when it helps most.
-            Text("\(session.fanTeams.count) of \(control.maxFanTeams)")
-                .font(.system(size: 12, weight: .medium))
-                .opacity(0.6)
+            if !session.fanTeams.isEmpty {
+                Text("\(session.fanTeams.count) followed")
+                    .font(.system(size: 12, weight: .medium))
+                    .opacity(0.6)
+            }
         }
         .padding(14)
         .background(.thinMaterial)
@@ -196,15 +149,8 @@ private enum LeagueState {
 /// One league: header (logo + country + name + status), then its team grid.
 private struct LeagueSection: View {
     @EnvironmentObject var session: AppSession
-    /// Observed, not just read: the cap drives the button's label, so a Remote
-    /// Config change to `max_fan_teams` has to land while the window is open.
-    @ObservedObject private var control = ControlPlane.shared
     let league: League
     let teams: [Team]
-
-    /// Raises the picker's "you're at the cap" banner. Owned up there because
-    /// the banner belongs to the window, not to one league's header.
-    let onCapReached: () -> Void
 
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 12), count: 4)
     private var state: LeagueState { LeagueState(league) }
@@ -254,11 +200,6 @@ private struct LeagueSection: View {
         if let index = ids.firstIndex(of: key) {
             ids.remove(at: index)
         } else {
-            // Cap how many teams a user can follow (config-driven). Adding past
-            // the cap is a no-op so the user can't silently lose later picks —
-            // the banner is what says so, since a tile that just ignores the
-            // click reads as broken.
-            guard ids.count < control.maxFanTeams else { return onCapReached() }
             ids.append(key)
         }
         session.setFanTeams(ids)
@@ -274,7 +215,6 @@ private struct LeagueSection: View {
         let followed = Set(session.prefs.fanTeamIds)
         return shownIds.filter { !followed.contains($0) }
     }
-    private var room: Int { max(0, control.maxFanTeams - session.prefs.fanTeamIds.count) }
 
     /// Both controls can be on screen at once: a part-followed section offers
     /// "Follow all" for the rest and "Unfollow all" for what's already picked.
@@ -298,20 +238,12 @@ private struct LeagueSection: View {
     /// One `setFanTeams` call, not one per team: it persists, logs, emits a
     /// per-team analytics event and kicks off `reconcileFanMatches`, so a loop
     /// would fire that whole tail twenty times.
-    ///
-    /// The cap is 10 and a league is 18-20 teams, so this usually can't take
-    /// them all. The button doesn't say so up front — hitting the ceiling
-    /// raises the banner instead, which is also the only feedback when there
-    /// was no room to begin with and the click does nothing at all.
     private func followAll() {
-        let capacity = room
-        if capacity < unfollowed.count { onCapReached() }
-        guard capacity > 0 else { return }
-        let taken = min(capacity, unfollowed.count)
+        let added = unfollowed
         // The individual `team_follow` events still fire per team; this is the
         // marker that says they came from one bulk action.
-        AppAnalytics.leagueFollowAll(leagueId: league.id, count: taken)
-        session.setFanTeams(session.prefs.fanTeamIds + unfollowed.prefix(capacity))
+        AppAnalytics.leagueFollowAll(leagueId: league.id, count: added.count)
+        session.setFanTeams(session.prefs.fanTeamIds + added)
     }
 
     private func unfollowAll() {
