@@ -202,9 +202,9 @@ struct MenuPopoverView: View {
         MenuPopoverController.shared.close()
     }
 
-    /// A pre-filled support email — the app repo is private, so there's no
-    /// public issue tracker to point at. Build + OS go in the body so reports
-    /// arrive with the version already attached.
+    /// A pre-filled support email, so users without a GitHub account can still
+    /// report. Build + OS go in the body so reports arrive with the version
+    /// already attached.
     private var reportBugURL: URL {
         supportMail(subject: "Bug report — All Day I Dream About Sports")
     }

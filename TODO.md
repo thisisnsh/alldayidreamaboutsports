@@ -98,18 +98,28 @@ lives on Cloudflare.
 - [ ] **Set each GitHub environment's `R2_BUCKET_SCORES` var** to its scores
       bucket after the script completes. The custom domains only work because
       DNS is now on Cloudflare.
-- [ ] **Create an R2 API token** (read+write all four buckets) → save as GCP secrets
+- [ ] **Create an R2 API token** (read+write on that environment's scores bucket
+      only) → save as GCP secrets
       `r2-access-key-id` / `r2-secret-access-key` / `r2-endpoint` so the backend
       can write score files.
 
 ## 4. GitHub repo settings
 
-Two repos: this **private** one (the app + backend) and a **public** one that
-hosts the marketing website on free GitHub Pages.
+Two repos: this one (the app + backend) and a separate one that hosts the
+marketing website on GitHub Pages. The repo lives at
+`thisisnsh/alldayidreamaboutsports`; the WIF condition in `setup-gcp.sh` assumes
+that exact `owner/repo` slug — if you rename it, reconcile the trust too.
 
-- [ ] **Push this private repo** to GitHub as `thisisnsh/alldayidreamaboutsports`.
-      Heads up: the WIF condition in `setup-gcp.sh` and the README badge URLs
-      assume that exact `owner/repo` slug — if you rename it, update those too.
+- [ ] **Finish the live security rollout first** (next section). Going public
+      before it is applied advertises the gaps those steps close.
+- [ ] **Make the repo public**, then in Settings → Code security enable private
+      vulnerability reporting, secret scanning with push protection, and
+      Dependabot alerts. Everything in git history becomes public too; the
+      deleted `confetti-pop.mp3` and old DMG background are still in history.
+- [ ] **Protect `main`:** require the backend, app and secret-scan checks (copy
+      the exact names from the first workflow runs), require a pull request,
+      block force pushes. Settings → Actions: require approval before running
+      workflows from outside contributors' forks.
 - [ ] **Publish the website:** follow the README in the separate public repo
       [`thisisnsh/alldayidreamaboutsports.com`](https://github.com/thisisnsh/alldayidreamaboutsports.com),
       then set its Pages custom domain to `alldayidreamaboutsports.com` and
@@ -119,7 +129,25 @@ hosts the marketing website on free GitHub Pages.
       **DNS-only / grey cloud** (not proxied), so Pages can verify the domain.
 - [ ] **Create `staging` + `prod` environments** in repo settings and add the
       secrets/vars listed in the table in `infra/README.md`. This is how CI
-      deploys to the right cloud project.
+      deploys to the right cloud project. Restrict both to `main` and require a
+      reviewer on `prod`.
+
+## 4a. Live security rollout (before going public)
+
+The repository fixes are committed; these account-side steps are not applied.
+
+- [ ] **Scores request guard:** with a Cloudflare token limited to Zone WAF
+      Edit, run `python3 infra/secure_scores.py --plan`, then `--apply`. Verify
+      canonical `/catalog.json` returns 200 and warms to HIT while a query-string
+      variant and an `Origin` header get 403 (`infra/README.md`). Today, random
+      query strings create cold cache keys that read R2.
+- [ ] **Scoped backend IAM:** `bash infra/scope-backend-iam.sh <project> us-central1
+      --plan`, then `--apply` on staging, verify a source deploy, then prod.
+- [ ] **R2 alerts:** configure Cloudflare R2 operations/billing alerts, confirm
+      they reach you, and confirm `r2.dev` is off and the R2 token is
+      bucket-scoped.
+- [ ] **Delete the retired buckets** `alldayidreamaboutsports-*-downloads` and
+      their `download.` DNS records if they still exist.
 ## 5. Mac App Store (one-time) — `app/README.md#mac-app-store`
 
 The app ships only through the Mac App Store, built and uploaded from Xcode with

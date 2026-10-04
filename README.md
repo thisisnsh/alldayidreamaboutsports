@@ -41,9 +41,8 @@ there are no shared celebration counts, user writes, or Firestore dependency.
 | `infra/` | GCP/R2 setup scripts, Firestore rules | [infra/README.md](infra/README.md) — one-time cloud setup, emergency-stop runbook |
 | `.github/` | CI: backend test/deploy | [.github/README.md](.github/README.md) — workflow overview |
 
-The landing page + privacy policy live in the separate **public** repo
-[`thisisnsh/alldayidreamaboutsports.com`](https://github.com/thisisnsh/alldayidreamaboutsports.com)
-(GitHub Pages isn't free on this private repo).
+The landing page + privacy policy live in the separate repo
+[`thisisnsh/alldayidreamaboutsports.com`](https://github.com/thisisnsh/alldayidreamaboutsports.com).
 
 **Shipping for the first time?** Work through [TODO.md](TODO.md) top to bottom.
 
