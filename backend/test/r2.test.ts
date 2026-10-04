@@ -89,7 +89,7 @@ describe("R2 cache-control invariant (§0: no write path omits it)", () => {
     for (const cc of [CACHE_CONTROL_LIVE, CACHE_CONTROL_LONG]) {
       const send = vi.fn().mockResolvedValue({});
       const r2 = new R2({ send } as never, "scores");
-      await r2.putJson("matches/1.json", { fixtureId: 1 }, cc);
+      await r2.putJson("matches/7.json", match, cc);
       const put = send.mock.calls[0]![0] as PutObjectCommand;
       expect(put.input.CacheControl).toBe(cc);
       expect(put.input.CacheControl).toBeTruthy();
@@ -102,5 +102,35 @@ describe("R2 cache-control invariant (§0: no write path omits it)", () => {
     await r2.putJsonIfChanged("fixtures-2026-06-14.json", { matches: [] }, CACHE_CONTROL_LONG);
     const put = send.mock.calls[0]![0] as PutObjectCommand;
     expect(put.input.CacheControl).toBe(CACHE_CONTROL_LONG);
+  });
+});
+
+describe("unsafe score publication", () => {
+  it.each([-1, 101, 50_000, Number.MAX_SAFE_INTEGER])("rejects a hostile score %s before any R2 write", async (goals) => {
+    const bad = { ...match, home: { ...match.home, goals } };
+    const send = vi.fn();
+    const r2 = new R2({ send } as never, "scores");
+    const store = new R2MatchStateStore({ send } as never, "scores");
+    await expect(store.save(bad, null)).rejects.toThrow("invalid match");
+    await expect(r2.putJson("matches/7.json", bad, CACHE_CONTROL_LIVE)).rejects.toThrow("invalid match");
+    await expect(r2.putJsonIfChanged("fixtures-2026-06-14.json", { matches: [bad] }, CACHE_CONTROL_LONG)).rejects.toThrow("invalid fixture");
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it("rejects oversized timelines, clock overflows, and mismatched object IDs", async () => {
+    const send = vi.fn();
+    const store = new R2MatchStateStore({ send } as never, "scores");
+    for (const bad of [
+      { ...match, minute: Number.MAX_SAFE_INTEGER },
+      { ...match, extra: -1 },
+      { ...match, home: { ...match.home, yellowCards: Number.MAX_SAFE_INTEGER } },
+      { ...match, home: { ...match.home, goalEvents: Array(101).fill({ minute: 1, extra: null }) } },
+      { ...match, home: { ...match.home, goalEvents: [{ player: null, minute: 45, extra: Number.MAX_SAFE_INTEGER }] } },
+    ]) {
+      await expect(store.save(bad, null)).rejects.toThrow("invalid match");
+    }
+    const r2 = new R2({ send } as never, "scores");
+    await expect(r2.putJson("matches/8.json", match, CACHE_CONTROL_LIVE)).rejects.toThrow("invalid match");
+    expect(send).not.toHaveBeenCalled();
   });
 });

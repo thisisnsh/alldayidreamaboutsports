@@ -4,11 +4,7 @@ import { ApiFootballProvider } from "../src/providers/apiFootball.js";
 import type { CatalogTeam, LeagueInfo, ScoreProvider } from "../src/providers/types.js";
 
 function providerReturning(payload: unknown, status = 200) {
-  const fetchMock = vi.fn().mockResolvedValue({
-    ok: status < 400,
-    status,
-    json: () => Promise.resolve(payload),
-  });
+  const fetchMock = vi.fn().mockImplementation(async () => new Response(JSON.stringify(payload), { status }));
   return { provider: new ApiFootballProvider("key", fetchMock as never), fetchMock };
 }
 

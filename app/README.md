@@ -184,6 +184,14 @@ xcodebuild -scheme AllDayIDreamAboutSports -configuration Debug \
   CODE_SIGNING_ALLOWED=NO build
 ```
 
+The security checks cover hostile match counters and event bursts as well as
+remote URL/size limits. Network and cached fixtures reject negative or excessive
+values: scores/cards at most 100, minutes at most 300, stoppage at most 60,
+each team event list and VAR list at most 100, and shootout kicks at most 200.
+Schedule responses allow at most 512 fixtures. A diff exceeding 64 events updates
+the accepted score but emits no overlay burst. Invalid snapshots leave the last
+valid live state intact; an invalid persisted cache triggers a fresh bootstrap.
+
 For signed forks, replace `DEVELOPMENT_TEAM`, `PRODUCT_BUNDLE_IDENTIFIER`, and
 the keychain access group in `App.entitlements` with your own values. Real-service
 builds also need your own Firebase plists and scores URLs. Debug uses fake match

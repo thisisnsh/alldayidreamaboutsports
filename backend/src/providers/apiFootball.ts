@@ -1,6 +1,7 @@
 import type { GoalEvent, MatchState, MatchStatus, PenaltyKick, Period, SubEvent, VarEvent } from "../types.js";
 import type { CatalogTeam, LeagueInfo, ScoreProvider } from "./types.js";
 import { log } from "../log.js";
+import { readRemoteJson } from "../remoteJson.js";
 
 const BASE = "https://v3.football.api-sports.io";
 
@@ -113,7 +114,7 @@ export class ApiFootballProvider implements ScoreProvider {
         redirect: "error",
       });
       if (!res.ok) throw new Error(`API-Football ${path} -> HTTP ${res.status}`);
-      const body = (await res.json()) as { response?: T[]; errors?: unknown };
+      const body = (await readRemoteJson(res)) as { response?: T[]; errors?: unknown };
       // API-Football reports quota/auth/parameter failures as HTTP 200 with
       // a non-empty `errors` (object or array) and an empty `response`. Taking
       // that as "no fixtures" would overwrite the published schedule with
@@ -124,6 +125,7 @@ export class ApiFootballProvider implements ScoreProvider {
       if (!Array.isArray(body.response)) {
         throw new Error(`API-Football ${path} -> bad body: ${JSON.stringify(body.errors ?? body).slice(0, 300)}`);
       }
+      if (body.response.length > 2048) throw new Error("API-Football response exceeds row limit");
       log.info("provider_request_complete", {
         provider: "api-football", path, rows: body.response.length, durationMs: Date.now() - started,
       });

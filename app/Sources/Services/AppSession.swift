@@ -65,10 +65,18 @@ final class AppSession: ObservableObject {
         // A demo run starts from an empty board: DemoEngine seeds every fixture
         // itself, so restoring a cache would only leave rows from an older
         // reel (or an older DevConfig) sitting in "All Teams".
-        if let data = defaults.data(forKey: CacheKey.fixtures),
-           let stored = try? JSONDecoder().decode([Fixture].self, from: data) {
-            fixturesById = Dictionary(stored.map { ($0.fixtureId, $0) }, uniquingKeysWith: { _, last in last })
-            publishFixtures()
+        if let data = defaults.data(forKey: CacheKey.fixtures) {
+            do {
+                let stored = try JSONDecoder().decode([Fixture].self, from: data)
+                fixturesById = Dictionary(stored.map { ($0.fixtureId, $0) }, uniquingKeysWith: { _, last in last })
+                publishFixtures()
+            } catch {
+                // A rejected old cache must not leave the schedule marked as
+                // loaded, or polling would have no fixtures until tomorrow.
+                defaults.removeObject(forKey: CacheKey.fixtures)
+                defaults.removeObject(forKey: CacheKey.fixtureBootstrapDates)
+                AppLog.info(.fixtures, "fixture_cache_rejected")
+            }
         }
         #endif
         Task {

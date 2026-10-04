@@ -349,7 +349,7 @@ final class LiveStore {
     /// minute (plus stoppage) the moment itself carries, and held there until
     /// the next beat moves it.
     func noteClockObservation(_ current: Fixture) {
-        guard current.running == true, let period = current.period,
+        guard current.hasValidBounds, current.running == true, let period = current.period,
               [.first, .second, .extraFirst, .extraSecond].contains(period)
         else { return }
         let baseSeconds = current.minute.map { Double($0 + (current.extra ?? 0)) * 60 }
@@ -365,6 +365,10 @@ final class LiveStore {
     /// events (don't replay pre-launch goals); only later deltas fire overlays.
     /// A baseline gone stale (see `baselineIsStale`) re-seeds the same way.
     private func ingest(_ current: Fixture) {
+        guard current.hasValidBounds else {
+            AppLog.info(.fixtures, "snapshot_rejected reason=invalid_bounds fixture_id=\(current.fixtureId)")
+            return
+        }
         let now = Date()
         let prev = baseline[current.fixtureId]
         // OBSERVATION-GAP GUARD: `prev` is only "the state one poll ago" while
