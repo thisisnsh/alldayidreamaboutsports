@@ -191,7 +191,6 @@ enum AppAnalytics {
         case launchAtLogin = "launch_at_login"
         case goalCenter = "goal_center"
         case confetti
-        case confettiSound = "confetti_sound"
         case theme
         case capsuleSize = "capsule_size"
         case capsulePosition = "capsule_position"
@@ -234,7 +233,6 @@ enum AppAnalytics {
         setUserProperty((s.launchAtLogin ?? false) ? "on" : "off", forName: Setting.launchAtLogin.property)
         setUserProperty((s.goalCenter ?? true) ? "on" : "off", forName: Setting.goalCenter.property)
         setUserProperty((s.confetti ?? true) ? "on" : "off", forName: Setting.confetti.property)
-        setUserProperty((s.confettiSound ?? true) ? "on" : "off", forName: Setting.confettiSound.property)
         setUserProperty((s.theme ?? .system).rawValue, forName: Setting.theme.property)
         setUserProperty((s.capsuleSize ?? .medium).rawValue, forName: Setting.capsuleSize.property)
         setUserProperty((s.capsulePosition ?? .top).rawValue, forName: Setting.capsulePosition.property)

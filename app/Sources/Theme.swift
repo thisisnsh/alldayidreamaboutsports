@@ -1,5 +1,4 @@
 import AppKit
-import AVFoundation
 import SwiftUI
 
 /// Monochrome surfaces: pure white app in light mode, pure black in dark.
@@ -74,33 +73,6 @@ enum CapsulePosition: String, CaseIterable, Codable {
         switch self {
         case .top: "Top"
         case .bottom: "Bottom"
-        }
-    }
-}
-
-/// Plays the confetti pop bundled at `Resources/confetti-pop.mp3`. Each call
-/// spins up fresh `AVAudioPlayer` instances so pops overlap freely — one per
-/// goal in the set — exactly like the confetti bursts they ride along with.
-/// Finished players are pruned on the next call so the pool never grows.
-@MainActor
-enum ConfettiSoundPlayer {
-    private static var players: [AVAudioPlayer] = []
-    private static let soundURL = Bundle.main.url(forResource: "confetti-pop", withExtension: "mp3")
-
-    /// Fire `times` pops in parallel (default one). No-op when muted upstream.
-    static func play(times: Int = 1) {
-        guard times > 0 else { return }
-        guard let url = soundURL else {
-            AppLog.error(.celebrations, "confetti_sound_missing name=confetti-pop.mp3")
-            return
-        }
-        // Drop players that have finished so the array stays bounded.
-        players.removeAll { !$0.isPlaying }
-        for _ in 0 ..< times {
-            guard let player = try? AVAudioPlayer(contentsOf: url) else { continue }
-            player.prepareToPlay()
-            players.append(player)
-            player.play()
         }
     }
 }

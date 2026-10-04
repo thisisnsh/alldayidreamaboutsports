@@ -61,13 +61,7 @@ struct SettingsView: View {
                         SettingsCard("Goal celebration") {
                             toggleRow("Show goal in center", isOn: settingsBinding(\.goalCenter, default: true))
                             toggleRow("Show confetti in corners", isOn: settingsBinding(\.confetti, default: true))
-                            // The pop rides along with the confetti, so it only
-                            // makes sense while confetti is on; hide it otherwise.
-                            // Its value is preserved so re-enabling confetti brings
-                            // back whatever the user last set (default on).
-                            if session.prefs.settings.confetti ?? true {
-                                toggleRow("Play confetti sound", isOn: confettiSoundBinding)
-                            }
+
                             Button {
                                 // No event here: `OverlayManager.preview()`
                                 // reports the same click as
@@ -77,7 +71,7 @@ struct SettingsView: View {
                                 Text("Preview animation").frame(maxWidth: .infinity)
                             }
                             .buttonStyle(.cardButton)
-                            caption("Choose how your team’s goals are celebrated with animations and sound. You’ll always see the notch drop on goal like every other event. Preview shows exactly what you picked.")
+                            caption("Choose how your team’s goals are celebrated with animations. You’ll always see the notch drop on goal like every other event. Preview shows exactly what you picked.")
                         }
                     }
 
@@ -227,24 +221,8 @@ struct SettingsView: View {
                     if type == .goal {
                         $0.goalCenter = on
                         $0.confetti = on
-                        // confettiSound is intentionally left untouched — it
-                        // rides on confetti's visibility and keeps its value so
-                        // re-enabling brings back the user's last choice.
-                    }
-                }
-            }
-        )
-    }
 
-    private var confettiSoundBinding: Binding<Bool> {
-        Binding(
-            get: { session.prefs.settings.confettiSound ?? true },
-            set: { on in
-                session.updateSettings { $0.confettiSound = on }
-                // Pop once when switching it on so the user hears what they
-                // enabled — a preview of the confetti sound.
-                if on {
-                    ConfettiSoundPlayer.play()
+                    }
                 }
             }
         )

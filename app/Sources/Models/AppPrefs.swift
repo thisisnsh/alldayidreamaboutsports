@@ -19,10 +19,6 @@ struct PrefSettings: Codable, Equatable {
     var goalCenter: Bool?
     /// Confetti burst on fan-team goals (with either style).
     var confetti: Bool?
-    /// Pop sound riding along with the confetti burst; only meaningful while
-    /// `confetti` is on. off = silent confetti. Preserved across confetti
-    /// toggles so re-enabling confetti restores the user's last choice.
-    var confettiSound: Bool?
     /// Size of pinned score capsules (fonts + logos). nil = medium.
     var capsuleSize: CapsuleSize?
     /// Vertical screen edge for pinned capsules. nil = top.

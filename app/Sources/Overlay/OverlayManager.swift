@@ -164,12 +164,7 @@ final class OverlayManager: ObservableObject {
         let settings = AppSession.shared.prefs.settings
         if settings.confetti ?? true {
             fireConfetti(count: fanGoals.count)
-            // The pop rides along with the confetti — one per goal, in parallel.
-            // Muting confetti mutes the sound with it; the toggle is independent
-            // only while confetti is on.
-            if settings.confettiSound ?? true {
-                ConfettiSoundPlayer.play(times: fanGoals.count)
-            }
+
         }
         if settings.goalCenter ?? true, !fanGoals.isEmpty {
             startBall(for: fanGoals)
