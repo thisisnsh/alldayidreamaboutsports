@@ -72,7 +72,8 @@ struct Catalog: Codable {
 
     func validated() throws -> Catalog {
         guard leagues.count <= 100, teams.count <= 100,
-              teams.values.allSatisfy({ $0.count <= 500 }) else { throw ValidationError.excessiveRows }
+              teams.values.allSatisfy({ $0.count <= 500 }),
+              teams.values.reduce(0, { $0 + $1.count }) <= 2000 else { throw ValidationError.excessiveRows }
         guard Set(leagues.map(\.id)).count == leagues.count else { throw ValidationError.duplicateLeague }
         for rows in teams.values {
             guard Set(rows.map(\.id)).count == rows.count else { throw ValidationError.duplicateTeam }

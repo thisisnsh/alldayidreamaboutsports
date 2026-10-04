@@ -59,6 +59,10 @@ struct RemoteDataTests {
             preconditionFailure("duplicate team accepted")
         } catch Catalog.ValidationError.duplicateTeam {}
         _ = try Catalog(leagues: [league], teams: ["39": [team]]).validated()
+        do {
+            _ = try Catalog(leagues: Array(repeating: league, count: 101), teams: [:]).validated()
+            preconditionFailure("oversized catalog accepted")
+        } catch Catalog.ValidationError.excessiveRows {}
         print("Remote data checks passed: URL policy, byte limits, and catalog validation")
     }
 }

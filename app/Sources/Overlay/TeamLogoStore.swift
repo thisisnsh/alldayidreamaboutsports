@@ -15,7 +15,17 @@ final class TeamLogoStore: ObservableObject {
     /// Bumped whenever a new image finishes loading — observe to trigger redraws.
     @Published private(set) var version = 0
 
-    private var images: [String: NSImage] = [:]
+    private let images: NSCache<NSString, NSImage> = {
+        let cache = NSCache<NSString, NSImage>()
+        cache.countLimit = 256
+        cache.totalCostLimit = 32 * 1024 * 1024
+        return cache
+    }()
+
+    private func cache(_ image: NSImage, for url: String) {
+        let cost = Int(image.size.width) * Int(image.size.height) * 4
+        images.setObject(image, forKey: url as NSString, cost: cost)
+    }
     private var loading: Set<String> = []
     private var warmTask: Task<Void, Never>?
     /// Consecutive failed loads per URL, cleared the moment one succeeds.
@@ -27,7 +37,7 @@ final class TeamLogoStore: ObservableObject {
     /// A URL that has just failed twice is in its cooldown and returns nil
     /// without touching the network until the window is up.
     func image(for url: String) -> NSImage? {
-        if let img = images[url] { return img }
+        if let img = images.object(forKey: url as NSString) { return img }
         if let until = coolingUntil[url], until > Date() { return nil }
         guard !url.isEmpty, let parsed = URL(string: url), !loading.contains(url) else { return nil }
         loading.insert(url)
@@ -37,7 +47,7 @@ final class TeamLogoStore: ObservableObject {
             if let img {
                 failures[url] = nil
                 coolingUntil[url] = nil
-                images[url] = img
+                cache(img, for: url)
             } else {
                 // A rendered fallback is the signal to refresh, so bumping
                 // `version` below is what sends the retry: observers redraw and
@@ -91,12 +101,12 @@ final class TeamLogoStore: ObservableObject {
             for (index, url) in targets.enumerated() {
                 if Task.isCancelled { return }
                 guard let self else { return }
-                if self.images[url] == nil {
+                if self.images.object(forKey: url as NSString) == nil {
                     _ = self.image(for: url) // kicks off its own fetch; doesn't block
                 } else if stale, let parsed = URL(string: url) {
                     Task {
                         if let img = await Self.load(parsed) {
-                            self.images[url] = img
+                            self.cache(img, for: url)
                             self.version &+= 1
                         }
                     }
