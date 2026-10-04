@@ -30,16 +30,9 @@ SCORES_HOSTS=(
   "scores-staging.alldayidreamaboutsports.com"
   "scores.alldayidreamaboutsports.com"
 )
-DOWNLOAD_HOSTS=(
-  "download-staging.alldayidreamaboutsports.com"
-  "download.alldayidreamaboutsports.com"
-)
-
 BUCKET_DOMAIN_PAIRS=(
   "alldayidreamaboutsports-staging-scores:scores-staging.alldayidreamaboutsports.com"
   "alldayidreamaboutsports-scores:scores.alldayidreamaboutsports.com"
-  "alldayidreamaboutsports-staging-downloads:download-staging.alldayidreamaboutsports.com"
-  "alldayidreamaboutsports-downloads:download.alldayidreamaboutsports.com"
 )
 
 require_tool() {
@@ -291,7 +284,7 @@ disable_r2_dev_url() {
 }
 
 configure_cloudflare_zone() {
-  local scores_expression downloads_expression r2_expression cache_refs cache_rules rate_refs rate_rules
+  local scores_expression cache_refs cache_rules rate_refs rate_rules
 
   : "${CLOUDFLARE_API_TOKEN:?set CLOUDFLARE_API_TOKEN for Cloudflare API setup}"
   : "${CLOUDFLARE_ACCOUNT_ID:?set CLOUDFLARE_ACCOUNT_ID for R2 custom-domain setup}"
@@ -304,20 +297,15 @@ configure_cloudflare_zone() {
   done
 
   scores_expression="$(host_expression "${SCORES_HOSTS[@]}")"
-  downloads_expression="$(host_expression "${DOWNLOAD_HOSTS[@]}")"
-  r2_expression="$(host_expression "${SCORES_HOSTS[@]}" "${DOWNLOAD_HOSTS[@]}")"
 
+  # The retired downloads ref stays listed so reruns remove its old rule.
   cache_refs='["allday_scores_cache_settings", "allday_downloads_cache_settings"]'
   cache_rules="$(
     jq -s '.' \
       <(cache_rule \
         "allday_scores_cache_settings" \
         "Cache scores R2 JSON only when objects carry Cache-Control" \
-        "$scores_expression") \
-      <(cache_rule \
-        "allday_downloads_cache_settings" \
-        "Cache downloads R2 objects only when objects carry Cache-Control" \
-        "$downloads_expression")
+        "$scores_expression")
   )"
   ensure_ruleset \
     "http_request_cache_settings" \
@@ -336,8 +324,8 @@ configure_cloudflare_zone() {
     jq -s '.' \
       <(rate_limit_rule \
         "allday_r2_origin_rate_limit" \
-        "Rate limit R2 origin reads for scores and downloads per IP/colo" \
-        "$r2_expression" \
+        "Rate limit R2 origin reads for scores per IP/colo" \
+        "$scores_expression" \
         "$R2_ORIGIN_RATE_LIMIT_REQUESTS_PER_10_SECONDS" \
         true)
   )"
@@ -354,10 +342,6 @@ require_tool npx
 # public scores buckets: fixtures-*.json, matches/*.json, catalog.json
 create_bucket alldayidreamaboutsports-staging-scores
 create_bucket alldayidreamaboutsports-scores
-# downloads buckets: app DMGs + appcast.xml (Sparkle feed). Staging gets its
-# own so test releases never reach production's auto-update feed.
-create_bucket alldayidreamaboutsports-staging-downloads
-create_bucket alldayidreamaboutsports-downloads
 
 for pair in "${BUCKET_DOMAIN_PAIRS[@]}"; do
   disable_r2_dev_url "${pair%%:*}"
@@ -373,12 +357,12 @@ Configured:
 - R2 buckets
 - R2 custom domains
 - r2.dev disabled
-- Cache Rules for scores/download hostnames
+- Cache Rules for scores hostnames
 - Tiered Cache + Smart Tiered Cache topology
-- WAF rate limits for scores/download hostnames
+- WAF rate limits for scores hostnames
 
 Rate limits:
-- R2 origin reads: ${R2_ORIGIN_RATE_LIMIT_REQUESTS_PER_10_SECONDS}/10s per IP + colo across scores/downloads, origin requests only
+- R2 origin reads: ${R2_ORIGIN_RATE_LIMIT_REQUESTS_PER_10_SECONDS}/10s per IP + colo across scores hosts, origin requests only
 - mitigation timeout: ${RATE_LIMIT_MITIGATION_TIMEOUT_SECONDS}s
 
 Verify after objects are uploaded:

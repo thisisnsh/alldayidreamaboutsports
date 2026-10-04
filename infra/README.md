@@ -56,8 +56,6 @@ The scores data and comparison state are environment-specific:
 | staging | `alldayidreamaboutsports-staging-scores` | `scores-staging.alldayidreamaboutsports.com` | `R2_BUCKET_SCORES=alldayidreamaboutsports-staging-scores` |
 | prod | `alldayidreamaboutsports-scores` | `scores.alldayidreamaboutsports.com` | `R2_BUCKET_SCORES=alldayidreamaboutsports-scores` |
 
-Downloads also use separate staging/prod buckets and custom domains so test
-releases never reach the production auto-update feed.
 `R2_BUCKET_SCORES` is required by deployment and the backend has no fallback,
 so staging cannot accidentally write into the production scores bucket.
 
@@ -75,7 +73,7 @@ the origin. Public `r2.dev` URLs bypass the zone Cache Rules and WAF, so the
 script keeps them disabled.
 
 JSON is not cached by Cloudflare by default. The script creates Cache Rules for
-both scores hostnames and the download hostnames in the
+both scores hostnames in the
 `http_request_cache_settings` phase. Those rules make matching objects eligible
 for cache, set Edge TTL to "use Cache-Control if present, bypass cache if not",
 and set Browser TTL to respect origin. Without this, every app request reaches
@@ -104,7 +102,7 @@ cache-busting requests that would otherwise read R2.
 
 | Scope | Limit | Why |
 |---|---:|---|
-| all scores/download custom domains, R2 origin reads only | 200/10s per IP + colo | Counts only origin requests, so cache hits are not penalized |
+| both scores custom domains, R2 origin reads only | 200/10s per IP + colo | Counts only origin requests, so cache hits are not penalized |
 
 Override the request limit with `R2_ORIGIN_RATE_LIMIT_REQUESTS_PER_10_SECONDS`.
 On Cloudflare Free, the mitigation timeout must stay at 10 seconds.
@@ -142,16 +140,15 @@ curl -fsS https://scores-staging.alldayidreamaboutsports.com/fixtures-$(date -u 
 ```
 
 Production `scores.alldayidreamaboutsports.com` remains empty until the
-production backend is deployed and its jobs run. The `download-staging.` /
-`download.` buckets held the old website DMGs + Sparkle appcast; the app now
-ships only through the Mac App Store, so nothing publishes to them any more.
+production backend is deployed and its jobs run.
 
 DNS for `alldayidreamaboutsports.com`: apex → **GitHub Pages** (A records
-185.199.108.153/.109/.110/.111). The website lives in the **public** repo
+185.199.108.153/.109/.110/.111). The website lives in the separate repo
 `thisisnsh/alldayidreamaboutsports.com` (Settings → Pages → Source = "Deploy
-from a branch" `main`/root, custom domain + HTTPS enforced) — Pages isn't free on
-this private repo. `scores-staging.`, `scores.`, `download-staging.`, and
-`download.` -> R2 custom domains (Cloudflare-proxied).
+from a branch" `main`/root, custom domain + HTTPS enforced). `scores-staging.`
+and `scores.` -> R2 custom domains (Cloudflare-proxied). The script no longer
+manages the retired `*-downloads` buckets or `download.` domains; delete them
+from the Cloudflare dashboard if they still exist.
 
 ## 3. API-Football
 
