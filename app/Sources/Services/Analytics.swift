@@ -22,7 +22,7 @@ import FirebaseAnalytics
 /// open Firebase → Analytics → DebugView.
 ///
 /// NOTHING HERE FIRES ON A POLL TICK. The live loop re-reads every followed
-/// match every `poll_seconds` for the length of a game; every pipeline event
+/// match every 5 seconds for the length of a game; every pipeline event
 /// below is gated on something having actually happened (a diff producing
 /// events, a snapshot rejected, a set displayed, a fetch failing), so a quiet
 /// match emits nothing at all.
@@ -98,15 +98,11 @@ enum AppAnalytics {
         log("feature_requested")
     }
 
-    /// `state` is what the menu was showing: `normal` or `kill_switch`. A bug
-    /// reported from behind the kill switch is a different kind of report.
-    static func bugReported(state: String) {
-        log("bug_reported", ["state": state])
+    static func bugReported() {
+        log("bug_reported")
     }
 
-    /// Every Quit in the app. `source` says which one, since they are otherwise
-    /// the same action: `menu_kill_switch`, `menu_update_required`,
-    /// `settings`, `update_gate`.
+    /// Every Quit in the app. `source` says which one (today only `settings`).
     static func appQuit(source: String) {
         log("app_quit", ["source": source])
     }
@@ -128,20 +124,9 @@ enum AppAnalytics {
 
     // MARK: Updates
 
-    /// The soft "Update available" banner was clicked — the conversion half of
-    /// `update_available_shown`.
-    static func updateBannerTapped() {
-        log("update_banner_tapped")
-    }
-
-    /// An App Store update check was asked for. `source`: `settings` or `update_gate`.
+    /// An App Store update check was asked for. `source`: `settings`.
     static func updateCheckStarted(source: String) {
         log("update_check_started", ["source": source])
-    }
-
-    /// "Later" on an optional update.
-    static func updateDeferred() {
-        log("update_deferred")
     }
 
     // MARK: Fan teams
@@ -305,24 +290,6 @@ enum AppAnalytics {
     /// `reason: user` when the ✕ ended the set, `timeout` when it aged out.
     static func overlayDismissed(reason: String) {
         log("overlay_dismissed", ["reason": reason])
-    }
-
-    // MARK: Control plane and updates
-
-    /// Fired on the transition INTO a gated state, not on every config apply.
-    static func controlPlaneGate(_ gate: String) {
-        log("control_plane_gate", ["gate": gate])
-    }
-
-    static func remoteConfigFetchFailed(stage: String, error: Error? = nil) {
-        var parameters: [String: Any] = ["stage": stage]
-        if let error { parameters["reason"] = AppLog.errorLabel(error) }
-        log("remote_config_fetch_failed", parameters)
-    }
-
-    /// The soft "Update available" banner rendered.
-    static func updateAvailableShown() {
-        log("update_available_shown", [:])
     }
 
     // MARK: Dev demo controls

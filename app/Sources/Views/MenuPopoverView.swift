@@ -4,7 +4,6 @@ import SwiftUI
 /// followed teams (live scores), and actions.
 struct MenuPopoverView: View {
     @EnvironmentObject var session: AppSession
-    @ObservedObject private var control = ControlPlane.shared
     @Environment(\.openWindow) private var openWindow
     /// Which slice of today the fixture list shows. Stored locally rather than
     /// in `prefs` — it's a view preference for this Mac, not synced state, and
@@ -19,26 +18,14 @@ struct MenuPopoverView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            if control.killSwitch {
-                maintenance
-            } else if control.updateRequired {
-                forcedUpdate
-            } else {
-                // A soft "Update available" nudge sits atop the normal menu —
-                // the app still works, so unlike `updateRequired` it doesn't
-                // replace the content.
-                if control.updateAvailable {
-                    updateBanner
-                }
-                header
-                if !session.fanTeams.isEmpty {
-                    fanOfRow
-                }
-                Divider()
-                fixturesSection
-                Divider()
-                actions
+            header
+            if !session.fanTeams.isEmpty {
+                fanOfRow
             }
+            Divider()
+            fixturesSection
+            Divider()
+            actions
         }
         .padding(16)
         .frame(width: 320)
@@ -186,7 +173,7 @@ struct MenuPopoverView: View {
                 Label("Request a feature", systemImage: "checklist.unchecked")
             }
             Button {
-                AppAnalytics.bugReported(state: "normal")
+                AppAnalytics.bugReported()
                 dismissMenu()
                 NSWorkspace.shared.open(reportBugURL)
             } label: {
@@ -206,14 +193,6 @@ struct MenuPopoverView: View {
         .labelStyle(.fixedIcon)
         .buttonStyle(.hoverHighlight)
         .font(.system(size: 13))
-    }
-
-    /// The Quit buttons in this menu are the same action from two different
-    /// states — kill switch, forced update — so they share the one event and
-    /// are told apart by `source`.
-    private func quit(source: String) {
-        AppAnalytics.appQuit(source: source)
-        NSApp.terminate(nil)
     }
 
     /// Closes the open MenuBarExtra panel. The window-style menu has no SwiftUI
@@ -247,102 +226,6 @@ struct MenuPopoverView: View {
             s.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? s
         }
         return URL(string: "mailto:\(AppEnvironment.supportEmail)?subject=\(encode(subject))&body=\(encode(body))")!
-    }
-
-    private var maintenance: some View {
-        VStack(spacing: 14) {
-            Image(systemName: "wrench.and.screwdriver.fill")
-                .font(.system(size: 32))
-            Text("Hold on…")
-                .font(.system(size: 18, weight: .bold, design: .rounded))
-            Text(control.killMessage.isEmpty
-                 ? "We're fixing something — back soon."
-                 : control.killMessage)
-                .font(.system(size: 13))
-                .multilineTextAlignment(.center)
-                .lineLimit(nil)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: 260)
-                .opacity(0.8)
-            Button {
-                AppAnalytics.bugReported(state: "kill_switch")
-                dismissMenu()
-                NSWorkspace.shared.open(reportBugURL)
-            } label: {
-                Label("Report a bug", systemImage: "ladybug")
-            }
-            .buttonStyle(.primaryPill)
-            Button("Quit") { quit(source: "menu_kill_switch") }
-                .buttonStyle(.hoverHighlight)
-                .font(.caption)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 12)
-    }
-
-    /// Top-of-menu nudge when a newer build exists. The button opens the same
-    /// Update window the forced path uses, whose "Update now" opens the App
-    /// Store like the "Check for Updates" button in Settings.
-    private var updateBanner: some View {
-        Button {
-            AppAnalytics.updateBannerTapped()
-            dismissMenu()
-            openWindow(id: WindowID.update)
-            NSApp.activate(ignoringOtherApps: true)
-        } label: {
-            HStack(spacing: 8) {
-                Image(systemName: "arrow.down.circle.fill")
-                    .font(.system(size: 15))
-                    .foregroundStyle(Color.accentColor)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text("Update available")
-                        .font(.system(size: 13, weight: .semibold))
-                    Text("A newer version is ready to install.")
-                        .font(.system(size: 11))
-                        .opacity(0.7)
-                }
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 11, weight: .semibold))
-                    .opacity(0.5)
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.hoverHighlight)
-        .background(
-            RoundedRectangle(cornerRadius: 10)
-                .fill(Color.accentColor.opacity(0.12))
-        )
-    }
-
-    private var forcedUpdate: some View {
-        VStack(spacing: 14) {
-            Image(systemName: "arrow.down.circle.fill")
-                .font(.system(size: 32))
-            Text("Update required")
-                .font(.system(size: 18, weight: .bold, design: .rounded))
-            Text("This version is too old to keep up with the matches. Update to keep celebrating.")
-                .font(.system(size: 13))
-                .multilineTextAlignment(.center)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: 260)
-                .opacity(0.8)
-            Button {
-                dismissMenu()
-                openWindow(id: WindowID.update)
-                NSApp.activate(ignoringOtherApps: true)
-            } label: {
-                Label("Update now", systemImage: "arrow.down.circle")
-            }
-            .buttonStyle(.primaryPill)
-            Button("Quit") { quit(source: "menu_update_required") }
-                .buttonStyle(.hoverHighlight)
-                .font(.caption)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 12)
     }
 }
 

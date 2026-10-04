@@ -44,11 +44,6 @@ final class EventRouter {
     }
 
     func route(_ event: MatchEvent) {
-        guard ControlPlane.shared.isOperational else {
-            AppLog.info(.fixtures, "event_rejected event_id=\(event.eventId) reason=control_plane_disabled")
-            AppAnalytics.eventDropped(reason: "control_plane", type: event.type.rawValue)
-            return
-        }
         // The poll loop recomputes deterministic ids; drop anything we've
         // animated already (a re-read of an unchanged file diffs to nothing,
         // but a baseline-less restart could re-surface a recent transition).

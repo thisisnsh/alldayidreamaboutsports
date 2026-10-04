@@ -114,7 +114,7 @@ final class OverlayManager: ObservableObject {
         }
     }
 
-    /// Kill switch / preview: drop everything pending and end the current set.
+    /// Preview: drop everything pending and end the current set.
     func dismissAll() {
         goalQueue.removeAll()
         otherQueue.removeAll()
@@ -223,8 +223,8 @@ final class OverlayManager: ObservableObject {
         hideBall()
     }
 
-    /// Tear the ball down WITHOUT reporting a dismissal — a kill switch, a
-    /// sign-out or the preview reset is not the user closing anything.
+    /// Tear the ball down WITHOUT reporting a dismissal — a VAR reversal or
+    /// the preview reset is not the user closing anything.
     private func hideBall() {
         guard ballPhase != .hidden else { return }
         cancelBallScheduled()

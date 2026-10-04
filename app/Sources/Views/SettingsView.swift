@@ -419,8 +419,7 @@ private struct DemoControls: View {
 
 /// Opens the App Store's Updates page.
 struct CheckForUpdatesButton: View {
-    /// Which entry point this button is, for `update_check_started`'s `source`
-    /// — the update window's "Update now" runs the same check.
+    /// Which entry point this button is, for `update_check_started`'s `source`.
     let source: String
 
     var body: some View {
