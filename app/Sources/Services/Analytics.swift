@@ -86,6 +86,12 @@ enum AppAnalytics {
     // already reported by the thing it triggers gets no event of its own:
     // "Preview animation" is `celebration_preview`.
 
+    /// The last onboarding step's "Show me". `fan_count` = teams followed by
+    /// then; the step funnel itself is the `onboarding_*` screen views.
+    static func onboardingCompleted(fanCount: Int) {
+        log("onboarding_completed", ["fan_count": fanCount])
+    }
+
     static func teamPickerOpened() {
         log("team_picker_opened")
     }

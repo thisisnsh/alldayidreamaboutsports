@@ -439,6 +439,10 @@ private struct DemoControls: View {
             }
             .buttonStyle(.cardButton)
         }
+        Button("Show onboarding") {
+            OnboardingWindowController.shared.show()
+        }
+        .buttonStyle(.cardButton)
         Text("Deterministic timeline from Dev/DevConfig.swift — the same events fire at the same seconds every run.")
             .font(.caption)
             .opacity(0.6)

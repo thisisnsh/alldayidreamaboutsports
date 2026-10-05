@@ -7,26 +7,13 @@ struct AllDayIDreamAboutSportsApp: App {
     @State private var insertsSwiftUIMenu = false
 
     var body: some Scene {
-        // Keep a non-window scene first so SwiftUI does not open one of the
-        // utility windows at launch. AppKit owns the real transient menu.
+        // SwiftUI needs a scene; a hidden menu bar extra is one that opens no
+        // window. AppKit owns the real status item, popover and onboarding
+        // window (see AppDelegate / OnboardingWindowController).
         MenuBarExtra(isInserted: $insertsSwiftUIMenu) {
             EmptyView()
         } label: {
             EmptyView()
         }
-
-        // The welcome window, without a title bar — just the traffic lights
-        // over content. Teams and Settings live in the menu bar popover.
-        Window("Welcome", id: WindowID.welcome) {
-            WelcomeView()
-                .environmentObject(session)
-        }
-        .windowStyle(.hiddenTitleBar)
-        .windowResizability(.contentSize)
-        .defaultPosition(.center)
     }
-}
-
-enum WindowID {
-    static let welcome = "welcome"
 }

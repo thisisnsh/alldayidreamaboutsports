@@ -208,7 +208,7 @@ final class FakeScores: ScoresProviding {
     // ╔════════════════════════════════════════════════════════════════╗
     // ║  WHERE THE TEAMS COME FROM — flip these two lines.              ║
     // ║  LIVE (default): the same `catalog.json` the shipped app reads, ║
-    // ║    off the production CDN, so "Become a Fan" lists the real     ║
+    // ║    off the production CDN, so the Teams page lists the real     ║
     // ║    current leagues and squads. A public, edge-cached, read-only ║
     // ║    file: no auth, no API-Football quota.                        ║
     // ║  HARD-CODED: comment out the fetch, uncomment the return below, ║
