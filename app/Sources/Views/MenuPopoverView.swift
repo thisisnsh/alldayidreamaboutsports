@@ -1,143 +1,206 @@
 import SwiftUI
 
-/// The menu bar dropdown: "Fan of" flags, today's fixtures for
-/// followed teams (live scores), and actions.
+/// The popover's pages. After onboarding the popover is the whole app:
+/// matches, teams and settings all live in it, and nothing opens a window.
+enum PopoverPage {
+    case home, teams, settings
+}
+
+/// Which popover page is showing. A shared object rather than view state so
+/// AppKit entry points (the right-click menu, ⌘,) can navigate too.
+@MainActor
+final class PopoverRouter: ObservableObject {
+    static let shared = PopoverRouter()
+
+    @Published private(set) var page: PopoverPage = .home
+    /// Whether the last move went deeper, so the slide runs the matching way.
+    @Published private(set) var forward = true
+
+    func go(_ page: PopoverPage) {
+        guard page != self.page else { return }
+        forward = page != .home
+        withAnimation(.easeOut(duration: 0.2)) { self.page = page }
+        switch page {
+        case .home:
+            AppAnalytics.screenView(MenuPopoverView.screen)
+        case .teams:
+            AppAnalytics.teamPickerOpened()
+            AppAnalytics.screenView(TeamsPage.screen)
+            Task { await AppSession.shared.refreshCatalog() }
+        case .settings:
+            AppAnalytics.settingsOpened()
+            AppAnalytics.screenView(SettingsPage.screen)
+        }
+    }
+
+    /// Jump without animation — used just before the popover shows, so it
+    /// never opens mid-slide.
+    func reset(to page: PopoverPage = .home) {
+        forward = true
+        self.page = page
+    }
+}
+
+/// The menu bar popover: a fixed-size frame that swaps between pages.
 struct MenuPopoverView: View {
     @EnvironmentObject var session: AppSession
-    @Environment(\.openWindow) private var openWindow
+    @ObservedObject private var router = PopoverRouter.shared
+    /// The analytics screen name for the home page. The `screen_view` itself is
+    /// fired by `MenuPopoverController.showMenu()` — the hosting controller is
+    /// built once and reused, so `.onAppear` here would only fire once a launch.
+    static let screen = "menu"
+    /// Fixed for every page: resizing an `NSPopover` while it's open jumps.
+    static let size = CGSize(width: 360, height: 540)
+
+    var body: some View {
+        ZStack {
+            switch router.page {
+            case .home: HomePage().transition(slide)
+            case .teams: TeamsPage().transition(slide)
+            case .settings: SettingsPage().transition(slide)
+            }
+        }
+        .frame(width: Self.size.width, height: Self.size.height)
+        .clipped()
+        .background(AppBackground())
+        .appTheme(session.prefs.settings.theme ?? .system)
+    }
+
+    private var slide: AnyTransition {
+        .asymmetric(
+            insertion: .move(edge: router.forward ? .trailing : .leading).combined(with: .opacity),
+            removal: .move(edge: router.forward ? .leading : .trailing).combined(with: .opacity)
+        )
+    }
+}
+
+/// Header of a pushed page: a back button to the matches, the page title
+/// centered, and an optional note on the right.
+struct PageHeader: View {
+    let title: String
+    var note: String? = nil
+
+    var body: some View {
+        ZStack {
+            Text(title).font(.system(size: 15, weight: .bold, design: .rounded))
+            HStack {
+                Button {
+                    PopoverRouter.shared.go(.home)
+                } label: {
+                    HStack(spacing: 3) {
+                        Image(systemName: "chevron.left").font(.system(size: 11, weight: .semibold))
+                        Text("Matches")
+                    }
+                    .font(.system(size: 13))
+                }
+                .buttonStyle(.hoverHighlight)
+                Spacer()
+                if let note {
+                    Text(note).font(.system(size: 11)).foregroundStyle(.secondary)
+                }
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.top, 10)
+        .padding(.bottom, 4)
+    }
+}
+
+/// A bare SF Symbol button for the popover's toolbars.
+struct ToolbarIconButton: View {
+    let symbol: String
+    let help: String
+    let action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 14))
+                .frame(width: 28, height: 26)
+                .background(
+                    RoundedRectangle(cornerRadius: 7).fill(Color.primary.opacity(hovering ? 0.1 : 0))
+                )
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .help(help)
+        .accessibilityLabel(help)
+    }
+}
+
+/// Today's matches: the scope switch and the way to Teams and Settings on top,
+/// the list in the middle, the followed teams along the bottom.
+struct HomePage: View {
+    @EnvironmentObject var session: AppSession
     /// Which slice of today the fixture list shows. Stored locally rather than
     /// in `prefs` — it's a view preference for this Mac, not synced state, and
     /// the menu rebuilds its view on every open so it has to outlive that.
     @AppStorage("menuFixtureScope", store: AppDefaults.shared) private var fixtureScope: FixtureScope = .mine
-    /// The analytics screen name for everything in this popover, including the
-    /// controls that live outside this file (the status-item controller, the
-    /// capsule pin). The `screen_view` itself is fired by
-    /// `MenuPopoverController.showMenu()` — the hosting controller is built once
-    /// and reused, so `.onAppear` here would only ever fire once per launch.
-    static let screen = "menu"
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(spacing: 0) {
             header
-            if !session.fanTeams.isEmpty {
-                fanOfRow
-            }
+            fixturesList
             Divider()
-            fixturesSection
-            Divider()
-            actions
+            followingFooter
         }
-        .padding(16)
-        .frame(width: 320)
-        .background(AppBackground())
-        .installsWindowOpener()
-        .appTheme(session.prefs.settings.theme ?? .system)
     }
 
     private var header: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "soccerball")
-                .font(.system(size: 22))
-                .frame(width: 36, height: 36)
-            Text("All Day I Dream About Sports").font(.system(size: 14, weight: .semibold))
-            Spacer()
-        }
-    }
-
-    private var fanOfRow: some View {
         HStack(spacing: 6) {
-            Text("Fan of").font(.caption).opacity(0.7).fixedSize()
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 6) {
-                    ForEach(session.fanTeams) { team in
-                        CachedTeamLogo(url: team.logo, size: 18)
-                    }
-                }
-            }
+            Text("Today").font(.system(size: 15, weight: .bold, design: .rounded))
+            Spacer()
+            FixtureScopePicker(scope: $fixtureScope)
+            ToolbarIconButton(symbol: "heart", help: "Teams") { PopoverRouter.shared.go(.teams) }
+            ToolbarIconButton(symbol: "gearshape", help: "Settings") { PopoverRouter.shared.go(.settings) }
         }
+        .padding(.leading, 16)
+        .padding(.trailing, 10)
+        .padding(.top, 12)
+        .padding(.bottom, 8)
     }
 
-    private var fixturesSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            let shown = shownFixtures
-            HStack {
-                Text(fixtureScope == .mine ? "Today's live scores" : "Today's matches")
-                    .font(.caption)
-                    .fontWeight(.semibold)
-                    .opacity(0.7)
+    @ViewBuilder private var fixturesList: some View {
+        let shown = shownFixtures
+        if shown.isEmpty {
+            VStack(spacing: 6) {
                 Spacer()
-                FixtureScopePicker(scope: $fixtureScope)
-                // Hidden for now — `refreshFixtures()` and its wiring stay intact;
-                // re-enable when we revisit the manual refresh UX.
-                if false {
-                    Button {
-                        Task { await session.refreshFixtures() }
-                    } label: {
-                        Image(systemName: "arrow.clockwise").font(.caption).opacity(0.5)
-                    }
-                    .buttonStyle(.plain)
+                Text(emptyMessage).font(.system(size: 13)).opacity(0.7)
+                if fixtureScope == .mine, session.hasFixturesToday {
+                    Text("Switch to All Teams to see the full matchday.")
+                        .font(.system(size: 11)).opacity(0.5)
                 }
+                Spacer()
             }
-            if shown.isEmpty {
-                Text(emptyMessage)
-                    .font(.system(size: 13))
-                    .opacity(0.7)
-            } else if shown.count <= Self.unscrolledRows {
-                VStack(alignment: .leading, spacing: 8) {
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            ScrollView(.vertical, showsIndicators: true) {
+                VStack(alignment: .leading, spacing: 4) {
                     ForEach(shown) { fixture in
                         FixtureRow(fixture: fixture, live: fixtureScope == .mine)
                     }
                 }
-            } else {
-                // "All Teams" is a whole matchday across five leagues (~30-50
-                // rows) — scroll it rather than growing the menu past the
-                // bottom of the screen.
-                ScrollView(.vertical, showsIndicators: true) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        ForEach(shown) { fixture in
-                            FixtureRow(fixture: fixture, live: fixtureScope == .mine)
-                        }
-                    }
-                    // Keeps the first and last row clear of the fades, so a
-                    // list parked at either end reads at full strength.
-                    .padding(.vertical, Self.fadeInset)
-                }
-                .frame(height: Self.scrolledHeight + 2 * Self.fadeInset)
-                // Rows dissolve into the menu at both ends instead of being
-                // sliced off by the scroll view's edge.
-                .mask(
-                    VStack(spacing: 0) {
-                        LinearGradient(colors: [.clear, .black], startPoint: .top, endPoint: .bottom)
-                            .frame(height: Self.fadeHeight)
-                        Rectangle()
-                        LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom)
-                            .frame(height: Self.fadeHeight)
-                    }
-                )
-                // The inset is bled back out of the surrounding margins, so the
-                // fades live in the gaps either side and the first row starts
-                // exactly where the unscrolled list's does — the section keeps
-                // the same footprint whether or not it scrolls.
-                .padding(.vertical, -Self.fadeInset)
+                .padding(.horizontal, 8)
+                .padding(.vertical, Self.fadeHeight)
             }
+            // Rows dissolve into the popover at both ends instead of being
+            // sliced off by the scroll view's edge.
+            .mask(
+                VStack(spacing: 0) {
+                    LinearGradient(colors: [.clear, .black], startPoint: .top, endPoint: .bottom)
+                        .frame(height: Self.fadeHeight)
+                    Rectangle()
+                    LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom)
+                        .frame(height: Self.fadeHeight)
+                }
+            )
+            .frame(maxHeight: .infinity)
         }
     }
 
-    /// How many rows fit before the list starts scrolling, and the height it
-    /// settles at then. A row is ~42pt with 8pt between, so the scrolling list
-    /// is five rows plus a peek of the sixth — the cue that it scrolls. Both
-    /// stay under the old `.prefix(6)` list's height, which is what the
-    /// popover's fixed content size (`MenuPopoverController.showMenu`) is
-    /// budgeted for: go past it and the last row loses its subtitle line.
-    private static let unscrolledRows = 5
-    private static let scrolledHeight: CGFloat = 5 * 42 + 4 * 8 + 20
-    /// The top and bottom fades: short enough to read as a soft edge rather
-    /// than a dimmed row, with a slightly taller inset behind them so a row at
-    /// rest sits clear of the gradient. The inset is padding *outside* the
-    /// height above — it overhangs into the section's margins rather than
-    /// eating rows.
     private static let fadeHeight: CGFloat = 10
-    private static let fadeInset: CGFloat = 12
 
     private var shownFixtures: [Fixture] {
         switch fixtureScope {
@@ -149,101 +212,41 @@ struct MenuPopoverView: View {
     /// Nothing to list: either football is off entirely today, or it's on but
     /// none of it is theirs (only reachable in "My Teams").
     private var emptyMessage: String {
-        session.hasFixturesToday
+        if session.fanTeamIds.isEmpty, fixtureScope == .mine { return "Follow a team to see its matches" }
+        return session.hasFixturesToday
             ? "None of your teams play today 💤"
             : "No matches today — rest day ☁️"
     }
 
-    private var actions: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Button {
-                AppAnalytics.teamPickerOpened()
-                Task { await session.refreshCatalog() }
-                dismissMenu()
-                openWindow(id: WindowID.teamPicker)
-                NSApp.activate(ignoringOtherApps: true)
-            } label: {
-                Label("Become a Fan", systemImage: "heart.circle.fill")
+    /// The followed teams, doubling as the way into Teams.
+    private var followingFooter: some View {
+        Button {
+            PopoverRouter.shared.go(.teams)
+        } label: {
+            HStack(spacing: 8) {
+                let fans = session.fanTeams
+                if fans.isEmpty {
+                    Image(systemName: "heart.circle.fill").font(.system(size: 16))
+                    Text("Follow your teams")
+                } else {
+                    HStack(spacing: -3) {
+                        ForEach(fans.prefix(6)) { team in
+                            CachedTeamLogo(url: team.logo, size: 18)
+                        }
+                    }
+                    Text("Following \(fans.count) \(fans.count == 1 ? "team" : "teams")")
+                }
+                Spacer()
+                Image(systemName: "chevron.right").font(.system(size: 11, weight: .semibold)).opacity(0.5)
             }
-            Button {
-                AppAnalytics.featureRequested()
-                dismissMenu()
-                NSWorkspace.shared.open(requestFeatureURL)
-            } label: {
-                Label("Request a feature", systemImage: "checklist.unchecked")
-            }
-            Button {
-                AppAnalytics.bugReported()
-                dismissMenu()
-                NSWorkspace.shared.open(reportBugURL)
-            } label: {
-                Label("Report a bug", systemImage: "ladybug")
-            }
-            Button {
-                AppAnalytics.settingsOpened()
-                dismissMenu()
-                openWindow(id: WindowID.settings)
-                NSApp.activate(ignoringOtherApps: true)
-            } label: {
-                Label("Settings", systemImage: "gearshape")
-            }
+            .font(.system(size: 12, weight: .medium))
+            .frame(maxWidth: .infinity)
+            .contentShape(Rectangle())
         }
-        // Icons vary in width (the lightbulb is narrow); pin every glyph to the
-        // same column so the labels line up.
-        .labelStyle(.fixedIcon)
         .buttonStyle(.hoverHighlight)
-        .font(.system(size: 13))
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
     }
-
-    /// Closes the open MenuBarExtra panel. The window-style menu has no SwiftUI
-    /// dismiss action, so we close the panel directly — it's the key window
-    /// while the menu is showing, and SwiftUI rebuilds it on the next open.
-    private func dismissMenu() {
-        MenuPopoverController.shared.close()
-    }
-
-    /// A pre-filled support email, so users without a GitHub account can still
-    /// report. Build + OS go in the body so reports arrive with the version
-    /// already attached.
-    private var reportBugURL: URL {
-        supportMail(subject: "Bug report — All Day I Dream About Sports")
-    }
-
-    /// Same support inbox, framed for feature ideas instead of bugs.
-    private var requestFeatureURL: URL {
-        supportMail(subject: "Feature request — All Day I Dream About Sports")
-    }
-
-    private func supportMail(subject: String) -> URL {
-        let body = """
-
-
-        ———
-        \(AppEnvironment.profileName) \(AppEnvironment.appVersion) (Build \(AppEnvironment.buildNumber))
-        macOS \(ProcessInfo.processInfo.operatingSystemVersionString)
-        """
-        func encode(_ s: String) -> String {
-            s.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? s
-        }
-        return URL(string: "mailto:\(AppEnvironment.supportEmail)?subject=\(encode(subject))&body=\(encode(body))")!
-    }
-}
-
-/// Lines menu-row labels up by pinning each icon to a fixed-width column —
-/// SF Symbols like `lightbulb` are narrower than `gearshape`, so without this
-/// the text would start at different x positions per row.
-private struct FixedIconLabelStyle: LabelStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        HStack(spacing: 8) {
-            configuration.icon
-                .frame(width: 18, alignment: .center)
-            configuration.title
-        }
-    }
-}
-
-extension LabelStyle where Self == FixedIconLabelStyle {
-    static var fixedIcon: FixedIconLabelStyle { .init() }
 }
 
 /// Which of today's matches the menu lists: only the followed teams' (the

@@ -15,8 +15,8 @@ struct AllDayIDreamAboutSportsApp: App {
             EmptyView()
         }
 
-        // Separate windows, all without title bars — just the traffic
-        // lights over content; headings live in the views themselves.
+        // The welcome window, without a title bar — just the traffic lights
+        // over content. Teams and Settings live in the menu bar popover.
         Window("Welcome", id: WindowID.welcome) {
             WelcomeView()
                 .environmentObject(session)
@@ -24,26 +24,9 @@ struct AllDayIDreamAboutSportsApp: App {
         .windowStyle(.hiddenTitleBar)
         .windowResizability(.contentSize)
         .defaultPosition(.center)
-
-        Window("Become a Fan", id: WindowID.teamPicker) {
-            TeamPickerView()
-                .environmentObject(session)
-        }
-        .windowStyle(.hiddenTitleBar)
-        .windowResizability(.contentSize)
-        .defaultPosition(.center)
-
-        Window("Settings", id: WindowID.settings) {
-            SettingsView()
-                .environmentObject(session)
-        }
-        .windowStyle(.hiddenTitleBar)
-        .windowResizability(.contentSize)
     }
 }
 
 enum WindowID {
     static let welcome = "welcome"
-    static let teamPicker = "teamPicker"
-    static let settings = "settings"
 }

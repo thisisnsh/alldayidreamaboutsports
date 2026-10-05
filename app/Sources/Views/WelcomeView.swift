@@ -6,7 +6,6 @@ import SwiftUI
 struct WelcomeView: View {
     @EnvironmentObject var session: AppSession
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.openWindow) private var openWindow
     private static let screen = "welcome"
 
     var body: some View {
@@ -38,9 +37,8 @@ struct WelcomeView: View {
                 .opacity(0.8)
             if session.fanTeamIds.isEmpty {
                 Button {
-                    AppAnalytics.teamPickerOpened()
                     dismiss()
-                    openWindow(id: WindowID.teamPicker)
+                    MenuPopoverController.shared.showMenu(page: .teams)
                 } label: {
                     Label("Pick your teams", systemImage: "star.fill")
                 }

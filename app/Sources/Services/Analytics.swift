@@ -102,7 +102,8 @@ enum AppAnalytics {
         log("bug_reported")
     }
 
-    /// Every Quit in the app. `source` says which one (today only `settings`).
+    /// Every Quit in the app. `source` says which one: `settings` or
+    /// `status_menu` (the status item's right-click menu).
     static func appQuit(source: String) {
         log("app_quit", ["source": source])
     }
