@@ -138,6 +138,8 @@ struct HomePage: View {
     /// in `prefs` — it's a view preference for this Mac, not synced state, and
     /// the menu rebuilds its view on every open so it has to outlive that.
     @AppStorage("menuFixtureScope", store: AppDefaults.shared) private var fixtureScope: FixtureScope = .mine
+    /// The one row (or Now card) showing its timeline.
+    @State private var expanded: Int?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -162,9 +164,16 @@ struct HomePage: View {
         .padding(.bottom, 8)
     }
 
+    /// The followed match being played right now, if any — it gets the big
+    /// card on top. The first by kickoff when several overlap.
+    private var nowFixture: Fixture? {
+        session.fixtures.first { $0.isLive }
+    }
+
     @ViewBuilder private var fixturesList: some View {
-        let shown = shownFixtures
-        if shown.isEmpty {
+        let now = nowFixture
+        let shown = shownFixtures.filter { $0.fixtureId != now?.fixtureId }
+        if shown.isEmpty, now == nil {
             VStack(spacing: 6) {
                 Spacer()
                 Text(emptyMessage).font(.system(size: 13)).opacity(0.7)
@@ -178,8 +187,18 @@ struct HomePage: View {
         } else {
             ScrollView(.vertical, showsIndicators: true) {
                 VStack(alignment: .leading, spacing: 4) {
+                    if let now {
+                        NowCard(fixture: now, expanded: $expanded)
+                            .padding(.bottom, 6)
+                    }
                     ForEach(shown) { fixture in
-                        FixtureRow(fixture: fixture, live: fixtureScope == .mine)
+                        FixtureRow(
+                            fixture: fixture,
+                            // A followed team's match always carries live state
+                            // (LiveStore polls it), whichever list it's in.
+                            live: fixtureScope == .mine || fixture.involves(session.fanTeamIds),
+                            expanded: $expanded
+                        )
                     }
                 }
                 .padding(.horizontal, 8)
@@ -310,83 +329,234 @@ private struct FixtureScopePicker: View {
     }
 }
 
+/// The followed match being played right now: a big scoreline, the latest
+/// events, and the pin. Expands to the full timeline.
+private struct NowCard: View {
+    let fixture: Fixture
+    @Binding var expanded: Int?
+    @EnvironmentObject var session: AppSession
+    @ObservedObject private var capsules = PinnedCapsuleManager.shared
+
+    private var isExpanded: Bool { expanded == fixture.fixtureId }
+    private var isPinned: Bool { capsules.isPinned(fixture.fixtureId) }
+
+    var body: some View {
+        let timeline = capsuleTimeline(for: fixture)
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Circle().fill(.red).frame(width: 7, height: 7)
+                TimelineView(.periodic(from: .now, by: 1)) { ctx in
+                    Text(fixture.liveMinuteText(
+                        localElapsed: LiveStore.shared.localElapsedSeconds(fixture.fixtureId, at: ctx.date)))
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(.red)
+                }
+                Spacer()
+                if let league = session.leagueName(for: fixture.leagueId) {
+                    Text(league).font(.system(size: 10)).opacity(0.6).lineLimit(1)
+                }
+            }
+            teamLine(fixture.home, goals: fixture.home.goals, other: fixture.away.goals)
+            teamLine(fixture.away, goals: fixture.away.goals, other: fixture.home.goals)
+            if let pens = fixture.shootout {
+                Text("Penalties \(pens.home) – \(pens.away)").font(.system(size: 11, weight: .semibold)).opacity(0.7)
+            }
+
+            let shownEvents = isExpanded ? timeline : Array(timeline.suffix(3).reversed())
+            if !shownEvents.isEmpty {
+                Divider()
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(shownEvents) { TimelineEventLine(row: $0) }
+                }
+            }
+
+            HStack(spacing: 8) {
+                Button {
+                    capsules.toggle(fixtureId: fixture.fixtureId)
+                } label: {
+                    Label(isPinned ? "Pinned to screen" : "Pin to screen", systemImage: "pin.fill")
+                }
+                .buttonStyle(.cardButton)
+                .help(isPinned ? "Unpin the floating score" : "Float this score on screen")
+                if timeline.count > 3 {
+                    Button(isExpanded ? "Hide timeline" : "Full timeline") {
+                        withAnimation(.easeOut(duration: 0.15)) {
+                            expanded = isExpanded ? nil : fixture.fixtureId
+                        }
+                    }
+                    .buttonStyle(.hoverHighlight)
+                    .font(.system(size: 12))
+                }
+            }
+        }
+        .padding(12)
+        .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.06)))
+    }
+
+    private func teamLine(_ team: ScoreboardTeam, goals: Int, other: Int) -> some View {
+        HStack(spacing: 10) {
+            CachedTeamLogo(url: TeamCatalog.team(for: team.id, in: session.allTeams).logo, size: 24)
+            Text(team.name).font(.system(size: 15, weight: .bold, design: .rounded)).lineLimit(1)
+            Spacer()
+            Text("\(goals)")
+                .font(.system(size: 24, weight: .heavy, design: .rounded))
+                .monospacedDigit()
+                .contentTransition(.numericText())
+                .animation(.spring, value: goals)
+        }
+        // The side that's behind reads quieter.
+        .opacity(goals < other ? 0.7 : 1)
+    }
+}
+
+/// One event in a match timeline, for the popover: minute, team, what, who.
+/// The capsule's timeline (`capsuleTimeline`) is the source, so the two agree.
+private struct TimelineEventLine: View {
+    let row: CapsuleTimelineRow
+    @EnvironmentObject var session: AppSession
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Text(row.minuteText)
+                .font(.system(size: 10, weight: .semibold, design: .rounded))
+                .monospacedDigit()
+                .opacity(0.6)
+                .frame(width: 34, alignment: .trailing)
+            if let teamId = row.teamId {
+                CachedTeamLogo(url: TeamCatalog.team(for: teamId, in: session.allTeams).logo, size: 12)
+            } else {
+                Color.clear.frame(width: 12, height: 12)
+            }
+            Image(systemName: row.icon)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(row.disallowed ? Color.secondary : row.color)
+                .frame(width: 14)
+            Text(row.label)
+                .font(.system(size: 11, weight: .semibold))
+                .strikethrough(row.disallowed)
+            if let text = row.text {
+                Text(text).font(.system(size: 11)).opacity(0.65).lineLimit(1).strikethrough(row.disallowed)
+            }
+            Spacer(minLength: 0)
+        }
+    }
+}
+
 private struct FixtureRow: View {
     let fixture: Fixture
     /// Whether this row may show live state — score, minute, FT
-    /// tally. Only "My Teams" can: `LiveStore` polls `session.fixtures` alone,
+    /// tally. Only a followed team's match can: `LiveStore` polls `session.fixtures` alone,
     /// and `fixtures-{date}.json` is schedule data by construction (goals
     /// zeroed, status forced to SCHEDULED — see `toScheduleRow` in the
     /// backend's poller). A schedule row is teams + kickoff time, nothing else;
     /// showing it a "0 – 0" would be inventing a scoreline.
     var live: Bool = true
+    @Binding var expanded: Int?
     @EnvironmentObject var session: AppSession
     @ObservedObject private var capsules = PinnedCapsuleManager.shared
     @State private var hovering = false
 
     private var isPinned: Bool { capsules.isPinned(fixture.fixtureId) }
+    private var isExpanded: Bool { expanded == fixture.fixtureId }
     /// A capsule reads `session.fixtures`, so only a followed team's match can
-    /// be pinned — and only from the list that's actually showing live state.
+    /// be pinned — and only from a row that's actually showing live state.
     private var pinnable: Bool { live && fixture.involves(session.fanTeamIds) }
 
     var body: some View {
-        // The row is hover-only: it reveals the pin affordance and does not
-        // navigate anywhere.
-        Button {
-        } label: {
-            HStack(alignment: .center, spacing: 6) {
-                if pinnable, isPinned || hovering {
-                    pinSlot
+        // Clicking a row opens its timeline (and the pin) in place. The detail
+        // sits outside the button so its own pin button gets the click.
+        VStack(alignment: .leading, spacing: 6) {
+            Button {
+                withAnimation(.easeOut(duration: 0.15)) {
+                    expanded = isExpanded ? nil : fixture.fixtureId
                 }
+            } label: {
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 6) {
                         CachedTeamLogo(url: logo(fixture.home.id), size: 16)
-                        // Short codes ("MUN"), not full club names — the row is
-                        // 320pt wide and the crest already says who it is. A
-                        // codeless team falls back to its name and truncates
-                        // with …; score, logos and the time never get squeezed.
+                        // Short codes ("MUN"), not full club names — the crest
+                        // already says who it is. A codeless team falls back to
+                        // its name and truncates with …; score, logos and the
+                        // time never get squeezed.
                         Text(shortName(fixture.home)).font(.system(size: 12)).lineLimit(1)
                         Text(score).font(.system(size: 12, weight: .bold))
                             .fixedSize().layoutPriority(1)
                         Text(shortName(fixture.away)).font(.system(size: 12)).lineLimit(1)
                         CachedTeamLogo(url: logo(fixture.away.id), size: 16)
+                        if isPinned {
+                            Image(systemName: "pin.fill")
+                                .font(.system(size: 9))
+                                .foregroundStyle(Color.accentColor)
+                                .help("Pinned to screen")
+                        }
                         Spacer()
                         trailing
                     }
                     subtitle
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
             }
-            .contentShape(Rectangle())
+            .buttonStyle(.plain)
+            .accessibilityHint(isExpanded ? "Hides the timeline" : "Shows the timeline")
+            if isExpanded {
+                detail
+            }
         }
-        .buttonStyle(.hoverHighlight)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color.primary.opacity(isExpanded ? 0.06 : (hovering ? 0.08 : 0)))
+        )
         .onHover { over in
-            withAnimation(.easeOut(duration: 0.15)) { hovering = over }
+            withAnimation(.easeOut(duration: 0.12)) { hovering = over }
         }
     }
 
-    /// Competition and stage remain visible while hovering the pin control.
+    /// What opens under the row: the timeline once there's play to show, the
+    /// kickoff otherwise, and the pin for a followed match.
+    @ViewBuilder private var detail: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            let timeline = live ? capsuleTimeline(for: fixture) : []
+            if !timeline.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(timeline) { TimelineEventLine(row: $0) }
+                }
+            } else if let note = detailNote {
+                Text(note).font(.system(size: 11)).opacity(0.6)
+            }
+            if pinnable {
+                Button {
+                    capsules.toggle(fixtureId: fixture.fixtureId)
+                } label: {
+                    Label(isPinned ? "Unpin from screen" : "Pin to screen", systemImage: "pin.fill")
+                }
+                .buttonStyle(.cardButton)
+            }
+        }
+    }
+
+    private var detailNote: String? {
+        let kickoff = fixture.kickoff.map { $0.formatted(date: .omitted, time: .shortened) }
+        if !live {
+            let when = kickoff.map { "Kicks off at \($0). " } ?? ""
+            return when + "Follow either team for live scores and alerts."
+        }
+        switch fixture.status {
+        case "SCHEDULED": return kickoff.map { "Kicks off at \($0)." }
+        case "FINISHED": return "No goals or cards."
+        default: return fixture.isLive ? "Nothing yet." : nil
+        }
+    }
+
+    /// Competition and stage, under the teams.
     @ViewBuilder private var subtitle: some View {
         let league = session.leagueName(for: fixture.leagueId)
         if let text = [league, fixture.stageLabel]
             .compactMap({ $0 }).joined(separator: " · ").trimmedNonEmpty {
             Text(text).font(.system(size: 10)).opacity(0.6).lineLimit(1)
         }
-    }
-
-    /// Leading pin toggle, centered on the row. Only present on hover (or while
-    /// pinned) so resting rows sit flush left with no reserved gutter.
-    private var pinSlot: some View {
-        Button {
-            capsules.toggle(fixtureId: fixture.fixtureId)
-        } label: {
-            Image(systemName: "pin.fill")
-                .font(.system(size: 11))
-                .foregroundStyle(isPinned ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.secondary))
-        }
-        .buttonStyle(.plain)
-        .hoverLift()
-        .frame(width: 16)
-        .transition(.opacity)
-        .help(isPinned ? "Unpin capsule" : "Pin scores to screen")
     }
 
     private var score: String {
