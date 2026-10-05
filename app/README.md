@@ -139,11 +139,11 @@ backward-compatible (additive fields; breaking changes under a new path).
 
 | Dir | What |
 |---|---|
-| `Sources/App.swift` | window scenes (welcome, picker, settings) |
-| `Sources/AppDelegate.swift` | transient AppKit menu, Firebase bootstrap (Crashlytics/Analytics), reopen handling |
+| `Sources/App.swift` | SwiftUI entry point (a hidden scene; AppKit owns the UI) |
+| `Sources/AppDelegate.swift` | status item, popover and right-click menu, Firebase bootstrap (Crashlytics/Analytics), reopen handling |
 | `Sources/Services/` | local prefs, scores CDN, live polling, event routing |
 | `Sources/Overlay/` | the two overlay panels: full-screen click-through display + small clickable ball; celebration, notch pill, particles |
-| `Sources/Views/` | welcome, popover, team picker, settings |
+| `Sources/Views/` | the popover (matches, Teams and Settings pages) and the first-run onboarding window |
 
 Key invariants:
 - Overlay panels use `sharingType = .readOnly`, so they show up in screen

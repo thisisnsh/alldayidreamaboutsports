@@ -4,12 +4,6 @@ import SwiftUI
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let menuController = MenuPopoverController.shared
-    // Invisible SwiftUI host kept alive for the whole process so the
-    // `WindowOpener` bridge (`@Environment(\.openWindow)`) is captured at launch
-    // — before the user touches the menu bar. Without it, a launch-time
-    // `openWindow(.welcome)` sits queued until the first utility view renders
-    // (i.e. until the user clicks the status item).
-    private var windowOpenerHost: NSWindow?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Disk-backed HTTP cache so team/league logos (API CDN) download once and
@@ -29,7 +23,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         AppSession.shared.bootstrap()
         menuController.install()
-        installWindowOpenerBridge()
 
         #if DEV_BACKEND
         // Play the deterministic demo timeline (DevConfig.timeline) so
@@ -38,9 +31,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             DemoEngine.shared.start()
         }
         #else
-        // Opening the app surfaces the welcome window, which points at the
-        // menu bar icon and, until the user follows a team, at Teams.
-        openWindow(WindowID.welcome)
+        // A fresh install gets the one-time setup window. After that, launch
+        // is silent: the app lives in the menu bar (and starts at login).
+        if OnboardingWindowController.shared.isNeeded {
+            OnboardingWindowController.shared.show()
+        }
         #endif
 
         // Recover live polling after system sleep: App Nap + sleep suspend the
@@ -50,28 +45,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ) { [weak self] _ in
             Task { @MainActor in self?.recoverLivePolling() }
         }
-    }
-
-    /// Mount a 1×1, fully transparent SwiftUI window once at launch. Its only
-    /// job is to render `WindowOpenerBridge`, whose `.installsWindowOpener()`
-    /// captures the `openWindow` action into `WindowOpener.shared`. Ordered to
-    /// the back, alpha 0, click-through, and excluded from the Windows menu, so
-    /// it is invisible and inert.
-    private func installWindowOpenerBridge() {
-        let host = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 1, height: 1),
-            styleMask: [.borderless],
-            backing: .buffered,
-            defer: false,
-        )
-        host.contentViewController = NSHostingController(rootView: WindowOpenerBridge())
-        host.alphaValue = 0
-        host.ignoresMouseEvents = true
-        host.isExcludedFromWindowsMenu = true
-        host.isReleasedWhenClosed = false
-        host.collectionBehavior = [.stationary, .ignoresCycle]
-        host.orderBack(nil)
-        windowOpenerHost = host
     }
 
     // Foreground (e.g. the user clicks into the app): same recovery as wake —
@@ -109,9 +82,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     // App is invisible except the menu bar — reopening from Finder/Spotlight
-    // should surface something useful.
+    // opens the popover (or setup, if it was never finished).
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
-        openWindow(WindowID.welcome)
+        if OnboardingWindowController.shared.isNeeded {
+            OnboardingWindowController.shared.show()
+        } else {
+            MenuPopoverController.shared.showMenu()
+        }
         return false
     }
 }
@@ -262,91 +239,5 @@ final class MenuPopoverController: NSObject, NSPopoverDelegate {
             NSEvent.removeMonitor(monitor)
             keyMonitor = nil
         }
-    }
-}
-
-/// Opens a SwiftUI `Window` scene by id from AppKit contexts.
-func openWindow(_ id: String) {
-    DispatchQueue.main.async {
-        NSApp.activate(ignoringOtherApps: true)
-        // SwiftUI exposes scene opening via EnvironmentValues; from AppKit we
-        // go through the shared opener installed by RootWindowOpener.
-        WindowOpener.shared.open(id)
-        // As an accessory (menu-bar) app, openWindow doesn't reliably raise the
-        // window above other apps — especially when the scene already exists and
-        // is just being re-shown. Force it to the front once it has rendered.
-        bringWindowToFront(id)
-    }
-}
-
-/// Window titles keyed by scene id, so AppKit can find a just-opened SwiftUI
-/// window in `NSApp.windows` (which exposes title, not scene id).
-private let windowTitleByID: [String: String] = [
-    WindowID.welcome: "Welcome",
-]
-
-/// Raises the window for a scene id above all other apps. Retries briefly
-/// because SwiftUI may not have inserted the window into `NSApp.windows` yet.
-private func bringWindowToFront(_ id: String, attempt: Int = 0) {
-    guard let title = windowTitleByID[id] else { return }
-    if let window = NSApp.windows.first(where: { $0.title == title }) {
-        window.makeKeyAndOrderFront(nil)
-        window.orderFrontRegardless()
-        return
-    }
-    guard attempt < 10 else { return }
-    DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-        bringWindowToFront(id, attempt: attempt + 1)
-    }
-}
-
-/// Bridges AppKit → SwiftUI's openWindow environment action. Opens requested
-/// before any SwiftUI scene has rendered (e.g. from
-/// applicationDidFinishLaunching) are queued and replayed once the handler
-/// is installed — the MenuBarExtra label installs it at launch.
-final class WindowOpener {
-    static let shared = WindowOpener()
-    private var pending: [String] = []
-
-    var handler: ((String) -> Void)? {
-        didSet {
-            guard let handler else { return }
-            let queued = pending
-            pending = []
-            queued.forEach(handler)
-        }
-    }
-
-    func open(_ id: String) {
-        if let handler {
-            handler(id)
-        } else {
-            pending.append(id)
-        }
-    }
-}
-
-/// Invisible helper installed at the root of every scene so AppKit code can
-/// open SwiftUI windows.
-struct WindowOpenerInstaller: ViewModifier {
-    @Environment(\.openWindow) private var openWindow
-
-    func body(content: Content) -> some View {
-        content.onAppear {
-            WindowOpener.shared.handler = { id in openWindow(id: id) }
-        }
-    }
-}
-
-extension View {
-    func installsWindowOpener() -> some View { modifier(WindowOpenerInstaller()) }
-}
-
-/// The content of the invisible launch-time host window: nothing visible, just
-/// a carrier for `.installsWindowOpener()` so the bridge is wired up before any
-/// utility window or the menu popover has rendered.
-struct WindowOpenerBridge: View {
-    var body: some View {
-        Color.clear.installsWindowOpener()
     }
 }
