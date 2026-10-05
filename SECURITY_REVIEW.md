@@ -1,6 +1,6 @@
 # Security review — 2026-10-04
 
-Reviewed repository revision: `6ad3c55`.
+Initial reviewed repository revision: `6ad3c55`. Remediation and deployment results are recorded below.
 
 Result: one locally reproduced medium-severity availability issue and one low-severity CDN hardening gap. No critical/high-severity exploit was identified in the reviewed code. This is a repository review with isolated local reproductions, not a certification of the deployed services.
 
@@ -48,7 +48,7 @@ The allow condition checks only prefixes, suffixes, and lengths. A local evaluat
 
 Cloudflare documents the full URI as part of the [default cache key](https://developers.cloudflare.com/cache/how-to/cache-keys/) and origin operations in [R2 pricing](https://developers.cloudflare.com/r2/pricing/). The cost-abuse assessment is an inference from those behaviors and the checked-in configuration, not a measured live exploit.
 
-## Checks completed
+## Initial audit checks
 
 | Check | Result |
 | --- | --- |
@@ -66,11 +66,11 @@ Also reviewed service OIDC checks, route authorization, redirect handling, image
 
 ## Scope limits
 
-No production/staging exploit traffic, load test, cloud mutation, or deployment was performed. Actual Cloud Run IAM, Cloudflare rules, R2 token scopes/public access, billing alerts, and GitHub environment protections were not inspected in the live accounts. The initial audit did not include a full Xcode app build; remediation builds are recorded below. No container OS vulnerability scan or audit of bundled third-party binary contents was performed. Empty advisory results and a clean secret scan do not establish absence of vulnerabilities or secrets.
+The initial audit used local reproductions and did not mutate or deploy cloud resources. Subsequent authorized rollout and live checks are recorded below. No production/staging exploit payloads or load tests were run. Billing alerts, all R2 token scopes, and all GitHub environment protections were not comprehensively audited. No container OS vulnerability scan or audit of bundled third-party binary contents was performed. Empty advisory results and a clean secret scan do not establish absence of vulnerabilities or secrets.
 
-## Remediation prepared locally
+## Remediation implemented
 
-Following the review, both findings were addressed in the working tree:
+Following the review, both findings were addressed in commit `4dda075e6ced89ac7c6a985966679ac18b90bd0c`:
 
 - Fixture decoding now rejects unsafe scores, card counts, times, and collection sizes, including persisted fixtures. Ingestion also validates values constructed without decoding. An invalid old cache clears its bootstrap markers so the app can recover.
 - The diff engine validates both snapshots and suppresses bursts exceeding 64 events. Both original exploit cases are regression-tested, alongside ordinary goals, VAR cancellations, cards, substitutions, and shootouts.
@@ -78,21 +78,53 @@ Following the review, both findings were addressed in the working tree:
 
 Remediation validation: both standalone Swift security suites passed, all seven infrastructure tests passed, and `git diff --check` passed. The unsigned Debug app built successfully with locked dependencies. A second unsigned Debug build, generated from a temporary spec without `DEV_BACKEND`, also passed, compiling real-service ingestion and persisted-cache recovery without launching the app or running release upload scripts. The normal generated project was restored afterward.
 
-These changes require a new app release and application of the Cloudflare guard (`python3 infra/secure_scores.py --apply` with the documented zone credentials). The local predicate tests are not a Cloudflare API validation or a live enforcement test. Existing installed app builds remain vulnerable until updated. The guard still cannot prevent all distributed traffic or requests for syntactically valid nonexistent objects.
+The cloud changes have been deployed as recorded below. Existing installed app builds gain the local protections only after updating; server publication validation also mitigates unsafe feed data for older clients. The guard still cannot prevent all distributed traffic or requests for syntactically valid nonexistent objects and does not impose a global cost cap.
 
 ## Authorized rollout — 2026-10-04
 
 The Cloudflare guard has now been applied and read back successfully. Production
-`catalog.json` returned 200; malformed match/date paths, query variants, and an
+`catalog.json` returned 200 with a Cloudflare cache HIT and `public, max-age=43200`;
+malformed match/date paths, query variants, and an
 Origin header returned 403. Staging canonical access remains restricted (401),
 while malformed requests are blocked (403). The existing origin rate limit was
 preserved. There had been no custom firewall entrypoint before this rollout.
+R2 development URLs were verified disabled for both score buckets.
 
 Backend publication validation was added for older clients, together with an
 8 MiB upstream response limit. All 145 backend tests, type checking, build, npm
 audit, both Swift security suites, and seven infrastructure tests passed.
 
+Backend rollout completed successfully in both environments:
+
+| Environment | Ready revision | Deployment evidence |
+| --- | --- | --- |
+| Staging | `alldayidreamaboutsports-backend-00039-bc9` | [Successful deployment and rerun after IAM changes](https://github.com/thisisnsh/alldayidreamaboutsports/actions/runs/37227053296) |
+| Production | `alldayidreamaboutsports-backend-00011-t4c` | [Successful production deployment](https://github.com/thisisnsh/alldayidreamaboutsports/actions/runs/37249424022) |
+
+Authenticated workflow health checks passed. Independent anonymous requests to
+`/internal/healthz` returned 403 in both environments. No error-severity entries
+were returned for either current revision in the final 20-minute log check.
+The two sampled public fixture schedules passed publication validation; both
+were empty, so this did not exercise live match records.
+
+Project-wide runtime secret access and deploy service-account/storage grants
+were replaced with access to the four required secrets, named service accounts,
+and regional source buckets. IAM was backed up before changes, scoped grants
+were read back, and deployments passed with the narrower permissions. Both
+services retain private invoker policies. Deployment federation conditions
+were verified against the repository/owner IDs, main branch, exact workflow,
+and respective environment.
+
+Commit `1971b58d50b6e6d0f5c737df7d27d08a4d7ddc53` gives the secret-scan job
+read access to pull-request metadata and disables scanner comments. This fixes
+the observed Dependabot PR scan permission failure without granting comment
+write access. [Main-branch security CI passed](https://github.com/thisisnsh/alldayidreamaboutsports/actions/runs/37249372312).
+App CI and the earlier security scan also passed.
+
 Firebase apps/configurations were registered for the current bundle identifier
 in both environments. The release build now rejects mismatched Firebase bundle
 IDs. Version 1.0.0 build 2 archived successfully and passed signature verification.
-App Store upload and backend deployment results will be recorded after completion.
+The signed universal app uploaded successfully to App Store Connect. It has not
+been approved or released through this work; the user elected to handle App Store
+review and release. Upload reported a nonblocking missing dSYM warning for the
+prebuilt framework `A`.
