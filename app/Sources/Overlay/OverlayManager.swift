@@ -296,6 +296,29 @@ final class OverlayManager: ObservableObject {
         submit(event, isFanGoal: true)
     }
 
+    /// Settings / onboarding sample: one notch drop of `type` for a generic
+    /// match, so a size or alert-level change shows what it does. Never a fan
+    /// goal — the celebration has its own Preview.
+    func previewAlert(_ type: MatchEventType) {
+        let event = MatchEvent(
+            eventId: "preview-alert:\(Date().timeIntervalSince1970)",
+            type: type,
+            fixtureId: 0,
+            leagueId: 1,
+            teamId: TeamCatalog.previewHome.id,
+            player: "Player Name",
+            minute: 73,
+            homeTeamId: TeamCatalog.previewHome.id,
+            awayTeamId: TeamCatalog.previewAway.id,
+            homeName: TeamCatalog.previewHome.name,
+            awayName: TeamCatalog.previewAway.name,
+            homeGoals: type == .goal ? 1 : 0,
+            awayGoals: 0
+        )
+        dismissAll()
+        submit(event, isFanGoal: false)
+    }
+
     // MARK: Scheduling
 
     private func scheduleLifecycle(after seconds: Double, _ block: @escaping () -> Void) {

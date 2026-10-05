@@ -1,41 +1,24 @@
 import SwiftUI
 
-struct SettingsView: View {
+/// The popover's Settings page. Every change shows on screen right away: the
+/// overlays it tunes are on screen beside the popover, not behind a window.
+struct SettingsPage: View {
     @EnvironmentObject var session: AppSession
     @Environment(\.colorScheme) private var scheme
     @State private var launchAtLogin = LaunchAtLogin.isEnabled
     // Local mirror so the SwiftUI content reacts synchronously while the
     // deferred session write updates the application-level AppKit appearance.
     @State private var activeTheme: ThemeChoice = .system
+    /// The twelve per-event switches sit behind the presets, folded.
+    @State private var customizing = false
     @ObservedObject private var displayTarget = OverlayDisplayTarget.shared
-    private static let screen = "settings"
+    static let screen = "settings"
 
     var body: some View {
-        ZStack {
-            AppBackground()
-            settingsContent
-        }
-        .frame(width: 440, height: 640)
-        .installsWindowOpener()
-        .appTheme(activeTheme)
-        .onAppear {
-            AppAnalytics.screenView(Self.screen)
-            activeTheme = session.prefs.settings.theme ?? .system
-        }
-    }
-
-    private var settingsContent: some View {
         VStack(spacing: 0) {
-            // Fixed heading — left-aligned, tucked under the traffic lights;
-            // only the cards below it scroll.
-            Text("Settings")
-                .font(.system(size: 18, weight: .bold, design: .rounded))
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.leading, 16)
-                .padding(.top, 8)
-
+            PageHeader(title: "Settings")
             ScrollView {
-                VStack(spacing: 14) {
+                VStack(spacing: 12) {
                     #if DEV_BACKEND
                     Text("🧪 dev session — fake backend, hardcoded data, scripted demo")
                         .font(.caption2)
@@ -48,19 +31,39 @@ struct SettingsView: View {
                     }
                     #endif
 
-                    SettingsCard("Events") {
-                        ForEach(MatchEventType.settingsOrder, id: \.self) { type in
-                            eventRow(type)
+                    SettingsCard("Alerts") {
+                        Picker("Alerts", selection: presetBinding) {
+                            ForEach(AlertPreset.allCases, id: \.self) { Text($0.label).tag(Optional($0)) }
                         }
-                        caption("Each event shows as a drop from the notch.")
+                        .pickerStyle(.segmented)
+                        .labelsHidden()
+                        caption(presetCaption)
+                        Button {
+                            withAnimation(.easeOut(duration: 0.15)) { customizing.toggle() }
+                        } label: {
+                            HStack(spacing: 4) {
+                                Text("Customize events")
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 9, weight: .bold))
+                                    .rotationEffect(.degrees(customizing ? 90 : 0))
+                            }
+                            .font(.system(size: 12))
+                            .foregroundStyle(Color.accentColor)
+                        }
+                        .buttonStyle(.plain)
+                        if customizing {
+                            ForEach(MatchEventType.settingsOrder, id: \.self) { type in
+                                eventRow(type)
+                            }
+                        }
                     }
 
                     // No goal events = nothing to celebrate; the whole
                     // section disappears (its switches were zeroed too).
                     if session.prefs.settings.eventEnabled(.goal) {
-                        SettingsCard("Goal celebration") {
-                            toggleRow("Show goal in center", isOn: settingsBinding(\.goalCenter, default: true))
-                            toggleRow("Show confetti in corners", isOn: settingsBinding(\.confetti, default: true))
+                        SettingsCard("When your team scores") {
+                            toggleRow("Ball and score in the center", isOn: settingsBinding(\.goalCenter, default: true))
+                            toggleRow("Confetti in the corners", isOn: settingsBinding(\.confetti, default: true))
 
                             Button {
                                 // No event here: `OverlayManager.preview()`
@@ -68,25 +71,23 @@ struct SettingsView: View {
                                 // `celebration_preview`.
                                 OverlayManager.shared.preview()
                             } label: {
-                                Text("Preview animation").frame(maxWidth: .infinity)
+                                Text("Preview celebration").frame(maxWidth: .infinity)
                             }
                             .buttonStyle(.cardButton)
-                            caption("Choose how your team’s goals are celebrated with animations. You’ll always see the notch drop on goal like every other event. Preview shows exactly what you picked.")
                         }
                     }
 
-                    SettingsCard("Appearance") {
-                        pickerRow("Theme", selection: themeBinding, cases: ThemeChoice.allCases) { $0.label }
-                        pickerRow("Capsule size", selection: capsuleSizeBinding, cases: CapsuleSize.allCases) { $0.label }
-                        pickerRow("Capsule position", selection: capsulePositionBinding, cases: CapsulePosition.allCases) { $0.label }
-                        pickerRow("Notch drop size", selection: notchDropSizeBinding, cases: CapsuleSize.allCases) { $0.label }
+                    SettingsCard("On screen") {
+                        pickerRow("Size", selection: overlaySizeBinding, cases: CapsuleSize.allCases) { $0.label }
+                        pickerRow("Pinned score", selection: capsulePositionBinding, cases: CapsulePosition.allCases) { $0.label }
                         if displayTarget.displays.count > 1 {
                             screenPickerRow
                         }
-                        caption("Capsules and notifications appear on the selected screen. Pin a match from the menu to float its live score; hover it to see the event timeline.")
+                        caption("Size applies to notch alerts and pinned scores. Pin a live match from the menu to float its score; hover it to see the timeline.")
                     }
 
-                    SettingsCard("Behavior") {
+                    SettingsCard("General") {
+                        pickerRow("Theme", selection: themeBinding, cases: ThemeChoice.allCases) { $0.label }
                         toggleRow("Open at login", isOn: Binding(
                             get: { launchAtLogin },
                             set: { on in
@@ -95,36 +96,61 @@ struct SettingsView: View {
                                 session.updateSettings { $0.launchAtLogin = on }
                             }
                         ))
-                        caption("Turn this on so you never miss a goal — the app starts silently in the menu bar. It never shows in the Dock; that's how it's designed.")
+                        caption("The app starts silently in the menu bar. It never shows in the Dock; that's how it's designed.")
                     }
 
-                    SettingsCard("Updates") {
-                        CheckForUpdatesButton(source: "settings")
-                            .buttonStyle(.cardButton)
-                        caption("\(AppEnvironment.profileName) v\(AppEnvironment.appVersion) (Build \(AppEnvironment.buildNumber))")
-                    }
-
-                    Button {
-                        AppAnalytics.appQuit(source: "settings")
-                        NSApp.terminate(nil)
-                    } label: {
-                        Text("Quit").foregroundStyle(.red).frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.cardButton)
+                    footer
                 }
-                .padding(.horizontal, 16)
-                .padding(.top, 12)
-                .padding(.bottom, 16)
+                .padding(.horizontal, 12)
+                .padding(.top, 8)
+                .padding(.bottom, 12)
             }
             // Cards fade out as they slide up under the heading.
             .mask(
                 VStack(spacing: 0) {
                     LinearGradient(colors: [.clear, .black], startPoint: .top, endPoint: .bottom)
-                        .frame(height: 18)
+                        .frame(height: 12)
                     Rectangle()
                 }
             )
         }
+        .onAppear {
+            activeTheme = session.prefs.settings.theme ?? .system
+            launchAtLogin = LaunchAtLogin.isEnabled
+        }
+    }
+
+    /// Feedback, version and Quit — the things that used to crowd the bottom
+    /// of the menu.
+    private var footer: some View {
+        VStack(spacing: 8) {
+            HStack(spacing: 8) {
+                Button { Feedback.reportBug() } label: {
+                    Label("Report a bug", systemImage: "ladybug").frame(maxWidth: .infinity)
+                }
+                Button { Feedback.requestFeature() } label: {
+                    Label("Request a feature", systemImage: "lightbulb").frame(maxWidth: .infinity)
+                }
+            }
+            .buttonStyle(.cardButton)
+            HStack {
+                Text("\(AppEnvironment.profileName) v\(AppEnvironment.appVersion) (Build \(AppEnvironment.buildNumber))")
+                    .font(.caption)
+                    .opacity(0.6)
+                Spacer()
+                CheckForUpdatesButton(source: "settings")
+                    .buttonStyle(.hoverHighlight)
+                    .font(.caption)
+            }
+            Button {
+                AppAnalytics.appQuit(source: "settings")
+                NSApp.terminate(nil)
+            } label: {
+                Text("Quit").foregroundStyle(.red).frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.cardButton)
+        }
+        .padding(.top, 4)
     }
 
     // MARK: Rows
@@ -208,6 +234,39 @@ struct SettingsView: View {
             .fixedSize(horizontal: false, vertical: true)
     }
 
+    // MARK: Presets
+
+    /// nil when the switches match no preset — the segmented control then
+    /// shows nothing selected and the caption says "Custom".
+    private var presetBinding: Binding<AlertPreset?> {
+        Binding(
+            get: { AlertPreset.matching(session.prefs.settings) },
+            set: { preset in
+                guard let preset else { return }
+                // Deferred like `themeBinding` to avoid "Publishing changes
+                // from within view updates" when the segmented control flips.
+                DispatchQueue.main.async {
+                    let goalWasOn = session.prefs.settings.eventEnabled(.goal)
+                    session.updateSettings {
+                        preset.apply(to: &$0)
+                        // Every preset includes goals: bring the celebration
+                        // back if goals had been muted (which zeroed it).
+                        if !goalWasOn {
+                            $0.goalCenter = true
+                            $0.confetti = true
+                        }
+                    }
+                    OverlayManager.shared.previewAlert(preset.sampleEvent)
+                }
+            }
+        )
+    }
+
+    private var presetCaption: String {
+        let what = AlertPreset.matching(session.prefs.settings)?.summary ?? "Custom: your own mix of events."
+        return "\(what) Each alert drops from the notch."
+    }
+
     // MARK: Bindings
 
     private func eventBinding(_ type: MatchEventType) -> Binding<Bool> {
@@ -236,28 +295,21 @@ struct SettingsView: View {
         )
     }
 
-    private var capsuleSizeBinding: Binding<CapsuleSize> {
+    /// One size for both overlays: the capsule and the notch drops. Reads
+    /// the capsule's (they only differ if set apart by an older build), and
+    /// replays a notch alert so the new size is visible straight away.
+    private var overlaySizeBinding: Binding<CapsuleSize> {
         Binding(
             get: { session.prefs.settings.capsuleSize ?? .medium },
             set: { choice in
                 // Deferred like `themeBinding` to avoid "Publishing changes from
                 // within view updates" when the segmented control flips.
                 DispatchQueue.main.async {
-                    session.updateSettings { $0.capsuleSize = choice }
-                }
-            }
-        )
-    }
-
-    private var notchDropSizeBinding: Binding<CapsuleSize> {
-        Binding(
-            get: { session.prefs.settings.notchDropSize ?? .medium },
-            set: { choice in
-                // Deferred like `capsuleSizeBinding` to avoid "Publishing
-                // changes from within view updates" when the segmented
-                // control flips.
-                DispatchQueue.main.async {
-                    session.updateSettings { $0.notchDropSize = choice }
+                    session.updateSettings {
+                        $0.capsuleSize = choice
+                        $0.notchDropSize = choice
+                    }
+                    OverlayManager.shared.previewAlert(.goal)
                 }
             }
         )
