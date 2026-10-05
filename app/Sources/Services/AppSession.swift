@@ -161,6 +161,9 @@ final class AppSession: ObservableObject {
         if before.confetti != after.confetti {
             AppAnalytics.settingChanged(.confetti, enabled: after.confetti ?? true)
         }
+        if before.menuBarScore != after.menuBarScore {
+            AppAnalytics.settingChanged(.menuBarScore, enabled: after.menuBarScore ?? true)
+        }
         // The enum-valued settings take the `value:` overload; the booleans
         // above take `enabled:`.
         if before.theme != after.theme {

@@ -88,6 +88,7 @@ struct SettingsPage: View {
 
                     SettingsCard("General") {
                         pickerRow("Theme", selection: themeBinding, cases: ThemeChoice.allCases) { $0.label }
+                        toggleRow("Live score in menu bar", isOn: settingsBinding(\.menuBarScore, default: true))
                         toggleRow("Open at login", isOn: Binding(
                             get: { launchAtLogin },
                             set: { on in
