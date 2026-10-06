@@ -108,6 +108,12 @@ enum AppAnalytics {
         log("bug_reported")
     }
 
+    /// A followed-team win hit the review cadence (1st, 7th, 13th, …) and we
+    /// asked StoreKit — which may still decline to show the sheet.
+    static func reviewRequested(wins: Int) {
+        log("review_requested", ["wins": wins])
+    }
+
     /// Every Quit in the app. `source` says which one: `settings` or
     /// `status_menu` (the status item's right-click menu).
     static func appQuit(source: String) {
