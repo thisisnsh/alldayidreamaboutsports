@@ -133,15 +133,9 @@ struct SettingsPage: View {
                 }
             }
             .buttonStyle(.cardButton)
-            HStack {
-                Text("\(AppEnvironment.profileName) v\(AppEnvironment.appVersion) (Build \(AppEnvironment.buildNumber))")
-                    .font(.caption)
-                    .opacity(0.6)
-                Spacer()
-                CheckForUpdatesButton(source: "settings")
-                    .buttonStyle(.hoverHighlight)
-                    .font(.caption)
-            }
+            Text("\(AppEnvironment.profileName) v\(AppEnvironment.appVersion) (Build \(AppEnvironment.buildNumber))")
+                .font(.caption)
+                .opacity(0.6)
             Button {
                 AppAnalytics.appQuit(source: "settings")
                 NSApp.terminate(nil)
@@ -450,18 +444,3 @@ private struct DemoControls: View {
     }
 }
 #endif
-
-/// Opens the App Store's Updates page.
-struct CheckForUpdatesButton: View {
-    /// Which entry point this button is, for `update_check_started`'s `source`.
-    let source: String
-
-    var body: some View {
-        Button {
-            AppAnalytics.updateCheckStarted(source: source)
-            AppUpdater.checkForUpdates()
-        } label: {
-            Text("Check for Updates…").frame(maxWidth: .infinity)
-        }
-    }
-}

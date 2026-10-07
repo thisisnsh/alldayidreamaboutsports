@@ -82,7 +82,7 @@ enum AppAnalytics {
     //
     // A parameter appears only where the SAME action has several entry points
     // and both the total and the split are worth having — `app_quit`'s
-    // `source`, `update_check_started`'s `source`. A control whose click is
+    // `source`. A control whose click is
     // already reported by the thing it triggers gets no event of its own:
     // "Preview animation" is `celebration_preview`.
 
@@ -133,13 +133,6 @@ enum AppAnalytics {
 
     static func capsuleUnpinned(fixtureId: Int) {
         log("capsule_unpinned", ["fixture_id": fixtureId])
-    }
-
-    // MARK: Updates
-
-    /// An App Store update check was asked for. `source`: `settings`.
-    static func updateCheckStarted(source: String) {
-        log("update_check_started", ["source": source])
     }
 
     // MARK: Fan teams
