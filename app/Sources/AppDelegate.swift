@@ -101,6 +101,7 @@ final class MenuPopoverController: NSObject, NSPopoverDelegate {
     static let shared = MenuPopoverController()
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
     private let popover = NSPopover()
+    private var hostingView: NSView?
     private var eventMonitor: Any?
     private var keyMonitor: Any?
     /// When the popover went up, for the `menu_closed` duration. Non-nil only
@@ -116,10 +117,28 @@ final class MenuPopoverController: NSObject, NSPopoverDelegate {
         button.sendAction(on: [.leftMouseUp, .rightMouseUp])
         popover.behavior = .transient
         popover.delegate = self
-        popover.contentSize = MenuPopoverView.size(following: AppSession.shared.fanTeams.count)
-        popover.contentViewController = NSHostingController(
+        // The popover's size is ours to set (`fitToFollowedTeams`), not the
+        // SwiftUI content's, so the two can't disagree about the height.
+        let hosting = NSHostingController(
             rootView: MenuPopoverView().environmentObject(AppSession.shared)
         )
+        hosting.sizingOptions = []
+        popover.contentViewController = hosting
+        hostingView = hosting.view
+        fitToFollowedTeams()
+    }
+
+    /// Size the popover for the follow count. Only while it's closed —
+    /// resizing an open `NSPopover` jumps — so a follow change on the Teams
+    /// page shows from the next open. Run on close too, so the SwiftUI frame
+    /// has long settled by the time it reopens.
+    private func fitToFollowedTeams() {
+        guard !popover.isShown else { return }
+        let size = MenuPopoverView.size(following: AppSession.shared.fanTeams.count)
+        PopoverRouter.shared.height = size.height
+        popover.contentSize = size
+        hostingView?.frame.size = size
+        hostingView?.layoutSubtreeIfNeeded()
     }
 
     @objc private func statusItemClicked() {
@@ -146,11 +165,7 @@ final class MenuPopoverController: NSObject, NSPopoverDelegate {
             return
         }
         PopoverRouter.shared.reset(to: page)
-        // Sized while closed: the follow count can change on the Teams page,
-        // but the new height waits for the next open.
-        let size = MenuPopoverView.size(following: AppSession.shared.fanTeams.count)
-        PopoverRouter.shared.height = size.height
-        popover.contentSize = size
+        fitToFollowedTeams()
         NSApp.activate(ignoringOtherApps: true)
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
         button.highlight(true)
@@ -175,6 +190,7 @@ final class MenuPopoverController: NSObject, NSPopoverDelegate {
             AppAnalytics.menuClosed(openSeconds: Date().timeIntervalSince(openedAt))
         }
         stopRefreshing()
+        fitToFollowedTeams()
     }
 
     // MARK: Right-click menu
