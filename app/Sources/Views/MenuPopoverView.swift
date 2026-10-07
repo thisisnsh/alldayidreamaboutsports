@@ -130,7 +130,7 @@ struct ToolbarIconButton: View {
     }
 }
 
-/// Today's matches: the scope switch and the way to Settings on top, the list
+/// Today's matches: the scope switch, Settings and Quit on top, the list
 /// in the middle, the followed teams (the way to Teams) along the bottom.
 struct HomePage: View {
     @EnvironmentObject var session: AppSession
@@ -156,6 +156,10 @@ struct HomePage: View {
             Spacer()
             FixtureScopePicker(scope: $fixtureScope)
             ToolbarIconButton(symbol: "gearshape", help: "Settings") { PopoverRouter.shared.go(.settings) }
+            ToolbarIconButton(symbol: "power", help: "Quit") {
+                AppAnalytics.appQuit(source: "menu")
+                NSApp.terminate(nil)
+            }
         }
         .padding(.leading, 16)
         .padding(.trailing, 10)

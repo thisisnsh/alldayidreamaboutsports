@@ -119,7 +119,7 @@ struct SettingsPage: View {
         }
     }
 
-    /// Feedback, version and Quit — the things that used to crowd the bottom
+    /// Feedback and version — the things that used to crowd the bottom
     /// of the menu.
     private var footer: some View {
         VStack(spacing: 8) {
@@ -135,13 +135,6 @@ struct SettingsPage: View {
             Text("\(AppEnvironment.profileName) v\(AppEnvironment.appVersion) (Build \(AppEnvironment.buildNumber))")
                 .font(.caption)
                 .opacity(0.6)
-            Button {
-                AppAnalytics.appQuit(source: "settings")
-                NSApp.terminate(nil)
-            } label: {
-                Text("Quit").foregroundStyle(.red).frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.cardButton)
         }
         .padding(.top, 4)
     }
