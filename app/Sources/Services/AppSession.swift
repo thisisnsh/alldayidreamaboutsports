@@ -158,9 +158,6 @@ final class AppSession: ObservableObject {
         if before.goalCenter != after.goalCenter {
             AppAnalytics.settingChanged(.goalCenter, enabled: after.goalCenter ?? true)
         }
-        if before.confetti != after.confetti {
-            AppAnalytics.settingChanged(.confetti, enabled: after.confetti ?? true)
-        }
         // The enum-valued settings take the `value:` overload; the booleans
         // above take `enabled:`.
         if before.theme != after.theme {

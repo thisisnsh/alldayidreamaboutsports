@@ -160,12 +160,9 @@ final class OverlayManager: ObservableObject {
         // One per displayed set — the unit a user actually perceives, and the
         // only overlay event that fires per set rather than per event.
         AppAnalytics.overlaySetShown(count: set.count, hasFanGoal: !fanGoals.isEmpty)
-        let settings = AppSession.shared.prefs.settings
-        if settings.confetti ?? true {
+        // One switch for the whole goal animation: ball and confetti.
+        if AppSession.shared.prefs.settings.goalCenter ?? true, !fanGoals.isEmpty {
             fireConfetti(count: fanGoals.count)
-
-        }
-        if settings.goalCenter ?? true, !fanGoals.isEmpty {
             startBall(for: fanGoals)
         }
         scheduleLifecycle(after: pillHoldSeconds) { [self] in endSet() }

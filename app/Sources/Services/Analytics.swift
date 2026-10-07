@@ -190,7 +190,6 @@ enum AppAnalytics {
     enum Setting: String {
         case launchAtLogin = "launch_at_login"
         case goalCenter = "goal_center"
-        case confetti
         case theme
         case capsuleSize = "capsule_size"
         case capsulePosition = "capsule_position"
@@ -228,11 +227,10 @@ enum AppAnalytics {
     }
 
     /// Push the current settings up as user properties (called at launch) so an
-    /// install that never opens Settings is still counted in "% with confetti on".
+    /// install that never opens Settings is still counted in "% with the goal animation on".
     static func syncSettingProperties(_ s: PrefSettings) {
         setUserProperty((s.launchAtLogin ?? false) ? "on" : "off", forName: Setting.launchAtLogin.property)
         setUserProperty((s.goalCenter ?? true) ? "on" : "off", forName: Setting.goalCenter.property)
-        setUserProperty((s.confetti ?? true) ? "on" : "off", forName: Setting.confetti.property)
         setUserProperty((s.theme ?? .system).rawValue, forName: Setting.theme.property)
         setUserProperty((s.capsuleSize ?? .medium).rawValue, forName: Setting.capsuleSize.property)
         setUserProperty((s.capsulePosition ?? .top).rawValue, forName: Setting.capsulePosition.property)
