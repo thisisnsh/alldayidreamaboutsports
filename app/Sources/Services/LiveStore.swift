@@ -364,13 +364,18 @@ final class LiveStore {
     /// BASELINE GUARD: the first observation seeds the baseline and emits NO
     /// events (don't replay pre-launch goals); only later deltas fire overlays.
     /// A baseline gone stale (see `baselineIsStale`) re-seeds the same way.
-    private func ingest(_ current: Fixture) {
-        guard current.hasValidBounds else {
-            AppLog.info(.fixtures, "snapshot_rejected reason=invalid_bounds fixture_id=\(current.fixtureId)")
+    private func ingest(_ snapshot: Fixture) {
+        guard snapshot.hasValidBounds else {
+            AppLog.info(.fixtures, "snapshot_rejected reason=invalid_bounds fixture_id=\(snapshot.fixtureId)")
             return
         }
         let now = Date()
-        let prev = baseline[current.fixtureId]
+        let prev = baseline[snapshot.fixtureId]
+        // The feed can drop timeline entries it already sent. Keep what we've
+        // seen for the rest of this run (the cache is wiped on quit), so the
+        // timeline doesn't lose them — and since the baseline is this merged
+        // state too, the entries coming back later don't refire as new.
+        let current = prev.map { snapshot.keepingEvents(from: $0) } ?? snapshot
         // OBSERVATION-GAP GUARD: `prev` is only "the state one poll ago" while
         // we've been watching continuously. After a gap — the lid was shut, the
         // Mac slept, the network went away — it's an old snapshot, and diffing

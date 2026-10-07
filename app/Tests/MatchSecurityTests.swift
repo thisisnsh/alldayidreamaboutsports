@@ -110,6 +110,23 @@ struct MatchSecurityTests {
         precondition(MatchDiff.diff(prev: zero, next: fixture(subs: [sub])).map(\.type) == [.substitution])
         let shootout = Shootout(home: 1, away: 0, kicks: [PenaltyKickRecord(teamId: 1, player: "A", scored: true)])
         precondition(MatchDiff.diff(prev: zero, next: fixture(shootout: shootout)).map(\.type) == [.penaltyKick])
+
+        // Events the feed drops are kept from the earlier snapshot; fresh ones win,
+        // and a cancelled goal still leaves the timeline.
+        let goal = MatchTimelineEvent(player: "A", minute: 10, extra: nil)
+        func scored(_ goals: Int, _ events: [MatchTimelineEvent], subs: [SubstitutionRecord] = []) -> Fixture {
+            Fixture(fixtureId: 1, leagueId: 39, round: nil, kickoffISO: "2026-10-04T12:00:00Z",
+                    status: "LIVE", rawStatus: "1H", minute: 20,
+                    home: ScoreboardTeam(id: 1, name: "A", goals: goals, goalEvents: events, subs: subs),
+                    away: ScoreboardTeam(id: 2, name: "B", goals: 0), shootout: nil)
+        }
+        let seen = scored(1, [goal], subs: [sub])
+        let kept = scored(1, []).keepingEvents(from: seen)
+        precondition(kept.home.goalEvents == [goal] && kept.home.subs == [sub])
+        precondition(MatchDiff.diff(prev: kept, next: seen).isEmpty)
+        let other = MatchTimelineEvent(player: "C", minute: 12, extra: nil)
+        precondition(scored(1, [other]).keepingEvents(from: seen).home.goalEvents == [other])
+        precondition(scored(0, []).keepingEvents(from: seen).home.goalEvents.isEmpty)
         print("Match security checks passed: decoding bounds, cached data, exploit regressions, and normal transitions")
     }
 }
