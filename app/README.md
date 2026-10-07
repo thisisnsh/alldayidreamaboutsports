@@ -100,8 +100,7 @@ for tracking. Crashlytics is not a live arbitrary-log viewer; use Console.app or
 The app is sandboxed (`App.entitlements`: app sandbox + outgoing network + the
 Firebase keychain group) and Xcode signs it automatically — Apple Development
 when you run it, Apple Distribution when you archive it for upload. There is no
-in-app updater and no forced update: the App Store installs updates, and
-Settings' "Check for Updates…" opens its Updates page (`AppUpdater`). Launch at login starts OFF (guideline 2.4.5 bars
+in-app updater and no forced update: the App Store installs updates. Launch at login starts OFF (guideline 2.4.5 bars
 adding a login item without consent); users switch it on in Settings.
 `ITSAppUsesNonExemptEncryption = NO` skips the export-compliance question on
 every upload.
