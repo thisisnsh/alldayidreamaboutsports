@@ -15,6 +15,9 @@ final class PopoverRouter: ObservableObject {
     @Published private(set) var page: PopoverPage = .home
     /// Whether the last move went deeper, so the slide runs the matching way.
     @Published private(set) var forward = true
+    /// The popover's height, picked by `MenuPopoverController` each time it
+    /// opens and held while it's up.
+    @Published var height = MenuPopoverView.maxHeight
 
     func go(_ page: PopoverPage) {
         guard page != self.page else { return }
@@ -41,7 +44,8 @@ final class PopoverRouter: ObservableObject {
     }
 }
 
-/// The menu bar popover: a fixed-size frame that swaps between pages.
+/// The menu bar popover: a fixed-width frame that swaps between pages, as tall
+/// as the followed teams need.
 struct MenuPopoverView: View {
     @EnvironmentObject var session: AppSession
     @ObservedObject private var router = PopoverRouter.shared
@@ -49,8 +53,15 @@ struct MenuPopoverView: View {
     /// fired by `MenuPopoverController.showMenu()` — the hosting controller is
     /// built once and reused, so `.onAppear` here would only fire once a launch.
     static let screen = "menu"
-    /// Fixed for every page: resizing an `NSPopover` while it's open jumps.
-    static let size = CGSize(width: 360, height: 540)
+    static let width: CGFloat = 360
+    static let maxHeight: CGFloat = 540
+
+    /// Few followed teams means few matches, so a short popover; four or more
+    /// get the full height. Only applied as the popover opens and the same for
+    /// every page — resizing an `NSPopover` while it's open jumps.
+    static func size(following count: Int) -> CGSize {
+        CGSize(width: width, height: min(maxHeight, 340 + 50 * CGFloat(count)))
+    }
 
     var body: some View {
         ZStack {
@@ -60,7 +71,7 @@ struct MenuPopoverView: View {
             case .settings: SettingsPage().transition(slide)
             }
         }
-        .frame(width: Self.size.width, height: Self.size.height)
+        .frame(width: Self.width, height: router.height)
         .clipped()
         .background(AppBackground())
         .appTheme(session.prefs.settings.theme ?? .system)
