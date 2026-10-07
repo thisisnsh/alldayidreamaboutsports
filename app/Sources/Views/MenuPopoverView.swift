@@ -130,8 +130,8 @@ struct ToolbarIconButton: View {
     }
 }
 
-/// Today's matches: the scope switch and the way to Teams and Settings on top,
-/// the list in the middle, the followed teams along the bottom.
+/// Today's matches: the scope switch and the way to Settings on top, the list
+/// in the middle, the followed teams (the way to Teams) along the bottom.
 struct HomePage: View {
     @EnvironmentObject var session: AppSession
     /// Which slice of today the fixture list shows. Stored locally rather than
@@ -155,7 +155,6 @@ struct HomePage: View {
             Text("Today").font(.system(size: 15, weight: .bold, design: .rounded))
             Spacer()
             FixtureScopePicker(scope: $fixtureScope)
-            ToolbarIconButton(symbol: "heart", help: "Teams") { PopoverRouter.shared.go(.teams) }
             ToolbarIconButton(symbol: "gearshape", help: "Settings") { PopoverRouter.shared.go(.settings) }
         }
         .padding(.leading, 16)
