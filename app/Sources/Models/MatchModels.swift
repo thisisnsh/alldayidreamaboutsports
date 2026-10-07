@@ -544,6 +544,52 @@ struct Fixture: Codable, Identifiable, Hashable {
             penAway: shootout?.away
         )
     }
+
+    /// This snapshot with any event list the feed dropped refilled from
+    /// `stored`, an earlier snapshot of the same match. The feed sometimes
+    /// briefly omits timeline entries it already sent; a fresh non-empty list
+    /// always wins. Goal/card lists are bounded by this snapshot's own counts,
+    /// so a VAR-cancelled goal or rescinded card still leaves the timeline.
+    func keepingEvents(from stored: Fixture) -> Fixture {
+        guard stored.fixtureId == fixtureId else { return self }
+        func counted(_ fresh: [MatchTimelineEvent], _ old: [MatchTimelineEvent], count: Int) -> [MatchTimelineEvent] {
+            fresh.count >= min(count, old.count) ? fresh : Array(old.prefix(count))
+        }
+        func team(_ fresh: ScoreboardTeam, _ old: ScoreboardTeam) -> ScoreboardTeam {
+            guard fresh.id == old.id else { return fresh }
+            return ScoreboardTeam(
+                id: fresh.id,
+                name: fresh.name,
+                goals: fresh.goals,
+                yellowCards: fresh.yellowCards,
+                redCards: fresh.redCards,
+                goalEvents: counted(fresh.goalEvents, old.goalEvents, count: fresh.goals),
+                yellowCardEvents: counted(fresh.yellowCardEvents, old.yellowCardEvents, count: fresh.yellowCards),
+                redCardEvents: counted(fresh.redCardEvents, old.redCardEvents, count: fresh.redCards),
+                subs: fresh.subs.isEmpty ? old.subs : fresh.subs
+            )
+        }
+        var mergedShootout = shootout ?? stored.shootout
+        if let fresh = shootout, fresh.kicks.isEmpty, let old = stored.shootout, !old.kicks.isEmpty {
+            mergedShootout = Shootout(home: fresh.home, away: fresh.away, kicks: old.kicks)
+        }
+        return Fixture(
+            fixtureId: fixtureId,
+            leagueId: leagueId,
+            round: round,
+            kickoffISO: kickoffISO,
+            status: status,
+            rawStatus: rawStatus,
+            minute: minute,
+            extra: extra,
+            period: period,
+            running: running,
+            home: team(home, stored.home),
+            away: team(away, stored.away),
+            shootout: mergedShootout,
+            varEvents: varEvents.isEmpty ? stored.varEvents : varEvents
+        )
+    }
 }
 
 struct Score: Codable, Hashable {
