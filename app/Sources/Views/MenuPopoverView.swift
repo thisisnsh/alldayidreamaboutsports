@@ -144,6 +144,54 @@ struct ToolbarIconButton: View {
     }
 }
 
+/// The header's power button. Turns red on hover; the first click only asks
+/// ("Quit?"), the second quits. The ask lapses on its own after a few seconds.
+private struct QuitButton: View {
+    @State private var hovering = false
+    @State private var confirming = false
+
+    var body: some View {
+        Button {
+            if confirming {
+                AppAnalytics.appQuit(source: "menu")
+                NSApp.terminate(nil)
+            } else {
+                withAnimation(.easeOut(duration: 0.15)) { confirming = true }
+            }
+        } label: {
+            Group {
+                if confirming {
+                    Text("Quit?")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 9)
+                } else {
+                    Image(systemName: "power")
+                        .font(.system(size: 14))
+                        .foregroundStyle(hovering ? Color.red : Color.primary)
+                        .frame(width: 28)
+                }
+            }
+            .frame(height: 26)
+            .background(
+                RoundedRectangle(cornerRadius: 7)
+                    .fill(confirming ? Color.red : Color.red.opacity(hovering ? 0.15 : 0))
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .help(confirming ? "Click again to quit" : "Quit")
+        .accessibilityLabel(confirming ? "Confirm quit" : "Quit")
+        .task(id: confirming) {
+            guard confirming, (try? await Task.sleep(for: .seconds(3))) != nil else { return }
+            withAnimation(.easeOut(duration: 0.15)) { confirming = false }
+        }
+        // A stale ask shouldn't greet the next open.
+        .onDisappear { confirming = false }
+    }
+}
+
 /// Today's matches: the scope switch, Settings and Quit on top, the list
 /// in the middle, the followed teams (the way to Teams) along the bottom.
 struct HomePage: View {
@@ -170,10 +218,7 @@ struct HomePage: View {
             Spacer()
             FixtureScopePicker(scope: $fixtureScope)
             ToolbarIconButton(symbol: "gearshape", help: "Settings") { PopoverRouter.shared.go(.settings) }
-            ToolbarIconButton(symbol: "power", help: "Quit") {
-                AppAnalytics.appQuit(source: "menu")
-                NSApp.terminate(nil)
-            }
+            QuitButton()
         }
         .padding(.leading, 16)
         .padding(.trailing, 10)
