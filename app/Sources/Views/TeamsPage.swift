@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// The popover's Teams page: search, the followed teams as removable chips,
-/// then every league's team grid. Saves on every toggle.
+/// The popover's Teams page: search, then every league's team grid. Saves on
+/// every toggle.
 struct TeamsPage: View {
     @EnvironmentObject var session: AppSession
     @State private var query = ""
@@ -12,9 +12,6 @@ struct TeamsPage: View {
             PageHeader(title: "Teams", note: "\(session.fanTeams.count) followed")
             TeamSearchField(query: $query)
                 .padding(.horizontal, 12)
-            if !session.fanTeams.isEmpty {
-                followedChips
-            }
             ScrollView {
                 TeamLeagueList(query: query, columns: 4)
                     .padding(.horizontal, 12)
@@ -31,34 +28,6 @@ struct TeamsPage: View {
         }
         // Fetch+cache all logos when the page opens; re-fetch if >24h old.
         .task { TeamLogoStore.shared.warm(session.leagues.map(\.logo) + session.allTeams.map(\.logo)) }
-    }
-
-    /// One tap unfollows — the quickest way to prune without hunting through
-    /// the grids.
-    private var followedChips: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 6) {
-                ForEach(session.fanTeams) { team in
-                    Button {
-                        session.setFanTeams(session.prefs.fanTeamIds.filter { $0 != String(team.id) })
-                    } label: {
-                        HStack(spacing: 5) {
-                            CachedTeamLogo(url: team.logo, size: 16)
-                            Text(team.name).font(.system(size: 11, weight: .semibold)).lineLimit(1)
-                            Image(systemName: "xmark").font(.system(size: 8, weight: .bold)).opacity(0.5)
-                        }
-                        .padding(.leading, 4)
-                        .padding(.trailing, 8)
-                        .padding(.vertical, 3)
-                        .background(Capsule().fill(Color.primary.opacity(0.07)))
-                    }
-                    .buttonStyle(.plain)
-                    .hoverLift()
-                    .help("Unfollow \(team.name)")
-                }
-            }
-            .padding(.horizontal, 12)
-        }
     }
 }
 
