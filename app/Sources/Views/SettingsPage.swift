@@ -236,10 +236,9 @@ struct SettingsPage: View {
                     session.updateSettings {
                         preset.apply(to: &$0)
                         // Every preset includes goals: bring the goal animation
-                        // back if goals had been muted (which zeroed it).
+                        // back if goals had been muted (which turned it off).
                         if !goalWasOn {
                             $0.goalCenter = true
-                            $0.confetti = true
                         }
                     }
                     OverlayManager.shared.previewAlert(preset.sampleEvent)
@@ -262,11 +261,9 @@ struct SettingsPage: View {
                 session.updateSettings {
                     $0.notifications = ($0.notifications ?? [:]).merging([type.settingsKey: on]) { _, new in new }
                     // Muting goals mutes the goal animation with it; unmuting
-                    // restores all of them so the section never reappears all-off.
+                    // restores it so the section never reappears switched off.
                     if type == .goal {
                         $0.goalCenter = on
-                        $0.confetti = on
-
                     }
                 }
             }
@@ -277,12 +274,7 @@ struct SettingsPage: View {
     private var goalAnimationBinding: Binding<Bool> {
         Binding(
             get: { session.prefs.settings.goalCenter ?? true },
-            set: { on in
-                session.updateSettings {
-                    $0.goalCenter = on
-                    $0.confetti = on
-                }
-            }
+            set: { on in session.updateSettings { $0.goalCenter = on } }
         )
     }
 
