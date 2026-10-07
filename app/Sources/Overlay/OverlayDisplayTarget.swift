@@ -62,7 +62,9 @@ final class OverlayDisplayTarget: ObservableObject {
             selectedDisplayID = fallback.flatMap(displayID(for:)) ?? refreshed.first?.id
         }
 
-        if notify || selectedDisplayID != oldSelection {
+        // Never post from `init`: observers read `OverlayDisplayTarget.shared`,
+        // and re-entering the static initializer traps in swift_once.
+        if notify {
             NotificationCenter.default.post(name: .overlayDisplayTargetDidChange, object: self)
         }
     }
