@@ -56,11 +56,11 @@ struct MenuPopoverView: View {
     static let width: CGFloat = 360
     static let maxHeight: CGFloat = 540
 
-    /// Few followed teams means few matches, so a short popover; four or more
+    /// Few followed teams means few matches, so a short popover; eight or more
     /// get the full height. Only applied as the popover opens and the same for
     /// every page — resizing an `NSPopover` while it's open jumps.
     static func size(following count: Int) -> CGSize {
-        CGSize(width: width, height: min(maxHeight, 340 + 50 * CGFloat(count)))
+        CGSize(width: width, height: min(maxHeight, 300 + 30 * CGFloat(count)))
     }
 
     var body: some View {
