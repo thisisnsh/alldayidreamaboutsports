@@ -34,8 +34,9 @@ enum BallPhase {
 ///   Each set takes goals first, then fills remaining slots with other events.
 /// - The visible stack is chronological within the selected set: oldest at the
 ///   top, newest at the bottom, and it stays up for `pillHoldSeconds`.
-/// - Fan goals start confetti and one shared center ball only when their goal
-///   notification reaches the displayed set.
+/// - Fan goals start confetti and one shared center ball when their goal pill
+///   drops, and the ball leaves with the set — the two are on screen for
+///   exactly the same time.
 @MainActor
 final class OverlayManager: ObservableObject {
     static let shared = OverlayManager()
@@ -49,7 +50,6 @@ final class OverlayManager: ObservableObject {
     private var otherQueue: [QueuedNotchItem] = []
     private var nextArrivalSeq = 0
     private var lifecycleScheduled: [DispatchWorkItem] = []
-    private var ballScheduled: DispatchWorkItem?
     private var queueBusy = false  // set synchronously so rapid-fire pushes can't race startNextSetIfIdle
     private var displayPanel: NSPanel?
     private var interactPanel: NSPanel?
@@ -117,7 +117,6 @@ final class OverlayManager: ObservableObject {
     func dismissAll() {
         goalQueue.removeAll()
         otherQueue.removeAll()
-        cancelBallScheduled()
         hideBall()
         endSet()
     }
@@ -160,10 +159,14 @@ final class OverlayManager: ObservableObject {
         // One per displayed set — the unit a user actually perceives, and the
         // only overlay event that fires per set rather than per event.
         AppAnalytics.overlaySetShown(count: set.count, hasFanGoal: !fanGoals.isEmpty)
-        // One switch for the whole goal animation: ball and confetti.
-        if AppSession.shared.prefs.settings.goalCenter ?? true, !fanGoals.isEmpty {
-            fireConfetti(count: fanGoals.count)
-            startBall(for: fanGoals)
+        // Ball and confetti come in as the first fan-goal pill drops, and the
+        // ball goes out with the set in `endSet`.
+        if AppSession.shared.prefs.settings.goalCenter ?? true,
+           let first = set.firstIndex(where: { $0.fanGoal != nil }) {
+            scheduleLifecycle(after: Double(first) * Self.pillDropStagger) { [self] in
+                fireConfetti(count: fanGoals.count)
+                startBall(for: fanGoals)
+            }
         }
         scheduleLifecycle(after: pillHoldSeconds) { [self] in endSet() }
     }
@@ -172,6 +175,7 @@ final class OverlayManager: ObservableObject {
     func endSet() {
         guard !activeSet.isEmpty || queueBusy else { return }
         cancelLifecycleScheduled()
+        finishBall()
         withAnimation(.easeIn(duration: 0.35)) {
             activeSet = []
         }
@@ -185,7 +189,6 @@ final class OverlayManager: ObservableObject {
     // MARK: Ball — the fan-goal animation for the active displayed set
 
     private func startBall(for goals: [MatchEvent]) {
-        cancelBallScheduled()
         // A followed team scored and the animation actually fired. Skips the
         // Settings preview, whose synthetic event carries fixture 0 — that one
         // reports as `celebration_preview`.
@@ -193,10 +196,8 @@ final class OverlayManager: ObservableObject {
             AppAnalytics.celebrationShown()
         }
         ballEvents = goals
-        // It stays for `pillHoldSeconds`, independent of the notification set.
         ballPhase = .showing
         showInteractPanel()
-        scheduleBall(after: pillHoldSeconds) { [self] in finishBall() }
     }
 
     /// Ball ✕ — only the ball goes; the notification set stays.
@@ -213,7 +214,6 @@ final class OverlayManager: ObservableObject {
     /// the preview reset is not the user closing anything.
     private func hideBall() {
         guard ballPhase != .hidden else { return }
-        cancelBallScheduled()
         withAnimation(.easeOut(duration: 0.3)) {
             ballPhase = .hidden
             ballEvents = []
@@ -222,13 +222,12 @@ final class OverlayManager: ObservableObject {
         hidePanelsIfDone()
     }
 
-    /// Natural ball expiry — independent of the notification set.
+    /// Natural ball expiry — leaves with its set, on the pills' curve.
     private func finishBall() {
         guard ballPhase != .hidden else { return }
         AppAnalytics.overlayDismissed(reason: "timeout")
-        cancelBallScheduled()
         fadeOutInteractPanel(duration: 0.35)
-        withAnimation(.easeOut(duration: 0.35)) {
+        withAnimation(.easeIn(duration: 0.35)) {
             ballPhase = .hidden
             ballEvents = []
         }
@@ -311,20 +310,9 @@ final class OverlayManager: ObservableObject {
         DispatchQueue.main.asyncAfter(deadline: .now() + seconds, execute: block)
     }
 
-    private func scheduleBall(after seconds: Double, _ block: @escaping () -> Void) {
-        let work = DispatchWorkItem(block: block)
-        ballScheduled = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + seconds, execute: work)
-    }
-
     private func cancelLifecycleScheduled() {
         lifecycleScheduled.forEach { $0.cancel() }
         lifecycleScheduled.removeAll()
-    }
-
-    private func cancelBallScheduled() {
-        ballScheduled?.cancel()
-        ballScheduled = nil
     }
 
     // MARK: Panels
