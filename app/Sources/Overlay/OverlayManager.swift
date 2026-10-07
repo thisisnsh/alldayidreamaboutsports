@@ -26,7 +26,7 @@ private struct QueuedNotchItem {
 }
 
 enum BallPhase {
-    case hidden, tapping
+    case hidden, showing
 }
 
 /// TWO queues of events, displayed in SETS:
@@ -44,7 +44,6 @@ final class OverlayManager: ObservableObject {
     @Published private(set) var ballEvents: [MatchEvent] = [] // fan goals of the current set
     @Published private(set) var ballPhase: BallPhase = .hidden
     @Published private(set) var confettiBursts: [ConfettiBurst] = []
-    @Published var tapBursts = 0 // increments per user tap → spawns mini balls
 
     private var goalQueue: [QueuedNotchItem] = []
     private var otherQueue: [QueuedNotchItem] = []
@@ -99,8 +98,8 @@ final class OverlayManager: ObservableObject {
     }
 
     /// VAR cancelled a goal. The pill stays queued (it's information), but it
-    /// no longer triggers ball/confetti; if the ball is currently celebrating
-    /// that team, it stops celebrating it (and goes away if no teams remain).
+    /// no longer triggers ball/confetti; if the ball is showing that team, it
+    /// drops it (and goes away if no teams remain).
     func cancelGoal(fixtureId: Int, teamId: Int?) {
         for index in goalQueue.indices
         where goalQueue[index].item.fanGoal?.fixtureId == fixtureId && goalQueue[index].item.fanGoal?.teamId == teamId {
@@ -186,24 +185,19 @@ final class OverlayManager: ObservableObject {
         }
     }
 
-    // MARK: Ball — fan-goal celebration for the active displayed set
+    // MARK: Ball — the fan-goal animation for the active displayed set
 
     private func startBall(for goals: [MatchEvent]) {
         cancelBallScheduled()
-        if ballPhase != .hidden {
-            recordTapEngagement()
-        }
-        // A followed team scored and the celebration actually fired. Skips the
+        // A followed team scored and the animation actually fired. Skips the
         // Settings preview, whose synthetic event carries fixture 0 — that one
         // reports as `celebration_preview`.
         if goals.contains(where: { $0.fixtureId > 0 }) {
             AppAnalytics.celebrationShown()
         }
         ballEvents = goals
-        tapBursts = 0
-        // The ball is tappable the instant it appears — no separate drop phase.
         // It stays for `pillHoldSeconds`, independent of the notification set.
-        ballPhase = .tapping
+        ballPhase = .showing
         showInteractPanel()
         scheduleBall(after: pillHoldSeconds) { [self] in finishBall() }
     }
@@ -212,7 +206,7 @@ final class OverlayManager: ObservableObject {
     func dismissBall() {
         guard ballPhase != .hidden else { return }
         // The ✕ is the one overlay control a user can press, so this is what
-        // says whether people close celebrations or let them ride (the other
+        // says whether people close the ball or let it ride (the other
         // half is `finishBall`'s `timeout`).
         AppAnalytics.overlayDismissed(reason: "user")
         hideBall()
@@ -223,7 +217,6 @@ final class OverlayManager: ObservableObject {
     private func hideBall() {
         guard ballPhase != .hidden else { return }
         cancelBallScheduled()
-        recordTapEngagement()
         withAnimation(.easeOut(duration: 0.3)) {
             ballPhase = .hidden
             ballEvents = []
@@ -237,22 +230,12 @@ final class OverlayManager: ObservableObject {
         guard ballPhase != .hidden else { return }
         AppAnalytics.overlayDismissed(reason: "timeout")
         cancelBallScheduled()
-        recordTapEngagement()
         fadeOutInteractPanel(duration: 0.35)
         withAnimation(.easeOut(duration: 0.35)) {
             ballPhase = .hidden
             ballEvents = []
         }
         scheduleAmbient(after: 0.4) { [self] in hideInteractPanel() }
-    }
-
-    /// Local animation engagement only; taps never leave the app as counts.
-    private func recordTapEngagement() {
-        AppAnalytics.celebrationTap(tapped: tapBursts > 0)
-    }
-
-    func registerTap() {
-        tapBursts += 1
     }
 
     // MARK: Confetti — fire and forget, never waits for anything
@@ -298,7 +281,7 @@ final class OverlayManager: ObservableObject {
 
     /// Settings / onboarding sample: one notch drop of `type` for a generic
     /// match, so a size or alert-level change shows what it does. Never a fan
-    /// goal — the celebration has its own Preview.
+    /// goal — the goal animation has its own Preview.
     func previewAlert(_ type: MatchEventType) {
         let event = MatchEvent(
             eventId: "preview-alert:\(Date().timeIntervalSince1970)",
@@ -447,7 +430,7 @@ final class OverlayManager: ObservableObject {
         displayPanel?.orderOut(nil)
     }
 
-    /// Fades the tappable ball in lockstep with the scene so the celebration
+    /// Fades the ball's panel in lockstep with the scene so the whole thing
     /// dissolves as one piece.
     private func fadeOutInteractPanel(duration: Double) {
         guard let panel = interactPanel, panel.isVisible else { return }
@@ -486,7 +469,7 @@ final class OverlayManager: ObservableObject {
     }
 }
 
-/// The ✕ shared by the notification stack and the celebration ball, so both
+/// The ✕ shared by the notification stack and the goal ball, so both
 /// look identical. The caller supplies what dismissing means.
 struct DismissCrossButton: View {
     let action: () -> Void

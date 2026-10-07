@@ -158,13 +158,7 @@ enum AppAnalytics {
 
     // MARK: Celebrations
 
-    /// Did the user tap the celebration while it was up? Just the yes/no signal.
-    static func celebrationTap(tapped: Bool) {
-        log("celebration_tap", ["tapped": tapped ? "yes" : "no"])
-    }
-
-    /// A followed team scored and the celebration fired — the denominator the
-    /// tap rate is measured against.
+    /// A followed team scored and the goal ball showed.
     static func celebrationShown() {
         log("celebration_shown", [:])
     }

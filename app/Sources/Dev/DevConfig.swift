@@ -18,8 +18,7 @@ import Foundation
 // ║  NOTHING BELOW IS MADE UP. Every goal, card, substitution and minute  ║
 // ║  is lifted from a real meeting between those two clubs (each block    ║
 // ║  names its match), so a pinned capsule's timeline reads like a real   ║
-// ║  one. The only invented numbers are the celebration tap totals (our   ║
-// ║  own metric, not match data) and the clearly-marked synthetic block   ║
+// ║  one. The only invented part is the clearly-marked synthetic block    ║
 // ║  at the bottom, which is commented out.                               ║
 // ╚══════════════════════════════════════════════════════════════════════╝
 

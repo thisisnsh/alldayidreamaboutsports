@@ -9,9 +9,9 @@ struct OverlayDisplayView: View {
         GeometryReader { geo in
             ZStack {
                 if overlay.ballPhase != .hidden, !overlay.ballEvents.isEmpty {
-                    BallScene(events: overlay.ballEvents, size: geo.size)
-                        // Keyed per set so confetti clocks / mini-ball state
-                        // never leak between consecutive sets.
+                    BallScene(size: geo.size)
+                        // Keyed per set so state never leaks between
+                        // consecutive sets.
                         .id(overlay.ballEvents.first?.eventId ?? "")
                         .transition(.opacity)
                 }
@@ -32,41 +32,25 @@ struct OverlayDisplayView: View {
     }
 }
 
-/// The center celebration for one set: a single ball carrying the flags of
-/// every team that scored. Just the ball carrying their logos — no names or
-/// scoreline (that detail rides in the notification pills).
+/// The backdrop behind the center ball (which lives in its own panel, see
+/// `InteractiveBallView`): a dark gradient so the white ball pops over any
+/// wallpaper.
 private struct BallScene: View {
-    let events: [MatchEvent]
     let size: CGSize
-    @EnvironmentObject var overlay: OverlayManager
-
-    private var teams: [Team] {
-        events.compactMap { $0.teamId }.map { TeamCatalog.team(for: $0, in: AppSession.shared.allTeams) }
-    }
 
     var body: some View {
-        ZStack {
-            // Center dark gradient so the white ball pops over any wallpaper.
-            RadialGradient(
-                colors: [Color.black.opacity(0.55), .clear],
-                center: .center,
-                startRadius: 40,
-                endRadius: min(size.width, size.height) * 0.45
-            )
-            .allowsHitTesting(false)
-
-            if overlay.ballPhase == .tapping {
-                // Each user tap spawns a mini ball; the ✕ and "tap to…" prompt
-                // live in the interactive ball panel, revealed on hover
-                // (see InteractiveBallView).
-                MiniBallBursts(teams: teams, size: size, bursts: overlay.tapBursts)
-            }
-        }
+        RadialGradient(
+            colors: [Color.black.opacity(0.55), .clear],
+            center: .center,
+            startRadius: 40,
+            endRadius: min(size.width, size.height) * 0.45
+        )
+        .allowsHitTesting(false)
     }
 }
 
 /// The ball: SF soccerball in white, with a logo badge for EVERY team
-/// being celebrated.
+/// that scored.
 struct BallView: View {
     let teams: [Team]
     let diameter: CGFloat
