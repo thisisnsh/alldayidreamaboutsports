@@ -116,7 +116,7 @@ final class MenuPopoverController: NSObject, NSPopoverDelegate {
         button.sendAction(on: [.leftMouseUp, .rightMouseUp])
         popover.behavior = .transient
         popover.delegate = self
-        popover.contentSize = MenuPopoverView.size
+        popover.contentSize = MenuPopoverView.size(following: AppSession.shared.fanTeams.count)
         popover.contentViewController = NSHostingController(
             rootView: MenuPopoverView().environmentObject(AppSession.shared)
         )
@@ -146,6 +146,11 @@ final class MenuPopoverController: NSObject, NSPopoverDelegate {
             return
         }
         PopoverRouter.shared.reset(to: page)
+        // Sized while closed: the follow count can change on the Teams page,
+        // but the new height waits for the next open.
+        let size = MenuPopoverView.size(following: AppSession.shared.fanTeams.count)
+        PopoverRouter.shared.height = size.height
+        popover.contentSize = size
         NSApp.activate(ignoringOtherApps: true)
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
         button.highlight(true)
