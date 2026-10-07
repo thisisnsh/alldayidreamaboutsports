@@ -1,5 +1,17 @@
 # TODO before shipping 🚢
 
+**Status checked 2026-10-07 against revision `494bd80`, live GCP/Cloudflare,
+GitHub settings and deployment runs.** Most cloud provisioning is complete.
+Checked items below have supporting evidence; unchecked items are either still
+pending or explicitly unverified. This check changed documentation only.
+
+The remaining release work includes privacy/telemetry disclosures and legacy
+profile handling, a production deployment of the patched dependencies, staging
+test preparation and manual end-to-end testing, website migration to the App
+Store, and GitHub publication/security settings. R2 alert delivery and Apple
+account/App Store setup could not be verified. See
+[`OPEN_SOURCE_REVIEW.md`](OPEN_SOURCE_REVIEW.md) for evidence and limitations.
+
 The big picture: this is a Mac menu-bar app that shows live scores from Europe's
 top five leagues and fires a goal celebration on your screen. To go live you need
 (1) accounts to build & sign the app, (2) a cloud backend that watches matches and
@@ -41,42 +53,59 @@ These are the paid/identity things nothing else works without.
 
 - [ ] **Apple Developer membership** active for team `983LBM5U6B`. Then register
       the app's bundle id `com.thisisnsh.alldaysports` (explicit, Keychain Sharing). No Push
-      Notifications capability is needed — the app polls.
-- [ ] **Subscribe to API-Football "Ultra"** ($29/mo) and copy the API key. This
+      Notifications capability is needed — the app polls. **Unverified:** local
+      project settings do not establish current membership or App ID capabilities.
+- [x] **Subscribe to API-Football "Ultra"** ($29/mo) and copy the API key. This
       is the live-scores data feed the backend polls. It runs year-round now, so
-      this is a standing $29/mo, not a six-week rental.
-- [ ] **Domain** `alldayidreamaboutsports.com`: keep it **registered at
+      this is a standing $29/mo, not a six-week rental. Both configured keys
+      return an active Ultra subscription with a 75,000/day allowance.
+- [x] **Domain** `alldayidreamaboutsports.com`: keep it **registered at
       Hostinger** (that's fine — you own and renew it there), but later you'll
       point its **nameservers at Cloudflare** so Cloudflare can serve the
       download/scores files for free. Registrar (Hostinger) and DNS host
-      (Cloudflare) are two separate jobs; you only move the DNS job.
+      (Cloudflare) are two separate jobs; you only move the DNS job. Registration
+      at Hostinger and delegation to Cloudflare are already verified.
 
 ## 2. Google Cloud + Firebase — do staging first, then repeat for prod — `infra/README.md`
 
 This is the backend brain: a project that runs polling, plus Firebase for
-anonymous analytics and crash reports. You'll run
+product analytics and crash reports. You'll run
 this whole section twice. **Note the short project name:** GCP caps project ids at
 30 characters and `alldayidreamaboutsports-staging` is 31 — one too long — so we
 use the shorter `dreamaboutsports-` prefix for the GCP project id only.
 Everything else (bundle id, buckets, domain) still uses the full name.
 
-- [ ] **Create the project:** `gcloud projects create dreamaboutsports-staging`
+- [x] **Create the projects and provision services:** `gcloud projects create dreamaboutsports-staging`
       (then enable billing) →
       `./infra/setup-gcp.sh dreamaboutsports-staging us-central1`.
       The script turns on the APIs and creates service accounts so you don't have
-      to click through the console.
-- [x] **Add Firebase staging** and save its downloaded config as
+      to click through the console. Both projects are active with Cloud Run,
+      the task queue, all four scheduler jobs, service accounts and deployment
+      federation configured. Billing linkage itself could not be queried because
+      the Cloud Billing API is disabled; no API was enabled during this check.
+- [x] **Add Firebase staging and prod** and save their downloaded configs as
       `app/Resources/GoogleService-Info-Staging.plist`. This file points at
       `dreamaboutsports-staging`; the build now includes it only in `Staging`.
-      Repeat for prod later as `GoogleService-Info-Production.plist`.
-- [ ] **Retire legacy celebration data** with `infra/retire-celebrations.mjs`
-      after deploying the backend without shared counts.
-- [ ] **Set the real secret values:** `api-football-key`
-      (generate with `openssl rand -hex 32`), and the three R2 keys (you'll have
+      Prod is also registered and configured as `GoogleService-Info-Production.plist`.
+- [x] **Retire legacy celebration data** with `infra/retire-celebrations.mjs`
+      after deploying the backend without shared counts. Both environments have
+      no celebration documents (including missing parents), no `celebrate/`
+      R2 objects, no retired celebration Remote Config parameters, and no
+      obsolete runtime Firestore/Firebase Admin grants.
+- [ ] **Decide how to handle legacy profiles:** Firestore still contains 2
+      staging and 6 production `users` records. The celebration cleanup does
+      not delete profiles. Both databases have deny-all client rules; document
+      retention/deletion and align the privacy policy before release.
+- [x] **Set the real secret values:** the provider-issued `api-football-key`
+      and the three R2 credentials (you'll have
       those after section 3). Secrets are how the backend gets credentials
-      without hard-coding them.
-- [ ] **Verify private backend invocation**: authenticated health returns 200;
-      anonymous health returns 403. The deploy workflow checks both.
+      without hard-coding them. All four latest secret versions are enabled in
+      both projects; the API keys and R2 credentials work. An API-Football key
+      comes from the provider; a random locally generated value will not work.
+- [x] **Verify private backend invocation**: authenticated health succeeds in
+      the successful staging (Oct 7) and prod (Oct 5) deployment smoke tests;
+      anonymous health returns 403 in fresh checks of both services. Only the
+      environment's scheduler and deploy identities have `run.invoker`.
 
 ## 3. Cloudflare R2 (storage + custom domains) — `infra/setup-r2.sh`
 
@@ -87,21 +116,28 @@ The app fetches fixtures and live scores from here whenever
 the menu opens. The `scores.` custom domains are the reason the domain's DNS
 lives on Cloudflare.
 
-- [ ] **Run `./infra/setup-r2.sh`** with `CLOUDFLARE_API_TOKEN`,
+- [x] **Provision R2/CDN configuration** with `./infra/setup-r2.sh` and `CLOUDFLARE_API_TOKEN`,
       `CLOUDFLARE_ACCOUNT_ID`, and `CLOUDFLARE_ZONE_ID` to create the buckets,
       attach the custom domains, disable `r2.dev`, create Cache Rules, enable
-      Smart Tiered Cache, and apply WAF rate limits.
-- [ ] **Move DNS to Cloudflare:** add `alldayidreamaboutsports.com` as a site in
+      Smart Tiered Cache, and apply WAF rate limits. Both scores buckets and
+      domains exist; all four existing buckets have `r2.dev` disabled. Cache
+      rules, tiered caching, Smart Tiered Cache and the origin-only rate limit
+      are enabled. The staging custom domain is currently **disabled**; see §6.
+- [x] **Move DNS to Cloudflare:** add `alldayidreamaboutsports.com` as a site in
       Cloudflare, then change the **nameservers at Hostinger** to the two
       Cloudflare gives you. (You're not moving the domain — just who answers DNS.
-      You keep renewing at Hostinger.)
-- [ ] **Set each GitHub environment's `R2_BUCKET_SCORES` var** to its scores
+      You keep renewing at Hostinger.) The zone is active and DNS delegates to
+      `carter.ns.cloudflare.com` / `desiree.ns.cloudflare.com`.
+- [x] **Set each GitHub environment's `R2_BUCKET_SCORES` var** to its scores
       bucket after the script completes. The custom domains only work because
       DNS is now on Cloudflare.
-- [ ] **Create an R2 API token** (read+write on that environment's scores bucket
+- [x] **Configure each environment's R2 credentials** (read+write on its scores bucket
       only) → save as GCP secrets
       `r2-access-key-id` / `r2-secret-access-key` / `r2-endpoint` so the backend
-      can write score files.
+      can write score files. Both backends have published objects. Read-only
+      access probes succeed for the intended bucket and return 403 for the
+      other three existing buckets. Token policy metadata was not accessible;
+      no write probe was performed.
 
 ## 4. GitHub repo settings
 
@@ -120,55 +156,88 @@ that exact `owner/repo` slug — if you rename it, reconcile the trust too.
       the exact names from the first workflow runs), require a pull request,
       block force pushes. Settings → Actions: require approval before running
       workflows from outside contributors' forks.
-- [ ] **Publish the website:** follow the README in the separate public repo
+- [x] **Publish the website with its custom domain:** follow the README in the separate public repo
       [`thisisnsh/alldayidreamaboutsports.com`](https://github.com/thisisnsh/alldayidreamaboutsports.com),
-      then set its Pages custom domain to `alldayidreamaboutsports.com` and
-      enforce HTTPS.
-- [ ] **DNS for the website:** in **Cloudflare** (DNS now lives there), point the
-      apex at GitHub Pages — A records to `185.199.108–111.153`, set to
-      **DNS-only / grey cloud** (not proxied), so Pages can verify the domain.
-- [ ] **Create `staging` + `prod` environments** in repo settings and add the
+      then set its Pages custom domain to `alldayidreamaboutsports.com`. Pages
+      reports built/verified and both the homepage and privacy page return 200
+      over HTTPS. The website uses an Actions deployment workflow.
+- [ ] **Enforce website HTTPS and verify origin DNS:** Pages currently reports
+      `https_enforced=false` and certificate state `dns_changed`; HTTP serves
+      200 without redirecting. Public apex DNS returns Cloudflare proxy IPs,
+      rather than DNS-only Pages records. DNS record details are unavailable
+      with the current tokens; verify the intended proxy/origin configuration
+      and certificate renewal before enabling HTTPS enforcement.
+- [x] **Create `staging` + `prod` environments** in repo settings and add the
       secrets/vars listed in the table in `infra/README.md`. This is how CI
-      deploys to the right cloud project. Restrict both to `main` and require a
-      reviewer on `prod`.
+      deploys to the right cloud project. Both contain the required GCP secrets
+      and project/region/bucket vars and restrict deployments to `main`.
+- [ ] **Require a reviewer on `prod`** where the GitHub plan supports it.
+      No reviewer rule is currently present. Exact GCP federation conditions
+      already restrict each environment to this repository, `main` and the
+      deployment workflow.
 
 ## 4a. Live security rollout (before going public)
 
-The repository fixes are committed; these account-side steps are not applied.
+The scores guard and scoped backend IAM are already applied to both environments.
+Alert verification and download migration/cleanup remain.
 
-- [ ] **Scores request guard:** with a Cloudflare token limited to Zone WAF
+- [x] **Scores request guard:** with a Cloudflare token limited to Zone WAF
       Edit, run `python3 infra/secure_scores.py --plan`, then `--apply`. Verify
       canonical `/catalog.json` returns 200 and warms to HIT while a query-string
-      variant and an `Origin` header get 403 (`infra/README.md`). Today, random
-      query strings create cold cache keys that read R2.
-- [ ] **Scoped backend IAM:** `bash infra/scope-backend-iam.sh <project> us-central1
-      --plan`, then `--apply` on staging, verify a source deploy, then prod.
-- [ ] **R2 alerts:** configure Cloudflare R2 operations/billing alerts, confirm
-      they reach you, and confirm `r2.dev` is off and the R2 token is
-      bucket-scoped.
-- [ ] **Delete the retired buckets** `alldayidreamaboutsports-*-downloads` and
-      their `download.` DNS records if they still exist.
+      variant and an `Origin` header get 403 (`infra/README.md`). The enabled
+      live rule matches the canonical path/header policy for both hosts. Prod
+      passes 200/HIT and 403 probes. Staging rejects query/Origin variants too,
+      but canonical requests cannot succeed until its domain is re-enabled.
+- [x] **Scoped backend IAM:** resource-level secret access, runtime/build
+      impersonation, and source-bucket grants are present in both projects;
+      the old project-wide Secret Accessor, Service Account User and Storage
+      Admin grants are absent. Subsequent source deployments passed in both.
+- [ ] **R2 alerts:** verify operations/billing alerts and actual delivery.
+      **Unverified:** notification policy/history APIs return 403 with the
+      available tokens. Disabled `r2.dev` and isolation between existing
+      buckets are already verified in §3. Ordinary alerts do not impose a
+      global spending cap; see review finding 5.
+- [ ] **Migrate website dependencies, then delete retired download resources.**
+      Both download buckets still exist; prod's download custom domain is
+      enabled. The website still uses it for download links and promo media.
+      Move those assets and replace download links with the App Store listing
+      before deleting buckets/domains/DNS records and obsolete cache rules.
+
 ## 5. Mac App Store (one-time) — `app/README.md#mac-app-store`
 
 The app ships only through the Mac App Store, built and uploaded from Xcode with
 automatic signing — no certificates to export, no notarization, no CI.
 
-- [ ] **Register Firebase Apple apps** for `com.thisisnsh.alldaysports` in staging and
-      prod, and replace both `GoogleService-Info-*.plist` files.
+- [x] **Register Firebase Apple apps** for `com.thisisnsh.alldaysports` in staging and
+      prod, and replace both `GoogleService-Info-*.plist` files. Both live app
+      registrations are active and their IDs match the local config files.
 - [ ] **Create the App Store Connect record** (New macOS App,
       `com.thisisnsh.alldaysports`): listing, screenshots, privacy labels.
+      **Unverified:** no App Store Connect account inspection was available.
+- [ ] **Resolve privacy disclosures and telemetry controls** before submission:
+      team IDs/settings still go into telemetry and Crashlytics breadcrumbs,
+      and no collection preference is present. The live privacy policy still
+      describes removed sign-in/shared counts. See review finding 1.
 
 ## 6. End-to-end test on staging (during any live league match)
 
 Don't ship without watching the whole pipeline work on a real goal. Use a
 **staging build** (section "How staging vs prod works" above).
 
-- [ ] **Deploy the backend to staging:** `gh workflow run backend-deploy.yml`,
+- [x] **Deploy the backend to staging:** `gh workflow run backend-deploy.yml`,
       then re-run `setup-gcp.sh` so the match scheduler gets the real deployed
-      URL.
+      URL. The latest successful source deployment is Oct 7 (`b2de0e3`);
+      all four scheduler targets already use the deployed URL and audience.
+- [ ] **Prepare staging for the live test:** re-enable its scores custom domain
+      and resume the appropriate scheduler jobs. `dispatch-live-scores`,
+      `sync-catalog` and `cache-health` are paused; only `sync-schedule` is
+      enabled. Refresh the catalog (its stored copy is from June 18 and has no
+      Cache-Control), then verify canonical CDN reads succeed and cache to HIT.
+      Today's staging fixture object already exists.
 - [ ] **Follow both teams that are playing** on a staging build.
 - [ ] **Inject a test goal** (steps in `backend/README.md`) → the celebration
-      should fire, and tapping the ball should animate locally without an upload.
+      should fire. The old tap-the-ball interaction has been removed; shared
+      celebration uploads are no longer part of this test.
 - [ ] **Then watch a real goal:** it should land < 30s behind the TV broadcast,
       the event pill should show, and the popover score should reconcile.
 - [ ] **Test the emergency stop:** block the staging scores hostname with a
@@ -185,18 +254,26 @@ Don't ship without watching the whole pipeline work on a real goal. Use a
 
 ## 7. Ship
 
-- [ ] **Redo sections 2–3 for prod** (`dreamaboutsports-prod` + prod
-      plist/secrets) and deploy the backend to prod.
+- [x] **Provision prod and deploy its backend** (`dreamaboutsports-prod` + prod
+      plist/secrets). The service is deployed, all four jobs are enabled, and
+      the scores CDN serves cached catalog/fixture JSON.
+- [ ] **Deploy the current verified backend to prod.** The latest observed prod
+      deployment is Oct 5 (`1971b58`), whose lockfile still uses `proxy-addr`
+      2.0.7. Today's patch and dependency upgrades have reached staging only.
+      Promote after staging verification and repeat the deployment smoke test.
 - [ ] **Archive in Xcode and upload** (Product → Archive → Distribute App →
       App Store Connect), test the build via TestFlight, then submit for review.
 - [ ] **Check the website is live** (public repo): it links to the App Store
-      listing and the privacy page is reachable.
+      listing and the privacy page is reachable. Reachability is verified, but
+      current links still target direct downloads and the privacy text is stale.
 - [ ] **📣 Announce** — and keep the emergency-stop runbook (`infra/README.md`)
       handy during matches.
 
 ## Post-MVP (cut from v1, revisit after launch)
 
-- [ ] Multi-display picker for the overlay (currently: main screen only).
+- [x] Multi-display picker for the overlay: `SettingsPage` uses
+      `OverlayDisplayTarget`, and overlays follow the selected screen. Manual
+      notch/external-display validation remains in §6.
 - [ ] Quiet hours; football-data.org fallback provider; localization.
 - [ ] A sixth competition (Champions League) needs either the Mega plan or a
       per-league gate — five leagues already use 69% of the Ultra quota on a
