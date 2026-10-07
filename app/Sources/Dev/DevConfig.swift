@@ -70,8 +70,8 @@ enum DevConfig {
     // HOW MANY MATCHES ARE LIVE AT ONCE is purely a function of the `at`
     // values: a fixture is live from its `.kickoff` until its `.fullTime`, so
     // overlapping those windows is how you get two (or three) running side by
-    // side — as written, City–Arsenal, Madrid–Barça and Bayern–Dortmund are
-    // all live around t=45–48s, which stresses the notch stack, goal-priority
+    // side — as written, City–Arsenal and Madrid–Barça are both live from
+    // t=65s to t=220s, which stresses the notch stack, goal-priority
     // selection and the shared center-ball celebration. Want one at a time?
     // Push each kickoff past the previous full-time.
     //
@@ -103,7 +103,7 @@ enum DevConfig {
         // ── Manchester City 2-1 Arsenal ─────────────────────────────────
         // Real match: Premier League, 19 April 2026, Etihad Stadium.
         // BOTH sides are followed, so every goal here is a full center-ball
-        // celebration — including Arsenal's. Kicks off first, at t=2.
+        // celebration — including Arsenal's. Kicks off first, at t=40.
         DemoMoment(at: 30 + 10,  .mciArs, minute: 1,  .kickoff),
         DemoMoment(at: 30 + 20,  .mciArs, minute: 15, .yellowCard(.home, player: "Marc Guéhi")),
         DemoMoment(at: 30 + 30, .mciArs, minute: 16, .goal(.home, player: "Rayan Cherki")),    // 1-0
@@ -130,30 +130,31 @@ enum DevConfig {
         // 90+10 and Lunin's red after the final whistle, which is what puts
         // red cards on the capsule timeline. Only Madrid is followed, so
         // Barça's goal is a pill while Madrid's two celebrate.
-        // Kicks off 18s after City–Arsenal — the two run side by side, while
-        // their listed kickoff times stay an hour apart.
-        DemoMoment(at: 190 + 10, .madBar, minute: 1,  .kickoff),
-        DemoMoment(at: 190 + 20, .madBar, minute: 22, .goal(.home, player: "Kylian Mbappé")),   // 1-0
-        DemoMoment(at: 190 + 30, .madBar, minute: 23, .yellowCard(.home, player: "Federico Valverde")),
-        DemoMoment(at: 190 + 40, .madBar, minute: 38, .goal(.away, player: "Fermín López")),    // 1-1, pill only
-        DemoMoment(at: 190 + 50, .madBar, minute: 42, .yellowCard(.away, player: "Pedri")),
-        DemoMoment(at: 190 + 60, .madBar, minute: 43, .goal(.home, player: "Jude Bellingham")), // 2-1
-        DemoMoment(at: 190 + 70, .madBar, minute: 45, .halfTime),
-        DemoMoment(at: 190 + 90, .madBar, minute: 66, .substitution(.home, playerIn: "Brahim Díaz", playerOut: "Arda Güler")),
-        DemoMoment(at: 190 + 100, .madBar, minute: 72, .substitution(.home, playerIn: "Dani Carvajal", playerOut: "Federico Valverde")),
-        DemoMoment(at: 190 + 120, .madBar, minute: 72, .substitution(.home, playerIn: "Rodrygo", playerOut: "Vinícius Júnior")),
-        DemoMoment(at: 190 + 130, .madBar, minute: 74, .substitution(.away, playerIn: "Ronald Araújo", playerOut: "Eric García")),
-        DemoMoment(at: 190 + 140, .madBar, minute: 74, .substitution(.away, playerIn: "Marc Casadó", playerOut: "Ferran Torres")),
-        DemoMoment(at: 190 + 150, .madBar, minute: 83, .substitution(.away, playerIn: "Roony Bardghji", playerOut: "Pau Cubarsí")),
-        DemoMoment(at: 190 + 160, .madBar, minute: 90, .substitution(.home, playerIn: "Gonzalo García", playerOut: "Jude Bellingham")),
-        DemoMoment(at: 190 + 170, .madBar, minute: 90, extra: 1, .substitution(.home, playerIn: "Dani Ceballos", playerOut: "Kylian Mbappé")),
-        DemoMoment(at: 190 + 180, .madBar, minute: 90, extra: 7, .substitution(.away, playerIn: "Gerard Martín", playerOut: "Alejandro Balde")),
+        // Kicks off 25s after City–Arsenal, so the two are live side by side
+        // for most of the show (t=65–220s): the top card plus a live row.
+        // Offsets end in 5 against City's 0s, so no two beats collide.
+        DemoMoment(at: 55 + 10, .madBar, minute: 1,  .kickoff),
+        DemoMoment(at: 55 + 20, .madBar, minute: 22, .goal(.home, player: "Kylian Mbappé")),   // 1-0
+        DemoMoment(at: 55 + 30, .madBar, minute: 23, .yellowCard(.home, player: "Federico Valverde")),
+        DemoMoment(at: 55 + 40, .madBar, minute: 38, .goal(.away, player: "Fermín López")),    // 1-1, pill only
+        DemoMoment(at: 55 + 50, .madBar, minute: 42, .yellowCard(.away, player: "Pedri")),
+        DemoMoment(at: 55 + 60, .madBar, minute: 43, .goal(.home, player: "Jude Bellingham")), // 2-1
+        DemoMoment(at: 55 + 70, .madBar, minute: 45, .halfTime),
+        DemoMoment(at: 55 + 90, .madBar, minute: 66, .substitution(.home, playerIn: "Brahim Díaz", playerOut: "Arda Güler")),
+        DemoMoment(at: 55 + 100, .madBar, minute: 72, .substitution(.home, playerIn: "Dani Carvajal", playerOut: "Federico Valverde")),
+        DemoMoment(at: 55 + 120, .madBar, minute: 72, .substitution(.home, playerIn: "Rodrygo", playerOut: "Vinícius Júnior")),
+        DemoMoment(at: 55 + 130, .madBar, minute: 74, .substitution(.away, playerIn: "Ronald Araújo", playerOut: "Eric García")),
+        DemoMoment(at: 55 + 140, .madBar, minute: 74, .substitution(.away, playerIn: "Marc Casadó", playerOut: "Ferran Torres")),
+        DemoMoment(at: 55 + 150, .madBar, minute: 83, .substitution(.away, playerIn: "Roony Bardghji", playerOut: "Pau Cubarsí")),
+        DemoMoment(at: 55 + 160, .madBar, minute: 90, .substitution(.home, playerIn: "Gonzalo García", playerOut: "Jude Bellingham")),
+        DemoMoment(at: 55 + 170, .madBar, minute: 90, extra: 1, .substitution(.home, playerIn: "Dani Ceballos", playerOut: "Kylian Mbappé")),
+        DemoMoment(at: 55 + 180, .madBar, minute: 90, extra: 7, .substitution(.away, playerIn: "Gerard Martín", playerOut: "Alejandro Balde")),
         // Pedri walks for a second yellow, then it boils over after the whistle.
-        DemoMoment(at: 190 + 190,  .madBar, minute: 90, extra: 10, .redCard(.away, player: "Pedri")),
-        DemoMoment(at: 190 + 200, .madBar, minute: 90, extra: 11, .yellowCard(.home, player: "Rodrygo")),
-        DemoMoment(at: 190 + 210, .madBar, minute: 90, extra: 11, .yellowCard(.away, player: "Ferran Torres")),
-        DemoMoment(at: 190 + 220, .madBar, minute: 90, extra: 11, .redCard(.home, player: "Andriy Lunin")),
-        DemoMoment(at: 190 + 230, .madBar, minute: 90, .fullTime),
+        DemoMoment(at: 55 + 190,  .madBar, minute: 90, extra: 10, .redCard(.away, player: "Pedri")),
+        DemoMoment(at: 55 + 200, .madBar, minute: 90, extra: 11, .yellowCard(.home, player: "Rodrygo")),
+        DemoMoment(at: 55 + 210, .madBar, minute: 90, extra: 11, .yellowCard(.away, player: "Ferran Torres")),
+        DemoMoment(at: 55 + 220, .madBar, minute: 90, extra: 11, .redCard(.home, player: "Andriy Lunin")),
+        DemoMoment(at: 55 + 230, .madBar, minute: 90, .fullTime),
 
         // ── Bayern München 3-2 Borussia Dortmund ────────────────────────
         // Real match: Der Klassiker, Bundesliga, 28 February 2026 — played at
