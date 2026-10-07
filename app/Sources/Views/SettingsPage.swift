@@ -62,8 +62,7 @@ struct SettingsPage: View {
                     // section disappears (its switches were zeroed too).
                     if session.prefs.settings.eventEnabled(.goal) {
                         SettingsCard("When your team scores") {
-                            toggleRow("Ball and score in the center", isOn: settingsBinding(\.goalCenter, default: true))
-                            toggleRow("Confetti in the corners", isOn: settingsBinding(\.confetti, default: true))
+                            toggleRow("Goal celebration in the center", isOn: celebrationBinding)
 
                             Button {
                                 // No event here: `OverlayManager.preview()`
@@ -281,11 +280,17 @@ struct SettingsPage: View {
         )
     }
 
-    private func settingsBinding(_ keyPath: WritableKeyPath<PrefSettings, Bool?>,
-                                 default defaultValue: Bool) -> Binding<Bool> {
+    /// The whole celebration — center ball and score plus the confetti — is one
+    /// switch.
+    private var celebrationBinding: Binding<Bool> {
         Binding(
-            get: { session.prefs.settings[keyPath: keyPath] ?? defaultValue },
-            set: { on in session.updateSettings { $0[keyPath: keyPath] = on } }
+            get: { session.prefs.settings.goalCenter ?? true },
+            set: { on in
+                session.updateSettings {
+                    $0.goalCenter = on
+                    $0.confetti = on
+                }
+            }
         )
     }
 
