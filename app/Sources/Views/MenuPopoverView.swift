@@ -97,6 +97,9 @@ struct PageHeader: View {
                 Spacer()
                 if let note {
                     Text(note).font(.system(size: 11)).foregroundStyle(.secondary)
+                        // Lines up with the 16pt inset of the pages' content;
+                        // the back button gets its inset from its own hover pad.
+                        .padding(.trailing, 8)
                 }
             }
         }
