@@ -15,9 +15,12 @@ final class PopoverRouter: ObservableObject {
     @Published private(set) var page: PopoverPage = .home
     /// Whether the last move went deeper, so the slide runs the matching way.
     @Published private(set) var forward = true
-    /// The popover's height, picked by `MenuPopoverController` each time it
-    /// opens and held while it's up.
+    /// The popover's height, set by `MenuPopoverController` from the page and
+    /// `homeFit`.
     @Published var height = MenuPopoverView.maxHeight
+    /// How tall the home page wants to be to show all its matches without
+    /// scrolling, as last measured. nil until it first lays out.
+    @Published var homeFit: CGFloat?
 
     func go(_ page: PopoverPage) {
         guard page != self.page else { return }
@@ -44,8 +47,8 @@ final class PopoverRouter: ObservableObject {
     }
 }
 
-/// The menu bar popover: a fixed-width frame that swaps between pages, as tall
-/// as the followed teams need.
+/// The menu bar popover: a fixed-width frame that swaps between pages. Home is
+/// as tall as its matches need; Teams and Settings use the full height.
 struct MenuPopoverView: View {
     @EnvironmentObject var session: AppSession
     @ObservedObject private var router = PopoverRouter.shared
@@ -55,12 +58,11 @@ struct MenuPopoverView: View {
     static let screen = "menu"
     static let width: CGFloat = 360
     static let maxHeight: CGFloat = 540
+    static let minHeight: CGFloat = 200
 
-    /// Few followed teams means few matches, so a short popover; eight or more
-    /// get the full height. Only applied as the popover opens and the same for
-    /// every page — resizing an `NSPopover` while it's open jumps.
-    static func size(following count: Int) -> CGSize {
-        CGSize(width: width, height: min(maxHeight, 300 + 30 * CGFloat(count)))
+    static func height(for page: PopoverPage, homeFit: CGFloat?) -> CGFloat {
+        guard page == .home, let homeFit else { return maxHeight }
+        return min(maxHeight, max(minHeight, homeFit.rounded(.up)))
     }
 
     var body: some View {
@@ -202,15 +204,30 @@ struct HomePage: View {
     @AppStorage("menuFixtureScope", store: AppDefaults.shared) private var fixtureScope: FixtureScope = .mine
     /// The one row (or Now card) showing its timeline.
     @State private var expanded: Int?
+    /// Natural heights of the three parts, for `PopoverRouter.homeFit`.
+    @State private var headerHeight: CGFloat = 0
+    @State private var listHeight: CGFloat = 0
+    @State private var footerHeight: CGFloat = 0
 
     var body: some View {
         VStack(spacing: 0) {
-            header
+            header.onGeometryChange(for: CGFloat.self, of: \.size.height) { headerHeight = $0; reportFit() }
             fixturesList
             Divider()
-            followingFooter
+            followingFooter.onGeometryChange(for: CGFloat.self, of: \.size.height) { footerHeight = $0; reportFit() }
         }
     }
+
+    /// The height that shows every match without scrolling or leftover space.
+    private func reportFit() {
+        guard headerHeight > 0, listHeight > 0, footerHeight > 0 else { return }
+        let fit = headerHeight + listHeight + 1 + footerHeight // 1 = divider
+        if PopoverRouter.shared.homeFit != fit { PopoverRouter.shared.homeFit = fit }
+    }
+
+    /// The empty state's share of the fit — its own frame just fills whatever
+    /// it's given, so it can't be measured.
+    private static let emptyListHeight: CGFloat = 140
 
     private var header: some View {
         HStack(spacing: 6) {
@@ -246,6 +263,7 @@ struct HomePage: View {
                 Spacer()
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .onAppear { listHeight = Self.emptyListHeight; reportFit() }
         } else {
             ScrollView(.vertical, showsIndicators: true) {
                 VStack(alignment: .leading, spacing: 4) {
@@ -265,6 +283,9 @@ struct HomePage: View {
                 }
                 .padding(.horizontal, 8)
                 .padding(.vertical, Self.fadeHeight)
+                // Measured inside the scroll view, so it's the content's
+                // natural height, whatever the viewport.
+                .onGeometryChange(for: CGFloat.self, of: \.size.height) { listHeight = $0; reportFit() }
             }
             // Rows dissolve into the popover at both ends instead of being
             // sliced off by the scroll view's edge.

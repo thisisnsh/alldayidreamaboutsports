@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import FirebaseCore
 import SwiftUI
 
@@ -102,6 +103,7 @@ final class MenuPopoverController: NSObject, NSPopoverDelegate {
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
     private let popover = NSPopover()
     private var hostingView: NSView?
+    private var heightSubscription: AnyCancellable?
     private var eventMonitor: Any?
     private var keyMonitor: Any?
     /// When the popover went up, for the `menu_closed` duration. Non-nil only
@@ -117,28 +119,28 @@ final class MenuPopoverController: NSObject, NSPopoverDelegate {
         button.sendAction(on: [.leftMouseUp, .rightMouseUp])
         popover.behavior = .transient
         popover.delegate = self
-        // The popover's size is ours to set (`fitToFollowedTeams`), not the
-        // SwiftUI content's, so the two can't disagree about the height.
+        // The popover's size is ours to set (`applyHeight`), not the SwiftUI
+        // content's, so the two can't disagree about the height.
         let hosting = NSHostingController(
             rootView: MenuPopoverView().environmentObject(AppSession.shared)
         )
         hosting.sizingOptions = []
         popover.contentViewController = hosting
         hostingView = hosting.view
-        fitToFollowedTeams()
+        // Home hugs its matches; Teams and Settings get the full height.
+        // Follows the page and the measured home content, open or closed.
+        let router = PopoverRouter.shared
+        heightSubscription = router.$page.combineLatest(router.$homeFit)
+            .map { MenuPopoverView.height(for: $0, homeFit: $1) }
+            .removeDuplicates()
+            .sink { [weak self] in self?.applyHeight($0) }
     }
 
-    /// Size the popover for the follow count. Only while it's closed —
-    /// resizing an open `NSPopover` jumps — so a follow change on the Teams
-    /// page shows from the next open. Run on close too, so the SwiftUI frame
-    /// has long settled by the time it reopens.
-    private func fitToFollowedTeams() {
-        guard !popover.isShown else { return }
-        let size = MenuPopoverView.size(following: AppSession.shared.fanTeams.count)
-        PopoverRouter.shared.height = size.height
-        popover.contentSize = size
-        hostingView?.frame.size = size
-        hostingView?.layoutSubtreeIfNeeded()
+    private func applyHeight(_ height: CGFloat) {
+        let router = PopoverRouter.shared
+        if router.height != height { router.height = height }
+        let size = CGSize(width: MenuPopoverView.width, height: height)
+        if popover.contentSize != size { popover.contentSize = size }
     }
 
     @objc private func statusItemClicked() {
@@ -165,7 +167,10 @@ final class MenuPopoverController: NSObject, NSPopoverDelegate {
             return
         }
         PopoverRouter.shared.reset(to: page)
-        fitToFollowedTeams()
+        // Let the home page re-measure (matches may have changed while it was
+        // closed) so the popover opens at the right height.
+        hostingView?.layoutSubtreeIfNeeded()
+        applyHeight(MenuPopoverView.height(for: page, homeFit: PopoverRouter.shared.homeFit))
         NSApp.activate(ignoringOtherApps: true)
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
         button.highlight(true)
@@ -190,7 +195,6 @@ final class MenuPopoverController: NSObject, NSPopoverDelegate {
             AppAnalytics.menuClosed(openSeconds: Date().timeIntervalSince(openedAt))
         }
         stopRefreshing()
-        fitToFollowedTeams()
     }
 
     // MARK: Right-click menu
