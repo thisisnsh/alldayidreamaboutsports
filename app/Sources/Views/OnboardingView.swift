@@ -135,7 +135,7 @@ struct OnboardingView: View {
             Text("All Day I Dream\nAbout Sports")
                 .font(.system(size: 30, weight: .heavy, design: .rounded))
                 .multilineTextAlignment(.center)
-            Text("Live scores and goal celebrations for the teams you follow, right at the top of your screen.")
+            Text("Live scores and goal alerts for the teams you follow, right at the top of your screen.")
                 .font(.system(size: 14, design: .rounded))
                 .multilineTextAlignment(.center)
                 .opacity(0.7)
