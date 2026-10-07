@@ -25,8 +25,6 @@ struct PrefSettings: Codable, Equatable {
     var capsulePosition: CapsulePosition?
     /// Size of the notch-drop event pills (fonts + padding). nil = medium.
     var notchDropSize: CapsuleSize?
-    /// A followed team's live score next to the status item icon. nil = on.
-    var menuBarScore: Bool?
 }
 
 

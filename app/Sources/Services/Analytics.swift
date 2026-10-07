@@ -208,7 +208,6 @@ enum AppAnalytics {
         case capsuleSize = "capsule_size"
         case capsulePosition = "capsule_position"
         case notchDropSize = "notch_drop_size"
-        case menuBarScore = "menu_bar_score"
 
         var event: String { "setting_\(rawValue)_changed" }
         var property: String { "pref_\(rawValue)" }
@@ -251,7 +250,6 @@ enum AppAnalytics {
         setUserProperty((s.capsuleSize ?? .medium).rawValue, forName: Setting.capsuleSize.property)
         setUserProperty((s.capsulePosition ?? .top).rawValue, forName: Setting.capsulePosition.property)
         setUserProperty((s.notchDropSize ?? .medium).rawValue, forName: Setting.notchDropSize.property)
-        setUserProperty((s.menuBarScore ?? true) ? "on" : "off", forName: Setting.menuBarScore.property)
     }
 
     // MARK: Live-scores pipeline

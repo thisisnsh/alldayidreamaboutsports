@@ -1,5 +1,4 @@
 import AppKit
-import Combine
 import FirebaseCore
 import SwiftUI
 
@@ -100,12 +99,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 @MainActor
 final class MenuPopoverController: NSObject, NSPopoverDelegate {
     static let shared = MenuPopoverController()
-    private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+    private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
     private let popover = NSPopover()
-    private var scoreSubscription: AnyCancellable?
-    /// Ticks the menu bar score's minute while a followed match is live; nil
-    /// otherwise, so an idle app runs no timer.
-    private var scoreTimer: Timer?
     private var eventMonitor: Any?
     private var keyMonitor: Any?
     /// When the popover went up, for the `menu_closed` duration. Non-nil only
@@ -125,49 +120,6 @@ final class MenuPopoverController: NSObject, NSPopoverDelegate {
         popover.contentViewController = NSHostingController(
             rootView: MenuPopoverView().environmentObject(AppSession.shared)
         )
-        // Re-evaluate on every poll merge and settings change. objectWillChange
-        // fires before the write, so read on the next runloop turn.
-        scoreSubscription = AppSession.shared.objectWillChange
-            .receive(on: RunLoop.main)
-            .sink { [weak self] _ in self?.updateScoreTitle() }
-        updateScoreTitle()
-    }
-
-    // MARK: Live score in the menu bar
-
-    /// While a followed team plays, the status item reads `ARS 2–1 CHE 67′`
-    /// beside the ball — the cheapest live surface macOS has. Off (or between
-    /// matches) it's the bare icon.
-    private func updateScoreTitle() {
-        guard let button = statusItem.button else { return }
-        let session = AppSession.shared
-        let live = (session.prefs.settings.menuBarScore ?? true)
-            ? session.fixtures.first(where: \.isLive) : nil
-        guard let fixture = live else {
-            if !button.title.isEmpty {
-                button.title = ""
-                button.imagePosition = .imageOnly
-            }
-            scoreTimer?.invalidate()
-            scoreTimer = nil
-            return
-        }
-        let teams = session.allTeams
-        let home = TeamCatalog.shortName(for: fixture.home.id, in: teams, fallback: fixture.home.name)
-        let away = TeamCatalog.shortName(for: fixture.away.id, in: teams, fallback: fixture.away.name)
-        let minute = fixture.liveMinuteText(localElapsed: LiveStore.shared.localElapsedSeconds(fixture.fixtureId))
-        let title = "\(home) \(fixture.home.goals)–\(fixture.away.goals) \(away)  \(minute)"
-        if button.title != title {
-            button.attributedTitle = NSAttributedString(string: title, attributes: [
-                .font: NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .medium),
-            ])
-            button.imagePosition = .imageLeading
-        }
-        if scoreTimer == nil {
-            scoreTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
-                MainActor.assumeIsolated { self?.updateScoreTitle() }
-            }
-        }
     }
 
     @objc private func statusItemClicked() {
