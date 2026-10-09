@@ -27,6 +27,9 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: read # configure-pages reads the Pages site config
     defaults:
       run:
         working-directory: website
