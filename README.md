@@ -44,8 +44,6 @@ there are no shared celebration counts, user writes, or Firestore dependency.
 The landing page + privacy policy live in the separate repo
 [`thisisnsh/alldayidreamaboutsports.com`](https://github.com/thisisnsh/alldayidreamaboutsports.com).
 
-**Shipping for the first time?** Work through [TODO.md](TODO.md) top to bottom.
-
 ## Quick start
 
 - Backend: `cd backend && npm install && npm test && npm run dev`
