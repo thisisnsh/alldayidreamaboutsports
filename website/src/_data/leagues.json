@@ -1,0 +1,74 @@
+[
+  {
+    "id": 39,
+    "name": "Premier League",
+    "slug": "premier-league",
+    "type": "League",
+    "country": "England",
+    "season": 2026,
+    "active": true,
+    "ended": false,
+    "crest": "/assets/crests/league-39.webp",
+    "teamCount": 20
+  },
+  {
+    "id": 140,
+    "name": "La Liga",
+    "slug": "la-liga",
+    "type": "League",
+    "country": "Spain",
+    "season": 2026,
+    "active": true,
+    "ended": false,
+    "crest": "/assets/crests/league-140.webp",
+    "teamCount": 20
+  },
+  {
+    "id": 135,
+    "name": "Serie A",
+    "slug": "serie-a",
+    "type": "League",
+    "country": "Italy",
+    "season": 2026,
+    "active": true,
+    "ended": false,
+    "crest": "/assets/crests/league-135.webp",
+    "teamCount": 20
+  },
+  {
+    "id": 78,
+    "name": "Bundesliga",
+    "slug": "bundesliga",
+    "type": "League",
+    "country": "Germany",
+    "season": 2026,
+    "active": true,
+    "ended": false,
+    "crest": "/assets/crests/league-78.webp",
+    "teamCount": 18
+  },
+  {
+    "id": 61,
+    "name": "Ligue 1",
+    "slug": "ligue-1",
+    "type": "League",
+    "country": "France",
+    "season": 2026,
+    "active": true,
+    "ended": false,
+    "crest": "/assets/crests/league-61.webp",
+    "teamCount": 18
+  },
+  {
+    "id": 1,
+    "name": "World Cup",
+    "slug": "world-cup",
+    "type": "Cup",
+    "country": "World",
+    "season": 2026,
+    "active": false,
+    "ended": true,
+    "crest": "/assets/crests/league-1.webp",
+    "teamCount": 48
+  }
+]
