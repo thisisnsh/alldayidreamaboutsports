@@ -1,0 +1,121 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   All Day I Dream About Sports - site behaviour.
+
+   Three things, none of which block anything:
+     1. the fixed background video, loaded only when it is worth loading
+     2. reveal-on-scroll
+     3. the nav (scrolled state, and the toggle on small screens)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ───────────────────────── background video ────────────────────────────── */
+(() => {
+  const video = document.getElementById("bgvideo");
+  const loading = document.getElementById("video-loading");
+  const poster = document.querySelector(".videobg-poster");
+
+  // If the poster itself is unreachable, hide it rather than leave a browser's
+  // broken-image mark sitting behind the hero.
+  if (poster) poster.addEventListener("error", () => poster.remove(), { once: true });
+
+  if (!video) return;
+
+  // Respect explicit accessibility and bandwidth preferences. Everyone else,
+  // including phones, gets the reel; the poster remains as a fallback.
+  const conn = navigator.connection || {};
+  const skip =
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches ||
+    conn.saveData === true;
+
+  if (skip) {
+    video.remove();
+    return;
+  }
+
+  if (loading) loading.hidden = false;
+
+  const add = (type, src) => {
+    if (!src) return;
+    const s = document.createElement("source");
+    s.type = type;
+    s.src = src;
+    video.appendChild(s);
+  };
+
+  let done = false;
+  const settle = () => {
+    if (done) return;
+    done = true;
+    if (loading) loading.hidden = true;
+  };
+
+  video.addEventListener(
+    "canplay",
+    () => {
+      settle();
+      // The poster stays underneath, so the crossfade has nothing to reveal.
+      video.classList.add("is-ready");
+      const p = video.play();
+      if (p && p.catch) p.catch(() => {});
+    },
+    { once: true }
+  );
+
+  // If it never arrives, the poster simply remains and nothing is broken.
+  video.addEventListener("error", settle, { once: true });
+
+  add("video/webm", video.dataset.webm);
+  add("video/mp4", video.dataset.mp4);
+  video.preload = "auto";
+  video.load();
+})();
+
+/* ───────────────────────── reveal on scroll ────────────────────────────── */
+(() => {
+  const items = document.querySelectorAll(".reveal");
+  if (!items.length) return;
+
+  if (
+    !("IntersectionObserver" in window) ||
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches
+  ) {
+    items.forEach((el) => el.classList.add("in"));
+    return;
+  }
+
+  const io = new IntersectionObserver(
+    (entries) => {
+      for (const e of entries) {
+        if (!e.isIntersecting) continue;
+        e.target.classList.add("in");
+        io.unobserve(e.target);
+      }
+    },
+    { rootMargin: "0px 0px -8% 0px", threshold: 0.05 }
+  );
+  items.forEach((el) => io.observe(el));
+})();
+
+/* ───────────────────────────── nav ─────────────────────────────────────── */
+(() => {
+  const nav = document.getElementById("nav");
+  if (nav) {
+    const onScroll = () => nav.classList.toggle("scrolled", window.scrollY > 12);
+    onScroll();
+    addEventListener("scroll", onScroll, { passive: true });
+  }
+
+  const toggle = document.getElementById("nav-toggle");
+  const links = document.getElementById("nav-links");
+  if (!toggle || !links) return;
+
+  toggle.addEventListener("click", () => {
+    const open = links.classList.toggle("open");
+    toggle.setAttribute("aria-expanded", String(open));
+  });
+  links.addEventListener("click", (e) => {
+    if (e.target.closest("a")) {
+      links.classList.remove("open");
+      toggle.setAttribute("aria-expanded", "false");
+    }
+  });
+})();
