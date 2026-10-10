@@ -11,11 +11,12 @@ final class AppSession: ObservableObject {
     @Published var leagues: [League] = []
     @Published var teamsByLeague: [Int: [Team]] = TeamCatalog.fallbackByLeague
     @Published var fixtures: [Fixture] = []
-    /// Every fixture kicking off today across all leagues — the menu's "All
-    /// Teams" list. Schedule data only (`fixtures-{date}.json` publishes rows
-    /// as SCHEDULED / 0-0 by construction): matches outside `fixtures` are
-    /// never polled, so they carry a kickoff time and nothing live.
-    @Published var todayFixtures: [Fixture] = []
+    /// Followed-team fixtures on the local days either side of today (keys -1
+    /// and 1), for the menu's day arrows. Today itself is `fixtures`.
+    @Published private(set) var neighborFixtures: [Int: [Fixture]] = [:]
+    /// Which of yesterday (-1), today (0) and tomorrow (1) have any football
+    /// at all, followed teams or not — tells "none of yours" from "none".
+    @Published private(set) var daysWithFixtures: Set<Int> = []
     @Published private(set) var scheduleState: DataLoadState = .loading
     @Published private(set) var catalogState: DataLoadState = .loading
     @Published private(set) var liveScoreUpdates: [Int: LiveScoreUpdate] = [:]
@@ -35,11 +36,19 @@ final class AppSession: ObservableObject {
     /// The local day `publishFixtures()` last projected for — see
     /// `reprojectIfDayChanged()`.
     private var projectedDay: Date?
+    /// Every followed match the app has seen past SCHEDULED, by id: final
+    /// scores and the events seen while it was live. Kept across quits (unlike
+    /// the fixture cache) because a finished match's file may no longer carry
+    /// its events — this is what yesterday's list reads them from.
+    private var archive: [Int: Fixture] = [:]
+    /// How long an archived match is kept after kickoff.
+    private static let archiveDays = 3
 
     private enum CacheKey {
         static let fanTeamIds = "fanTeamIds"
         static let settings = "settings"
         static let fixtures = "cachedFixtures"
+        static let archive = "matchArchive"
         /// `"<utc day>:<file date>"` for each schedule file loaded on that UTC
         /// day — the bootstrap is complete once all three of today±1 are in.
         static let fixtureBootstrapDates = "fixtureBootstrapDates"
@@ -67,13 +76,14 @@ final class AppSession: ObservableObject {
         applyApplicationTheme()
         AppAnalytics.syncSettingProperties(prefs.settings)
         #if !DEV_BACKEND
+        loadArchive()
         // A demo run starts from an empty board: DemoEngine seeds every fixture
         // itself, so restoring a cache would only leave rows from an older
         // reel (or an older DevConfig) sitting in "All Teams".
         if let data = defaults.data(forKey: CacheKey.fixtures) {
             do {
                 let stored = try JSONDecoder().decode([Fixture].self, from: data)
-                fixturesById = Dictionary(stored.map { ($0.fixtureId, $0) }, uniquingKeysWith: { _, last in last })
+                fixturesById.merge(stored.map { ($0.fixtureId, $0) }, uniquingKeysWith: { _, last in last })
                 publishFixtures()
             } catch {
                 // A rejected old cache must not leave the schedule marked as
@@ -262,7 +272,9 @@ final class AppSession: ObservableObject {
     }
 
     /// The schedule bootstrap: once per day, read `fixtures-{date}.json` for
-    /// today±1 (12h TTL) for kickoff times + which fan matches play. Live scores
+    /// today±2 (12h TTL) for kickoff times + which fan matches play. ±2 UTC
+    /// days, not ±1, so the menu's local yesterday and tomorrow are covered
+    /// whatever the time zone. Live scores
     /// are never read from here — that's the poll loop's job. Never overwrites a
     /// live-polled fixture with a (possibly stale) schedule row. Each date is
     /// tracked on its own: one that failed is retried (at most once a minute)
@@ -275,9 +287,9 @@ final class AppSession: ObservableObject {
         // must be UTC too — the local calendar can pick the wrong day near
         // midnight/DST and miss the +1 (or -1) file.
         let calendar = Calendar.utc
-        let dates = [-1, 0, 1].compactMap { calendar.date(byAdding: .day, value: $0, to: now) }
+        let dates = [-2, -1, 0, 1, 2].compactMap { calendar.date(byAdding: .day, value: $0, to: now) }
         let key = { (date: Date) in "\(bootstrapDay):\(ISO8601DateFormatter.dateOnly.string(from: date))" }
-        // Only entries from today's UTC bootstrap count: a new day re-reads all three.
+        // Only entries from today's UTC bootstrap count: a new day re-reads them all.
         var loaded = Set(defaults.stringArray(forKey: CacheKey.fixtureBootstrapDates) ?? [])
             .filter { $0.hasPrefix("\(bootstrapDay):") }
         let pending = force ? dates : dates.filter { !loaded.contains(key($0)) }
@@ -318,7 +330,8 @@ final class AppSession: ObservableObject {
                 // is FINISHED it's out of the poll loop, and its matches/{id}
                 // file answers 304, so nothing would ever restore the score.
                 if let existing = fixturesById[fixture.fixtureId],
-                   existing.needsFrequentRefresh(at: now) || existing.status == "FINISHED" {
+                   existing.needsFrequentRefresh(at: now) || existing.status == "FINISHED"
+                    || archive[fixture.fixtureId] != nil {
                     continue
                 }
                 fixturesById[fixture.fixtureId] = fixture
@@ -335,6 +348,39 @@ final class AppSession: ObservableObject {
     func applyLiveFixture(_ fixture: Fixture) {
         fixturesById[fixture.fixtureId] = fixture
         confirmLiveScore(fixture.fixtureId)
+        #if !DEV_BACKEND
+        // The demo replays its reel every launch; nothing of it is kept.
+        if fixture.status != "SCHEDULED", archive[fixture.fixtureId] != fixture {
+            archive[fixture.fixtureId] = fixture
+            persistArchive()
+        }
+        #endif
+    }
+
+    /// The last state archived for a match, events included — `LiveStore`
+    /// merges a fresh read over it so events the file no longer carries stay.
+    func archivedFixture(_ fixtureId: Int) -> Fixture? {
+        archive[fixtureId]
+    }
+
+    private func loadArchive() {
+        guard let data = defaults.data(forKey: CacheKey.archive),
+              let stored = try? JSONDecoder().decode([Fixture].self, from: data) else { return }
+        let cutoff = Calendar.current.date(byAdding: .day, value: -Self.archiveDays, to: Date()) ?? .distantPast
+        archive = Dictionary(
+            stored.filter { ($0.kickoff ?? .distantPast) >= cutoff }.map { ($0.fixtureId, $0) },
+            uniquingKeysWith: { _, last in last }
+        )
+        fixturesById.merge(archive) { _, archived in archived }
+        publishFixtures()
+    }
+
+    private func persistArchive() {
+        let cutoff = Calendar.current.date(byAdding: .day, value: -Self.archiveDays, to: Date()) ?? .distantPast
+        archive = archive.filter { ($0.value.kickoff ?? .distantPast) >= cutoff }
+        if let data = try? JSONEncoder().encode(Array(archive.values)) {
+            defaults.set(data, forKey: CacheKey.archive)
+        }
     }
 
     func confirmLiveScore(_ fixtureId: Int) {
@@ -351,23 +397,52 @@ final class AppSession: ObservableObject {
         (liveScoreUpdates[fixtureId] ?? LiveScoreUpdate()).status(at: date)
     }
 
-    /// Project the working set into the two published, sorted lists and persist
-    /// them. Visible = a match that kicks off today, or a live one whatever day
-    /// it started on; `fixtures` narrows that to the user's own teams.
-    /// `fixtures` — NOT `todayFixtures` — is what `LiveStore` polls, so a
-    /// fuller today list costs nothing beyond the schedule file we already read.
+    /// Project the working set into the published, sorted per-day lists and
+    /// persist it. Today = a followed match that kicks off today, or a live one
+    /// whatever day it started on; yesterday and tomorrow are by kickoff alone,
+    /// so a live match never shows twice.
     func publishFixtures() {
         let calendar = Calendar.current
         let now = Date()
-        projectedDay = calendar.startOfDay(for: now)
-        todayFixtures = fixturesById.values
-            .filter { fixture in
-                fixture.kickoff.map { calendar.isDate($0, inSameDayAs: now) } == true
-                    || fixture.isLive
+        let today = calendar.startOfDay(for: now)
+        projectedDay = today
+        // A "live" row that kicked off half a day ago is a leftover whose end
+        // was never seen, not a match in play.
+        func live(_ fixture: Fixture) -> Bool {
+            fixture.isLive && (fixture.kickoff ?? now) > now.addingTimeInterval(-12 * 60 * 60)
+        }
+        // Rows older than the menu's yesterday (and the archive) are done with.
+        if let cutoff = calendar.date(byAdding: .day, value: -Self.archiveDays, to: today) {
+            fixturesById = fixturesById.filter { _, fixture in
+                live(fixture) || (fixture.kickoff ?? .distantFuture) >= cutoff
             }
+        }
+        func dayOffset(_ fixture: Fixture) -> Int? {
+            guard let kickoff = fixture.kickoff else { return nil }
+            return calendar.dateComponents([.day], from: today, to: calendar.startOfDay(for: kickoff)).day
+        }
+        let sorted = fixturesById.values
             .sorted { ($0.kickoff ?? .distantFuture) < ($1.kickoff ?? .distantFuture) }
-        fixtures = todayFixtures.filter { $0.involves(fanTeamIds) }
+        var days: Set<Int> = []
+        var neighbors: [Int: [Fixture]] = [-1: [], 1: []]
+        var todays: [Fixture] = []
+        let fans = fanTeamIds
+        for fixture in sorted {
+            let offset = live(fixture) ? 0 : dayOffset(fixture)
+            guard let offset, (-1 ... 1).contains(offset) else { continue }
+            days.insert(offset)
+            guard fixture.involves(fans) else { continue }
+            if offset == 0 { todays.append(fixture) } else { neighbors[offset, default: []].append(fixture) }
+        }
+        fixtures = todays
+        neighborFixtures = neighbors
+        daysWithFixtures = days
         persistFixtureCache()
+    }
+
+    /// The followed matches on `offset` days from today (-1, 0 or 1).
+    func fixtures(dayOffset offset: Int) -> [Fixture] {
+        offset == 0 ? fixtures : neighborFixtures[offset] ?? []
     }
 
     /// The visible lists are a projection onto the LOCAL day, but the schedule
@@ -388,10 +463,10 @@ final class AppSession: ObservableObject {
         return fixturesById.values.filter { $0.involves(fans) }
     }
 
-    /// Is there any football on today at all, fan teams or not? The menu needs
-    /// this to tell "none of your teams play today" from "nobody plays today" —
-    /// `fixtures` alone can no longer answer it now that it is fan-filtered.
-    var hasFixturesToday: Bool { !todayFixtures.isEmpty }
+    /// Is there any football at all `offset` days from today, fan teams or
+    /// not? The menu needs this to tell "none of your teams play" from "nobody
+    /// plays" — the fan-filtered lists alone can't answer it.
+    func hasFixtures(dayOffset offset: Int) -> Bool { daysWithFixtures.contains(offset) }
 
     /// The competition a fixture belongs to, for the menu's fixture rows. Falls
     /// back to the bundled names while catalog.json is still loading.
@@ -400,10 +475,9 @@ final class AppSession: ObservableObject {
     }
 
     private func persistFixtureCache() {
-        // The wider list: the schedule bootstrap runs once a UTC day, so a
-        // relaunch later that day rebuilds the working set from this cache
-        // alone — caching only the fan matches would empty "All Teams".
-        if let data = try? JSONEncoder().encode(todayFixtures) {
+        // The whole working set: the schedule bootstrap runs once a UTC day,
+        // so a relaunch later that day rebuilds it from this cache alone.
+        if let data = try? JSONEncoder().encode(Array(fixturesById.values)) {
             defaults.set(data, forKey: CacheKey.fixtures)
         }
     }
@@ -413,11 +487,12 @@ final class AppSession: ObservableObject {
     /// in-memory working set, their UserDefaults backing, and the once-per-day
     /// schedule gate — and reset the live-poll baseline and conditional-GET
     /// ETags so the next session re-fetches everything fresh from the CDN (no
-    /// 304s against now-dropped data). Fan teams and settings are preserved.
-    /// Called on quit (`applicationWillTerminate`).
+    /// 304s against now-dropped data). Fan teams, settings and the match
+    /// archive are preserved. Called on quit (`applicationWillTerminate`).
     func clearMatchCache() {
         fixtures = []
-        todayFixtures = []
+        neighborFixtures = [:]
+        daysWithFixtures = []
         fixturesById = [:]
         liveScoreUpdates = [:]
         scheduleState = .loading

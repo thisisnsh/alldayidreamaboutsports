@@ -23,6 +23,9 @@ final class PopoverRouter: ObservableObject {
     @Published var homeFit: CGFloat?
     /// The home header is asking "Quit the app?" in place of its controls.
     @Published var confirmingQuit = false
+    /// The day the home page lists: -1 yesterday, 0 today, 1 tomorrow. Every
+    /// open starts back on today.
+    @Published var dayOffset = 0
 
     func go(_ page: PopoverPage) {
         guard page != self.page else { return }
@@ -54,6 +57,7 @@ final class PopoverRouter: ObservableObject {
     /// never opens mid-slide.
     func reset(to page: PopoverPage = .home) {
         confirmingQuit = false
+        dayOffset = 0
         forward = true
         self.page = page
     }
@@ -142,13 +146,14 @@ extension PageHeader where Trailing == EmptyView {
 struct ToolbarIconButton: View {
     let symbol: String
     let help: String
+    var size: CGFloat = 14
     let action: () -> Void
     @State private var hovering = false
 
     var body: some View {
         Button(action: action) {
             Image(systemName: symbol)
-                .font(.system(size: 14))
+                .font(.system(size: size, weight: size < 14 ? .semibold : .regular))
                 .frame(width: 28, height: 26)
                 .background(
                     RoundedRectangle(cornerRadius: 7).fill(Color.primary.opacity(hovering ? 0.1 : 0))
@@ -162,7 +167,8 @@ struct ToolbarIconButton: View {
     }
 }
 
-/// Today's matches for the followed teams, grouped by state, with those teams
+/// One day's matches for the followed teams (today by default; the header's
+/// arrows step to yesterday and tomorrow), grouped by state, with those teams
 /// along the bottom.
 struct HomePage: View {
     @EnvironmentObject var session: AppSession
@@ -199,7 +205,7 @@ struct HomePage: View {
             if router.confirmingQuit {
                 quitConfirmation
             } else {
-                Text("Today").font(.system(size: 15, weight: .bold, design: .rounded))
+                daySwitcher
                 Spacer()
                 ToolbarIconButton(symbol: "gearshape", help: "Settings") { router.go(.settings) }
                 ToolbarIconButton(symbol: "power", help: "Quit") { router.askToQuit() }
@@ -211,6 +217,39 @@ struct HomePage: View {
         .padding(.trailing, 10)
         .padding(.top, 12)
         .padding(.bottom, 8)
+    }
+
+    /// `‹ Today ›`: steps one day back or forward, no further.
+    private var daySwitcher: some View {
+        HStack(spacing: 0) {
+            dayArrow(-1, symbol: "chevron.left", help: "Previous day")
+            Text(Self.dayTitle(router.dayOffset))
+                .font(.system(size: 15, weight: .bold, design: .rounded))
+                .frame(minWidth: 84)
+                .contentTransition(.opacity)
+            dayArrow(1, symbol: "chevron.right", help: "Next day")
+        }
+        // The arrow's hover pad sits in the list's 16pt inset.
+        .padding(.leading, -8)
+    }
+
+    private func dayArrow(_ step: Int, symbol: String, help: String) -> some View {
+        let target = router.dayOffset + step
+        let enabled = (-1 ... 1).contains(target)
+        return ToolbarIconButton(symbol: symbol, help: help, size: 12) {
+            expanded = nil
+            withAnimation(.easeOut(duration: 0.15)) { router.dayOffset = target }
+        }
+        .disabled(!enabled)
+        .opacity(enabled ? 1 : 0.3)
+    }
+
+    static func dayTitle(_ offset: Int) -> String {
+        switch offset {
+        case -1: "Yesterday"
+        case 1: "Tomorrow"
+        default: "Today"
+        }
     }
 
     /// Replaces the header's controls until answered. Return quits, Esc
@@ -251,10 +290,10 @@ struct HomePage: View {
                         .buttonStyle(.cardButton)
                 } else if session.scheduleState == .loading {
                     ProgressView().controlSize(.small)
-                    Text("Loading today's matches…").font(.system(size: 13)).foregroundStyle(.secondary)
+                    Text("Loading matches…").font(.system(size: 13)).foregroundStyle(.secondary)
                 } else if session.scheduleState == .unavailable {
                     Image(systemName: "wifi.exclamationmark").font(.system(size: 24)).foregroundStyle(.secondary)
-                    Text("Couldn't load today's matches").font(.system(size: 13, weight: .medium))
+                    Text("Couldn't load matches").font(.system(size: 13, weight: .medium))
                     retryButton
                 } else {
                     Text(emptyMessage).font(.system(size: 13)).foregroundStyle(.secondary)
@@ -307,7 +346,7 @@ struct HomePage: View {
                     if liveCards {
                         NowCard(fixture: fixture, expanded: $expanded)
                     } else {
-                        FixtureRow(fixture: fixture, expanded: $expanded)
+                        FixtureRow(fixture: fixture, pinnable: router.dayOffset == 0, expanded: $expanded)
                     }
                 }
             }
@@ -322,14 +361,17 @@ struct HomePage: View {
 
     private static let fadeHeight: CGFloat = 10
 
-    private var shownFixtures: [Fixture] { session.fixtures }
+    private var shownFixtures: [Fixture] { session.fixtures(dayOffset: router.dayOffset) }
 
-    /// Nothing to list: either football is off entirely today, or it's on but
-    /// none of it is theirs.
+    /// Nothing to list: either football is off entirely that day, or it's on
+    /// but none of it is theirs.
     private var emptyMessage: String {
-        session.hasFixturesToday
-            ? "None of your teams play today 💤"
-            : "No matches today — rest day ☁️"
+        let any = session.hasFixtures(dayOffset: router.dayOffset)
+        switch router.dayOffset {
+        case -1: return any ? "None of your teams played yesterday" : "No matches yesterday"
+        case 1: return any ? "None of your teams play tomorrow" : "No matches tomorrow"
+        default: return any ? "None of your teams play today 💤" : "No matches today — rest day ☁️"
+        }
     }
 
     /// The followed teams, doubling as the way into Teams.
@@ -536,6 +578,9 @@ private struct TimelineEventLine: View {
 
 private struct FixtureRow: View {
     let fixture: Fixture
+    /// Only today's matches can float on screen — a capsule reads today's
+    /// live list.
+    var pinnable = true
     @Binding var expanded: Int?
     @EnvironmentObject var session: AppSession
     @ObservedObject private var capsules = PinnedCapsuleManager.shared
@@ -597,7 +642,7 @@ private struct FixtureRow: View {
     }
 
     /// What opens under the row: the timeline once there's play to show, the
-    /// kickoff otherwise, and the pin.
+    /// kickoff otherwise, and the pin for today's matches.
     @ViewBuilder private var detail: some View {
         VStack(alignment: .leading, spacing: 6) {
             let timeline = capsuleTimeline(for: fixture)
@@ -608,12 +653,14 @@ private struct FixtureRow: View {
             } else if let note = detailNote {
                 Text(note).font(.system(size: 12)).foregroundStyle(.secondary)
             }
-            Button {
-                capsules.toggle(fixtureId: fixture.fixtureId)
-            } label: {
-                Label(isPinned ? "Unpin from screen" : "Pin to screen", systemImage: "pin.fill")
+            if pinnable {
+                Button {
+                    capsules.toggle(fixtureId: fixture.fixtureId)
+                } label: {
+                    Label(isPinned ? "Unpin from screen" : "Pin to screen", systemImage: "pin.fill")
+                }
+                .buttonStyle(.cardButton)
             }
-            .buttonStyle(.cardButton)
         }
     }
 

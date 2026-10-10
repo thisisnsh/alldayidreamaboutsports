@@ -84,7 +84,7 @@ When your team scores, your team's crest and confetti burst from the bottom corn
 
 ### 🏟️ Just your teams
 
-The menu shows today's fixtures for the clubs you follow, and nothing else.
+The menu shows today's fixtures for the clubs you follow, and nothing else. The arrows next to **Today** step back to yesterday's results (with the goals and cards the app saw live) and ahead to tomorrow's kickoffs.
 
 ### ⏱️ A clock that knows football
 

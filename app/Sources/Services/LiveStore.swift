@@ -159,10 +159,12 @@ final class LiveStore {
         let teams = teamIds ?? session.fanTeamIds
         guard !teams.isEmpty else { return }
         let now = Date()
-        let targets = session.fixtures.filter { fixture in
+        // Back to the start of the menu's yesterday, so its scores are final.
+        let since = Calendar.current.date(byAdding: .day, value: -1, to: Calendar.current.startOfDay(for: now)) ?? now
+        let targets = session.fanWorkingSet.filter { fixture in
             fixture.involves(teams)
                 && fixture.status != "FINISHED" && !fixture.isCalledOff // schedule already terminal — trust it
-                && (fixture.kickoff.map { $0 <= now } ?? false) // has kicked off
+                && (fixture.kickoff.map { $0 <= now && $0 >= since } ?? false) // kicked off since yesterday
                 && !isInLiveWindow(fixture, at: now) // pollCycle owns in-window matches
         }
         guard !targets.isEmpty else { return }
@@ -386,7 +388,10 @@ final class LiveStore {
         // seen for the rest of this run (the cache is wiped on quit), so the
         // timeline doesn't lose them — and since the baseline is this merged
         // state too, the entries coming back later don't refire as new.
-        let current = prev.map { snapshot.keepingEvents(from: $0) } ?? snapshot
+        // On a first read, the archive stands in for the baseline: a finished
+        // match's file may have lost events the app saw live.
+        let current = (prev ?? session.archivedFixture(snapshot.fixtureId))
+            .map { snapshot.keepingEvents(from: $0) } ?? snapshot
         // OBSERVATION-GAP GUARD: `prev` is only "the state one poll ago" while
         // we've been watching continuously. After a gap — the lid was shut, the
         // Mac slept, the network went away — it's an old snapshot, and diffing
