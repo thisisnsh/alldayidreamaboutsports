@@ -45,7 +45,7 @@ targets:
         CODE_SIGN_ENTITLEMENTS: App.entitlements
         MARKETING_VERSION: 1.0.0
         # Bump for every App Store upload.
-        CURRENT_PROJECT_VERSION: 2
+        CURRENT_PROJECT_VERSION: 1
         ENABLE_HARDENED_RUNTIME: true
         SWIFT_VERSION: 5.10
         DEAD_CODE_STRIPPING: true
