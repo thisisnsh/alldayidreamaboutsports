@@ -94,7 +94,7 @@ struct SettingsPage: View {
                         pickerRow("Theme", selection: themeBinding, cases: ThemeChoice.allCases) { $0.label }
                         pickerRow("Size", selection: overlaySizeBinding, cases: CapsuleSize.allCases) { $0.label }
                         pickerRow("Pinned score", selection: capsulePositionBinding, cases: CapsulePosition.allCases) { $0.label }
-                        caption("Size applies to notch alerts and pinned scores. Pin a live match from the menu to float its score; hover it to see the timeline.")
+                        caption("Size applies to notch alerts and pinned scores. Pin a match from the menu to float its score. Click it for the timeline; drag it to any corner.")
                     }
 
                     footer

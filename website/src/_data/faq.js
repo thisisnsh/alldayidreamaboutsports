@@ -24,11 +24,11 @@ const home = [
   },
   {
     q: "Will match notifications interrupt my work?",
-    a: "No. Alerts slide in below the notch and get out of the way, and the floating score capsule never intercepts a click meant for the window behind it. It is built to keep you in flow while you follow the match.",
+    a: "No. Alerts slide in below the notch and get out of the way, and the floating score capsule fades almost clear when your pointer is over it, so you can see the window behind. It is built to keep you in flow while you follow the match.",
   },
   {
     q: "Can I pin more than one match to my screen?",
-    a: "Yes. Pin several capsules at once and the stack animates so the others slide out of the way when one expands. Hover a capsule for the full event timeline - every goal, card and substitution on a shared minute column - and set each one to small, medium or large, at the top or the bottom of the screen.",
+    a: "Yes. Pin several capsules at once, drag each to any corner and they snap into place without overlapping. Click a capsule for the full event timeline - every goal, card and substitution on a shared minute column - and set them to small, medium or large.",
   },
   {
     q: "Can I celebrate goals with other fans?",

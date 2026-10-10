@@ -12,7 +12,7 @@ const home = [
   },
   {
     h: "Capsules you can stack",
-    p: "Pin several matches at once. Hover any capsule for the full event timeline - every goal, card and substitution.",
+    p: "Pin several matches at once and drag each to any corner. Click a capsule for the full event timeline - every goal, card and substitution.",
   },
   {
     h: "Celebrate the goal with everyone else",
@@ -36,7 +36,7 @@ function forLeague(league) {
     },
     {
       h: `Pin the ${L} match to a corner`,
-      p: `Pin several matches at once. Hover any capsule for the full event timeline - every goal, card and substitution.`,
+      p: `Pin several matches at once and drag each to any corner. Click a capsule for the full event timeline - every goal, card and substitution.`,
     },
     {
       h: "Follow teams or leagues",
@@ -60,7 +60,7 @@ function forTeam(team) {
     },
     {
       h: `Pin the ${T} match to a corner`,
-      p: "Pin several matches at once. Hover any capsule for the full event timeline - every goal, card and substitution.",
+      p: "Pin several matches at once and drag each to any corner. Click a capsule for the full event timeline - every goal, card and substitution.",
     },
     {
       h: `Celebrate ${T} goals with everyone else`,

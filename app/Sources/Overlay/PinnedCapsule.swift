@@ -76,9 +76,31 @@ struct CapsuleMetrics {
 
 // MARK: - Manager
 
-/// Owns one click-through capsule-stack panel per display. A SwiftUI `VStack`
-/// performs the vertical layout; AppKit only sizes and anchors each whole stack.
-/// All panels float above every app, including full screen (`OverlayWindow`).
+/// A screen corner a pinned capsule snaps to. Capsules in the same corner
+/// stack away from it, so two never overlap.
+enum CapsuleCorner: CaseIterable {
+    case topLeft, topRight, bottomLeft, bottomRight
+
+    var isTop: Bool { self == .topLeft || self == .topRight }
+    var isLeft: Bool { self == .topLeft || self == .bottomLeft }
+
+    /// The corner whose quadrant of `area` holds `point`.
+    static func nearest(to point: CGPoint, in area: CGRect) -> CapsuleCorner {
+        switch (point.y >= area.midY, point.x < area.midX) {
+        case (true, true): .topLeft
+        case (true, false): .topRight
+        case (false, true): .bottomLeft
+        case (false, false): .bottomRight
+        }
+    }
+}
+
+/// Owns one small panel per pinned match, all on the display selected in
+/// Settings. A new pin opens top-right; the user can drag it anywhere and on
+/// release it snaps to the nearest corner, stacking with whatever is there.
+/// A click expands or collapses it, a right-click offers Unpin, and the
+/// pointer over it fades it so what's behind shows through. All panels float
+/// above every app, including full screen (`OverlayWindow`).
 @MainActor
 final class PinnedCapsuleManager: ObservableObject {
     static let shared = PinnedCapsuleManager()
@@ -86,18 +108,24 @@ final class PinnedCapsuleManager: ObservableObject {
     /// Which matches are pinned — the menu observes this to swap a fixture row
     /// into its "shown in capsule" state.
     @Published private(set) var pinnedFixtureIds: Set<Int> = []
-    /// All assignments point at the process-local display selected in Settings.
-    @Published private(set) var displayAssignments: [Int: CGDirectDisplayID] = [:]
-    /// Global insertion order; each display filters this into its own stack.
-    @Published private(set) var order: [Int] = []
-    /// Hover is derived from the global pointer because the panels themselves
-    /// intentionally ignore every mouse event.
-    @Published private(set) var hoveredFixtureId: Int?
+    /// Capsules showing full names and the timeline.
+    @Published private(set) var expandedFixtureIds: Set<Int> = []
 
-    private var panels: [CGDirectDisplayID: NSPanel] = [:]
-    private var capsuleFrames: [CGDirectDisplayID: [Int: CGRect]] = [:]
-    private var hoverTimer: Timer?
+    /// Each corner's capsules, nearest the corner first.
+    private var stacks: [CapsuleCorner: [Int]] = [:]
+    private var panels: [Int: NSPanel] = [:]
+    /// Each capsule's SwiftUI size (shadow margin included), as last measured.
+    private var sizes: [Int: CGSize] = [:]
+    /// The capsule being dragged — out of every stack until it's dropped.
+    private var dragging: Int?
     private var displayObserver: NSObjectProtocol?
+
+    /// Gap between a capsule and the screen edge, and between stacked capsules.
+    static let edgeGap: CGFloat = 12
+    /// Transparent margin around each capsule so its shadow isn't clipped.
+    static let shadowMargin: CGFloat = 8
+    /// How far the capsule fades while the pointer is over it.
+    static let hoverAlpha: CGFloat = 0.22
 
     private init() {
         displayObserver = NotificationCenter.default.addObserver(
@@ -110,6 +138,7 @@ final class PinnedCapsuleManager: ObservableObject {
     }
 
     func isPinned(_ fixtureId: Int) -> Bool { pinnedFixtureIds.contains(fixtureId) }
+    func isExpanded(_ fixtureId: Int) -> Bool { expandedFixtureIds.contains(fixtureId) }
 
     /// The one place both the menu row's pin affordance and any other caller
     /// funnel through, so the analytics live here rather than at each call site.
@@ -124,74 +153,118 @@ final class PinnedCapsuleManager: ObservableObject {
     }
 
     func pin(fixtureId: Int) {
-        guard !isPinned(fixtureId),
-              let displayID = OverlayDisplayTarget.shared.selectedDisplayID else { return }
-        let panel = ensurePanel(for: displayID)
-        displayAssignments[fixtureId] = displayID
-        order.append(fixtureId)
+        guard !isPinned(fixtureId), let screen = OverlayDisplayTarget.shared.selectedScreen else { return }
         pinnedFixtureIds.insert(fixtureId)
+        stacks[.topRight, default: []].append(fixtureId)
+        let panel = makePanel(for: fixtureId)
+        panels[fixtureId] = panel
+        sizes[fixtureId] = panel.contentView?.fittingSize
+        layout(on: screen, animated: false)
         panel.orderFrontRegardless()
-        startHoverTracking()
-        AppLog.info(.app, "capsule_pinned fixture_id=\(fixtureId) display_id=\(displayID)")
+        AppLog.info(.app, "capsule_pinned fixture_id=\(fixtureId)")
     }
 
     func unpin(fixtureId: Int) {
-        guard let displayID = displayAssignments[fixtureId] else { return }
-        displayAssignments[fixtureId] = nil
-        order.removeAll { $0 == fixtureId }
+        guard isPinned(fixtureId) else { return }
         pinnedFixtureIds.remove(fixtureId)
-        if fixtureIds(on: displayID).isEmpty {
-            panels[displayID]?.orderOut(nil)
-            panels[displayID] = nil
-            capsuleFrames[displayID] = nil
-        }
-        if hoveredFixtureId == fixtureId { hoveredFixtureId = nil }
-        stopHoverTrackingIfIdle()
+        expandedFixtureIds.remove(fixtureId)
+        for corner in CapsuleCorner.allCases { stacks[corner]?.removeAll { $0 == fixtureId } }
+        panels[fixtureId]?.orderOut(nil)
+        panels[fixtureId] = nil
+        sizes[fixtureId] = nil
+        if dragging == fixtureId { dragging = nil }
+        relayout(animated: true)
         AppLog.info(.app, "capsule_unpinned fixture_id=\(fixtureId)")
     }
 
-    // MARK: Stack membership
-
-    func fixtureIds(on displayID: CGDirectDisplayID) -> [Int] {
-        order.filter { displayAssignments[$0] == displayID }
-    }
-
-    // MARK: Click-through hover tracking
-
-    func updateCapsuleFrames(displayID: CGDirectDisplayID, frames: [Int: CGRect]) {
-        guard let panel = panels[displayID] else { return }
-        capsuleFrames[displayID] = frames.mapValues { frame in
-            CGRect(
-                x: panel.frame.minX + frame.minX,
-                y: panel.frame.maxY - frame.maxY,
-                width: frame.width,
-                height: frame.height
-            )
+    func toggleExpanded(_ fixtureId: Int) {
+        if expandedFixtureIds.contains(fixtureId) {
+            expandedFixtureIds.remove(fixtureId)
+        } else {
+            expandedFixtureIds.insert(fixtureId)
         }
-        refreshHover()
     }
 
-    private func startHoverTracking() {
-        guard hoverTimer == nil else { return }
-        let timer = Timer(timeInterval: 0.05, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated { self?.refreshHover() }
+    // MARK: Layout
+
+    /// The SwiftUI content reports its size; the panel follows, anchored to
+    /// its corner so it grows away from the screen edge.
+    func contentSizeChanged(_ fixtureId: Int, to size: CGSize) {
+        guard isPinned(fixtureId), sizes[fixtureId] != size else { return }
+        sizes[fixtureId] = size
+        if dragging == fixtureId, let panel = panels[fixtureId] {
+            panel.setFrame(CGRect(origin: panel.frame.origin, size: size), display: true)
+            return
         }
-        RunLoop.main.add(timer, forMode: .common)
-        hoverTimer = timer
+        relayout(animated: true)
     }
 
-    private func stopHoverTrackingIfIdle() {
-        guard pinnedFixtureIds.isEmpty else { return }
-        hoverTimer?.invalidate()
-        hoverTimer = nil
+    private func relayout(animated: Bool) {
+        guard let screen = OverlayDisplayTarget.shared.selectedScreen else { return }
+        layout(on: screen, animated: animated)
     }
 
-    private func refreshHover() {
-        let pointer = NSEvent.mouseLocation
-        let hovered = capsuleFrames.values.lazy
-            .compactMap { frames in frames.first { $0.value.contains(pointer) }?.key }
-            .first
-        if hoveredFixtureId != hovered { hoveredFixtureId = hovered }
+    /// Place every stacked capsule. A capsule only animates when it moves
+    /// without changing size: animating a resize would show the new content
+    /// centered in a frame that's still catching up.
+    private func layout(on screen: NSScreen, animated: Bool) {
+        let area = screen.visibleFrame
+        let margin = Self.shadowMargin
+        for corner in CapsuleCorner.allCases {
+            var offset: CGFloat = 0
+            for fixtureId in stacks[corner] ?? [] {
+                guard let panel = panels[fixtureId] else { continue }
+                let size = sizes[fixtureId] ?? panel.frame.size
+                let x = corner.isLeft
+                    ? area.minX + Self.edgeGap - margin
+                    : area.maxX - Self.edgeGap + margin - size.width
+                let y = corner.isTop
+                    ? area.maxY - Self.edgeGap + margin - offset - size.height
+                    : area.minY + Self.edgeGap - margin + offset
+                let frame = CGRect(x: x, y: y, width: size.width, height: size.height).integral
+                offset += size.height - 2 * margin + Self.edgeGap
+                if frame == panel.frame { continue }
+                if animated, frame.size == panel.frame.size, panel.isVisible {
+                    NSAnimationContext.runAnimationGroup { context in
+                        context.duration = 0.22
+                        context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                        panel.animator().setFrame(frame, display: true)
+                    }
+                } else {
+                    panel.setFrame(frame, display: true)
+                }
+            }
+        }
+    }
+
+    // MARK: Dragging
+
+    /// The capsule leaves its stack while it's carried, so the rest close up.
+    func beginDrag(_ fixtureId: Int) {
+        dragging = fixtureId
+        for corner in CapsuleCorner.allCases { stacks[corner]?.removeAll { $0 == fixtureId } }
+        relayout(animated: true)
+    }
+
+    /// Snap to the corner whose quadrant the capsule was dropped in, slotted
+    /// among that corner's capsules by where it landed.
+    func endDrag(_ fixtureId: Int) {
+        guard dragging == fixtureId else { return }
+        dragging = nil
+        guard let panel = panels[fixtureId],
+              let screen = OverlayDisplayTarget.shared.selectedScreen else { return }
+        let center = CGPoint(x: panel.frame.midX, y: panel.frame.midY)
+        let corner = CapsuleCorner.nearest(to: center, in: screen.visibleFrame)
+        var stack = stacks[corner] ?? []
+        let index = stack.filter { other in
+            guard let otherFrame = panels[other]?.frame else { return false }
+            return corner.isTop ? otherFrame.midY > center.y : otherFrame.midY < center.y
+        }.count
+        stack.insert(fixtureId, at: min(index, stack.count))
+        stacks[corner] = stack
+        AppLog.info(.app, "capsule_moved fixture_id=\(fixtureId) corner=\(corner)")
+        // Animate the snap: the dragged panel keeps its size, only its origin moves.
+        layout(on: screen, animated: true)
     }
 
     // MARK: Theme
@@ -205,52 +278,15 @@ final class PinnedCapsuleManager: ObservableObject {
 
     // MARK: Panels
 
-    private func displayID(for screen: NSScreen) -> CGDirectDisplayID? {
-        (screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value
-    }
-
-    private func screen(for displayID: CGDirectDisplayID) -> NSScreen? {
-        NSScreen.screens.first { self.displayID(for: $0) == displayID }
-    }
-
-    /// Migrate the complete stack when the user changes the setting or macOS
-    /// removes the selected display. Hover still uses the pointer only to decide
-    /// whether a capsule is expanded; it never chooses a target display.
+    /// Move every capsule when the user changes the screen setting or macOS
+    /// removes the selected display. Corners and order carry over.
     private func moveCapsulesToSelectedDisplay() {
-        guard let displayID = OverlayDisplayTarget.shared.selectedDisplayID else {
+        guard let screen = OverlayDisplayTarget.shared.selectedScreen else {
             for panel in panels.values { panel.orderOut(nil) }
-            panels.removeAll()
-            capsuleFrames.removeAll()
             return
         }
-
-        for panel in panels.values { panel.orderOut(nil) }
-        panels.removeAll()
-        capsuleFrames.removeAll()
-        for fixtureId in pinnedFixtureIds { displayAssignments[fixtureId] = displayID }
-        guard !pinnedFixtureIds.isEmpty else { return }
-        ensurePanel(for: displayID).orderFrontRegardless()
-    }
-
-    private func ensurePanel(for displayID: CGDirectDisplayID) -> NSPanel {
-        if let panel = panels[displayID] { return panel }
-        guard let screen = screen(for: displayID) else {
-            preconditionFailure("A capsule panel requires its captured display")
-        }
-        let panel = Self.makePanel(frame: screen.frame)
-        let bottomInset = max(0, screen.visibleFrame.minY - screen.frame.minY)
-        panel.contentView = Self.makeHostingView(
-            PinnedCapsuleStackView(
-                displayID: displayID,
-                topInset: OverlayLayout.topInset(on: screen),
-                bottomInset: bottomInset
-            )
-                .environmentObject(AppSession.shared)
-                .environmentObject(self)
-        )
-        panel.appearance = overlayAppearance
-        panels[displayID] = panel
-        return panel
+        layout(on: screen, animated: false)
+        for panel in panels.values { panel.orderFrontRegardless() }
     }
 
     private var overlayAppearance: NSAppearance? {
@@ -261,9 +297,9 @@ final class PinnedCapsuleManager: ObservableObject {
         }
     }
 
-    private static func makePanel(frame: NSRect) -> NSPanel {
+    private func makePanel(for fixtureId: Int) -> NSPanel {
         let panel = NSPanel(
-            contentRect: frame,
+            contentRect: CGRect(x: 0, y: 0, width: 200, height: 60),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
@@ -272,25 +308,138 @@ final class PinnedCapsuleManager: ObservableObject {
         panel.backgroundColor = .clear
         // No AppKit shadow: it hugs the rectangular FRAME, not the rounded
         // capsule, and reads as a visible window boundary. The SwiftUI shadow
-        // (inside the asymmetric stack inset) is the only shadow.
+        // (inside `shadowMargin`) is the only shadow.
         panel.hasShadow = false
         panel.level = OverlayWindow.level
         panel.collectionBehavior = OverlayWindow.collectionBehavior
-        panel.ignoresMouseEvents = true
         panel.sharingType = .readOnly
         panel.isFloatingPanel = true
         panel.becomesKeyOnlyIfNeeded = true
+        // Dragging is ours (`CapsuleInteractionView`): AppKit's own window
+        // drag can't tell a click from a drag or snap on release.
         panel.isMovableByWindowBackground = false
+        panel.appearance = overlayAppearance
+
+        let hostingView = NSHostingView(rootView: PinnedCapsuleView(fixtureId: fixtureId)
+            .padding(Self.shadowMargin)
+            .fixedSize()
+            .onGeometryChange(for: CGSize.self, of: \.size) { size in
+                DispatchQueue.main.async {
+                    PinnedCapsuleManager.shared.contentSizeChanged(fixtureId, to: size)
+                }
+            }
+            .environmentObject(AppSession.shared)
+            .environmentObject(self))
+        // The panel's frame is ours; never let the hosting view drive window
+        // constraints (a re-measuring root loops AppKit's constraint passes).
+        hostingView.sizingOptions = []
+        panel.contentView = CapsuleInteractionView(fixtureId: fixtureId, content: hostingView)
         return panel
     }
+}
 
-    /// Disable hosting-view-driven window constraints. Every capsule panel has
-    /// a static display-sized frame; only its SwiftUI stack changes shape.
-    private static func makeHostingView<Content: View>(_ rootView: Content) -> NSHostingView<Content> {
-        let hostingView = NSHostingView(rootView: rootView)
-        hostingView.sizingOptions = []
-        return hostingView
+/// The capsule panel's content view: takes every mouse event itself (the
+/// capsule has no controls of its own) to tell a click from a drag, and fades
+/// the panel while the pointer is over it.
+private final class CapsuleInteractionView: NSView {
+    let fixtureId: Int
+    private var dragStartMouse: CGPoint = .zero
+    private var dragStartOrigin: CGPoint = .zero
+    private var isDragging = false
+
+    init(fixtureId: Int, content: NSView) {
+        self.fixtureId = fixtureId
+        super.init(frame: content.frame)
+        content.autoresizingMask = [.width, .height]
+        addSubview(content)
     }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError() }
+
+    override var fittingSize: NSSize { subviews.first?.fittingSize ?? super.fittingSize }
+
+    /// Only the capsule itself is solid; the shadow margin lets clicks fall
+    /// through to whatever is behind.
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        let local = convert(point, from: superview)
+        let margin = PinnedCapsuleManager.shadowMargin
+        return bounds.insetBy(dx: margin, dy: margin).contains(local) ? self : nil
+    }
+
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        trackingAreas.forEach(removeTrackingArea)
+        let margin = PinnedCapsuleManager.shadowMargin
+        addTrackingArea(NSTrackingArea(
+            rect: bounds.insetBy(dx: margin, dy: margin),
+            options: [.mouseEnteredAndExited, .activeAlways],
+            owner: self
+        ))
+    }
+
+    override func mouseEntered(with event: NSEvent) { fade(to: PinnedCapsuleManager.hoverAlpha) }
+    override func mouseExited(with event: NSEvent) {
+        guard !isDragging else { return }
+        fade(to: 1)
+    }
+
+    private func fade(to alpha: CGFloat) {
+        guard let window else { return }
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.15
+            window.animator().alphaValue = alpha
+        }
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        dragStartMouse = NSEvent.mouseLocation
+        dragStartOrigin = window?.frame.origin ?? .zero
+        isDragging = false
+    }
+
+    override func mouseDragged(with event: NSEvent) {
+        let mouse = NSEvent.mouseLocation
+        let dx = mouse.x - dragStartMouse.x, dy = mouse.y - dragStartMouse.y
+        if !isDragging {
+            // A few points of wobble is still a click.
+            guard hypot(dx, dy) > 3 else { return }
+            isDragging = true
+            PinnedCapsuleManager.shared.beginDrag(fixtureId)
+        }
+        window?.setFrameOrigin(CGPoint(x: dragStartOrigin.x + dx, y: dragStartOrigin.y + dy))
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        if isDragging {
+            isDragging = false
+            PinnedCapsuleManager.shared.endDrag(fixtureId)
+            // The snap can carry the capsule out from under the pointer.
+            if let window, !window.frame.contains(NSEvent.mouseLocation) { fade(to: 1) }
+        } else {
+            PinnedCapsuleManager.shared.toggleExpanded(fixtureId)
+        }
+    }
+
+    override func rightMouseDown(with event: NSEvent) {
+        let manager = PinnedCapsuleManager.shared
+        let menu = NSMenu()
+        let expand = NSMenuItem(
+            title: manager.isExpanded(fixtureId) ? "Collapse" : "Show timeline",
+            action: #selector(toggleExpanded), keyEquivalent: ""
+        )
+        expand.target = self
+        menu.addItem(expand)
+        let unpin = NSMenuItem(title: "Unpin", action: #selector(unpin), keyEquivalent: "")
+        unpin.target = self
+        menu.addItem(unpin)
+        NSMenu.popUpContextMenu(menu, with: event, for: self)
+    }
+
+    @objc private func toggleExpanded() { PinnedCapsuleManager.shared.toggleExpanded(fixtureId) }
+    @objc private func unpin() { PinnedCapsuleManager.shared.toggle(fixtureId: fixtureId) }
 }
 
 // MARK: - Timeline
@@ -418,58 +567,10 @@ private func eventLabel(for type: MatchEventType) -> String {
 
 // MARK: - View
 
-/// One trailing-aligned stack inside a fixed, screen-sized click-through panel.
-private struct PinnedCapsuleStackView: View {
-    let displayID: CGDirectDisplayID
-    let topInset: CGFloat
-    let bottomInset: CGFloat
-    @EnvironmentObject private var manager: PinnedCapsuleManager
-    @EnvironmentObject private var session: AppSession
-
-    private var alignment: Alignment {
-        (session.prefs.settings.capsulePosition ?? .top) == .top ? .topTrailing : .bottomTrailing
-    }
-
-    var body: some View {
-        GeometryReader { proxy in
-            VStack(alignment: .trailing, spacing: OverlayLayout.stackSpacing) {
-                ForEach(manager.fixtureIds(on: displayID), id: \.self) { fixtureId in
-                    PinnedCapsuleView(fixtureId: fixtureId)
-                        .background(
-                            GeometryReader { geometry in
-                                Color.clear.preference(
-                                    key: CapsuleFramesKey.self,
-                                    value: [fixtureId: geometry.frame(in: .named("capsule-stack"))]
-                                )
-                            }
-                        )
-                }
-            }
-            .fixedSize()            
-            .animation(.easeInOut(duration: 0.25), value: manager.hoveredFixtureId)
-            .padding(EdgeInsets(
-                top: topInset + OverlayLayout.topGap,
-                leading: OverlayLayout.expandedShadowInset,
-                bottom: bottomInset + OverlayLayout.expandedShadowInset,
-                trailing: OverlayLayout.shadowInset
-            ))
-            .frame(width: proxy.size.width, height: proxy.size.height, alignment: alignment)
-        }
-        .coordinateSpace(name: "capsule-stack")
-        .onPreferenceChange(CapsuleFramesKey.self) { frames in
-            DispatchQueue.main.async {
-                manager.updateCapsuleFrames(displayID: displayID, frames: frames)
-            }
-        }
-    }
-}
-
-/// The capsule content. At rest it's the tightest possible scoreline —
+/// The capsule content. Collapsed it's the tightest possible scoreline —
 /// `logo MCI score MUN logo time`, each side its short code — in the notch
-/// pill's exact chrome. Hovering swaps the codes for full club names and slides
-/// the event timeline in. The screen-sized parent panel is static and
-/// click-through; hover comes from the manager's global pointer tracking. Reads
-/// live from `AppSession` as `LiveStore` polls.
+/// pill's chrome. Clicking expands it: full club names, the competition, and
+/// the event timeline. Reads live from `AppSession` as `LiveStore` polls.
 struct PinnedCapsuleView: View {
     let fixtureId: Int
     @EnvironmentObject var session: AppSession
@@ -478,12 +579,12 @@ struct PinnedCapsuleView: View {
 
     private var metrics: CapsuleMetrics { CapsuleMetrics(session.prefs.settings.capsuleSize ?? .medium) }
     private var fixture: Fixture? { session.fixtures.first { $0.fixtureId == fixtureId } }
-    private var hovering: Bool { manager.hoveredFixtureId == fixtureId }
+    private var expanded: Bool { manager.isExpanded(fixtureId) }
 
     var body: some View {
         Group {
             if let fixture {
-                capsule(fixture)
+                capsuleBody(fixture)
             } else {
                 // Fixture rolled out of today's list / cache cleared — retire it.
                 Color.clear.frame(width: 1, height: 1).onAppear {
@@ -495,14 +596,7 @@ struct PinnedCapsuleView: View {
         .respectReducedMotion()
     }
 
-    @ViewBuilder private func capsule(_ fixture: Fixture) -> some View {
-        let hasEvents = !capsuleTimeline(for: fixture).isEmpty
-        capsuleBody(fixture, showNames: hovering, showTimeline: hovering && hasEvents)
-            .animation(.easeInOut(duration: 0.25), value: hovering)
-    }
-
-    private func timelineList(_ fixture: Fixture) -> some View {
-        let rows = capsuleTimeline(for: fixture)
+    private func timelineList(_ rows: [CapsuleTimelineRow]) -> some View {
         // Reserve ONE minute-column width for the whole list, sized to the
         // widest minute (e.g. `45+7′`), so every logo/icon/label lines up in a
         // column instead of a stoppage-time row shoving itself rightward.
@@ -514,45 +608,49 @@ struct PinnedCapsuleView: View {
         }
     }
 
-    /// The visible capsule chrome + content for one state.
-    private func capsuleBody(_ fixture: Fixture, showNames: Bool, showTimeline: Bool) -> some View {
-        VStack(alignment: .leading, spacing: metrics.rowSpacing) {
-            header(fixture, showNames: showNames)
-            if showTimeline {
-                timelineList(fixture)
-                    // Breathing room between the scoreline and the event list.
-                    .padding(.top, metrics.rowSpacing)
-                    .transition(.opacity)
+    /// The visible capsule chrome + content. No SwiftUI animation on expand:
+    /// the panel snaps to the new size, and an animated body would be clipped
+    /// mid-way.
+    private func capsuleBody(_ fixture: Fixture) -> some View {
+        let rows = expanded ? capsuleTimeline(for: fixture) : []
+        return VStack(alignment: .leading, spacing: metrics.rowSpacing) {
+            header(fixture)
+            if expanded {
+                subtitle(fixture)
+                if !rows.isEmpty {
+                    Divider().padding(.vertical, metrics.rowSpacing / 2)
+                    timelineList(rows)
+                }
             }
         }
         .padding(.horizontal, metrics.hPad)
         .padding(.vertical, metrics.vPad)
-        // Clip to the animated bounds so event rows don't paint past the
-        // background while the expand/collapse animation is in flight; the
-        // shadowed fill sits outside the clip so it stays soft.
-        .clipShape(RoundedRectangle(cornerRadius: capsuleCorner, style: .continuous))
         .background(
             RoundedRectangle(cornerRadius: capsuleCorner, style: .continuous)
                 .fill(scheme == .dark ? Color.black : Color.white)
-                .shadow(color: .black.opacity(0.4), radius: 10, y: 4)
+                .shadow(color: .black.opacity(0.35), radius: 6, y: 3)
+        )
+        // A hairline edge so the capsule holds its shape on a wallpaper of
+        // the same color.
+        .overlay(
+            RoundedRectangle(cornerRadius: capsuleCorner, style: .continuous)
+                .strokeBorder(Color.primary.opacity(0.12), lineWidth: 0.5)
         )
         .contentShape(RoundedRectangle(cornerRadius: capsuleCorner, style: .continuous))
+        .accessibilityElement(children: .combine)
+        .accessibilityHint(expanded ? "Click to collapse. Drag to move." : "Click for the timeline. Drag to move.")
     }
 
-    /// One side of the scoreline. The resting capsule is the tightest thing on
-    /// screen, so it labels each team with its short code; `full` (hover) swaps
-    /// in the club's full name and the capsule widens to fit. `contentTransition`
-    /// cross-fades the two rather than snapping mid-slide.
-    private func teamLabel(_ team: ScoreboardTeam, full: Bool) -> some View {
-        Text(full ? team.name : TeamCatalog.shortName(for: team.id, in: session.allTeams, fallback: team.name))
-            .font(.system(size: metrics.nameFont, design: .rounded))
+    /// One side of the scoreline: the short code collapsed, the club's full
+    /// name expanded.
+    private func teamLabel(_ team: ScoreboardTeam) -> some View {
+        Text(expanded ? team.name : TeamCatalog.shortName(for: team.id, in: session.allTeams, fallback: team.name))
+            .font(.system(size: metrics.nameFont, weight: .medium, design: .rounded))
             .lineLimit(1)
-            .contentTransition(.opacity)
     }
 
-    /// The scoreline row: `logo name score name logo time`, where the names are
-    /// short codes at rest and full club names while `showNames` (hover).
-    private func header(_ fixture: Fixture, showNames: Bool) -> some View {
+    /// The scoreline row: `logo name score name logo time`.
+    private func header(_ fixture: Fixture) -> some View {
         HStack(spacing: 6) {
             // The scoreline itself hugs its content on ONE line (the inner
             // `.fixedSize`). Keeping it as its own group lets it sit flush-left
@@ -561,21 +659,33 @@ struct PinnedCapsuleView: View {
             // pinned right instead of drifting in beside the score.
             HStack(spacing: 6) {
                 CachedTeamLogo(url: logo(fixture.home.id), size: metrics.headerLogo)
-                teamLabel(fixture.home, full: showNames)
+                teamLabel(fixture.home)
                 Text(scoreText(fixture))
                     .font(.system(size: metrics.scoreFont, weight: .bold, design: .rounded))
+                    .monospacedDigit()
+                    .contentTransition(.numericText())
+                    .animation(.spring, value: fixture.scorelineText)
                     .fixedSize().layoutPriority(1)
-                teamLabel(fixture.away, full: showNames)
+                teamLabel(fixture.away)
                 CachedTeamLogo(url: logo(fixture.away.id), size: metrics.headerLogo)
             }
-            // Keep the scoreline on ONE line: at `45+x′` the wider clock would
-            // otherwise skew the HStack's ideal-size negotiation and truncate a
-            // team name. The capsule is free to grow wider instead.
             .fixedSize()
-            if showNames {
+            if expanded {
                 Spacer(minLength: 8)
             }
             trailing(fixture)
+                .padding(.leading, 2)
+        }
+    }
+
+    /// Competition and stage, under the scoreline when expanded.
+    @ViewBuilder private func subtitle(_ fixture: Fixture) -> some View {
+        if let text = [session.leagueName(for: fixture.leagueId), fixture.stageLabel]
+            .compactMap({ $0 }).joined(separator: " · ").trimmedNonEmpty {
+            Text(text)
+                .font(.system(size: metrics.eventFont, design: .rounded))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
         }
     }
 
@@ -630,7 +740,6 @@ struct PinnedCapsuleView: View {
             }
             Spacer(minLength: 6)
         }
-        .padding(.leading, metrics.rowSpacing)
     }
 
     private func logo(_ id: Int) -> String {
@@ -639,13 +748,5 @@ struct PinnedCapsuleView: View {
 
     private func scoreText(_ fixture: Fixture) -> String {
         fixture.status == "SCHEDULED" ? "vs" : fixture.scorelineText
-    }
-}
-
-/// Capsule bounds in the fixed panel's top-left SwiftUI coordinate space.
-private struct CapsuleFramesKey: PreferenceKey {
-    static var defaultValue: [Int: CGRect] = [:]
-    static func reduce(value: inout [Int: CGRect], nextValue: () -> [Int: CGRect]) {
-        value.merge(nextValue()) { _, new in new }
     }
 }

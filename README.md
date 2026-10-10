@@ -59,7 +59,7 @@ Pick the clubs you care about, or follow a whole league. When something happens 
 
 - **Free.** No subscription, no trial, no paid tier and no ads.
 - **No account.** There is nothing to sign up for. Your teams and settings stay on your Mac.
-- **Stays out of your way.** Alerts never take focus, and the score capsule never catches a click meant for the window behind it.
+- **Stays out of your way.** Alerts never take focus, and the score capsule fades almost clear when your pointer is over it so you can see what's behind.
 - **Open source.** Licensed under GPL-3.0, with the code right here.
 
 <br>
@@ -76,7 +76,7 @@ Choose **Goals only**, **Key moments** or **Everything**, or open **Customize ev
 
 ### 📌 A live score you can pin
 
-Pin a live match of a team you follow and its score stays in the top-right corner of the screen, or the bottom. Pin several and they stack. Hover a capsule to see the whole timeline of goals, cards and substitutions, and choose small, medium or large.
+Pin a live match of a team you follow and its score floats in the top-right corner. Drag it anywhere and it snaps to the nearest corner; pin several and they stack without overlapping. Click a capsule to see the whole timeline of goals, cards and substitutions (click again to shrink it), right-click to unpin, and choose small, medium or large.
 
 ### 🎉 Goal celebrations
 
