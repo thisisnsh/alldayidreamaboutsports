@@ -120,11 +120,6 @@ enum AppAnalytics {
         log("app_quit", ["source": source])
     }
 
-    /// The menu's My Teams / All Teams switch.
-    static func fixtureScopeChanged(_ value: String) {
-        log("fixture_scope_changed", ["value": value])
-    }
-
     // MARK: Capsules
 
     static func capsulePinned(fixtureId: Int) {

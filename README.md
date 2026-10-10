@@ -82,9 +82,9 @@ Pin a live match of a team you follow and its score stays in the top-right corne
 
 When your team scores, your team's crest, a few footballs and confetti burst from the bottom corners of the screen, out of the way of whatever you're doing. Hit **Preview goal confetti** in Settings to see one any time.
 
-### 🏟️ Your teams, or every match
+### 🏟️ Just your teams
 
-The **My Teams** tab shows today's fixtures for the clubs you follow. The **All Teams** tab shows the full matchday across all five leagues.
+The menu shows today's fixtures for the clubs you follow, and nothing else.
 
 ### ⏱️ A clock that knows football
 

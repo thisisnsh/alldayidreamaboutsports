@@ -162,14 +162,11 @@ struct ToolbarIconButton: View {
     }
 }
 
-/// Today's matches grouped by state, with followed teams along the bottom.
+/// Today's matches for the followed teams, grouped by state, with those teams
+/// along the bottom.
 struct HomePage: View {
     @EnvironmentObject var session: AppSession
     @ObservedObject private var router = PopoverRouter.shared
-    /// Which slice of today the fixture list shows. Stored locally rather than
-    /// in `prefs` — it's a view preference for this Mac, not synced state, and
-    /// the menu rebuilds its view on every open so it has to outlive that.
-    @AppStorage("menuFixtureScope", store: AppDefaults.shared) private var fixtureScope: FixtureScope = .mine
     /// The one row (or Now card) showing its timeline.
     @State private var expanded: Int?
     /// Natural heights of the three parts, for `PopoverRouter.homeFit`.
@@ -204,9 +201,6 @@ struct HomePage: View {
             } else {
                 Text("Today").font(.system(size: 15, weight: .bold, design: .rounded))
                 Spacer()
-                PillPicker(options: FixtureScope.allCases, selection: $fixtureScope, label: \.label) {
-                    AppAnalytics.fixtureScopeChanged($0.rawValue)
-                }
                 ToolbarIconButton(symbol: "gearshape", help: "Settings") { router.go(.settings) }
                 ToolbarIconButton(symbol: "power", help: "Quit") { router.askToQuit() }
             }
@@ -250,7 +244,7 @@ struct HomePage: View {
         if shownFixtures.isEmpty {
             VStack(spacing: 10) {
                 Spacer()
-                if fixtureScope == .mine, session.fanTeamIds.isEmpty {
+                if session.fanTeamIds.isEmpty {
                     Image(systemName: "heart.circle").font(.system(size: 28)).foregroundStyle(.secondary)
                     Text("Follow a team to see its matches").font(.system(size: 13, weight: .medium))
                     Button("Choose teams") { PopoverRouter.shared.go(.teams) }
@@ -264,10 +258,6 @@ struct HomePage: View {
                     retryButton
                 } else {
                     Text(emptyMessage).font(.system(size: 13)).foregroundStyle(.secondary)
-                    if fixtureScope == .mine, session.hasFixturesToday {
-                        Button("View all matches") { fixtureScope = .all }
-                            .buttonStyle(.cardButton)
-                    }
                 }
                 Spacer()
             }
@@ -281,16 +271,13 @@ struct HomePage: View {
                             Task { await session.refreshFixtures() }
                         }
                     }
-                    fixtureSection("Live", fixtures: followedFixtures.filter { $0.isLive }, liveCards: true)
-                    fixtureSection("Upcoming", fixtures: followedFixtures.filter {
+                    fixtureSection("Live", fixtures: shownFixtures.filter { $0.isLive }, liveCards: true)
+                    fixtureSection("Upcoming", fixtures: shownFixtures.filter {
                         !$0.isLive && $0.status != "FINISHED" && !$0.isCalledOff && ($0.kickoff ?? .distantPast) > Date()
                     })
-                    fixtureSection("Finished", fixtures: followedFixtures.filter { $0.status == "FINISHED" })
-                    fixtureSection("Match updates", fixtures: followedFixtures.filter {
+                    fixtureSection("Finished", fixtures: shownFixtures.filter { $0.status == "FINISHED" })
+                    fixtureSection("Match updates", fixtures: shownFixtures.filter {
                         !$0.isLive && $0.status != "FINISHED" && ($0.isCalledOff || ($0.kickoff ?? .distantPast) <= Date())
-                    })
-                    fixtureSection("Other matches · schedule only", fixtures: shownFixtures.filter {
-                        !$0.involves(session.fanTeamIds)
                     })
                 }
                 .padding(.horizontal, 8)
@@ -310,10 +297,6 @@ struct HomePage: View {
         }
     }
 
-    private var followedFixtures: [Fixture] {
-        shownFixtures.filter { $0.involves(session.fanTeamIds) }
-    }
-
     @ViewBuilder private func fixtureSection(_ title: String, fixtures: [Fixture], liveCards: Bool = false) -> some View {
         if !fixtures.isEmpty {
             VStack(alignment: .leading, spacing: 6) {
@@ -324,7 +307,7 @@ struct HomePage: View {
                     if liveCards {
                         NowCard(fixture: fixture, expanded: $expanded)
                     } else {
-                        FixtureRow(fixture: fixture, live: fixture.involves(session.fanTeamIds), expanded: $expanded)
+                        FixtureRow(fixture: fixture, expanded: $expanded)
                     }
                 }
             }
@@ -339,18 +322,12 @@ struct HomePage: View {
 
     private static let fadeHeight: CGFloat = 10
 
-    private var shownFixtures: [Fixture] {
-        switch fixtureScope {
-        case .mine: return session.fixtures
-        case .all: return session.todayFixtures
-        }
-    }
+    private var shownFixtures: [Fixture] { session.fixtures }
 
     /// Nothing to list: either football is off entirely today, or it's on but
-    /// none of it is theirs (only reachable in "My Teams").
+    /// none of it is theirs.
     private var emptyMessage: String {
-        if session.fanTeamIds.isEmpty, fixtureScope == .mine { return "Follow a team to see its matches" }
-        return session.hasFixturesToday
+        session.hasFixturesToday
             ? "None of your teams play today 💤"
             : "No matches today — rest day ☁️"
     }
@@ -386,23 +363,8 @@ struct HomePage: View {
     }
 }
 
-/// Which of today's matches the menu lists: only the followed teams' (the
-/// default), or the whole day across every league. Both come out of the one
-/// schedule file the app already downloads — "All Teams" adds no fetching.
-enum FixtureScope: String, CaseIterable {
-    case mine
-    case all
-
-    var label: String {
-        switch self {
-        case .mine: return "My Teams"
-        case .all: return "All Teams"
-        }
-    }
-}
-
-/// A compact two-or-more segment switch for a header row ("My Teams | All
-/// Teams", "All | Following"). Hand-rolled rather than
+/// A compact two-or-more segment switch for a header row ("All |
+/// Following"). Hand-rolled rather than
 /// `.pickerStyle(.segmented)`: at caption size AppKit's segmented control
 /// brings chrome (and a fixed height) far too heavy for a menu row.
 struct PillPicker<Option: Hashable>: View {
@@ -574,13 +536,6 @@ private struct TimelineEventLine: View {
 
 private struct FixtureRow: View {
     let fixture: Fixture
-    /// Whether this row may show live state — score, minute, FT
-    /// tally. Only a followed team's match can: `LiveStore` polls `session.fixtures` alone,
-    /// and `fixtures-{date}.json` is schedule data by construction (goals
-    /// zeroed, status forced to SCHEDULED — see `toScheduleRow` in the
-    /// backend's poller). A schedule row is teams + kickoff time, nothing else;
-    /// showing it a "0 – 0" would be inventing a scoreline.
-    var live: Bool = true
     @Binding var expanded: Int?
     @EnvironmentObject var session: AppSession
     @ObservedObject private var capsules = PinnedCapsuleManager.shared
@@ -588,9 +543,6 @@ private struct FixtureRow: View {
 
     private var isPinned: Bool { capsules.isPinned(fixture.fixtureId) }
     private var isExpanded: Bool { expanded == fixture.fixtureId }
-    /// A capsule reads `session.fixtures`, so only a followed team's match can
-    /// be pinned — and only from a row that's actually showing live state.
-    private var pinnable: Bool { live && fixture.involves(session.fanTeamIds) }
 
     var body: some View {
         // Clicking a row opens its timeline (and the pin) in place. The detail
@@ -645,10 +597,10 @@ private struct FixtureRow: View {
     }
 
     /// What opens under the row: the timeline once there's play to show, the
-    /// kickoff otherwise, and the pin for a followed match.
+    /// kickoff otherwise, and the pin.
     @ViewBuilder private var detail: some View {
         VStack(alignment: .leading, spacing: 6) {
-            let timeline = live ? capsuleTimeline(for: fixture) : []
+            let timeline = capsuleTimeline(for: fixture)
             if !timeline.isEmpty {
                 VStack(alignment: .leading, spacing: 4) {
                     ForEach(timeline) { TimelineEventLine(row: $0) }
@@ -656,37 +608,17 @@ private struct FixtureRow: View {
             } else if let note = detailNote {
                 Text(note).font(.system(size: 12)).foregroundStyle(.secondary)
             }
-            if !live {
-                HStack {
-                    followButton(fixture.home)
-                    followButton(fixture.away)
-                }
+            Button {
+                capsules.toggle(fixtureId: fixture.fixtureId)
+            } label: {
+                Label(isPinned ? "Unpin from screen" : "Pin to screen", systemImage: "pin.fill")
             }
-            if pinnable {
-                Button {
-                    capsules.toggle(fixtureId: fixture.fixtureId)
-                } label: {
-                    Label(isPinned ? "Unpin from screen" : "Pin to screen", systemImage: "pin.fill")
-                }
-                .buttonStyle(.cardButton)
-            }
+            .buttonStyle(.cardButton)
         }
-    }
-
-    private func followButton(_ team: ScoreboardTeam) -> some View {
-        Button("Follow \(shortName(team))") {
-            session.setFanTeams(session.prefs.fanTeamIds + [String(team.id)])
-        }
-        .buttonStyle(.cardButton)
-        .accessibilityLabel("Follow \(team.name) for live scores and alerts")
     }
 
     private var detailNote: String? {
         let kickoff = fixture.kickoff.map { $0.formatted(date: .omitted, time: .shortened) }
-        if !live {
-            let when = kickoff.map { "Scheduled for \($0). " } ?? ""
-            return when + "Follow either team for live scores and alerts."
-        }
         switch fixture.status {
         case "SCHEDULED":
             if (fixture.kickoff ?? .distantFuture) <= Date() {
@@ -708,18 +640,14 @@ private struct FixtureRow: View {
     }
 
     private var score: String {
-        if !live || fixture.status == "SCHEDULED" { return "vs" }
+        if fixture.status == "SCHEDULED" { return "vs" }
         return fixture.scorelineText
     }
 
     /// The right edge is always about time: minute when live, kickoff time
     /// when scheduled, FT when done.
     @ViewBuilder private var trailing: some View {
-        if !live {
-            if let kickoff = fixture.kickoff {
-                Text(kickoff, style: .time).font(.system(size: 12)).foregroundStyle(.secondary)
-            }
-        } else if fixture.isLive {
+        if fixture.isLive {
             LiveMatchStatus(fixture: fixture)
         } else if fixture.status == "FINISHED" {
             Text("FT").font(.system(size: 12, weight: .semibold)).foregroundStyle(.green)

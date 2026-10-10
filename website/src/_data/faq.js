@@ -51,10 +51,6 @@ const home = [
     a: "The upcoming Mac App Store version will receive updates through the App Store. Direct downloads and the old Sparkle update feed have been retired.",
   },
   {
-    q: "Can I see every match, not just my teams?",
-    a: "Yes. The menu has a My Teams tab for today's fixtures involving the clubs you follow, and an All Teams tab for every match across all five leagues, with matchday labels per league. Both read the same file, so switching costs nothing.",
-  },
-  {
     q: "Is it affiliated with FIFA?",
     a: "No. It is not affiliated with FIFA or any league, club or brand. Team names and crests are used only to identify the matches you choose to follow.",
   },
@@ -69,7 +65,7 @@ function forLeague(league) {
   const isCup = league.type === "Cup";
   const covers = isCup
     ? `The nations from the ${L} are saved in the app, and the results and events from the tournament are all handled by the same engine - extra time, penalty shootouts and aggregate scoring included.`
-    : `Yes - every ${L} fixture in the season. Follow a club or the whole league, and the All Teams tab shows the full ${L} matchday.`;
+    : `Yes - every ${L} fixture in the season. Follow the clubs you care about and the menu shows their ${L} matches.`;
 
   return [
     {
