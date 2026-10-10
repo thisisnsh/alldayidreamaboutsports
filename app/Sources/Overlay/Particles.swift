@@ -1,6 +1,7 @@
 import SwiftUI
 
-/// Goal confetti: footballs and the scoring team's crest bursting from the
+/// Goal confetti: the scoring team's crest, a few footballs and paper
+/// confetti bursting from the
 /// bottom-left and bottom-right corners when a fan team scores. Stays in the
 /// corners and out of the middle of the screen, so it never covers what the
 /// user is doing.
@@ -13,7 +14,7 @@ struct ConfettiView: View {
     @State private var start = Date()
     @ObservedObject private var logos = TeamLogoStore.shared
 
-    private enum Kind { case ball, crest }
+    private enum Kind { case ball, crest, paper }
 
     private struct Particle {
         let kind: Kind
@@ -21,6 +22,8 @@ struct ConfettiView: View {
         let velocity: CGVector
         let spin: Double
         let size: CGFloat
+        /// Paper confetti only.
+        let color: Color
         let delay: Double
     }
 
@@ -61,7 +64,9 @@ struct ConfettiView: View {
                     ctx.translateBy(x: x, y: y)
                     ctx.rotate(by: .radians(p.spin * t))
                     let box = CGRect(x: -p.size / 2, y: -p.size / 2, width: p.size, height: p.size)
-                    if p.kind == .crest, let crestImage {
+                    if p.kind == .paper {
+                        ctx.fill(Path(CGRect(x: -p.size / 2, y: -p.size / 4, width: p.size, height: p.size / 2)), with: .color(p.color))
+                    } else if p.kind == .crest, let crestImage {
                         ctx.draw(crestImage, in: Self.aspectFit(crestImage.size, in: box))
                     } else {
                         // White disc under the black glyph so the ball reads
@@ -84,6 +89,11 @@ struct ConfettiView: View {
         return CGRect(x: box.midX - w / 2, y: box.midY - h / 2, width: w, height: h)
     }
 
+    /// Per corner: mostly crests, a few footballs, and paper confetti around them.
+    private static let mix: [Kind] =
+        Array(repeating: .crest, count: 14) + Array(repeating: .ball, count: 4) + Array(repeating: .paper, count: 30)
+    private static let paperColors: [Color] = [.yellow, .green, .blue, .pink, .orange, .white, .red]
+
     private static func makeBursts(in size: CGSize) -> [Particle] {
         var all: [Particle] = []
         // Spawn just outside the bottom-left and bottom-right corners; mostly
@@ -94,15 +104,16 @@ struct ConfettiView: View {
             (CGPoint(x: size.width + 24, y: size.height + 24), -1.0),
         ]
         for (corner, dir) in corners {
-            for i in 0..<18 {
+            for kind in mix {
                 let angle = Double.random(in: 1.05...1.5) // steep: up, barely inward
                 let speed = Double.random(in: 300...580)
                 all.append(Particle(
-                    kind: i.isMultiple(of: 2) ? .crest : .ball,
+                    kind: kind,
                     origin: corner,
                     velocity: CGVector(dx: cos(angle) * speed * dir, dy: -sin(angle) * speed),
-                    spin: Double.random(in: -4...4),
-                    size: CGFloat.random(in: 22...36),
+                    spin: Double.random(in: kind == .paper ? -6...6 : -4...4),
+                    size: kind == .paper ? CGFloat.random(in: 10...16) : CGFloat.random(in: 22...36),
+                    color: paperColors.randomElement()!,
                     delay: Double.random(in: 0...0.5)
                 ))
             }
