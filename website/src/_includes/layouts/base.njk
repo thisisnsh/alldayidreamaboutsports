@@ -9,7 +9,8 @@
   {% if keywords %}<meta name="keywords" content="{{ keywords }}" />{% endif %}
   <meta name="author" content="{{ site.name }}" />
   <meta name="robots" content="{% if noindex %}noindex, follow{% else %}index, follow, max-image-preview:large{% endif %}" />
-  <meta name="theme-color" content="#000000" />
+  <meta name="theme-color" content="#176447" />
+  <meta name="color-scheme" content="light" />
   <meta name="apple-mobile-web-app-title" content="{{ site.shortName }}" />
   <link rel="canonical" href="{{ site.url }}{{ page.url }}" />
   <link rel="alternate" hreflang="en" href="{{ site.url }}{{ page.url }}" />
@@ -49,17 +50,15 @@
   <!-- Own stylesheet first: it's render-blocking by necessity, the webfont is not -->
   <link rel="stylesheet" href="/style.css" />
 
-  <!-- Rounded webfont as a cross-platform fallback for SF Pro Rounded (Mac renders the system
-       font natively, so this must never block the first paint) -->
+  <!-- Condensed sports headlines; the system fallback keeps first paint fast. -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" media="print" onload="this.media='all'; this.onload=null"
-        href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800&display=swap" />
-  <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800&display=swap" /></noscript>
+        href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800&display=swap" />
+  <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800&display=swap" /></noscript>
 
-  <!-- reveal-on-scroll is a progressive enhancement; without JS the content
-       must still be visible rather than sitting at opacity 0 forever. -->
-  <noscript><style>.reveal{opacity:1;transform:none}</style></noscript>
+  <!-- Navigation and content remain usable without JavaScript. -->
+  <noscript><style>.nav{position:static}.content{padding-top:0}</style></noscript>
 
   <!-- Structured data -->
   <script type="application/ld+json">
@@ -126,7 +125,7 @@
         ]
       },
       {% endif %}
-      {
+      {% if page.url == '/' %}{
         "@type": "VideoObject",
         "@id": "{{ site.url }}/#demo",
         "name": {{ site.youtube.title | dump | safe }},
@@ -136,8 +135,8 @@
         "embedUrl": "{{ site.youtube.embed }}",
         "contentUrl": "{{ site.youtube.watch }}",
         "publisher": { "@id": "{{ site.url }}/#org" },
-        "isPartOf": { "@id": "{{ site.url }}{{ page.url }}#webpage" }
-      },
+        "isPartOf": { "@id": "{{ site.url }}/#webpage" }
+      },{% endif %}
       {
         "@type": "SoftwareApplication",
         "@id": "{{ site.url }}/#app",
@@ -182,9 +181,10 @@
   </script>
 </head>
 <body>
+  <a class="skip-link" href="#top">Skip to content</a>
   {% include "partials/nav.njk" %}
 
-  <main class="content" id="top">
+  <main class="content" id="top" tabindex="-1">
     {{ content | safe }}
   </main>
 

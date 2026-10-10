@@ -1,14 +1,20 @@
-<section class="hero" aria-labelledby="hero-h">
-  <div class="wrap">
+<section class="hero{% if heroHome %} hero-home{% endif %}" aria-labelledby="hero-h">
+  <div class="wrap{% if heroHome %} hero-layout{% endif %}">
+    <div class="hero-copy">
     {% include "partials/breadcrumbs.njk" %}
     {% if heroCrest %}<img class="hero-crest reveal" src="{{ heroCrest }}" alt="" width="72" height="72" fetchpriority="high" decoding="async" />{% endif %}
     {% if heroMicro %}<p class="micro reveal">{{ heroMicro }}</p>{% endif %}
     <h1 class="display reveal d1" id="hero-h">{{ heroTitle | safe }}</h1>
     <p class="body reveal d2">{{ heroBody | safe }}</p>
     <div class="actions reveal d3">
-      <a class="btn btn-primary" href="{{ site.downloadUrl }}"><span class="apple" aria-hidden="true"></span>Download now</a>
+      <a class="btn btn-primary" href="{{ site.downloadUrl }}"><span class="apple" aria-hidden="true"></span>Coming to the App Store</a>
       <a class="btn btn-ghost" href="/#demo">Watch the demo</a>
     </div>
-    <span class="meta-note reveal d3">Launching on the App Store · Free · {{ site.requiresShort }}</span>
+    <span class="meta-note reveal d3">Free for {{ site.requiresShort }} · Built for football fans</span>
+    {% if heroHome %}
+    <div class="hero-proof"><span><b>5</b> European leagues</span><span><b>14</b> match event types</span><span><b>Free</b> No subscription</span></div>
+    {% endif %}
+    </div>
+    {% if heroHome %}{% include "partials/app-preview.njk" %}{% endif %}
   </div>
 </section>

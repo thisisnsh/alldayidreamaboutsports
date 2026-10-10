@@ -121,6 +121,14 @@ const titles = new Map();
 const descs = new Map();
 const internalLinks = new Map(); // href → the pages that link to it
 const noindex = new Set();
+const fragments = new Map(htmlFiles.map((file) => {
+  const rel = "/" + relative(SITE, file);
+  const url = rel.endsWith("/index.html") ? rel.slice(0, -"index.html".length) : rel;
+  const html = readFileSync(file, "utf8");
+  const ids = [...html.matchAll(/\bid="([^"]+)"/g)].map((m) => m[1]);
+  check(new Set(ids).size === ids.length, `${url}: duplicate element ids`);
+  return [url, new Set(ids)];
+}));
 
 for (const file of htmlFiles) {
   const rel = "/" + relative(SITE, file);
@@ -133,7 +141,7 @@ for (const file of htmlFiles) {
 
   check(!html.includes(EM_DASH), `${url}: contains an em dash`);
   check(!/\blive scores?\b/i.test(html), `${url}: implies that the website shows live scores`);
-  for (const match of html.matchAll(/<a\b[^>]*href="([^"]+)"[^>]*>(?:(?!<\/a>)[\s\S])*?Download now<\/a>/g)) {
+  for (const match of html.matchAll(/<a\b[^>]*href="([^"]+)"[^>]*>(?:(?!<\/a>)[\s\S])*?(?:Download now|Coming to the App Store|Coming soon)<\/a>/g)) {
     check(match[1] === "/comingsoon/", `${url}: download button does not point to coming soon`);
   }
 
@@ -163,7 +171,9 @@ for (const file of htmlFiles) {
   for (const m of html.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)) {
     try {
       const graph = JSON.parse(m[1])["@graph"];
-      check(Array.isArray(graph) && graph.length >= 6, `${url}: @graph looks short`);
+      check(Array.isArray(graph) && graph.length >= 5, `${url}: @graph looks short`);
+      const hasVideo = graph.some((node) => node["@type"] === "VideoObject");
+      check(hasVideo === (url === "/"), `${url}: video schema must describe the homepage's visible demo`);
     } catch (e) {
       fail.push(`${url}: JSON-LD does not parse - ${e.message}`);
     }
@@ -178,6 +188,14 @@ for (const file of htmlFiles) {
     const href = m[1];
     if (!internalLinks.has(href)) internalLinks.set(href, new Set());
     internalLinks.get(href).add(url);
+  }
+
+  for (const m of html.matchAll(/href="((?:\/[^"#?]*)?)#([^"]+)"/g)) {
+    const target = m[1] || url;
+    check(fragments.get(target)?.has(m[2]), `${url}: broken section link ${m[1]}#${m[2]}`);
+  }
+  for (const m of html.matchAll(/<img\b[^>]*src="(\/[^"]+)"/g)) {
+    check(existsSync(join(SITE, m[1])), `${url}: missing image ${m[1]}`);
   }
 }
 

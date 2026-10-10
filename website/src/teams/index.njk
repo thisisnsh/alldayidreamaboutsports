@@ -5,6 +5,7 @@ title: "Follow Teams and Leagues on Mac - Free Match Alerts"
 description: "Goal and match alerts on your Mac for clubs across Europe's top leagues and national teams from the World Cup. Pick your team, keep working. Free for macOS."
 keywords: "follow your team on Mac, football match alerts Mac, club goal alerts macOS, football notifications, follow team free"
 pageName: "Every team you can follow"
+teamDirectory: true
 heroMicro: "Teams and leagues"
 heroTitle: "Follow your team.<br />Free, and out of the <em>way</em>."
 heroBody: "Clubs across the Premier League, La Liga, Serie A, Bundesliga and Ligue 1, plus national teams from the World Cup. Choose the ones you care about in the app."
@@ -24,6 +25,21 @@ crumbs:
   </div>
 </section>
 
+<section class="directory-tools" aria-labelledby="directory-h">
+  <div class="wrap">
+    <p class="micro">Find your side</p>
+    <h2 class="section-h" id="directory-h">Your club is in good company.</h2>
+    <div class="team-search" hidden>
+      <label for="team-search">Search teams</label>
+      <input id="team-search" type="search" placeholder="Try Arsenal, Barcelona or Germany" autocomplete="off" aria-controls="team-directory" />
+      <p class="search-count" id="search-count" role="status" aria-live="polite"></p>
+    </div>
+    <nav class="league-jumps" aria-label="Jump to a competition">
+      {% for l in leagues %}<a href="#l-{{ l.slug }}">{{ l.name }} <span aria-hidden="true">↘</span></a>{% endfor %}
+    </nav>
+  </div>
+</section>
+<div id="team-directory">
 {% for l in leagues %}
 {% set gridTeams = teams | where("leagueId", l.id) %}
 {% set gridId = "l-" + l.slug %}
@@ -34,6 +50,7 @@ crumbs:
 {% include "partials/team-grid.njk" %}
 <p class="backline"><a href="/{{ l.slug }}/">Follow the {{ l.name }} →</a></p>
 {% endfor %}
+</div>
 
 {% set ctaHeading = "Pick your team.<br />Get on with your <em>day</em>." %}
 {% include "partials/cta.njk" %}

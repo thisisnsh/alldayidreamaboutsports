@@ -23,3 +23,12 @@ See the [root README](../README.md) for the app, backend and architecture.
 The homepage demo is an embedded YouTube player. All download buttons lead to
 `/comingsoon/` while the Mac App Store launch is pending; the website no longer
 requests media or installers from the retired R2 download buckets.
+
+The shared design uses warm white surfaces, pitch green and orange accents.
+The homepage preview is an illustrative HTML/CSS composition; the embedded
+video shows the actual app. The team directory supports name, catalog name,
+team code and league searches, with accent-insensitive matching. All team
+links and league shortcuts remain available without JavaScript.
+
+`npm run verify` checks titles, descriptions, canonicals, structured data,
+sitemap coverage, internal links, section links, images and orphaned pages.
