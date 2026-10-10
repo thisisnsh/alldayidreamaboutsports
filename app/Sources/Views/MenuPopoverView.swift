@@ -384,7 +384,7 @@ struct HomePage: View {
     private static let placeholderLimit = 12
 
     private static let bottomFade = LinearGradient(
-        stops: [.init(color: .black, location: 0), .init(color: .black, location: 0.4), .init(color: .clear, location: 1)],
+        stops: [.init(color: .black, location: 0), .init(color: .black, location: 0.6), .init(color: .clear, location: 1)],
         startPoint: .top, endPoint: .bottom
     )
 
@@ -650,10 +650,10 @@ private struct PlaceholderRow: View {
             }
             bar(width: 120)
         }
-        .foregroundStyle(Color.primary.opacity(0.07))
+        .foregroundStyle(Color.primary.opacity(0.14))
         .padding(.horizontal, 8)
         .frame(height: Self.height)
-        .opacity(max(0.25, 1 - Double(index) * 0.12))
+        .opacity(max(0.5, 1 - Double(index) * 0.06))
         .accessibilityHidden(true)
     }
 
