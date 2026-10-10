@@ -350,7 +350,7 @@ final class NotchIsland: ObservableObject {
     }
 
     private func makePanel() -> NSPanel {
-        let panel = NSPanel(
+        let panel = IslandPanel(
             contentRect: CGRect(origin: .zero, size: Self.panelSize),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
@@ -375,9 +375,19 @@ final class NotchIsland: ObservableObject {
         // The panel's frame is ours and fixed; never let the hosting view
         // drive window constraints off the animating island.
         hostingView.sizingOptions = []
+        // The panel overlaps the notch, so macOS gives it a top safe-area
+        // inset the notch's height — and SwiftUI would push the island down
+        // below the notch. The island must start at the screen's top edge.
+        hostingView.safeAreaRegions = []
         panel.contentView = hostingView
         return panel
     }
+}
+
+/// AppKit may nudge a window's frame off the menu bar / notch area; the
+/// island has to sit flush with the screen's top edge.
+private final class IslandPanel: NSPanel {
+    override func constrainFrameRect(_ frameRect: NSRect, to screen: NSScreen?) -> NSRect { frameRect }
 }
 
 /// Takes the first click even though the panel never becomes key, so a
@@ -392,6 +402,7 @@ private struct NotchIslandRoot: View {
     var body: some View {
         NotchIslandView()
             .frame(width: NotchIsland.panelSize.width, height: NotchIsland.panelSize.height, alignment: .top)
+            .ignoresSafeArea()
             .environment(\.colorScheme, .dark)
     }
 }
