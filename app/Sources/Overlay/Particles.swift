@@ -8,6 +8,8 @@ struct ConfettiView: View {
     let size: CGSize
     /// The scoring team's crest; pieces fall back to footballs until it loads.
     let logo: String
+    /// Fixed at first init — the burst token is created and shown in the
+    /// same tick, so this is when the burst appears.
     @State private var start = Date()
     @ObservedObject private var logos = TeamLogoStore.shared
 
@@ -22,7 +24,16 @@ struct ConfettiView: View {
         let delay: Double
     }
 
-    @State private var particles: [Particle] = []
+    /// Built in `init`, not `onAppear`: a write from `onAppear` never reaches
+    /// the TimelineView's content, so the Canvas kept drawing an empty list
+    /// and no confetti ever showed.
+    @State private var particles: [Particle]
+
+    init(size: CGSize, logo: String) {
+        self.size = size
+        self.logo = logo
+        _particles = State(initialValue: Self.makeBursts(in: size))
+    }
 
     /// Weak gravity lets pieces float up out of the corners and hang briefly
     /// instead of streaking across; the burst is gone in under four seconds.
@@ -64,13 +75,6 @@ struct ConfettiView: View {
             }
         }
         .allowsHitTesting(false)
-        .onAppear {
-            // Reset the clock HERE, not at init: if the view is created
-            // before it appears, particles would start mid-trajectory —
-            // that's the "confetti not starting from the bottom" bug.
-            start = Date()
-            particles = Self.makeBursts(in: size)
-        }
     }
 
     private static func aspectFit(_ image: CGSize, in box: CGRect) -> CGRect {
