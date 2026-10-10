@@ -80,7 +80,7 @@ Pin a live match of a team you follow and its score stays in the top-right corne
 
 ### 🎉 Goal celebrations
 
-When your team scores, the goal takes over the screen on a transparent overlay. Tap the ball for more. Hit **Preview goal animation** in Settings to see one any time.
+When your team scores, footballs and your team's crest burst from the bottom corners of the screen, out of the way of whatever you're doing. Hit **Preview goal confetti** in Settings to see one any time.
 
 ### 🏟️ Your teams, or every match
 
