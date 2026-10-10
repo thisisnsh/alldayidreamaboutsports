@@ -153,6 +153,9 @@ struct OnboardingView: View {
             Button("Get started", action: advance)
                 .buttonStyle(.primaryPill)
                 .keyboardShortcut(.defaultAction)
+            Text("No account needed.")
+                .font(.system(size: 12))
+                .opacity(0.5)
             Spacer()
         }
         .padding(28)
@@ -164,7 +167,7 @@ struct OnboardingView: View {
                     "Pick as many teams as you like. You can change them any time from the menu bar.")
             TeamSearchField(query: $query)
             ScrollView {
-                TeamLeagueList(query: query, columns: 6)
+                TeamLeagueList(query: query, columns: 5)
                     .padding(.vertical, 8)
                     .padding(.horizontal, 2)
             }
@@ -298,7 +301,9 @@ struct OnboardingView: View {
                     .buttonStyle(.primaryPill)
                     .keyboardShortcut(.defaultAction)
             case .hello:
-                Text("Tap the ball").font(.system(size: 12)).opacity(0.5)
+                Link("Privacy policy", destination: URL(string: "https://alldayidreamaboutsports.com/privacy/")!)
+                    .font(.system(size: 12))
+                    .opacity(0.6)
             case .done:
                 Text("This window won't open again").font(.system(size: 12)).opacity(0.5)
             }

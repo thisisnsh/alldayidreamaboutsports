@@ -67,7 +67,7 @@ struct TeamSearchField: View {
 }
 
 /// Every league's team grid, filtered by `query`. Shared by the popover's
-/// Teams page (4 compact columns) and onboarding (6 columns). Every league is
+/// Teams page (4 compact columns) and onboarding (5 columns). Every league is
 /// followable, at full opacity — a finished competition is badged "Ended" and
 /// one that hasn't started "Coming soon", but those are labels, not gates.
 struct TeamLeagueList: View {
