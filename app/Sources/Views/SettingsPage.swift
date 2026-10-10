@@ -132,10 +132,7 @@ struct SettingsPage: View {
                 }
             }
             .buttonStyle(.cardButton)
-            Button {
-                AppAnalytics.appQuit(source: "settings")
-                NSApp.terminate(nil)
-            } label: {
+            Button { PopoverRouter.shared.askToQuit() } label: {
                 Label("Quit app", systemImage: "power")
             }
             .buttonStyle(.hoverHighlight)

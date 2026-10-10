@@ -114,7 +114,7 @@ enum AppAnalytics {
         log("review_requested", ["wins": wins])
     }
 
-    /// Every Quit in the app. `source` says which one: `menu` (the popover header) or
+    /// Every Quit in the app. `source` says which one: `menu` (the popover's confirmed Quit) or
     /// `status_menu` (the status item's right-click menu).
     static func appQuit(source: String) {
         log("app_quit", ["source": source])

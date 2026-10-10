@@ -245,12 +245,21 @@ final class MenuPopoverController: NSObject, NSPopoverDelegate {
             self?.close()
         }
         // A menu bar app has no main menu to carry shortcuts, so the popover
-        // handles its own: ⌘, opens Settings, Esc steps back to the matches
-        // (and only closes the popover from there).
+        // handles its own: ⌘, opens Settings, ⌘Q asks to quit, Esc cancels
+        // that or steps back to the matches (and only closes the popover
+        // from there).
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
             let router = PopoverRouter.shared
             if event.modifierFlags.contains(.command), event.charactersIgnoringModifiers == "," {
                 router.go(.settings)
+                return nil
+            }
+            if event.modifierFlags.contains(.command), event.charactersIgnoringModifiers == "q" {
+                router.askToQuit()
+                return nil
+            }
+            if event.keyCode == 53, router.confirmingQuit { // Esc
+                withAnimation(.easeOut(duration: 0.15)) { router.confirmingQuit = false }
                 return nil
             }
             if event.keyCode == 53, router.page != .home { // Esc

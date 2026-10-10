@@ -21,9 +21,12 @@ final class PopoverRouter: ObservableObject {
     /// How tall the home page wants to be to show all its matches without
     /// scrolling, as last measured. nil until it first lays out.
     @Published var homeFit: CGFloat?
+    /// The home header is asking "Quit the app?" in place of its controls.
+    @Published var confirmingQuit = false
 
     func go(_ page: PopoverPage) {
         guard page != self.page else { return }
+        confirmingQuit = false
         forward = page != .home
         withAnimation(.easeOut(duration: 0.2)) { self.page = page }
         switch page {
@@ -39,9 +42,18 @@ final class PopoverRouter: ObservableObject {
         }
     }
 
+    /// Ask before quitting: brings up the home header's confirmation. Inline
+    /// rather than an alert — an alert window takes focus and the transient
+    /// popover would close underneath it.
+    func askToQuit() {
+        go(.home)
+        withAnimation(.easeOut(duration: 0.15)) { confirmingQuit = true }
+    }
+
     /// Jump without animation — used just before the popover shows, so it
     /// never opens mid-slide.
     func reset(to page: PopoverPage = .home) {
+        confirmingQuit = false
         forward = true
         self.page = page
     }
@@ -153,6 +165,7 @@ struct ToolbarIconButton: View {
 /// Today's matches grouped by state, with followed teams along the bottom.
 struct HomePage: View {
     @EnvironmentObject var session: AppSession
+    @ObservedObject private var router = PopoverRouter.shared
     /// Which slice of today the fixture list shows. Stored locally rather than
     /// in `prefs` — it's a view preference for this Mac, not synced state, and
     /// the menu rebuilds its view on every open so it has to outlive that.
@@ -186,17 +199,51 @@ struct HomePage: View {
 
     private var header: some View {
         HStack(spacing: 6) {
-            Text("Today").font(.system(size: 15, weight: .bold, design: .rounded))
-            Spacer()
-            PillPicker(options: FixtureScope.allCases, selection: $fixtureScope, label: \.label) {
-                AppAnalytics.fixtureScopeChanged($0.rawValue)
+            if router.confirmingQuit {
+                quitConfirmation
+            } else {
+                Text("Today").font(.system(size: 15, weight: .bold, design: .rounded))
+                Spacer()
+                PillPicker(options: FixtureScope.allCases, selection: $fixtureScope, label: \.label) {
+                    AppAnalytics.fixtureScopeChanged($0.rawValue)
+                }
+                ToolbarIconButton(symbol: "gearshape", help: "Settings") { router.go(.settings) }
+                ToolbarIconButton(symbol: "power", help: "Quit") { router.askToQuit() }
             }
-            ToolbarIconButton(symbol: "gearshape", help: "Settings") { PopoverRouter.shared.go(.settings) }
         }
+        // Same height either way, so confirming never resizes the popover.
+        .frame(height: 26)
         .padding(.leading, 16)
         .padding(.trailing, 10)
         .padding(.top, 12)
         .padding(.bottom, 8)
+    }
+
+    /// Replaces the header's controls until answered. Return quits, Esc
+    /// cancels.
+    @ViewBuilder private var quitConfirmation: some View {
+        // Shared baseline: centered on its own, the smaller text sits high.
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Text("Quit the app?").font(.system(size: 13, weight: .semibold))
+            Text("Alerts will stop.")
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        }
+        Spacer(minLength: 4)
+        Button("Cancel") {
+            withAnimation(.easeOut(duration: 0.15)) { router.confirmingQuit = false }
+        }
+        .buttonStyle(.hoverHighlight)
+        .keyboardShortcut(.cancelAction)
+        Button {
+            AppAnalytics.appQuit(source: "menu")
+            NSApp.terminate(nil)
+        } label: {
+            Text("Quit").fontWeight(.semibold).foregroundStyle(.red)
+        }
+        .buttonStyle(.hoverHighlight)
+        .keyboardShortcut(.defaultAction)
     }
 
     @ViewBuilder private var fixturesList: some View {
