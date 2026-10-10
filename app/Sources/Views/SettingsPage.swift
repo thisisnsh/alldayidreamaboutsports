@@ -436,11 +436,12 @@ private struct LaunchTestControls: View {
             .buttonStyle(.cardButton)
             Button("App opened again") {
                 MenuPopoverController.shared.close()
-                MenuPopoverController.shared.showOnOpen()
+                // A beat with the popover gone, like a real relaunch.
+                MenuPopoverController.shared.showOnOpen(after: 0.8)
             }
             .buttonStyle(.cardButton)
         }
-        Text("Welcome screen is the first-run setup. App opened again is what a set-up user sees on opening the app from Finder or Spotlight.")
+        Text("Welcome screen is the first-run setup. App opened again is what a set-up user sees on opening the app from Finder or Spotlight: the popover with a menu bar hint.")
             .font(.caption)
             .foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)

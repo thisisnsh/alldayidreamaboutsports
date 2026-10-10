@@ -164,11 +164,18 @@ final class MenuPopoverController: NSObject, NSPopoverDelegate {
     }
 
     /// Opening an already-set-up app: without this, a menu bar app looks like
-    /// it failed to open. Deferred because the status item isn't placed in the
-    /// menu bar on the launch tick (see `showMenu`).
-    func showOnOpen() {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-            self?.showMenu()
+    /// it failed to open. Drops the popover with a "here I am" hint. Deferred
+    /// because the status item isn't placed in the menu bar on the launch tick
+    /// (see `showMenu`), and retried while a previous popover is still closing.
+    func showOnOpen(after delay: TimeInterval = 0.5, attempts: Int = 10) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+            guard let self else { return }
+            guard !popover.isShown, statusItem.button?.window != nil else {
+                if attempts > 1 { showOnOpen(after: 0.2, attempts: attempts - 1) }
+                else { AppLog.info(.app, "open_hint_skipped") }
+                return
+            }
+            showMenu(openHint: true)
         }
     }
 
@@ -178,13 +185,14 @@ final class MenuPopoverController: NSObject, NSPopoverDelegate {
     /// hasn't been placed in the menu bar (e.g. at cold launch) would drop the
     /// popover in a random corner. Callers that need it shown reliably must do
     /// so once the menu bar item exists (a reopen/click).
-    func showMenu(page: PopoverPage = .home) {
+    func showMenu(page: PopoverPage = .home, openHint: Bool = false) {
         guard let button = statusItem.button, button.window != nil else { return }
         guard !popover.isShown else {
             PopoverRouter.shared.go(page)
             return
         }
         PopoverRouter.shared.reset(to: page)
+        PopoverRouter.shared.openHint = openHint
         // Let the home page re-measure (matches may have changed while it was
         // closed) so the popover opens at the right height.
         hostingView?.layoutSubtreeIfNeeded()
