@@ -33,12 +33,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         #else
         // A fresh install gets the one-time setup window. After that, a launch
-        // the user asked for (Finder, Spotlight, Launchpad) drops the popover
-        // so they see where the app lives; a login launch stays silent.
+        // the user asked for (Finder, Spotlight, Launchpad) shows the "I'm up
+        // here" window so they see where the app lives; a login launch stays
+        // silent.
         if OnboardingWindowController.shared.isNeeded {
             OnboardingWindowController.shared.show()
         } else if !LaunchAtLogin.wasLaunchedAtLogin {
-            menuController.showOnOpen()
+            OnboardingWindowController.shared.showWelcomeBack()
         }
         #endif
 
@@ -86,12 +87,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     // App is invisible except the menu bar — reopening from Finder/Spotlight
-    // opens the popover (or setup, if it was never finished).
+    // points at it again (or reopens setup, if it was never finished).
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
         if OnboardingWindowController.shared.isNeeded {
             OnboardingWindowController.shared.show()
         } else {
-            MenuPopoverController.shared.showMenu()
+            OnboardingWindowController.shared.showWelcomeBack()
         }
         return false
     }
@@ -141,36 +142,19 @@ final class MenuPopoverController: NSObject, NSPopoverDelegate {
         }
     }
 
-    /// Opening an already-set-up app: without this, a menu bar app looks like
-    /// it failed to open. Drops the popover with a "here I am" hint. Deferred
-    /// because the status item isn't placed in the menu bar on the launch tick
-    /// (see `showMenu`), and retried while a previous popover is still closing.
-    func showOnOpen(after delay: TimeInterval = 0.5, attempts: Int = 10) {
-        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
-            guard let self else { return }
-            guard !popover.isShown, statusItem.button?.window != nil else {
-                if attempts > 1 { showOnOpen(after: 0.2, attempts: attempts - 1) }
-                else { AppLog.info(.app, "open_hint_skipped") }
-                return
-            }
-            showMenu(openHint: true)
-        }
-    }
-
     /// Open the menu popover anchored to the status item, on `page`. No-op if
     /// it's already shown (beyond switching page) or the status item isn't
     /// available yet — the popover anchors to the button, and a button that
     /// hasn't been placed in the menu bar (e.g. at cold launch) would drop the
     /// popover in a random corner. Callers that need it shown reliably must do
     /// so once the menu bar item exists (a reopen/click).
-    func showMenu(page: PopoverPage = .home, openHint: Bool = false) {
+    func showMenu(page: PopoverPage = .home) {
         guard let button = statusItem.button, button.window != nil else { return }
         guard !popover.isShown else {
             PopoverRouter.shared.go(page)
             return
         }
         PopoverRouter.shared.reset(to: page)
-        PopoverRouter.shared.openHint = openHint
         NSApp.activate(ignoringOtherApps: true)
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
         button.highlight(true)

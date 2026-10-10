@@ -1,14 +1,20 @@
 import AppKit
 import SwiftUI
 
-/// The app's only window: first-run setup. It walks a new user from hello to
+/// The app's only windows. First-run setup walks a new user from hello to
 /// their teams to how loud alerts should be, then closes and opens the menu
-/// bar popover so they see where the app lives. After that it never opens
-/// again — everything else is in the popover.
+/// bar popover so they see where the app lives; after that it never opens
+/// again. Opening the app later gets a small "I'm up here" window instead,
+/// pointing at the menu bar — everything else is in the popover.
 @MainActor
 final class OnboardingWindowController: NSObject, NSWindowDelegate {
     static let shared = OnboardingWindowController()
     private var window: NSWindow?
+    /// Which window is up, so asking for the same one again just fronts it
+    /// (keeping setup on its current step).
+    private var showing: Kind?
+
+    private enum Kind { case onboarding, welcomeBack }
 
     private static let completeKey = "onboardingComplete"
 
@@ -19,13 +25,25 @@ final class OnboardingWindowController: NSObject, NSWindowDelegate {
     }
 
     func show() {
+        present(.onboarding, OnboardingView(), size: OnboardingView.size)
+    }
+
+    /// Opening an already-set-up app: without this, a menu bar app looks like
+    /// it failed to open.
+    func showWelcomeBack() {
+        present(.welcomeBack, WelcomeBackView(), size: WelcomeBackView.size)
+    }
+
+    private func present(_ kind: Kind, _ view: some View, size: CGSize) {
         NSApp.activate(ignoringOtherApps: true)
-        if let window {
+        if let window, showing == kind {
             window.makeKeyAndOrderFront(nil)
             return
         }
+        // Swap the other window for this one.
+        window?.close()
         let window = NSWindow(
-            contentRect: NSRect(origin: .zero, size: OnboardingView.size),
+            contentRect: NSRect(origin: .zero, size: size),
             styleMask: [.titled, .closable, .fullSizeContentView],
             backing: .buffered,
             defer: false
@@ -36,7 +54,7 @@ final class OnboardingWindowController: NSObject, NSWindowDelegate {
         window.isReleasedWhenClosed = false
         window.delegate = self
         window.contentViewController = NSHostingController(
-            rootView: OnboardingView().environmentObject(AppSession.shared)
+            rootView: view.environmentObject(AppSession.shared)
         )
         window.center()
         window.makeKeyAndOrderFront(nil)
@@ -44,6 +62,7 @@ final class OnboardingWindowController: NSObject, NSWindowDelegate {
         // its own.
         window.orderFrontRegardless()
         self.window = window
+        showing = kind
     }
 
     /// The last step's button: remember setup is done, swap the window for
@@ -51,6 +70,11 @@ final class OnboardingWindowController: NSObject, NSWindowDelegate {
     func finish() {
         AppDefaults.shared.set(true, forKey: Self.completeKey)
         AppAnalytics.onboardingCompleted(fanCount: AppSession.shared.fanTeamIds.count)
+        openMenu()
+    }
+
+    /// Close the window, then drop the popover from the menu bar.
+    func openMenu() {
         window?.close()
         // Let the window's close animation clear before the popover drops.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
@@ -59,7 +83,44 @@ final class OnboardingWindowController: NSObject, NSWindowDelegate {
     }
 
     func windowWillClose(_ notification: Notification) {
+        guard (notification.object as? NSWindow) === window else { return }
         window = nil
+        showing = nil
+    }
+}
+
+/// What a set-up user sees on opening the app from Finder or Spotlight: the
+/// crest marquee and where the app actually lives.
+struct WelcomeBackView: View {
+    @EnvironmentObject var session: AppSession
+    static let size = CGSize(width: 440, height: 400)
+
+    var body: some View {
+        ZStack(alignment: .bottom) {
+            LogoMarquee(logos: session.allTeams.map(\.logo), columnCount: 6, fadeTo: 0.65)
+            VStack(spacing: 12) {
+                Image(systemName: "arrow.up.right")
+                    .font(.system(size: 30, weight: .bold))
+                    .opacity(0.8)
+                Text("Hey, I'm up here")
+                    .font(.system(size: 26, weight: .heavy, design: .rounded))
+                Text("Click the \(Image(systemName: "soccerball")) in your menu bar any time for scores, teams and settings.")
+                    .font(.system(size: 14, design: .rounded))
+                    .multilineTextAlignment(.center)
+                    .opacity(0.7)
+                    .frame(maxWidth: 340)
+                Button("Open") { OnboardingWindowController.shared.openMenu() }
+                    .buttonStyle(.primaryPill)
+                    .keyboardShortcut(.defaultAction)
+            }
+            .padding(28)
+        }
+        .frame(width: Self.size.width, height: Self.size.height)
+        .background(AppBackground())
+        .appTheme(session.prefs.settings.theme ?? .system)
+        .respectReducedMotion()
+        .onAppear { AppAnalytics.screenView("welcome_back") }
+        .task { TeamLogoStore.shared.warm(session.allTeams.map(\.logo)) }
     }
 }
 

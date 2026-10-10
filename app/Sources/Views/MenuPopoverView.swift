@@ -20,9 +20,6 @@ final class PopoverRouter: ObservableObject {
     /// The day the home page lists: -1 yesterday, 0 today, 1 tomorrow. Every
     /// open starts back on today.
     @Published var dayOffset = 0
-    /// The app was just opened from Finder/Spotlight: home says where the app
-    /// lives. Only for that one open.
-    @Published var openHint = false
 
     func go(_ page: PopoverPage) {
         guard page != self.page else { return }
@@ -182,26 +179,7 @@ struct HomePage: View {
     }
 
     private var header: some View {
-        VStack(spacing: 0) {
-            if router.openHint { openHint }
-            headerControls
-        }
-    }
-
-    private var openHint: some View {
-        Label {
-            Text("I live up here in your menu bar. Click the \(Image(systemName: "soccerball")) any time for scores and settings.")
-                .fixedSize(horizontal: false, vertical: true)
-        } icon: {
-            Image(systemName: "arrow.up")
-        }
-        .font(.system(size: 12, weight: .medium))
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 9)
-        .background(RoundedRectangle(cornerRadius: 10).fill(Color.primary.opacity(0.08)))
-        .padding(.horizontal, 10)
-        .padding(.top, 10)
+        headerControls
     }
 
     private var headerControls: some View {
