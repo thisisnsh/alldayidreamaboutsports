@@ -287,7 +287,9 @@ struct HomePage: View {
                 ForEach(0..<Self.placeholderLimit, id: \.self) { PlaceholderRow(index: $0) }
             }
             .padding(.horizontal, 8)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            // minHeight 0: without it the frame grows to all 12 rows, pushing
+            // the header and footer out of the fixed-size popover.
+            .frame(maxWidth: .infinity, minHeight: 0, maxHeight: .infinity, alignment: .top)
             .clipped()
             .mask(Self.bottomFade)
         } else {
