@@ -19,12 +19,12 @@ export default {
     league: (data) => list(data.leagues).find((l) => l.id === data.team.leagueId),
 
     title: (data) =>
-      `Follow ${data.team.displayName} on Mac - Free Match Alerts`,
+      `${data.team.displayName} Match Alerts for Mac - Free`,
     description: (data) => {
       const t = data.team;
       return t.national
-        ? `Follow ${t.displayName} on your Mac. Every goal, card and VAR call from the 2026 World Cup dropped below your MacBook notch - saved and ready for 2030. Free for macOS.`
-        : `Follow ${t.displayName} on your Mac. Every goal, card, substitution and VAR call from the ${t.leagueName} dropped below your MacBook notch, with the score pinned to a corner. Free for macOS.`;
+        ? `Explore ${t.displayName}'s 2026 World Cup coverage in our free Mac football app. National teams stay saved between tournaments. Coming to the Mac App Store.`
+        : `${t.displayName} goal alerts, match notifications and pinned ${t.leagueName} scores on your Mac. Free football app, coming to the Mac App Store.`;
     },
     keywords: (data) => {
       const t = data.team;

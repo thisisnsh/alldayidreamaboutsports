@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Asserts everything §12 of the plan asks for, over the built _site/.
+ * Checks SEO metadata, crawlability and content over the built _site/.
  * Runs in CI, so it must not touch the network.
  *
  *   node scripts/verify-build.mjs
@@ -17,6 +17,9 @@ const EM_DASH = String.fromCodePoint(0x2014);
 
 const fail = [];
 const check = (ok, msg) => { if (!ok) fail.push(msg); };
+// Nunjucks escapes attributes; JSON-LD contains the original text.
+const decodeHtml = (value) => value?.replace(/&(?:amp|lt|gt|quot|apos|#39|#x27);/g,
+  (entity) => ({ "&amp;": "&", "&lt;": "<", "&gt;": ">", "&quot;": '"', "&apos;": "'", "&#39;": "'", "&#x27;": "'" })[entity]);
 
 function walk(dir, out = []) {
   for (const name of readdirSync(dir)) {
@@ -104,7 +107,7 @@ for (const file of files.filter((f) => /\.(html|js|css)$/.test(f))) {
 /* ── every sitemap <loc> is a page that actually built ────────────────── */
 const sitemap = readFileSync(join(SITE, "sitemap.xml"), "utf8");
 const locs = [...sitemap.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]);
-check(locs.length > 150, `sitemap has only ${locs.length} urls`);
+check(new Set(locs).size === locs.length, "sitemap contains duplicate URLs");
 const built = new Set(
   htmlFiles.map((f) => {
     const rel = "/" + relative(SITE, f).split("/").join("/");
@@ -112,6 +115,7 @@ const built = new Set(
   })
 );
 for (const loc of locs) {
+  check(loc.startsWith(`${ORIGIN}/`), `sitemap lists a noncanonical origin: ${loc}`);
   const path = loc.replace(ORIGIN, "");
   check(built.has(path), `sitemap lists ${loc} but ${path} did not build`);
 }
@@ -166,14 +170,42 @@ for (const file of htmlFiles) {
     html.includes(`<link rel="canonical" href="${ORIGIN}${url}" />`),
     `${url}: canonical is missing or points elsewhere`
   );
+  check(html.includes(`<meta property="og:url" content="${ORIGIN}${url}" />`),
+    `${url}: social URL differs from canonical`);
 
   // Every JSON-LD block on the page has to parse.
-  for (const m of html.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)) {
+  const schemaBlocks = [...html.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)];
+  check(schemaBlocks.length > 0, `${url}: missing structured data`);
+  for (const m of schemaBlocks) {
     try {
       const graph = JSON.parse(m[1])["@graph"];
       check(Array.isArray(graph) && graph.length >= 5, `${url}: @graph looks short`);
       const hasVideo = graph.some((node) => node["@type"] === "VideoObject");
       check(hasVideo === (url === "/"), `${url}: video schema must describe the homepage's visible demo`);
+      const webpage = graph.find((node) => node["@id"] === `${ORIGIN}${url}#webpage`);
+      check(webpage?.url === `${ORIGIN}${url}`, `${url}: schema page URL differs from canonical`);
+      check(webpage?.description === decodeHtml(desc), `${url}: schema description differs from meta description`);
+      const video = graph.find((node) => node["@type"] === "VideoObject");
+      if (video) {
+        check(html.includes(`src="${video.embedUrl}"`), `${url}: video schema player is not embedded`);
+        check(!video.contentUrl, `${url}: YouTube provides an embed URL, not a direct video content URL`);
+      }
+      const directory = graph.find((node) => node["@type"] === "ItemList");
+      if (url === "/teams/" || url === "/leagues/") {
+        const expected = url === "/teams/" ? teams : leagues;
+        check(webpage?.["@type"] === "CollectionPage", `${url}: directory must be a CollectionPage`);
+        check(webpage?.mainEntity?.["@id"] === directory?.["@id"], `${url}: page must reference its directory`);
+        check(directory?.numberOfItems === expected.length, `${url}: wrong directory size`);
+        check(directory?.itemListElement?.length === expected.length, `${url}: incomplete directory schema`);
+        for (const [i, entry] of (directory?.itemListElement || []).entries()) {
+          const record = expected[i];
+          const path = url === "/teams/" ? `/teams/${record?.slug}/` : `/${record?.slug}/`;
+          check(entry.position === i + 1, `${url}: invalid directory position`);
+          check(entry.url === `${ORIGIN}${path}`, `${url}: wrong directory entry URL`);
+          check(entry.name === (record?.displayName || record?.name), `${url}: wrong directory entry name`);
+          check(html.includes(`href="${path}"`), `${url}: directory schema entry has no visible link`);
+        }
+      }
     } catch (e) {
       fail.push(`${url}: JSON-LD does not parse - ${e.message}`);
     }
@@ -197,6 +229,14 @@ for (const file of htmlFiles) {
   for (const m of html.matchAll(/<img\b[^>]*src="(\/[^"]+)"/g)) {
     check(existsSync(join(SITE, m[1])), `${url}: missing image ${m[1]}`);
   }
+}
+
+/* ── sitemap exactly covers the indexable pages ───────────────────────── */
+const sitemapUrls = new Set(locs);
+for (const url of built) {
+  const indexable = !noindex.has(url) && url !== "/privacy.html";
+  check(sitemapUrls.has(`${ORIGIN}${url}`) === indexable,
+    indexable ? `indexable page missing from sitemap: ${url}` : `noindex page included in sitemap: ${url}`);
 }
 
 /* ── internal links all resolve ───────────────────────────────────────── */

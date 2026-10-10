@@ -32,3 +32,15 @@ links and league shortcuts remain available without JavaScript.
 
 `npm run verify` checks titles, descriptions, canonicals, structured data,
 sitemap coverage, internal links, section links, images and orphaned pages.
+
+The sitemap is generated from Eleventy's page collection, including every team
+and league pagination result, and excludes pages marked `noindex: true`.
+Verification requires exact coverage of indexable pages and rejects duplicate
+or noncanonical sitemap URLs. New pages are included automatically; keep their
+internal links and unique metadata in place before publishing.
+
+Team and league directories expose `CollectionPage` / `ItemList` structured
+data matching their visible links. Video metadata uses the YouTube player as
+`embedUrl`; a watch-page URL is not a video file and must not be `contentUrl`.
+Search descriptions and onboarding FAQs reflect the pending Mac App Store
+launch. Update those alongside the download destination when the app launches.

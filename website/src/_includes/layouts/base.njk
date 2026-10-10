@@ -1,3 +1,4 @@
+{% set isDirectory = page.url == '/teams/' or page.url == '/leagues/' %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -91,13 +92,14 @@
         "inLanguage": "en"
       },
       {
-        "@type": "WebPage",
+        "@type": "{{ 'CollectionPage' if isDirectory else 'WebPage' }}",
         "@id": "{{ site.url }}{{ page.url }}#webpage",
         "url": "{{ site.url }}{{ page.url }}",
         "name": {{ (pageName or title) | dump | safe }},
         "description": {{ description | dump | safe }},
         "isPartOf": { "@id": "{{ site.url }}/#website" },
         "about": { "@id": "{{ site.url }}/#app" },
+        {% if isDirectory %}"mainEntity": { "@id": "{{ site.url }}{{ page.url }}#directory" },{% endif %}
         "primaryImageOfPage": { "@id": "{{ site.url }}/#primaryimage" },
         {% if crumbs %}"breadcrumb": { "@id": "{{ site.url }}{{ page.url }}#breadcrumb" },{% endif %}
         "inLanguage": "en"
@@ -133,7 +135,7 @@
         "thumbnailUrl": ["{{ site.youtube.thumb }}"],
         "uploadDate": "{{ site.youtube.uploadDate }}",
         "embedUrl": "{{ site.youtube.embed }}",
-        "contentUrl": "{{ site.youtube.watch }}",
+        "url": "{{ site.youtube.watch }}",
         "publisher": { "@id": "{{ site.url }}/#org" },
         "isPartOf": { "@id": "{{ site.url }}/#webpage" }
       },{% endif %}
@@ -161,8 +163,23 @@
         "author": { "@id": "{{ site.url }}/#org" },
         "publisher": { "@id": "{{ site.url }}/#org" },
         "video": { "@id": "{{ site.url }}/#demo" },
-        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
-      }{% if faqItems %},
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD", "url": "{{ site.url }}{{ site.downloadUrl }}" }
+      }{% if isDirectory %},
+      {
+        "@type": "ItemList",
+        "@id": "{{ site.url }}{{ page.url }}#directory",
+        "name": {{ pageName | jsonld | safe }},
+        {% set entries = teams if page.url == '/teams/' else leagues %}
+        "numberOfItems": {{ entries | length }},
+        "itemListElement": [
+          {% for entry in entries %}{
+            "@type": "ListItem",
+            "position": {{ loop.index }},
+            "name": {{ (entry.displayName or entry.name) | jsonld | safe }},
+            "url": "{{ site.url }}{% if page.url == '/teams/' %}/teams{% endif %}/{{ entry.slug }}/"
+          }{% if not loop.last %},{% endif %}{% endfor %}
+        ]
+      }{% endif %}{% if faqItems %},
       {
         "@type": "FAQPage",
         "@id": "{{ site.url }}{{ page.url }}#faq",
