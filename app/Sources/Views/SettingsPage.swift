@@ -31,6 +31,22 @@ struct SettingsPage: View {
                     }
                     #endif
 
+                    SettingsCard("General") {
+                        toggleRow("Open at login", isOn: Binding(
+                            get: { launchAtLogin },
+                            set: { on in
+                                launchAtLogin = on
+                                LaunchAtLogin.set(enabled: on)
+                                session.updateSettings { $0.launchAtLogin = on }
+                            }
+                        ))
+                        caption("The app starts silently in the menu bar. It never shows in the Dock; that's how it's designed.")
+                        if displayTarget.displays.count > 1 {
+                            screenPickerRow
+                            caption("Alerts, goal confetti and pinned scores show on this screen.")
+                        }
+                    }
+
                     SettingsCard("Alerts") {
                         Picker("Alerts", selection: presetBinding) {
                             ForEach(AlertPreset.allCases, id: \.self) { Text($0.label).tag(Optional($0)) }
@@ -56,14 +72,12 @@ struct SettingsPage: View {
                                 eventRow(type)
                             }
                         }
-                    }
 
-                    // No goal events = nothing to celebrate; the whole
-                    // section disappears (its switches were zeroed too).
-                    if session.prefs.settings.eventEnabled(.goal) {
-                        SettingsCard("When your team scores") {
+                        // No goal events = nothing to celebrate; the confetti
+                        // rows disappear (their switch was zeroed too).
+                        if session.prefs.settings.eventEnabled(.goal) {
+                            Divider()
                             toggleRow("Goal confetti", isOn: goalAnimationBinding)
-
                             Button {
                                 // No event here: `OverlayManager.preview()`
                                 // reports the same click as
@@ -76,26 +90,11 @@ struct SettingsPage: View {
                         }
                     }
 
-                    SettingsCard("On screen") {
+                    SettingsCard("Appearance") {
+                        pickerRow("Theme", selection: themeBinding, cases: ThemeChoice.allCases) { $0.label }
                         pickerRow("Size", selection: overlaySizeBinding, cases: CapsuleSize.allCases) { $0.label }
                         pickerRow("Pinned score", selection: capsulePositionBinding, cases: CapsulePosition.allCases) { $0.label }
-                        if displayTarget.displays.count > 1 {
-                            screenPickerRow
-                        }
                         caption("Size applies to notch alerts and pinned scores. Pin a live match from the menu to float its score; hover it to see the timeline.")
-                    }
-
-                    SettingsCard("General") {
-                        pickerRow("Theme", selection: themeBinding, cases: ThemeChoice.allCases) { $0.label }
-                        toggleRow("Open at login", isOn: Binding(
-                            get: { launchAtLogin },
-                            set: { on in
-                                launchAtLogin = on
-                                LaunchAtLogin.set(enabled: on)
-                                session.updateSettings { $0.launchAtLogin = on }
-                            }
-                        ))
-                        caption("The app starts silently in the menu bar. It never shows in the Dock; that's how it's designed.")
                     }
 
                     footer
