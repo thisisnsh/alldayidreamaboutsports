@@ -2,7 +2,7 @@
 layout: layouts/page.njk
 permalink: /privacy/
 title: "Privacy Policy - All Day I Dream About Sports"
-description: "Privacy policy for All Day I Dream About Sports - what we collect, what we don't, where data lives, and how to delete it. We sell nothing."
+description: "Privacy policy for All Day I Dream About Sports - no accounts, no sign-in, teams and settings stay on your Mac, only anonymous usage and crash data. We sell nothing."
 pageName: "Privacy Policy"
 ogTitle: "Privacy Policy - All Day I Dream About Sports"
 ogDescription: "What we collect, what we don't, where data lives, and how to delete it."
@@ -20,43 +20,45 @@ crumbs:
     <p class="updated">Last updated: October 2026</p>
 
     <div class="prose">
-      <p><b>The short version:</b> we store the minimum needed to sign you in,
-      your picks and settings stay on your device, everything else is anonymous,
-      we don't sell your data, and you can ask us to delete your profile any
-      time.</p>
+      <p><b>The short version:</b> there are no accounts and no sign-in. Your
+      teams and settings stay on your Mac, the only thing we collect is
+      anonymous usage and crash data, and we don't sell anything.</p>
 
       <h2>What we collect</h2>
       <ul>
-        <li><b>Your profile</b>: when you sign in with Google we store your name,
-        email address, and profile photo URL. We use Google Sign-In; we never
-        see your password.</li>
         <li><b>Anonymous analytics</b>: which screens you open, which buttons
-        you use, which settings you toggle, and whether alerts and goal confetti
-        reached your screen - plus crash reports (via Firebase
-        Analytics/Crashlytics) so we can keep the app working. This is
-        anonymized - it's tied to a random app-instance identifier, never to
-        your name or sign-in.</li>
+        you use, which settings you toggle, which teams get followed (by
+        numeric team id), and whether alerts and goal confetti reached your
+        screen - plus crash reports (via Firebase Analytics/Crashlytics) so we
+        can keep the app working. It's tied to a random app-instance
+        identifier, never to your name, email or any account.</li>
       </ul>
 
       <h2>What we don't collect</h2>
       <ul>
-        <li>Any personal information beyond what is listed above.</li>
-        <li>The teams you follow and your app settings (theme, which events you
-        want to see) stay on your device - we never send them to our server.
-        Following a team or changing a setting is counted in the anonymous
-        usage statistics above, but that is an aggregate number, not an
-        account: your list of teams and your settings live only on your Mac,
-        and there is nothing on our side to restore them from.</li>
+        <li>Your name, email address, or any other personal details. The app
+        has no accounts, so there is nothing to sign in with.</li>
+        <li>Your list of teams and your app settings (theme, which events you
+        want to see). They live only on your Mac - we have no server copy, and
+        nothing on our side to restore them from.</li>
       </ul>
 
+      <h2>How the app gets scores</h2>
+      <p>Live scores are plain files downloaded from our Cloudflare-hosted
+      server, and team crests come from API-Sports' image server. Like any web
+      request, these servers see your IP address in the course of sending the
+      file; we don't log it against you or send anything about you with the
+      request.</p>
+
       <h2>Where it lives</h2>
-      <p>Your profile is stored on Google Cloud (Firestore) in the United
-      States. Anonymous analytics are processed by Firebase.</p>
+      <p>Anonymous analytics and crash reports are processed by Google
+      (Firebase). Everything else stays on your Mac.</p>
 
       <h2>Deleting your data</h2>
-      <p>Email
-      <a href="mailto:{{ site.email }}">{{ site.email }}</a>
-      and we'll delete your profile for you.</p>
+      <p>Deleting the app removes your teams and settings. Analytics can't be
+      linked back to you, so there is no profile for us to delete - but if you
+      have a question, email
+      <a href="mailto:{{ site.email }}">{{ site.email }}</a>.</p>
 
       <h2>Website demo</h2>
       <p>The embedded demo is hosted by YouTube. When the player loads or you
