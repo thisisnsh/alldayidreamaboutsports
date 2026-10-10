@@ -45,16 +45,21 @@ struct LogoMarquee: View {
     }
 
     var body: some View {
-        TimelineView(.animation(paused: reduceMotion)) { context in
-            let t = CGFloat(context.date.timeIntervalSinceReferenceDate)
-            HStack(alignment: .top, spacing: 0) {
-                ForEach(columns) { column in
-                    columnView(column, at: t)
+        // The columns are far taller than the view (they wrap). Hanging them
+        // off a Color.clear overlay keeps them from sizing the view, which
+        // would push everything else out of the window.
+        Color.clear
+            .overlay(alignment: .top) {
+                TimelineView(.animation(paused: reduceMotion)) { context in
+                    let t = CGFloat(context.date.timeIntervalSinceReferenceDate)
+                    HStack(alignment: .top, spacing: 0) {
+                        ForEach(columns) { column in
+                            columnView(column, at: t)
+                        }
+                    }
                 }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        }
-        .clipped()
+            .clipped()
         .mask(
             LinearGradient(
                 stops: [

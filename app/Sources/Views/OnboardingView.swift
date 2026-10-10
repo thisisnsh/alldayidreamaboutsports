@@ -53,9 +53,12 @@ final class OnboardingWindowController: NSObject, NSWindowDelegate {
         window.isMovableByWindowBackground = true
         window.isReleasedWhenClosed = false
         window.delegate = self
-        window.contentViewController = NSHostingController(
-            rootView: view.environmentObject(AppSession.shared)
-        )
+        // Fixed size: left to size itself, the hosting controller resizes the
+        // window after `center()`, knocking it off centre.
+        let hosting = NSHostingController(rootView: view.environmentObject(AppSession.shared))
+        hosting.sizingOptions = []
+        window.contentViewController = hosting
+        window.setContentSize(size)
         window.center()
         window.makeKeyAndOrderFront(nil)
         // An accessory app's window doesn't reliably come above other apps on
