@@ -132,10 +132,6 @@ struct SettingsPage: View {
                 }
             }
             .buttonStyle(.cardButton)
-            Button { PopoverRouter.shared.askToQuit() } label: {
-                Label("Quit app", systemImage: "power")
-            }
-            .buttonStyle(.hoverHighlight)
             Text("\(AppEnvironment.profileName) v\(AppEnvironment.appVersion) (Build \(AppEnvironment.buildNumber))")
                 .font(.caption)
                 .foregroundStyle(.secondary)
