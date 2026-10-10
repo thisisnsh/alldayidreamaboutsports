@@ -136,7 +136,7 @@ Pick which screen the alerts appear on. The app follows light and dark mode, can
 | **Infra** | One-time GCP and R2 setup scripts, plus the emergency-stop runbook | [`infra/README.md`](infra/README.md) |
 | **Website** | Eleventy landing page and privacy policy | [`website/README.md`](website/README.md) |
 | **Tester** | Staging-only tooling: fake publisher and load test | [`tester/README.md`](tester/README.md) |
-| **CI** | Backend, app, security and website workflows | [`.github/README.md`](.github/README.md) |
+| **CI** | Backend, app, security and website workflows | [`.github/workflows/README.md`](.github/workflows/README.md) |
 
 **Quick start**
 
