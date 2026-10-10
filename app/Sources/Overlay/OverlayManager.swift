@@ -85,8 +85,9 @@ final class OverlayManager: ObservableObject {
         (AppSession.shared.prefs.settings.alertDuration ?? .medium).alertHoldSeconds
     }
     /// Gap between a goal's confetti bursts: the next throw goes up as the
-    /// last one starts to fall away.
-    private static let confettiWaveGap: TimeInterval = 2.4
+    /// last one starts to fall away. Sized so 1/2/3 waves last about 3/5/7
+    /// seconds.
+    private static let confettiWaveGap: TimeInterval = 1.7
     /// Notification set size — how many pills display at once.
     private let setSize = 5
 

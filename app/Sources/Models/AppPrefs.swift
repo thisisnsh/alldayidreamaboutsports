@@ -44,14 +44,15 @@ enum OverlayDuration: String, CaseIterable, Codable {
     /// Seconds a set of notch alerts stays down once the last one lands.
     var alertHoldSeconds: TimeInterval {
         switch self {
-        case .short: 4
-        case .medium: 7
-        case .long: 12
+        case .short: 3
+        case .medium: 5
+        case .long: 7
         }
     }
 
-    /// Confetti bursts per goal, a few seconds apart. One burst is a single
-    /// physical throw, so longer confetti means more throws, not slower ones.
+    /// Confetti bursts per goal, a couple of seconds apart. One burst is a
+    /// single physical throw, so longer confetti means more throws, not
+    /// slower ones. With the wave gap the shower runs about 3/5/7 seconds.
     var confettiWaves: Int {
         switch self {
         case .short: 1
