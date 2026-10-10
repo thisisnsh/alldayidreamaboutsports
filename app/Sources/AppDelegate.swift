@@ -130,9 +130,15 @@ final class MenuPopoverController: NSObject, NSPopoverDelegate {
         // Home hugs its matches; Teams and Settings get the full height.
         // Follows the page and the measured home content, open or closed.
         let router = PopoverRouter.shared
+        // Resize on the next main-loop turn: @Published fires in willSet (before
+        // the page has changed, inside `go()`'s animation) and homeFit is
+        // written from a layout pass. Resizing the window synchronously there
+        // could strand the page transition — the popover resized but the old
+        // page stayed up.
         heightSubscription = router.$page.combineLatest(router.$homeFit)
             .map { MenuPopoverView.height(for: $0, homeFit: $1) }
             .removeDuplicates()
+            .receive(on: DispatchQueue.main)
             .sink { [weak self] in self?.applyHeight($0) }
     }
 
