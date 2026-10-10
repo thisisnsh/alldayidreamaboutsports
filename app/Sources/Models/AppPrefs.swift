@@ -20,8 +20,6 @@ struct PrefSettings: Codable, Equatable {
     var goalCenter: Bool?
     /// Size of pinned score capsules (fonts + logos). nil = medium.
     var capsuleSize: CapsuleSize?
-    /// Vertical screen edge for pinned capsules. nil = top.
-    var capsulePosition: CapsulePosition?
     /// Size of the notch-drop event pills (fonts + padding). nil = medium.
     var notchDropSize: CapsuleSize?
 }

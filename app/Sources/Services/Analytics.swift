@@ -187,7 +187,6 @@ enum AppAnalytics {
         case goalCenter = "goal_center"
         case theme
         case capsuleSize = "capsule_size"
-        case capsulePosition = "capsule_position"
         case notchDropSize = "notch_drop_size"
 
         var event: String { "setting_\(rawValue)_changed" }
@@ -228,7 +227,6 @@ enum AppAnalytics {
         setUserProperty((s.goalCenter ?? true) ? "on" : "off", forName: Setting.goalCenter.property)
         setUserProperty((s.theme ?? .system).rawValue, forName: Setting.theme.property)
         setUserProperty((s.capsuleSize ?? .medium).rawValue, forName: Setting.capsuleSize.property)
-        setUserProperty((s.capsulePosition ?? .top).rawValue, forName: Setting.capsulePosition.property)
         setUserProperty((s.notchDropSize ?? .medium).rawValue, forName: Setting.notchDropSize.property)
     }
 

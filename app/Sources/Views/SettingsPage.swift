@@ -93,7 +93,6 @@ struct SettingsPage: View {
                     SettingsCard("Appearance") {
                         pickerRow("Theme", selection: themeBinding, cases: ThemeChoice.allCases) { $0.label }
                         pickerRow("Size", selection: overlaySizeBinding, cases: CapsuleSize.allCases) { $0.label }
-                        pickerRow("Pinned score", selection: capsulePositionBinding, cases: CapsulePosition.allCases) { $0.label }
                         caption("Size applies to notch alerts and pinned scores. Pin a match from the menu to float its score. Click it for the timeline; drag it to any corner.")
                     }
 
@@ -292,17 +291,6 @@ struct SettingsPage: View {
                         $0.notchDropSize = choice
                     }
                     OverlayManager.shared.previewAlert(.goal)
-                }
-            }
-        )
-    }
-
-    private var capsulePositionBinding: Binding<CapsulePosition> {
-        Binding(
-            get: { session.prefs.settings.capsulePosition ?? .top },
-            set: { choice in
-                DispatchQueue.main.async {
-                    session.updateSettings { $0.capsulePosition = choice }
                 }
             }
         )

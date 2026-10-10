@@ -80,18 +80,6 @@ enum CapsuleSize: String, CaseIterable, Codable {
     }
 }
 
-/// Vertical edge used by the pinned capsule stack.
-enum CapsulePosition: String, CaseIterable, Codable {
-    case top, bottom
-
-    var label: String {
-        switch self {
-        case .top: "Top"
-        case .bottom: "Bottom"
-        }
-    }
-}
-
 // MARK: Buttons — every clickable thing reacts to hover.
 
 /// Row/list buttons: soft highlight + tiny lift on hover, press squish.

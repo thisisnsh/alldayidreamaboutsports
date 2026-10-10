@@ -181,9 +181,6 @@ final class AppSession: ObservableObject {
         if before.capsuleSize != after.capsuleSize {
             AppAnalytics.settingChanged(.capsuleSize, value: (after.capsuleSize ?? .medium).rawValue)
         }
-        if before.capsulePosition != after.capsulePosition {
-            AppAnalytics.settingChanged(.capsulePosition, value: (after.capsulePosition ?? .top).rawValue)
-        }
         if before.notchDropSize != after.notchDropSize {
             AppAnalytics.settingChanged(.notchDropSize, value: (after.notchDropSize ?? .medium).rawValue)
         }
