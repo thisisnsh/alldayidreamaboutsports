@@ -84,7 +84,7 @@ enum AppAnalytics {
     // and both the total and the split are worth having — `app_quit`'s
     // `source`. A control whose click is
     // already reported by the thing it triggers gets no event of its own:
-    // "Preview animation" is `celebration_preview`.
+    // "Preview goal confetti" is `celebration_preview`.
 
     /// The last onboarding step's "Show me". `fan_count` = teams followed by
     /// then; the step funnel itself is the `onboarding_*` screen views.
@@ -158,12 +158,12 @@ enum AppAnalytics {
 
     // MARK: Celebrations
 
-    /// A followed team scored and the goal ball showed.
+    /// A followed team scored and the goal confetti fired.
     static func celebrationShown() {
         log("celebration_shown", [:])
     }
 
-    /// Settings → "Preview animation".
+    /// Settings → "Preview goal confetti".
     static func celebrationPreview() {
         log("celebration_preview", [:])
     }
@@ -227,7 +227,7 @@ enum AppAnalytics {
     }
 
     /// Push the current settings up as user properties (called at launch) so an
-    /// install that never opens Settings is still counted in "% with the goal animation on".
+    /// install that never opens Settings is still counted in "% with goal confetti on".
     static func syncSettingProperties(_ s: PrefSettings) {
         setUserProperty((s.launchAtLogin ?? false) ? "on" : "off", forName: Setting.launchAtLogin.property)
         setUserProperty((s.goalCenter ?? true) ? "on" : "off", forName: Setting.goalCenter.property)
@@ -281,11 +281,6 @@ enum AppAnalytics {
     /// One per displayed set — the unit a user actually perceives.
     static func overlaySetShown(count: Int, hasFanGoal: Bool) {
         log("overlay_set_shown", ["count": count, "has_fan_goal": hasFanGoal ? "yes" : "no"])
-    }
-
-    /// `reason: user` when the ✕ ended the set, `timeout` when it aged out.
-    static func overlayDismissed(reason: String) {
-        log("overlay_dismissed", ["reason": reason])
     }
 
     // MARK: Dev demo controls

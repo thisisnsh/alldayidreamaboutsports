@@ -4,7 +4,7 @@ import SwiftUI
 // MARK: - Shared overlay-window configuration
 
 /// The window level + collection behavior shared by EVERY floating overlay —
-/// the notch notification stack, the center celebration ball, and pinned score
+/// the notch notification stack, goal confetti, and pinned score
 /// capsules. `.screenSaver` sits above full-screen window content, and
 /// `.canJoinAllSpaces` + `.fullScreenAuxiliary` let this accessory
 /// (`LSUIElement`) app draw over another app's full-screen space. Kept in one

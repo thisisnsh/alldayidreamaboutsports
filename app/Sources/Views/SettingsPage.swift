@@ -62,7 +62,7 @@ struct SettingsPage: View {
                     // section disappears (its switches were zeroed too).
                     if session.prefs.settings.eventEnabled(.goal) {
                         SettingsCard("When your team scores") {
-                            toggleRow("Goal animation in the center", isOn: goalAnimationBinding)
+                            toggleRow("Goal confetti", isOn: goalAnimationBinding)
 
                             Button {
                                 // No event here: `OverlayManager.preview()`
@@ -70,7 +70,7 @@ struct SettingsPage: View {
                                 // `celebration_preview`.
                                 OverlayManager.shared.preview()
                             } label: {
-                                Text("Preview goal animation").frame(maxWidth: .infinity)
+                                Text("Preview goal confetti").frame(maxWidth: .infinity)
                             }
                             .buttonStyle(.cardButton)
                         }
@@ -239,7 +239,7 @@ struct SettingsPage: View {
                     let goalWasOn = session.prefs.settings.eventEnabled(.goal)
                     session.updateSettings {
                         preset.apply(to: &$0)
-                        // Every preset includes goals: bring the goal animation
+                        // Every preset includes goals: bring the goal confetti
                         // back if goals had been muted (which turned it off).
                         if !goalWasOn {
                             $0.goalCenter = true
@@ -264,7 +264,7 @@ struct SettingsPage: View {
             set: { on in
                 session.updateSettings {
                     $0.notifications = ($0.notifications ?? [:]).merging([type.settingsKey: on]) { _, new in new }
-                    // Muting goals mutes the goal animation with it; unmuting
+                    // Muting goals mutes the goal confetti with it; unmuting
                     // restores it so the section never reappears switched off.
                     if type == .goal {
                         $0.goalCenter = on
@@ -274,7 +274,7 @@ struct SettingsPage: View {
         )
     }
 
-    /// The whole goal animation — center ball plus confetti — is one switch.
+    /// The goal confetti switch.
     private var goalAnimationBinding: Binding<Bool> {
         Binding(
             get: { session.prefs.settings.goalCenter ?? true },

@@ -61,7 +61,7 @@ enum TeamCatalog {
     /// The code is null for some clubs, and an id the catalog doesn't know
     /// resolves to a placeholder team — both fall back to `fallback`, the full
     /// name the fixture/event payload already carries. Surfaces with room to
-    /// spare (the picker, a hovered capsule, the goal celebration) show that
+    /// spare (the picker, a hovered capsule) show that
     /// full name instead.
     static func shortName(for id: Int, in teams: [Team], fallback: String) -> String {
         team(for: id, in: teams).code ?? fallback

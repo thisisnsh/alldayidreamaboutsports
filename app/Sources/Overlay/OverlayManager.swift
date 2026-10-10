@@ -2,7 +2,7 @@ import AppKit
 import SwiftUI
 
 /// One notification. `fanGoal` is set when this is a goal by a followed team —
-/// that's what drives confetti and the center ball for the set it shows in.
+/// that's what drives the goal confetti for the set it shows in.
 struct NotchItem: Identifiable, Equatable {
     let id: String
     let icon: String
@@ -14,9 +14,14 @@ struct NotchItem: Identifiable, Equatable {
     static func == (lhs: NotchItem, rhs: NotchItem) -> Bool { lhs.id == rhs.id }
 }
 
-/// Fire-and-forget confetti token; bursts overlap freely and outlive sets.
+/// Fire-and-forget confetti token for one fan goal; bursts overlap freely
+/// and outlive sets.
 struct ConfettiBurst: Identifiable {
     let id = UUID()
+    let fixtureId: Int
+    let teamId: Int?
+    /// The scoring team's crest, drawn among the footballs.
+    let logo: String
 }
 
 private struct QueuedNotchItem {
@@ -25,25 +30,19 @@ private struct QueuedNotchItem {
     let isGoal: Bool
 }
 
-enum BallPhase {
-    case hidden, showing
-}
-
 /// TWO queues of events, displayed in SETS:
 /// - Goals are kept in a priority queue; every other event waits separately.
 ///   Each set takes goals first, then fills remaining slots with other events.
 /// - The visible stack is chronological within the selected set: oldest at the
 ///   top, newest at the bottom, and it stays up for `pillHoldSeconds`.
-/// - Fan goals start confetti and one shared center ball when their goal pill
-///   drops, and the ball leaves with the set — the two are on screen for
-///   exactly the same time.
+/// - Fan goals fire goal confetti (footballs + the scorer's crest) from the
+///   bottom corners when their goal pill drops. It's click-through and
+///   fire-and-forget, so nothing ever sits in the middle of the screen.
 @MainActor
 final class OverlayManager: ObservableObject {
     static let shared = OverlayManager()
 
     @Published private(set) var activeSet: [NotchItem] = []
-    @Published private(set) var ballEvents: [MatchEvent] = [] // fan goals of the current set
-    @Published private(set) var ballPhase: BallPhase = .hidden
     @Published private(set) var confettiBursts: [ConfettiBurst] = []
 
     private var goalQueue: [QueuedNotchItem] = []
@@ -52,7 +51,6 @@ final class OverlayManager: ObservableObject {
     private var lifecycleScheduled: [DispatchWorkItem] = []
     private var queueBusy = false  // set synchronously so rapid-fire pushes can't race startNextSetIfIdle
     private var displayPanel: NSPanel?
-    private var interactPanel: NSPanel?
     private var displayObserver: NSObjectProtocol?
 
     private init() {
@@ -65,7 +63,7 @@ final class OverlayManager: ObservableObject {
         }
     }
 
-    /// How long each notification set (and the ball with it) stays on screen.
+    /// How long each notification set stays on screen.
     private let pillHoldSeconds: TimeInterval = 7
     /// Notification set size — how many pills display at once.
     private let setSize = 5
@@ -98,26 +96,21 @@ final class OverlayManager: ObservableObject {
     }
 
     /// VAR cancelled a goal. The pill stays queued (it's information), but it
-    /// no longer triggers ball/confetti; if the ball is showing that team, it
-    /// drops it (and goes away if no teams remain).
+    /// no longer fires confetti, and any of its confetti still in the air goes.
     func cancelGoal(fixtureId: Int, teamId: Int?) {
         for index in goalQueue.indices
         where goalQueue[index].item.fanGoal?.fixtureId == fixtureId && goalQueue[index].item.fanGoal?.teamId == teamId {
             goalQueue[index].item.fanGoal = nil
         }
-        guard ballPhase != .hidden else { return }
-        ballEvents.removeAll { $0.fixtureId == fixtureId && $0.teamId == teamId }
-        if ballEvents.isEmpty {
-            // VAR took the goal back — the ball goes, but nobody dismissed it.
-            hideBall()
-        }
+        confettiBursts.removeAll { $0.fixtureId == fixtureId && $0.teamId == teamId }
+        hidePanelsIfDone()
     }
 
     /// Preview: drop everything pending and end the current set.
     func dismissAll() {
         goalQueue.removeAll()
         otherQueue.removeAll()
-        hideBall()
+        confettiBursts.removeAll()
         endSet()
     }
 
@@ -159,13 +152,13 @@ final class OverlayManager: ObservableObject {
         // One per displayed set — the unit a user actually perceives, and the
         // only overlay event that fires per set rather than per event.
         AppAnalytics.overlaySetShown(count: set.count, hasFanGoal: !fanGoals.isEmpty)
-        // Ball and confetti come in as the first fan-goal pill drops, and the
-        // ball goes out with the set in `endSet`.
+        // Confetti comes in as the first fan-goal pill drops.
         if AppSession.shared.prefs.settings.goalCenter ?? true,
            let first = set.firstIndex(where: { $0.fanGoal != nil }) {
+            let crests = fanGoals.map { crest(for: $0) }
+            TeamLogoStore.shared.preload(crests)
             scheduleLifecycle(after: Double(first) * Self.pillDropStagger) { [self] in
-                fireConfetti(count: fanGoals.count)
-                startBall(for: fanGoals)
+                fireConfetti(for: fanGoals)
             }
         }
         scheduleLifecycle(after: pillHoldSeconds) { [self] in endSet() }
@@ -175,7 +168,6 @@ final class OverlayManager: ObservableObject {
     func endSet() {
         guard !activeSet.isEmpty || queueBusy else { return }
         cancelLifecycleScheduled()
-        finishBall()
         withAnimation(.easeIn(duration: 0.35)) {
             activeSet = []
         }
@@ -186,62 +178,21 @@ final class OverlayManager: ObservableObject {
         }
     }
 
-    // MARK: Ball — the fan-goal animation for the active displayed set
+    // MARK: Confetti — fire and forget, never waits for anything
 
-    private func startBall(for goals: [MatchEvent]) {
+    private func fireConfetti(for goals: [MatchEvent]) {
+        guard !goals.isEmpty else { return }
         // A followed team scored and the animation actually fired. Skips the
         // Settings preview, whose synthetic event carries fixture 0 — that one
         // reports as `celebration_preview`.
         if goals.contains(where: { $0.fixtureId > 0 }) {
             AppAnalytics.celebrationShown()
         }
-        ballEvents = goals
-        ballPhase = .showing
-        showInteractPanel()
-    }
-
-    /// Ball ✕ — only the ball goes; the notification set stays.
-    func dismissBall() {
-        guard ballPhase != .hidden else { return }
-        // The ✕ is the one overlay control a user can press, so this is what
-        // says whether people close the ball or let it ride (the other
-        // half is `finishBall`'s `timeout`).
-        AppAnalytics.overlayDismissed(reason: "user")
-        hideBall()
-    }
-
-    /// Tear the ball down WITHOUT reporting a dismissal — a VAR reversal or
-    /// the preview reset is not the user closing anything.
-    private func hideBall() {
-        guard ballPhase != .hidden else { return }
-        withAnimation(.easeOut(duration: 0.3)) {
-            ballPhase = .hidden
-            ballEvents = []
-        }
-        hideInteractPanel()
-        hidePanelsIfDone()
-    }
-
-    /// Natural ball expiry — leaves with its set, on the pills' curve.
-    private func finishBall() {
-        guard ballPhase != .hidden else { return }
-        AppAnalytics.overlayDismissed(reason: "timeout")
-        fadeOutInteractPanel(duration: 0.35)
-        withAnimation(.easeIn(duration: 0.35)) {
-            ballPhase = .hidden
-            ballEvents = []
-        }
-        scheduleAmbient(after: 0.4) { [self] in hideInteractPanel() }
-    }
-
-    // MARK: Confetti — fire and forget, never waits for anything
-
-    private func fireConfetti(count: Int) {
-        guard count > 0, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else { return }
-        for _ in 0 ..< count {
-            let burst = ConfettiBurst()
+        guard !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else { return }
+        for goal in goals {
+            let burst = ConfettiBurst(fixtureId: goal.fixtureId, teamId: goal.teamId, logo: crest(for: goal))
             confettiBursts.append(burst)
-            scheduleAmbient(after: 5.5) { [self] in
+            scheduleAmbient(after: ConfettiView.lifetime + 1.2) { [self] in
                 confettiBursts.removeAll { $0.id == burst.id }
                 hidePanelsIfDone()
             }
@@ -249,10 +200,15 @@ final class OverlayManager: ObservableObject {
         showDisplayPanel()
     }
 
+    private func crest(for goal: MatchEvent) -> String {
+        guard let teamId = goal.teamId else { return "" }
+        return TeamCatalog.team(for: teamId, in: AppSession.shared.allTeams).logo
+    }
+
     // MARK: Preview
 
-    /// Settings "Preview animation": a generic fan goal (Team A vs Team B)
-    /// through the exact same pipeline — pill set + confetti + ball, per the
+    /// Settings "Preview goal confetti": a generic fan goal (Team A vs Team B)
+    /// through the exact same pipeline — pill set + confetti, per the
     /// user's toggles. Jumps ahead of anything queued.
     func preview() {
         let event = MatchEvent(
@@ -277,7 +233,7 @@ final class OverlayManager: ObservableObject {
 
     /// Settings / onboarding sample: one notch drop of `type` for a generic
     /// match, so a size or alert-level change shows what it does. Never a fan
-    /// goal — the goal animation has its own Preview.
+    /// goal — the goal confetti has its own Preview.
     func previewAlert(_ type: MatchEventType) {
         let event = MatchEvent(
             eventId: "preview-alert:\(Date().timeIntervalSince1970)",
@@ -317,7 +273,7 @@ final class OverlayManager: ObservableObject {
 
     // MARK: Panels
 
-    private static func makePanel(frame: NSRect, clickThrough: Bool) -> NSPanel {
+    private static func makePanel(frame: NSRect) -> NSPanel {
         let panel = NSPanel(
             contentRect: frame,
             styleMask: [.borderless, .nonactivatingPanel],
@@ -327,13 +283,13 @@ final class OverlayManager: ObservableObject {
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = false
-        // `.screenSaver` (not `.statusBar`) so the pill/ball float ABOVE
+        // `.screenSaver` (not `.statusBar`) so the pills/confetti float ABOVE
         // full-screen apps too; the collection behavior lets this accessory app
         // draw over another app's full-screen space. Shared with the pinned
         // capsules via `OverlayWindow` so every overlay floats above everything.
         panel.level = OverlayWindow.level
         panel.collectionBehavior = OverlayWindow.collectionBehavior
-        panel.ignoresMouseEvents = clickThrough
+        panel.ignoresMouseEvents = true
         panel.sharingType = .readOnly
         panel.isFloatingPanel = true
         panel.becomesKeyOnlyIfNeeded = true
@@ -369,17 +325,15 @@ final class OverlayManager: ObservableObject {
     }
 
     /// Re-apply the theme to any panels already on screen — the Appearance
-    /// setting can change while a pill/ball is showing.
+    /// setting can change while a pill is showing.
     func applyOverlayTheme() {
-        let appearance = overlayAppearance
-        displayPanel?.appearance = appearance
-        interactPanel?.appearance = appearance
+        displayPanel?.appearance = overlayAppearance
     }
 
     private func showDisplayPanel() {
         guard let screen else { return }
         if displayPanel == nil {
-            let panel = Self.makePanel(frame: screen.frame, clickThrough: true)
+            let panel = Self.makePanel(frame: screen.frame)
             panel.contentView = Self.makeHostingView(OverlayDisplayView().environmentObject(self))
             displayPanel = panel
         }
@@ -391,14 +345,10 @@ final class OverlayManager: ObservableObject {
     private func displayTargetDidChange() {
         guard let screen else {
             displayPanel?.orderOut(nil)
-            interactPanel?.orderOut(nil)
             return
         }
         if let displayPanel, displayPanel.isVisible {
             displayPanel.setFrame(screen.frame, display: true)
-        }
-        if let interactPanel, interactPanel.isVisible {
-            interactPanel.setFrame(interactionFrame(on: screen), display: true)
         }
         // Re-evaluate selected-screen safe-area geometry in NotchStackView.
         objectWillChange.send()
@@ -411,62 +361,7 @@ final class OverlayManager: ObservableObject {
     /// order the panel out under a set whose pills haven't landed yet.
     private func hidePanelsIfDone() {
         guard !queueBusy, activeSet.isEmpty, goalQueue.isEmpty, otherQueue.isEmpty,
-              ballPhase == .hidden, confettiBursts.isEmpty else { return }
+              confettiBursts.isEmpty else { return }
         displayPanel?.orderOut(nil)
-    }
-
-    /// Fades the ball's panel in lockstep with the scene so the whole thing
-    /// dissolves as one piece.
-    private func fadeOutInteractPanel(duration: Double) {
-        guard let panel = interactPanel, panel.isVisible else { return }
-        NSAnimationContext.runAnimationGroup { context in
-            context.duration = duration
-            panel.animator().alphaValue = 0
-        }
-    }
-
-    private func showInteractPanel() {
-        guard let screen else { return }
-        let rect = interactionFrame(on: screen)
-        if interactPanel == nil {
-            let panel = Self.makePanel(frame: rect, clickThrough: false)
-            panel.contentView = Self.makeHostingView(InteractiveBallView().environmentObject(self))
-            interactPanel = panel
-        }
-        interactPanel?.appearance = overlayAppearance
-        interactPanel?.setFrame(rect, display: true)
-        interactPanel?.orderFrontRegardless()
-    }
-
-    private func interactionFrame(on screen: NSScreen) -> NSRect {
-        let size: CGFloat = 320
-        return NSRect(
-            x: screen.frame.midX - size / 2,
-            y: screen.frame.midY - size / 2,
-            width: size,
-            height: size
-        )
-    }
-
-    private func hideInteractPanel() {
-        interactPanel?.orderOut(nil)
-        interactPanel?.alphaValue = 1 // reset after a fade-out
-    }
-}
-
-/// The ✕ shared by the notification stack and the goal ball, so both
-/// look identical. The caller supplies what dismissing means.
-struct DismissCrossButton: View {
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            Image(systemName: "xmark.circle.fill")
-                .font(.system(size: 22))
-                .foregroundStyle(.white, .black.opacity(0.6))
-        }
-        .buttonStyle(.plain)
-        .hoverLift()
-        .accessibilityLabel("Dismiss goal celebration")
     }
 }

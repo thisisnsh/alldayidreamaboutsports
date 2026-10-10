@@ -120,8 +120,8 @@ final class EventRouter {
                                 presentation: celebrates ? "celebration" : "pill")
 
         // Every event joins the overlay queues. Goals are prioritized for the
-        // next displayed set; followed-team goals start the center celebration
-        // only once their goal pill reaches that set.
+        // next displayed set; followed-team goals fire their confetti only
+        // once their goal pill reaches that set.
         OverlayManager.shared.submit(event, isFanGoal: isFanGoal)
     }
 

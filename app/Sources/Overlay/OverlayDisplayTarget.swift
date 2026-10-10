@@ -13,7 +13,7 @@ extension Notification.Name {
 }
 
 /// The single display used by every app-owned overlay: pinned capsules, notch
-/// notifications, confetti, and the interactive goal ball.
+/// notifications and goal confetti.
 @MainActor
 final class OverlayDisplayTarget: ObservableObject {
     static let shared = OverlayDisplayTarget()

@@ -14,8 +14,9 @@ struct PrefSettings: Codable, Equatable {
     var theme: ThemeChoice?
     /// Per-event-type switches for the notch pills; missing key = enabled.
     var notifications: [String: Bool]?
-    /// The goal animation on fan-team goals: center ball plus confetti. Off =
-    /// fan goals use the notch pill like every other event.
+    /// Goal confetti on fan-team goals (footballs + the scorer's crest from
+    /// the bottom corners). Off = fan goals use the notch pill like every
+    /// other event. The key keeps its old "center" name so saved prefs carry over.
     var goalCenter: Bool?
     /// Size of pinned score capsules (fonts + logos). nil = medium.
     var capsuleSize: CapsuleSize?
