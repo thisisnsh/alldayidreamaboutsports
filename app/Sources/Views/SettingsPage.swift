@@ -305,7 +305,6 @@ struct SettingsPage: View {
         )
     }
 
-    /// Replays an alert so the new time can be felt straight away.
     private var alertDurationBinding: Binding<OverlayDuration> {
         Binding(
             get: { session.prefs.settings.alertDuration ?? .medium },
@@ -313,13 +312,11 @@ struct SettingsPage: View {
                 // Deferred like `themeBinding`.
                 DispatchQueue.main.async {
                     session.updateSettings { $0.alertDuration = choice }
-                    OverlayManager.shared.previewAlert(.goal)
                 }
             }
         )
     }
 
-    /// Replays the goal confetti at the new length.
     private var confettiDurationBinding: Binding<OverlayDuration> {
         Binding(
             get: { session.prefs.settings.confettiDuration ?? .medium },
@@ -327,7 +324,6 @@ struct SettingsPage: View {
                 // Deferred like `themeBinding`.
                 DispatchQueue.main.async {
                     session.updateSettings { $0.confettiDuration = choice }
-                    OverlayManager.shared.preview()
                 }
             }
         )
