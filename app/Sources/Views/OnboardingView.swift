@@ -99,15 +99,13 @@ struct WelcomeBackView: View {
     static let size = CGSize(width: 440, height: 400)
 
     var body: some View {
-        ZStack(alignment: .bottom) {
-            LogoMarquee(logos: session.allTeams.map(\.logo), columnCount: 6, fadeTo: 0.65)
+        ZStack {
+            LogoMarquee(logos: session.allTeams.map(\.logo), columnCount: 6, fadeTo: 0.55)
             VStack(spacing: 12) {
-                Image(systemName: "arrow.up.right")
-                    .font(.system(size: 30, weight: .bold))
-                    .opacity(0.8)
-                Text("Hey, I'm up here")
+                Text("All Day I Dream\nAbout Sports")
                     .font(.system(size: 26, weight: .heavy, design: .rounded))
-                Text("Click the \(Image(systemName: "soccerball")) in your menu bar any time for scores, teams and settings.")
+                    .multilineTextAlignment(.center)
+                Text("I'm up in your menu bar. Click the \(Image(systemName: "soccerball")) any time for scores, teams and settings.")
                     .font(.system(size: 14, design: .rounded))
                     .multilineTextAlignment(.center)
                     .opacity(0.7)
