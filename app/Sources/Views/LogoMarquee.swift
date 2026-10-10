@@ -8,6 +8,7 @@ struct LogoMarquee: View {
     private let columns: [Column]
     private let columnWidth: CGFloat
     private let fadeTo: CGFloat
+    private let strength: Double
     @ObservedObject private var store = TeamLogoStore.shared
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -16,10 +17,13 @@ struct LogoMarquee: View {
     /// limit so the marquee never evicts the picker's logos.
     private static let maxLogos = 48
 
-    /// - Parameter fadeTo: How far down (0–1) the crests have fully faded.
-    init(logos: [String], columnCount: Int = 7, columnWidth: CGFloat = 84, fadeTo: CGFloat = 0.85) {
+    /// - Parameters:
+    ///   - fadeTo: How far down (0–1) the crests have fully faded.
+    ///   - strength: Opacity at the top, so the crests stay a backdrop.
+    init(logos: [String], columnCount: Int = 7, columnWidth: CGFloat = 84, fadeTo: CGFloat = 0.85, strength: Double = 0.45) {
         self.columnWidth = columnWidth
         self.fadeTo = fadeTo
+        self.strength = strength
         var rng = SeededGenerator(seed: 2026)
         let pool = Array(Set(logos.filter { !$0.isEmpty })).sorted().shuffled(using: &rng).prefix(Self.maxLogos)
         guard !pool.isEmpty else {
@@ -71,6 +75,7 @@ struct LogoMarquee: View {
                 endPoint: .bottom
             )
         )
+        .opacity(strength)
         .allowsHitTesting(false)
         .accessibilityHidden(true)
     }
