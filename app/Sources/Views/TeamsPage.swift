@@ -25,7 +25,7 @@ struct TeamsPage: View {
                 .padding(.horizontal, 12)
             }
             ScrollView {
-                TeamLeagueList(query: query, columns: 3, followingOnly: followingOnly)
+                TeamLeagueList(query: query, columns: 5, compact: true, followingOnly: followingOnly)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 10)
             }
@@ -67,13 +67,15 @@ struct TeamSearchField: View {
 }
 
 /// Every league's team grid, filtered by `query`. Shared by the popover's
-/// Teams page (4 columns) and onboarding (6 columns). Every league is
+/// Teams page (5 compact columns) and onboarding (6 columns). Every league is
 /// followable, at full opacity — a finished competition is badged "Ended" and
 /// one that hasn't started "Coming soon", but those are labels, not gates.
 struct TeamLeagueList: View {
     @EnvironmentObject var session: AppSession
     let query: String
     let columns: Int
+    /// Smaller logos and labels, to fit five tiles across the popover.
+    var compact = false
     var followingOnly = false
     /// Folded leagues. View state only: every league opens unfolded.
     @State private var collapsed: Set<Int> = []
@@ -113,6 +115,7 @@ struct TeamLeagueList: View {
                         league: league,
                         teams: leagueTeams,
                         columns: columns,
+                        compact: compact,
                         // A search always shows its results, folded or not.
                         collapsed: query.isEmpty && collapsed.contains(league.id)
                     ) {
@@ -170,6 +173,7 @@ private struct LeagueSection: View {
     let league: League
     let teams: [Team]
     let columns: Int
+    let compact: Bool
     let collapsed: Bool
     let toggleCollapsed: () -> Void
 
@@ -215,9 +219,9 @@ private struct LeagueSection: View {
                 } else if teams.isEmpty {
                     Text("No teams yet").font(.system(size: 12)).opacity(0.6)
                 } else {
-                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: columns), spacing: 8) {
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: compact ? 6 : 8), count: columns), spacing: compact ? 6 : 8) {
                         ForEach(teams) { team in
-                            TeamTile(team: team, selected: session.fanTeamIds.contains(team.id)) {
+                            TeamTile(team: team, selected: session.fanTeamIds.contains(team.id), compact: compact) {
                                 toggle(team)
                             }
                         }
@@ -294,22 +298,23 @@ private struct LeagueSection: View {
 private struct TeamTile: View {
     let team: Team
     let selected: Bool
+    let compact: Bool
     let action: () -> Void
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         Button(action: action) {
             ZStack(alignment: .topTrailing) {
-                VStack(spacing: 5) {
-                    CachedTeamLogo(url: team.logo, size: 36, neutralBacking: true)
+                VStack(spacing: compact ? 4 : 5) {
+                    CachedTeamLogo(url: team.logo, size: compact ? 26 : 36, neutralBacking: true)
                     Text(team.name)
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.system(size: compact ? 10 : 12, weight: .medium))
                         .multilineTextAlignment(.center)
                         .lineLimit(2)
-                        .frame(height: 30, alignment: .top)
+                        .frame(height: compact ? 26 : 30, alignment: .top)
                 }
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 9)
+                .padding(.vertical, compact ? 7 : 9)
                 .padding(.horizontal, 3)
                 .background(
                     RoundedRectangle(cornerRadius: 10)
@@ -322,9 +327,9 @@ private struct TeamTile: View {
 
                 if selected {
                     Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 14))
+                        .font(.system(size: compact ? 12 : 14))
                         .foregroundStyle(scheme == .dark ? .black : .white, Color.primary)
-                        .padding(5)
+                        .padding(compact ? 3 : 5)
                 }
             }
         }
