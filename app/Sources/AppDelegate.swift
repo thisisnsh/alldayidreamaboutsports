@@ -106,7 +106,6 @@ final class MenuPopoverController: NSObject, NSPopoverDelegate {
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
     private let popover = NSPopover()
     private var hostingView: NSView?
-    private var heightSubscription: AnyCancellable?
     private var eventMonitor: Any?
     private var keyMonitor: Any?
     /// When the popover went up, for the `menu_closed` duration. Non-nil only
@@ -130,19 +129,6 @@ final class MenuPopoverController: NSObject, NSPopoverDelegate {
         hosting.sizingOptions = []
         popover.contentViewController = hosting
         hostingView = hosting.view
-        // Home hugs its matches; Teams and Settings get the full height.
-        // Follows the page and the measured home content, open or closed.
-        let router = PopoverRouter.shared
-        // Resize on the next main-loop turn: @Published fires in willSet (before
-        // the page has changed, inside `go()`'s animation) and homeFit is
-        // written from a layout pass. Resizing the window synchronously there
-        // could strand the page transition — the popover resized but the old
-        // page stayed up.
-        heightSubscription = router.$page.combineLatest(router.$homeFit)
-            .map { MenuPopoverView.height(for: $0, homeFit: $1) }
-            .removeDuplicates()
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] in self?.applyHeight($0) }
     }
 
     private func applyHeight(_ height: CGFloat) {

@@ -15,8 +15,8 @@ final class PopoverRouter: ObservableObject {
     @Published private(set) var page: PopoverPage = .home
     /// Whether the last move went deeper, so the slide runs the matching way.
     @Published private(set) var forward = true
-    /// The popover's height, set by `MenuPopoverController` from the page and
-    /// `homeFit`.
+    /// The popover's height, set by `MenuPopoverController` each time it opens
+    /// and held until it closes.
     @Published var height = MenuPopoverView.maxHeight
     /// How tall the home page wants to be to show all its matches without
     /// scrolling, as last measured. nil until it first lays out.
@@ -66,8 +66,9 @@ final class PopoverRouter: ObservableObject {
     }
 }
 
-/// The menu bar popover: a fixed-width frame that swaps between pages. Home is
-/// as tall as its matches need; Teams and Settings use the full height.
+/// The menu bar popover: a fixed-width frame that swaps between pages. It opens
+/// at one of three heights and keeps it until it closes: resizing a shown
+/// NSPopover shakes everything in it.
 struct MenuPopoverView: View {
     @EnvironmentObject var session: AppSession
     @ObservedObject private var router = PopoverRouter.shared
@@ -77,11 +78,13 @@ struct MenuPopoverView: View {
     static let screen = "menu"
     static let width: CGFloat = 360
     static let maxHeight: CGFloat = 540
-    static let minHeight: CGFloat = 200
+    /// Small, medium, large. Home opens at the smallest that fits its matches;
+    /// Teams and Settings open large.
+    static let heights: [CGFloat] = [320, 430, maxHeight]
 
     static func height(for page: PopoverPage, homeFit: CGFloat?) -> CGFloat {
         guard page == .home, let homeFit else { return maxHeight }
-        return min(maxHeight, max(minHeight, homeFit.rounded(.up)))
+        return heights.first { $0 >= homeFit.rounded(.up) } ?? maxHeight
     }
 
     var body: some View {
