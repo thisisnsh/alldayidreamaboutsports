@@ -136,7 +136,7 @@ final class NotchIsland: ObservableObject {
     /// Settled notification slots in panel coordinates, from the SwiftUI view.
     private var notificationFrames: [String: CGRect] = [:]
     private var hovering = false
-    private var mouseMonitors: [Any] = []
+    private var pointerTimer: Timer?
     private var cancellables: Set<AnyCancellable> = []
     private var collapseWork: DispatchWorkItem?
     private var hideWork: DispatchWorkItem?
@@ -231,6 +231,7 @@ final class NotchIsland: ObservableObject {
         hideWork?.cancel()
         if isResting {
             panel?.ignoresMouseEvents = true
+            stopPointerPolling()
             setHovering(false)
             setHoveredNotification(nil)
             let work = DispatchWorkItem { [weak self] in
@@ -247,22 +248,22 @@ final class NotchIsland: ObservableObject {
 
     // MARK: Pointer
 
-    /// Monitors (not tracking areas) follow the pointer, because the panel
-    /// ignores the mouse until the pointer is over the island or a notification
-    /// — and a window that ignores the mouse gets no tracking events.
-    private func installMouseMonitors() {
-        let mask: NSEvent.EventTypeMask = [.mouseMoved, .leftMouseDragged, .leftMouseUp]
-        if let global = NSEvent.addGlobalMonitorForEvents(matching: mask, handler: { [weak self] _ in
+    /// Poll the pointer while the island shows anything. The panel ignores
+    /// the mouse until the pointer is over the island or a notification, so
+    /// it gets no tracking events — and mouse-moved monitors miss moves
+    /// whenever no window takes them (e.g. while this app is active).
+    private func startPointerPolling() {
+        guard pointerTimer == nil else { return }
+        let timer = Timer(timeInterval: 1.0 / 20, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.trackPointer() }
-        }) {
-            mouseMonitors.append(global)
         }
-        if let local = NSEvent.addLocalMonitorForEvents(matching: mask, handler: { [weak self] event in
-            MainActor.assumeIsolated { self?.trackPointer() }
-            return event
-        }) {
-            mouseMonitors.append(local)
-        }
+        RunLoop.main.add(timer, forMode: .common)
+        pointerTimer = timer
+    }
+
+    private func stopPointerPolling() {
+        pointerTimer?.invalidate()
+        pointerTimer = nil
     }
 
     private func trackPointer() {
@@ -308,11 +309,9 @@ final class NotchIsland: ObservableObject {
 
     private func showPanel() {
         guard let screen = OverlayDisplayTarget.shared.selectedScreen else { return }
-        if panel == nil {
-            panel = makePanel()
-            installMouseMonitors()
-        }
+        if panel == nil { panel = makePanel() }
         guard let panel else { return }
+        startPointerPolling()
         let frame = frame(on: screen)
         // `refresh` runs on every poll; only move the panel when it must.
         if panel.frame != frame { panel.setFrame(frame, display: true) }
