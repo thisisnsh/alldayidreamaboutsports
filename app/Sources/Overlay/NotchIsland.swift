@@ -50,6 +50,12 @@ struct NotchGeometry {
         hasNotch ? CGSize(width: notchWidth, height: bandHeight) : CGSize(width: compactWidth, height: 0)
     }
 
+    /// What a drop splits off from: the hardware notch, or on a notchless
+    /// display a zero-height sliver of the top edge (the drop seeps out of it).
+    func dropSource(width: CGFloat) -> CGSize {
+        hasNotch ? CGSize(width: notchWidth, height: bandHeight) : CGSize(width: width * 0.5, height: 0)
+    }
+
     func expandedWidth(_ metrics: NotchPillMetrics) -> CGFloat {
         max(metrics.islandWidth, compactWidth + 40)
     }
@@ -94,25 +100,26 @@ struct NotchIslandShape: Shape {
 
 // MARK: - Controller
 
-/// What the island is showing. Drops win over everything; a match card wins
-/// over the compact pin.
+/// What the island itself is showing; a match card wins over the compact pin.
+/// Event drops aren't a mode: they split off the notch as their own bars
+/// (`NotchDropsLayer`) beneath whatever the island shows.
 enum IslandMode: Equatable {
     /// Nothing: the island is the hardware notch (and its panel is hidden).
     case rest
     /// A pinned match, in the menu bar beside the notch: score left, clock right.
     case compact(Int)
-    /// The current set of event drops.
-    case drops
     /// One match opened up: scoreline, status and its latest events.
     case card(Int)
 }
 
-/// The notch island: the notch itself grows sideways to hold a pinned score,
-/// and drops down to show event sets and match cards, then shrinks back into
-/// the hardware. One panel, fixed size, at the top-center of the display
-/// chosen in Settings; the island inside it animates. The panel only takes
-/// the mouse while the pointer is over the island — everywhere else clicks
-/// fall through to whatever is underneath.
+/// The notch island: the notch itself grows sideways to hold a pinned score
+/// and down to show a match card, then shrinks back into the hardware. Event
+/// drops split off the notch as separate black bars in the same panel.
+///
+/// One panel, fixed size, at the top-center of the display chosen in
+/// Settings; everything inside it animates. The panel only takes the mouse
+/// while the pointer is over the island — everywhere else, drops included,
+/// clicks fall through to whatever is underneath.
 ///
 /// Holds one match at a time; pinning another replaces it. Floating capsules
 /// (`PinnedCapsuleManager`) are the way to watch several matches at once.
@@ -125,9 +132,9 @@ final class NotchIsland: ObservableObject {
     /// The match whose card is open.
     @Published private(set) var cardFixtureId: Int?
 
-    /// Fixed panel size: room for the widest, tallest island (a large-size
-    /// card or a full set of drops) plus its shoulders and shadow.
-    static let panelSize = CGSize(width: 640, height: 600)
+    /// Fixed panel size: room for the widest, tallest content (a large-size
+    /// card, or a full set of long drops) plus shoulders and shadow.
+    static let panelSize = CGSize(width: 760, height: 600)
     static let spring = Animation.spring(response: 0.42, dampingFraction: 0.8)
 
     private var panel: NSPanel?
@@ -193,8 +200,8 @@ final class NotchIsland: ObservableObject {
         refresh()
     }
 
-    /// Open a match's card. From a drop, the set ends first so the card has
-    /// the island to itself.
+    /// Open a match's card. If drops are showing, the set ends first so the
+    /// card has the space under the notch to itself.
     func openCard(_ fixtureId: Int, source: String) {
         guard AppSession.shared.fixtures.contains(where: { $0.fixtureId == fixtureId }) else { return }
         AppAnalytics.notchCardOpened(fixtureId: fixtureId, source: source)
@@ -400,8 +407,14 @@ private final class IslandHostingView<Content: View>: NSHostingView<Content> {
 
 private struct NotchIslandRoot: View {
     var body: some View {
-        NotchIslandView()
-            .frame(width: NotchIsland.panelSize.width, height: NotchIsland.panelSize.height, alignment: .top)
+        ZStack(alignment: .top) {
+            NotchDropsLayer()
+            // Above the drops, so a neck passing up into the notch never
+            // covers the pinned score.
+            NotchIslandView()
+        }
+        .coordinateSpace(name: NotchDropsLayer.space)
+        .frame(width: NotchIsland.panelSize.width, height: NotchIsland.panelSize.height, alignment: .top)
             .ignoresSafeArea()
             .environment(\.colorScheme, .dark)
     }
@@ -409,13 +422,11 @@ private struct NotchIslandRoot: View {
 
 private struct NotchIslandView: View {
     @ObservedObject private var island = NotchIsland.shared
-    @ObservedObject private var overlay = OverlayManager.shared
     @ObservedObject private var capsules = PinnedCapsuleManager.shared
     @ObservedObject private var displayTarget = OverlayDisplayTarget.shared
     @EnvironmentObject private var session: AppSession
 
     private var mode: IslandMode {
-        if !overlay.activeSet.isEmpty { return .drops }
         if let id = island.cardFixtureId, fixture(id) != nil { return .card(id) }
         if let id = island.pinnedFixtureId, fixture(id) != nil { return .compact(id) }
         return .rest
@@ -445,7 +456,7 @@ private struct NotchIslandView: View {
 
     private func isDropped(_ mode: IslandMode) -> Bool {
         switch mode {
-        case .drops, .card: true
+        case .card: true
         case .rest, .compact: false
         }
     }
@@ -454,16 +465,16 @@ private struct NotchIslandView: View {
         switch mode {
         case .rest: geometry.restSize.width
         case .compact: geometry.compactWidth
-        case .drops, .card: geometry.expandedWidth(metrics)
+        case .card: geometry.expandedWidth(metrics)
         }
     }
 
-    /// nil = the content's own height (drops and cards grow with what they hold).
+    /// nil = the content's own height (a card grows with what it holds).
     private func height(_ mode: IslandMode, _ geometry: NotchGeometry) -> CGFloat? {
         switch mode {
         case .rest: geometry.restSize.height
         case .compact: geometry.bandHeight
-        case .drops, .card: nil
+        case .card: nil
         }
     }
 
@@ -474,7 +485,7 @@ private struct NotchIslandView: View {
             NotchIslandShape(topRadius: geometry.hasNotch ? 6 : 0, bottomRadius: geometry.hasNotch ? 9 : 0)
         case .compact:
             NotchIslandShape(topRadius: 6, bottomRadius: min(10, geometry.bandHeight / 2))
-        case .drops, .card:
+        case .card:
             NotchIslandShape(topRadius: 12, bottomRadius: metrics.corner)
         }
     }
@@ -491,19 +502,6 @@ private struct NotchIslandView: View {
                 CompactIsland(fixture: fixture, geometry: geometry)
                     .transition(.opacity)
             }
-        case .drops:
-            VStack(alignment: .leading, spacing: metrics.rowSpacing) {
-                ForEach(overlay.activeSet) { item in
-                    NotchDropRow(item: item, metrics: metrics)
-                        // Drop down out of the notch; rise back into it.
-                        .transition(.move(edge: .top).combined(with: .opacity))
-                        .onTapGesture { island.openCard(item.fixtureId, source: "drop") }
-                }
-            }
-            .padding(.top, geometry.bandHeight + 4)
-            .padding(.horizontal, metrics.hPad)
-            .padding(.bottom, metrics.vPad)
-            .transition(.opacity.combined(with: .scale(scale: 0.94, anchor: .top)))
         case let .card(id):
             if let fixture = fixture(id) {
                 IslandMatchCard(fixture: fixture, geometry: geometry, metrics: metrics)
@@ -516,7 +514,7 @@ private struct NotchIslandView: View {
         switch mode {
         case let .compact(id): island.openCard(id, source: "pin")
         case .card: island.closeCard()
-        case .rest, .drops: break
+        case .rest: break
         }
     }
 
@@ -537,7 +535,7 @@ private struct NotchIslandView: View {
             } else {
                 Button("Pin to notch") { island.toggle(fixtureId: id) }
             }
-        case .rest, .drops:
+        case .rest:
             EmptyView()
         }
     }

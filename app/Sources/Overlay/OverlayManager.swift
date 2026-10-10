@@ -146,7 +146,8 @@ final class OverlayManager: ObservableObject {
         // newest last, even though goals were prioritized for selection.
         for (index, item) in set.enumerated() {
             scheduleLifecycle(after: Double(index) * Self.pillDropStagger) { [self] in
-                withAnimation(.spring(duration: 0.45, bounce: 0.25)) {
+                // Long enough to see the drop split off the notch.
+                withAnimation(.spring(duration: 0.6, bounce: 0.2)) {
                     activeSet.append(item)
                 }
             }
@@ -172,10 +173,11 @@ final class OverlayManager: ObservableObject {
     func endSet() {
         guard !activeSet.isEmpty || queueBusy else { return }
         cancelLifecycleScheduled()
-        withAnimation(.easeIn(duration: 0.35)) {
+        // Pulled back up into the notch.
+        withAnimation(.easeInOut(duration: 0.45)) {
             activeSet = []
         }
-        scheduleLifecycle(after: 0.45) { [self] in
+        scheduleLifecycle(after: 0.55) { [self] in
             queueBusy = false
             startNextSetIfIdle()
             hidePanelsIfDone()
