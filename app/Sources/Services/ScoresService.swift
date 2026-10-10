@@ -78,6 +78,7 @@ final class ScoresETagStore {
 
     func etag(for path: String) -> String? { etags[path] }
     func set(_ etag: String, for path: String) { etags[path] = etag }
+    func remove(for path: String) { etags[path] = nil }
     /// Drop every cached ETag so the next read is a full 200 (not a 304 with no
     /// body) — required after the cached fixtures are wiped.
     func clear() { etags.removeAll() }

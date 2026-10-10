@@ -215,6 +215,18 @@ final class AppSession: ObservableObject {
         let catalog: Catalog
         do {
             catalog = try await scores.fetchCatalog().validated()
+        } catch ScoresError.notModified where !leagues.isEmpty {
+            // 304: the catalog already loaded this launch is still current.
+            catalogState = .ready
+            AppLog.info(.catalog, "refresh_not_modified leagues=\(leagues.count)")
+            return
+        } catch ScoresError.notModified {
+            // 304 but nothing usable loaded (the ETag is stored before
+            // validation): drop it so the next try is a full read.
+            ScoresETagStore.shared.remove(for: "catalog.json")
+            AppLog.info(.catalog, "refresh_not_modified_empty")
+            catalogState = .unavailable
+            return
         } catch {
             AppLog.error(.catalog, "refresh_failed", error: error)
             catalogState = .unavailable
