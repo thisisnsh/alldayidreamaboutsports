@@ -20,7 +20,7 @@ struct ConfettiBurst: Identifiable {
     let id = UUID()
     let fixtureId: Int
     let teamId: Int?
-    /// The scoring team's crest, drawn among the footballs.
+    /// The scoring team's crest, drawn among the paper confetti.
     let logo: String
 }
 
@@ -35,9 +35,9 @@ private struct QueuedNotchItem {
 ///   Each set takes goals first, then fills remaining slots with other events.
 /// - The visible stack is chronological within the selected set: oldest at the
 ///   top, newest at the bottom, and it stays up for `pillHoldSeconds`.
-/// - Fan goals fire goal confetti (footballs + the scorer's crest) from the
+/// - Fan goals fire goal confetti (the scorer's crest + paper) from the
 ///   bottom corners when their goal pill drops. It's click-through and
-///   fire-and-forget, so nothing ever sits in the middle of the screen.
+///   fire-and-forget, gone within seconds.
 @MainActor
 final class OverlayManager: ObservableObject {
     static let shared = OverlayManager()

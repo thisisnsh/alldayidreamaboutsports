@@ -1,20 +1,18 @@
 import SwiftUI
 
-/// Goal confetti: the scoring team's crest, a few footballs and paper
-/// confetti bursting from the
-/// bottom-left and bottom-right corners when a fan team scores. Stays in the
-/// corners and out of the middle of the screen, so it never covers what the
-/// user is doing.
+/// Goal confetti: the scoring team's crest and paper confetti bursting from
+/// the bottom-left and bottom-right corners when a fan team scores. Each burst
+/// leans in toward the middle of the screen, then falls away within seconds.
 struct ConfettiView: View {
     let size: CGSize
-    /// The scoring team's crest; pieces fall back to footballs until it loads.
+    /// The scoring team's crest; crest pieces stay hidden until it loads.
     let logo: String
     /// Fixed at first init — the burst token is created and shown in the
     /// same tick, so this is when the burst appears.
     @State private var start = Date()
     @ObservedObject private var logos = TeamLogoStore.shared
 
-    private enum Kind { case ball, crest, paper }
+    private enum Kind { case crest, paper }
 
     private struct Particle {
         let kind: Kind
@@ -51,7 +49,6 @@ struct ConfettiView: View {
             // renderer; nil until the crest has loaded.
             let crest = logos.image(for: logo)
             Canvas { canvas, _ in
-                let ball = canvas.resolve(Image(systemName: "soccerball"))
                 let crestImage = crest.map { canvas.resolve(Image(nsImage: $0)) }
                 for p in particles {
                     let t = elapsed - p.delay
@@ -66,15 +63,8 @@ struct ConfettiView: View {
                     let box = CGRect(x: -p.size / 2, y: -p.size / 2, width: p.size, height: p.size)
                     if p.kind == .paper {
                         ctx.fill(Path(CGRect(x: -p.size / 2, y: -p.size / 4, width: p.size, height: p.size / 2)), with: .color(p.color))
-                    } else if p.kind == .crest, let crestImage {
+                    } else if let crestImage {
                         ctx.draw(crestImage, in: Self.aspectFit(crestImage.size, in: box))
-                    } else {
-                        // White disc under the black glyph so the ball reads
-                        // on light and dark wallpapers alike.
-                        ctx.fill(Path(ellipseIn: box.insetBy(dx: p.size * 0.04, dy: p.size * 0.04)), with: .color(.white))
-                        var glyph = ball
-                        glyph.shading = .color(.black)
-                        ctx.draw(glyph, in: box)
                     }
                 }
             }
@@ -89,30 +79,30 @@ struct ConfettiView: View {
         return CGRect(x: box.midX - w / 2, y: box.midY - h / 2, width: w, height: h)
     }
 
-    /// Per corner: mostly crests, a few footballs, and paper confetti around them.
+    /// Per corner: crests with paper confetti around them.
     private static let mix: [Kind] =
-        Array(repeating: .crest, count: 14) + Array(repeating: .ball, count: 4) + Array(repeating: .paper, count: 30)
+        Array(repeating: .crest, count: 14) + Array(repeating: .paper, count: 34)
     private static let paperColors: [Color] = [.yellow, .green, .blue, .pink, .orange, .white, .red]
 
     private static func makeBursts(in size: CGSize) -> [Particle] {
         var all: [Particle] = []
-        // Spawn just outside the bottom-left and bottom-right corners; mostly
-        // vertical launch angles keep the burst anchored to its corner
-        // instead of drifting into the center of the screen.
+        // Spawn just outside the bottom-left and bottom-right corners and
+        // launch up and inward, so each burst reaches toward the middle of
+        // the screen before it falls.
         let corners: [(CGPoint, Double)] = [
             (CGPoint(x: -24, y: size.height + 24), 1.0),
             (CGPoint(x: size.width + 24, y: size.height + 24), -1.0),
         ]
         for (corner, dir) in corners {
             for kind in mix {
-                let angle = Double.random(in: 1.05...1.5) // steep: up, barely inward
-                let speed = Double.random(in: 300...580)
+                let angle = Double.random(in: 0.9...1.35) // up and inward
+                let speed = Double.random(in: 320...620)
                 all.append(Particle(
                     kind: kind,
                     origin: corner,
                     velocity: CGVector(dx: cos(angle) * speed * dir, dy: -sin(angle) * speed),
                     spin: Double.random(in: kind == .paper ? -6...6 : -4...4),
-                    size: kind == .paper ? CGFloat.random(in: 10...16) : CGFloat.random(in: 22...36),
+                    size: kind == .paper ? CGFloat.random(in: 10...16) : CGFloat.random(in: 28...44),
                     color: paperColors.randomElement()!,
                     delay: Double.random(in: 0...0.5)
                 ))

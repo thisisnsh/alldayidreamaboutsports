@@ -80,7 +80,7 @@ Pin a live match of a team you follow and its score stays in the top-right corne
 
 ### 🎉 Goal celebrations
 
-When your team scores, your team's crest, a few footballs and confetti burst from the bottom corners of the screen, out of the way of whatever you're doing. Hit **Preview goal confetti** in Settings to see one any time.
+When your team scores, your team's crest and confetti burst from the bottom corners of the screen and sweep in toward the middle. Hit **Preview goal confetti** in Settings to see one any time.
 
 ### 🏟️ Just your teams
 

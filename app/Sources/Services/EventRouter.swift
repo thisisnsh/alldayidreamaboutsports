@@ -2,7 +2,7 @@ import Foundation
 import SwiftUI
 
 /// Decides what each incoming event becomes:
-/// - GOAL by a followed team → full celebration (ball + confetti + tap window),
+/// - GOAL by a followed team → full celebration (crest confetti + tap window),
 ///   or a notch pill if the user prefers pills for goals
 /// - everything else in a followed match → notch pill
 /// The pill IS the notification — each event type can be toggled in Settings
