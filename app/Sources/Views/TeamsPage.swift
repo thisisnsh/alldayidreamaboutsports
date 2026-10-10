@@ -10,16 +10,14 @@ struct TeamsPage: View {
 
     var body: some View {
         VStack(spacing: 8) {
-            PageHeader(title: "Teams", note: "\(session.fanTeams.count) followed")
+            PageHeader(title: "Teams") {
+                PillPicker(options: [false, true], selection: $followingOnly) {
+                    $0 ? "Following" : "All"
+                }
+                .accessibilityLabel("Show teams")
+            }
             TeamSearchField(query: $query)
                 .padding(.horizontal, 12)
-            Picker("Show teams", selection: $followingOnly) {
-                Text("All teams").tag(false)
-                Text("Following").tag(true)
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .padding(.horizontal, 12)
             if session.catalogState == .unavailable {
                 DataStatusBanner(message: "Team list couldn't update", retrying: false) {
                     Task { await session.refreshCatalog() }

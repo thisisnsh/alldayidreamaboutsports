@@ -89,10 +89,10 @@ struct MenuPopoverView: View {
 }
 
 /// Header of a pushed page: a back button to the matches, the page title
-/// centered, and an optional note on the right.
-struct PageHeader: View {
+/// centered, and an optional control on the right.
+struct PageHeader<Trailing: View>: View {
     let title: String
-    var note: String? = nil
+    @ViewBuilder var trailing: Trailing
 
     var body: some View {
         ZStack {
@@ -109,17 +109,20 @@ struct PageHeader: View {
                 }
                 .buttonStyle(.hoverHighlight)
                 Spacer()
-                if let note {
-                    Text(note).font(.system(size: 11)).foregroundStyle(.secondary)
-                        // Lines up with the 16pt inset of the pages' content;
-                        // the back button gets its inset from its own hover pad.
-                        .padding(.trailing, 8)
-                }
+                // Lines up with the 16pt inset of the pages' content; the back
+                // button gets its inset from its own hover pad.
+                trailing.padding(.trailing, 8)
             }
         }
         .padding(.horizontal, 8)
         .padding(.top, 10)
         .padding(.bottom, 4)
+    }
+}
+
+extension PageHeader where Trailing == EmptyView {
+    init(title: String) {
+        self.init(title: title) { EmptyView() }
     }
 }
 
@@ -185,7 +188,9 @@ struct HomePage: View {
         HStack(spacing: 6) {
             Text("Today").font(.system(size: 15, weight: .bold, design: .rounded))
             Spacer()
-            FixtureScopePicker(scope: $fixtureScope)
+            PillPicker(options: FixtureScope.allCases, selection: $fixtureScope, label: \.label) {
+                AppAnalytics.fixtureScopeChanged($0.rawValue)
+            }
             ToolbarIconButton(symbol: "gearshape", help: "Settings") { PopoverRouter.shared.go(.settings) }
         }
         .padding(.leading, 16)
@@ -349,18 +354,22 @@ enum FixtureScope: String, CaseIterable {
     }
 }
 
-/// The two-segment scope switch in the "Today's matches" header. Hand-rolled
-/// rather than `.pickerStyle(.segmented)`: at caption size AppKit's segmented
-/// control brings chrome (and a fixed height) far too heavy for a menu row.
-private struct FixtureScopePicker: View {
-    @Binding var scope: FixtureScope
+/// A compact two-or-more segment switch for a header row ("My Teams | All
+/// Teams", "All | Following"). Hand-rolled rather than
+/// `.pickerStyle(.segmented)`: at caption size AppKit's segmented control
+/// brings chrome (and a fixed height) far too heavy for a menu row.
+struct PillPicker<Option: Hashable>: View {
+    let options: [Option]
+    @Binding var selection: Option
+    let label: (Option) -> String
+    var onSelect: (Option) -> Void = { _ in }
 
     var body: some View {
         HStack(spacing: 2) {
-            ForEach(FixtureScope.allCases, id: \.self) { option in
-                Segment(option: option, selected: scope == option) {
-                    AppAnalytics.fixtureScopeChanged(option.rawValue)
-                    withAnimation(.easeOut(duration: 0.15)) { scope = option }
+            ForEach(options, id: \.self) { option in
+                Segment(title: label(option), selected: selection == option) {
+                    onSelect(option)
+                    withAnimation(.easeOut(duration: 0.15)) { selection = option }
                 }
             }
         }
@@ -371,14 +380,14 @@ private struct FixtureScopePicker: View {
     }
 
     private struct Segment: View {
-        let option: FixtureScope
+        let title: String
         let selected: Bool
         let action: () -> Void
         @State private var hovering = false
 
         var body: some View {
             Button(action: action) {
-                Text(option.label)
+                Text(title)
                     .font(.system(size: 12, weight: selected ? .semibold : .regular))
                     .opacity(selected ? 1 : 0.6)
                     .padding(.horizontal, 7)
