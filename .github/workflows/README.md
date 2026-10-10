@@ -3,7 +3,7 @@
 | Workflow | Trigger | Checks |
 |---|---|---|
 | `backend-ci.yml` | All PRs/main pushes; reusable by deployments | Backend/tester clean install without lifecycle scripts, typechecks, tests, build, dependency audit, infrastructure tests |
-| `app-ci.yml` | All PRs/main pushes | Remote-data security tests and unsigned Debug build using the committed Swift lockfile |
+| `app-ci.yml` | PRs/main pushes touching `app/` or the workflow | Remote-data security tests and unsigned Debug build using the committed Swift lockfile |
 | `security.yml` | PRs/main pushes, weekly, manual | Full-history secret scanning and recurring dependency audits |
 | `website-deploy.yml` | `website/` main pushes, manual | Clean install, Eleventy build and built-site verification, then GitHub Pages deploy |
 | `backend-deploy.yml` | Relevant main pushes to staging; manual prod | Reuses backend verification for the exact commit before obtaining deployment credentials; authenticated health and anonymous-denial checks |
