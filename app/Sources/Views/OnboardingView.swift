@@ -231,7 +231,7 @@ struct OnboardingView: View {
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 12)
-                    .stroke(selected ? Color.primary : .clear, lineWidth: 2)
+                    .stroke(selected ? Color.primary : .clear, lineWidth: 0.75)
             )
             .contentShape(Rectangle())
         }

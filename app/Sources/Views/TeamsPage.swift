@@ -308,7 +308,7 @@ private struct TeamTile: View {
                 VStack(spacing: compact ? 4 : 5) {
                     CachedTeamLogo(url: team.logo, size: compact ? 30 : 36, neutralBacking: true)
                     Text(team.name)
-                        .font(.system(size: compact ? 11 : 12, weight: .medium))
+                        .font(.system(size: compact ? 11 : 12))
                         .multilineTextAlignment(.center)
                         .lineLimit(2)
                         .frame(height: compact ? 28 : 30, alignment: .top)
@@ -322,7 +322,7 @@ private struct TeamTile: View {
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 10)
-                        .stroke(selected ? Color.primary : .clear, lineWidth: 2)
+                        .stroke(selected ? Color.primary : .clear, lineWidth: 0.75)
                 )
 
                 if selected {
