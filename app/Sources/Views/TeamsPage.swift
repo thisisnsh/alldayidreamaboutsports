@@ -25,7 +25,7 @@ struct TeamsPage: View {
                 .padding(.horizontal, 12)
             }
             ScrollView {
-                TeamLeagueList(query: query, columns: 5, compact: true, followingOnly: followingOnly)
+                TeamLeagueList(query: query, columns: 4, compact: true, followingOnly: followingOnly)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 10)
             }
@@ -67,14 +67,14 @@ struct TeamSearchField: View {
 }
 
 /// Every league's team grid, filtered by `query`. Shared by the popover's
-/// Teams page (5 compact columns) and onboarding (6 columns). Every league is
+/// Teams page (4 compact columns) and onboarding (6 columns). Every league is
 /// followable, at full opacity — a finished competition is badged "Ended" and
 /// one that hasn't started "Coming soon", but those are labels, not gates.
 struct TeamLeagueList: View {
     @EnvironmentObject var session: AppSession
     let query: String
     let columns: Int
-    /// Smaller logos and labels, to fit five tiles across the popover.
+    /// Smaller logos and labels, to fit four tiles across the popover.
     var compact = false
     var followingOnly = false
     /// Folded leagues. View state only: every league opens unfolded.
@@ -306,12 +306,12 @@ private struct TeamTile: View {
         Button(action: action) {
             ZStack(alignment: .topTrailing) {
                 VStack(spacing: compact ? 4 : 5) {
-                    CachedTeamLogo(url: team.logo, size: compact ? 26 : 36, neutralBacking: true)
+                    CachedTeamLogo(url: team.logo, size: compact ? 30 : 36, neutralBacking: true)
                     Text(team.name)
-                        .font(.system(size: compact ? 10 : 12, weight: .medium))
+                        .font(.system(size: compact ? 11 : 12, weight: .medium))
                         .multilineTextAlignment(.center)
                         .lineLimit(2)
-                        .frame(height: compact ? 26 : 30, alignment: .top)
+                        .frame(height: compact ? 28 : 30, alignment: .top)
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, compact ? 7 : 9)
