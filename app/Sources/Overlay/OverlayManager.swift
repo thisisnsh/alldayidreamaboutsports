@@ -36,7 +36,7 @@ private struct QueuedNotchItem {
 /// - Goals are kept in a priority queue; every other event waits separately.
 ///   Each set takes goals first, then fills remaining slots with other events.
 /// - The visible stack is chronological within the selected set: oldest at the
-///   top, newest at the bottom, and it stays up for `pillHoldSeconds`. The
+///   top, newest at the bottom, and it stays up for the user's alert time. The
 ///   set is drawn by `NotchIsland`: drops emerge from the notch into fixed slots.
 /// - Fan goals fire goal confetti (the scorer's crest + paper) from the
 ///   bottom corners when their goal pill drops. It's click-through and
@@ -56,6 +56,16 @@ final class OverlayManager: ObservableObject {
     private var lifecycleScheduled: [DispatchWorkItem] = []
     private var queueBusy = false  // set synchronously so rapid-fire pushes can't race startNextSetIfIdle
     private var displayPanel: NSPanel?
+    /// Confetti waves after a goal's first burst, still to fire. Cancelled with
+    /// the goal (VAR) or by a preview.
+    private var pendingWaves: [PendingWave] = []
+
+    private struct PendingWave {
+        let id: UUID
+        let fixtureId: Int
+        let teamId: Int?
+        let work: DispatchWorkItem
+    }
     private var displayObserver: NSObjectProtocol?
 
     private init() {
@@ -69,7 +79,12 @@ final class OverlayManager: ObservableObject {
     }
 
     /// How long each notification set stays on screen.
-    private let pillHoldSeconds: TimeInterval = 7
+    private var pillHoldSeconds: TimeInterval {
+        (AppSession.shared.prefs.settings.alertDuration ?? .medium).alertHoldSeconds
+    }
+    /// Gap between a goal's confetti bursts: the next throw goes up as the
+    /// last one starts to fall away.
+    private static let confettiWaveGap: TimeInterval = 2.4
     /// Notification set size — how many pills display at once.
     private let setSize = 5
 
@@ -109,6 +124,7 @@ final class OverlayManager: ObservableObject {
             goalQueue[index].item.fanGoal = nil
         }
         confettiBursts.removeAll { $0.fixtureId == fixtureId && $0.teamId == teamId }
+        cancelWaves { $0.fixtureId == fixtureId && $0.teamId == teamId }
         hidePanelsIfDone()
     }
 
@@ -117,6 +133,7 @@ final class OverlayManager: ObservableObject {
         goalQueue.removeAll()
         otherQueue.removeAll()
         confettiBursts.removeAll()
+        cancelWaves { _ in true }
         endSet()
     }
 
@@ -196,15 +213,39 @@ final class OverlayManager: ObservableObject {
             AppAnalytics.celebrationShown()
         }
         guard !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else { return }
+        let waves = (AppSession.shared.prefs.settings.confettiDuration ?? .medium).confettiWaves
         for goal in goals {
-            let burst = ConfettiBurst(fixtureId: goal.fixtureId, teamId: goal.teamId, logo: crest(for: goal))
-            confettiBursts.append(burst)
-            scheduleAmbient(after: ConfettiView.lifetime + 1.2) { [self] in
-                confettiBursts.removeAll { $0.id == burst.id }
-                hidePanelsIfDone()
+            addBurst(for: goal)
+            for wave in 1..<max(1, waves) {
+                scheduleWave(for: goal, after: Double(wave) * Self.confettiWaveGap)
             }
         }
         showDisplayPanel()
+    }
+
+    private func addBurst(for goal: MatchEvent) {
+        let burst = ConfettiBurst(fixtureId: goal.fixtureId, teamId: goal.teamId, logo: crest(for: goal))
+        confettiBursts.append(burst)
+        scheduleAmbient(after: ConfettiView.lifetime + 1.2) { [self] in
+            confettiBursts.removeAll { $0.id == burst.id }
+            hidePanelsIfDone()
+        }
+    }
+
+    private func scheduleWave(for goal: MatchEvent, after seconds: Double) {
+        let id = UUID()
+        let work = DispatchWorkItem { [self] in
+            pendingWaves.removeAll { $0.id == id }
+            addBurst(for: goal)
+            showDisplayPanel()
+        }
+        pendingWaves.append(PendingWave(id: id, fixtureId: goal.fixtureId, teamId: goal.teamId, work: work))
+        DispatchQueue.main.asyncAfter(deadline: .now() + seconds, execute: work)
+    }
+
+    private func cancelWaves(where matches: (PendingWave) -> Bool) {
+        for wave in pendingWaves where matches(wave) { wave.work.cancel() }
+        pendingWaves.removeAll(where: matches)
     }
 
     private func crest(for goal: MatchEvent) -> String {

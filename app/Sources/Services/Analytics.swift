@@ -204,6 +204,8 @@ enum AppAnalytics {
         case theme
         case capsuleSize = "capsule_size"
         case notchDropSize = "notch_drop_size"
+        case alertDuration = "alert_duration"
+        case confettiDuration = "confetti_duration"
 
         var event: String { "setting_\(rawValue)_changed" }
         var property: String { "pref_\(rawValue)" }
@@ -244,6 +246,8 @@ enum AppAnalytics {
         setUserProperty((s.theme ?? .system).rawValue, forName: Setting.theme.property)
         setUserProperty((s.capsuleSize ?? .medium).rawValue, forName: Setting.capsuleSize.property)
         setUserProperty((s.notchDropSize ?? .medium).rawValue, forName: Setting.notchDropSize.property)
+        setUserProperty((s.alertDuration ?? .medium).rawValue, forName: Setting.alertDuration.property)
+        setUserProperty((s.confettiDuration ?? .medium).rawValue, forName: Setting.confettiDuration.property)
     }
 
     // MARK: Live-scores pipeline

@@ -59,6 +59,7 @@ struct SettingsPage: View {
                         .pickerStyle(.segmented)
                         .labelsHidden()
                         caption(presetCaption)
+                        pickerRow("Alert time", selection: alertDurationBinding, cases: OverlayDuration.allCases) { $0.label }
                         Button {
                             withAnimation(.easeOut(duration: 0.15)) { customizing.toggle() }
                         } label: {
@@ -83,6 +84,9 @@ struct SettingsPage: View {
                         if session.prefs.settings.eventEnabled(.goal) {
                             Divider()
                             toggleRow("Goal confetti", isOn: goalAnimationBinding)
+                            if session.prefs.settings.goalCenter ?? true {
+                                pickerRow("Confetti time", selection: confettiDurationBinding, cases: OverlayDuration.allCases) { $0.label }
+                            }
                             Button {
                                 // No event here: `OverlayManager.preview()`
                                 // reports the same click as
@@ -296,6 +300,34 @@ struct SettingsPage: View {
                         $0.notchDropSize = choice
                     }
                     OverlayManager.shared.previewAlert(.goal)
+                }
+            }
+        )
+    }
+
+    /// Replays an alert so the new time can be felt straight away.
+    private var alertDurationBinding: Binding<OverlayDuration> {
+        Binding(
+            get: { session.prefs.settings.alertDuration ?? .medium },
+            set: { choice in
+                // Deferred like `themeBinding`.
+                DispatchQueue.main.async {
+                    session.updateSettings { $0.alertDuration = choice }
+                    OverlayManager.shared.previewAlert(.goal)
+                }
+            }
+        )
+    }
+
+    /// Replays the goal confetti at the new length.
+    private var confettiDurationBinding: Binding<OverlayDuration> {
+        Binding(
+            get: { session.prefs.settings.confettiDuration ?? .medium },
+            set: { choice in
+                // Deferred like `themeBinding`.
+                DispatchQueue.main.async {
+                    session.updateSettings { $0.confettiDuration = choice }
+                    OverlayManager.shared.preview()
                 }
             }
         )

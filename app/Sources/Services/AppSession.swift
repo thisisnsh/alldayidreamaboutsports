@@ -184,6 +184,12 @@ final class AppSession: ObservableObject {
         if before.notchDropSize != after.notchDropSize {
             AppAnalytics.settingChanged(.notchDropSize, value: (after.notchDropSize ?? .medium).rawValue)
         }
+        if before.alertDuration != after.alertDuration {
+            AppAnalytics.settingChanged(.alertDuration, value: (after.alertDuration ?? .medium).rawValue)
+        }
+        if before.confettiDuration != after.confettiDuration {
+            AppAnalytics.settingChanged(.confettiDuration, value: (after.confettiDuration ?? .medium).rawValue)
+        }
         let beforeNotifs = before.notifications ?? [:]
         let afterNotifs = after.notifications ?? [:]
         for (key, value) in afterNotifs where beforeNotifs[key] != value {

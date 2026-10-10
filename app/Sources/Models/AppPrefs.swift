@@ -22,6 +22,43 @@ struct PrefSettings: Codable, Equatable {
     var capsuleSize: CapsuleSize?
     /// Size of the notch-drop event pills (fonts + padding). nil = medium.
     var notchDropSize: CapsuleSize?
+    /// How long each set of notch alerts stays down. nil = medium.
+    var alertDuration: OverlayDuration?
+    /// How long goal confetti keeps bursting. nil = medium.
+    var confettiDuration: OverlayDuration?
+}
+
+/// How long an overlay stays on screen: notch alerts and goal confetti each
+/// get their own.
+enum OverlayDuration: String, CaseIterable, Codable {
+    case short, medium, long
+
+    var label: String {
+        switch self {
+        case .short: "Short"
+        case .medium: "Medium"
+        case .long: "Long"
+        }
+    }
+
+    /// Seconds a set of notch alerts stays down once the last one lands.
+    var alertHoldSeconds: TimeInterval {
+        switch self {
+        case .short: 4
+        case .medium: 7
+        case .long: 12
+        }
+    }
+
+    /// Confetti bursts per goal, a few seconds apart. One burst is a single
+    /// physical throw, so longer confetti means more throws, not slower ones.
+    var confettiWaves: Int {
+        switch self {
+        case .short: 1
+        case .medium: 2
+        case .long: 3
+        }
+    }
 }
 
 
