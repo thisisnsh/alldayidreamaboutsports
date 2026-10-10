@@ -238,6 +238,14 @@ struct OnboardingView: View {
     }
 
     private var alerts: some View {
+        ZStack(alignment: .top) {
+            LogoMarquee(logos: marqueeLogos, fadeTo: 1)
+                .frame(height: 130)
+            alertsContent
+        }
+    }
+
+    private var alertsContent: some View {
         VStack(alignment: .leading, spacing: 12) {
             heading("How much do you want to hear?",
                     "Alerts drop from the notch while you work. Pick one to see it.")
@@ -263,7 +271,7 @@ struct OnboardingView: View {
             Spacer()
         }
         .padding(.horizontal, 28)
-        .padding(.top, 36)
+        .padding(.top, 96)
     }
 
     private func presetCard(_ preset: AlertPreset) -> some View {
