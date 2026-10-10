@@ -67,9 +67,9 @@ final class EventRouter {
             forgetEventId(event.eventId.replacingOccurrences(of: ":GOAL:", with: ":GOAL_CANCELLED:"))
         }
 
-        // Count followed-team wins before the mute check: a muted full-time
-        // pill still means the match was won.
-        ReviewPrompt.recordFullTime(event, fans: AppSession.shared.fanTeamIds)
+        // Count followed-team goals before the mute check: a muted goal pill
+        // still means the team scored.
+        ReviewPrompt.recordGoal(event, fans: AppSession.shared.fanTeamIds)
 
         let settings = AppSession.shared.prefs.settings
         guard settings.eventEnabled(event.type) else {

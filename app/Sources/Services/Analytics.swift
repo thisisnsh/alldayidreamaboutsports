@@ -108,10 +108,10 @@ enum AppAnalytics {
         log("bug_reported")
     }
 
-    /// A followed-team win hit the review cadence (1st, 7th, 13th, …) and we
-    /// asked StoreKit — which may still decline to show the sheet.
-    static func reviewRequested(wins: Int) {
-        log("review_requested", ["wins": wins])
+    /// A followed-team goal hit the review cadence (every 6th, at most once a
+    /// week) and we asked StoreKit — which may still decline to show the sheet.
+    static func reviewRequested(goals: Int) {
+        log("review_requested", ["goals": goals])
     }
 
     /// Every Quit in the app. `source` says which one: `menu` (the popover's confirmed Quit) or

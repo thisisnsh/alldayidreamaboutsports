@@ -1,27 +1,38 @@
 import AppKit
 import StoreKit
 
-/// Asks for an App Store rating on followed-team wins: the 1st, 7th, 13th, …
-/// (every 6th, starting with the first). A win is the best moment to ask, and
-/// spacing them out keeps it from nagging. StoreKit still decides whether the
-/// sheet actually appears (at most 3 times a year in App Store builds).
+/// Asks for an App Store rating on followed-team goals: every 6th (6th, 12th,
+/// 18th, …), but never twice within a week — a 6th goal asked recently skips
+/// the 12th, and the next ask waits for the 18th. A goal is the best moment to
+/// ask, and spacing them out keeps it from nagging. StoreKit still decides
+/// whether the sheet actually appears (at most 3 times a year in App Store
+/// builds).
 @MainActor
 enum ReviewPrompt {
-    private static let winCountKey = "followedTeamWins"
+    private static let goalCountKey = "followedTeamGoals"
+    private static let lastRequestKey = "reviewLastRequestedAt"
     private static let interval = 6
-    /// Let the full-time pill land before the review sheet takes focus.
+    private static let minGap: TimeInterval = 7 * 24 * 60 * 60
+    /// Let the goal pill land before the review sheet takes focus.
     private static let delay: Duration = .seconds(4)
 
-    /// Count a finished match if a followed team won it. Called once per
-    /// FULL_TIME event — EventRouter's dedupe guarantees one call per match.
-    static func recordFullTime(_ event: MatchEvent, fans: Set<Int>) {
-        guard event.type == .fullTime,
-              let winner = event.winnerTeamId, fans.contains(winner) else { return }
-        let wins = AppDefaults.shared.integer(forKey: winCountKey) + 1
-        AppDefaults.shared.set(wins, forKey: winCountKey)
-        guard (wins - 1) % interval == 0 else { return }
-        AppLog.info(.fixtures, "review_requested wins=\(wins) fixture_id=\(event.fixtureId)")
-        AppAnalytics.reviewRequested(wins: wins)
+    /// Count a goal if a followed team scored it. Called once per GOAL event —
+    /// EventRouter's dedupe guarantees one call per goal.
+    static func recordGoal(_ event: MatchEvent, fans: Set<Int>) {
+        guard event.type == .goal,
+              let scorer = event.teamId, fans.contains(scorer) else { return }
+        let goals = AppDefaults.shared.integer(forKey: goalCountKey) + 1
+        AppDefaults.shared.set(goals, forKey: goalCountKey)
+        guard goals % interval == 0 else { return }
+        let now = Date()
+        if let last = AppDefaults.shared.object(forKey: lastRequestKey) as? Date,
+           now.timeIntervalSince(last) < minGap {
+            AppLog.info(.fixtures, "review_skipped goals=\(goals) reason=asked_this_week")
+            return
+        }
+        AppDefaults.shared.set(now, forKey: lastRequestKey)
+        AppLog.info(.fixtures, "review_requested goals=\(goals) fixture_id=\(event.fixtureId)")
+        AppAnalytics.reviewRequested(goals: goals)
         Task {
             try? await Task.sleep(for: delay)
             // Menu bar app: nothing of ours is frontmost, so bring the app
@@ -29,17 +40,5 @@ enum ReviewPrompt {
             NSApp.activate(ignoringOtherApps: true)
             SKStoreReviewController.requestReview()
         }
-    }
-}
-
-extension MatchEvent {
-    /// The winning side of a finished match — on pens after a shootout, else
-    /// on goals — or nil for a draw.
-    var winnerTeamId: Int? {
-        if let home = penHome, let away = penAway, home != away {
-            return home > away ? homeTeamId : awayTeamId
-        }
-        guard homeGoals != awayGoals else { return nil }
-        return homeGoals > awayGoals ? homeTeamId : awayTeamId
     }
 }
