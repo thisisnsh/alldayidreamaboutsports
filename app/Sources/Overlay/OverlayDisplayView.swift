@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Full-screen, click-through layer hosting fire-and-forget goal confetti
-/// bursts and passive notch pills.
+/// bursts. Event drops live in the notch island (`NotchIsland`).
 struct OverlayDisplayView: View {
     @EnvironmentObject var overlay: OverlayManager
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -15,8 +15,6 @@ struct OverlayDisplayView: View {
                     ConfettiView(size: geo.size, logo: burst.logo)
                         .id(burst.id)
                 }
-
-                NotchStackView(items: overlay.activeSet)
             }
             .frame(width: geo.size.width, height: geo.size.height)
         }

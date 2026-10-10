@@ -1,95 +1,77 @@
 import AppKit
 import SwiftUI
 
-/// Every dimension in the notch-drop pill, scaled by the user's
-/// `notchDropSize` setting. Medium matches the pill's original hardcoded
-/// look; small/large step it down/up proportionally.
+/// Every dimension in the notch island's drops and match card, scaled by the
+/// user's `notchDropSize` setting. Medium is the baseline; small/large step it
+/// down/up proportionally. The compact pin (beside the notch) does NOT scale:
+/// it has to fit the menu bar's height.
 struct NotchPillMetrics {
     let icon: CGFloat
     let title: CGFloat
     let subtitle: CGFloat
+    /// The tinted disc behind each drop's event icon.
+    let disc: CGFloat
     let hPad: CGFloat
     let vPad: CGFloat
+    let rowSpacing: CGFloat
+    /// Bottom corner radius of the dropped island.
     let corner: CGFloat
+    /// Width of the island while it shows drops or a match card.
+    let islandWidth: CGFloat
 
     init(_ size: CapsuleSize) {
         switch size {
         case .small:
-            icon = 12; title = 11; subtitle = 9.5
-            hPad = 14; vPad = 8; corner = 15
+            icon = 11; title = 11; subtitle = 9.5; disc = 24
+            hPad = 14; vPad = 10; rowSpacing = 8; corner = 18; islandWidth = 340
         case .medium:
-            icon = 14; title = 13; subtitle = 11
-            hPad = 18; vPad = 10; corner = 18
+            icon = 13; title = 13; subtitle = 11; disc = 28
+            hPad = 18; vPad = 12; rowSpacing = 10; corner = 22; islandWidth = 390
         case .large:
-            icon = 16; title = 15; subtitle = 13
-            hPad = 22; vPad = 13; corner = 21
+            icon = 15; title = 15; subtitle = 13; disc = 34
+            hPad = 22; vPad = 15; rowSpacing = 12; corner = 26; islandWidth = 460
         }
     }
 }
 
-/// The real-time notification stack hanging off the notch: every match event
-/// appears in a displayed set, ordered oldest at the top and newest at the
-/// bottom. Styled to read as an extension of the notch hardware.
-struct NotchStackView: View {
-    let items: [NotchItem]
-    @ObservedObject private var displayTarget = OverlayDisplayTarget.shared
-
-    var body: some View {
-        VStack(spacing: 0) {
-            VStack(spacing: OverlayLayout.stackSpacing) {
-                ForEach(items) { item in
-                    NotchPillRow(item: item)
-                        // Drop down out of the notch; rise back into it.
-                        // (Each new pill is inserted at the top, so the ones
-                        // already showing get pushed down by the layout.)
-                        .transition(.move(edge: .top).combined(with: .opacity))
-                }
-            }
-            Spacer()
-        }
-        .padding(.top, OverlayLayout.topMargin(on: displayTarget.selectedScreen))
-        .frame(maxWidth: .infinity)
-        .allowsHitTesting(false)
-    }
-}
-
-private struct NotchPillRow: View {
+/// One event inside the dropped notch: a tinted icon disc, then the headline
+/// and the scoreline. The island is always black (it IS the notch), so this
+/// renders in the dark color scheme regardless of the app's theme.
+struct NotchDropRow: View {
     let item: NotchItem
-    // Black pill in dark mode, white pill in light mode; text/icons use
-    // `.primary` so they always invert against the fill.
-    @Environment(\.colorScheme) private var scheme
-    private var metrics: NotchPillMetrics { NotchPillMetrics(AppSession.shared.prefs.settings.notchDropSize ?? .medium) }
+    let metrics: NotchPillMetrics
+
+    /// `.primary` icons (goal, sub, VAR…) tint white on the black island.
+    private var tint: Color { item.iconColor == .primary ? .white : item.iconColor }
 
     var body: some View {
         HStack(spacing: 10) {
-            VStack(alignment: .center, spacing: 2) {
-                // The SF Symbol leads the headline row instead of sitting in a left
-                // rail spanning both lines — icon and the label it describes
-                // ("Goal", "Yellow card") read on the same line.
-                HStack(spacing: 6) {
-                    Image(systemName: item.icon)
-                        .font(.system(size: metrics.icon, weight: .semibold))
-                        .foregroundStyle(item.iconColor)
-                    SegmentLine(segments: item.title, size: metrics.title, weight: .semibold, color: .primary)
-                }
+            ZStack {
+                Circle()
+                    // A fan goal gets a solid green disc — the loudest row.
+                    .fill(item.fanGoal != nil ? Color.green : tint.opacity(0.18))
+                Image(systemName: item.icon)
+                    .font(.system(size: metrics.icon, weight: .semibold))
+                    .foregroundStyle(item.fanGoal != nil ? Color.white : tint)
+            }
+            .frame(width: metrics.disc, height: metrics.disc)
+            VStack(alignment: .leading, spacing: 2) {
+                SegmentLine(segments: item.title, size: metrics.title, weight: .semibold, color: .primary)
                 if let subtitle = item.subtitle {
-                    SegmentLine(segments: subtitle, size: metrics.subtitle, weight: .medium, color: .primary.opacity(0.8))
+                    SegmentLine(segments: subtitle, size: metrics.subtitle, weight: .medium, color: .secondary)
                 }
             }
+            Spacer(minLength: 0)
         }
-        .padding(.horizontal, metrics.hPad)
-        .padding(.vertical, metrics.vPad)
-        .background(
-            RoundedRectangle(cornerRadius: metrics.corner, style: .continuous)
-                .fill(scheme == .dark ? Color.black : Color.white)
-                .shadow(color: .black.opacity(0.4), radius: 10, y: 4)
-        )
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
     }
 }
 
-/// One pill line, built from `PillSegment`s: text runs interleaved with team
-/// logos (no emoji). Kept to a single line — long names truncate.
-private struct SegmentLine: View {
+/// One drop line, built from `PillSegment`s: text runs interleaved with team
+/// logos (no emoji). Kept to a single line — long names truncate to the
+/// island's width.
+struct SegmentLine: View {
     let segments: [PillSegment]
     let size: CGFloat
     let weight: Font.Weight
@@ -109,6 +91,5 @@ private struct SegmentLine: View {
             }
         }
         .lineLimit(1)
-        .fixedSize(horizontal: true, vertical: false)
     }
 }

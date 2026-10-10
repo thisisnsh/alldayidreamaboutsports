@@ -5,6 +5,8 @@ import SwiftUI
 /// that's what drives the goal confetti for the set it shows in.
 struct NotchItem: Identifiable, Equatable {
     let id: String
+    /// The match it's about — clicking the drop opens that match's card.
+    let fixtureId: Int
     let icon: String
     let iconColor: Color
     let title: [PillSegment]
@@ -34,7 +36,8 @@ private struct QueuedNotchItem {
 /// - Goals are kept in a priority queue; every other event waits separately.
 ///   Each set takes goals first, then fills remaining slots with other events.
 /// - The visible stack is chronological within the selected set: oldest at the
-///   top, newest at the bottom, and it stays up for `pillHoldSeconds`.
+///   top, newest at the bottom, and it stays up for `pillHoldSeconds`. The
+///   set is drawn by `NotchIsland`: the notch itself grows down to hold it.
 /// - Fan goals fire goal confetti (the scorer's crest + paper) from the
 ///   bottom corners when their goal pill drops. It's click-through and
 ///   fire-and-forget, gone within seconds.
@@ -73,6 +76,7 @@ final class OverlayManager: ObservableObject {
     func submit(_ event: MatchEvent, isFanGoal: Bool) {
         enqueue(NotchItem(
             id: event.eventId,
+            fixtureId: event.fixtureId,
             icon: pillIcon(for: event),
             iconColor: pillIconColor(for: event),
             title: pillTitle(for: event),
@@ -136,7 +140,7 @@ final class OverlayManager: ObservableObject {
         let set = selected
             .sorted { $0.arrivalSeq < $1.arrivalSeq }
             .map(\.item)
-        showDisplayPanel()
+        NotchIsland.shared.setWillShow()
 
         // Pills publish top-to-bottom in chronological order: oldest first,
         // newest last, even though goals were prioritized for selection.
@@ -350,18 +354,12 @@ final class OverlayManager: ObservableObject {
         if let displayPanel, displayPanel.isVisible {
             displayPanel.setFrame(screen.frame, display: true)
         }
-        // Re-evaluate selected-screen safe-area geometry in NotchStackView.
-        objectWillChange.send()
     }
 
-    /// The display panel stays while anything is on screen in either form.
-    /// `queueBusy` covers the set-start race: a just-started set flips it
-    /// synchronously but appends its pills to `activeSet` a tick later, so
-    /// without it the endSet continuation (startNextSetIfIdle → hide) would
-    /// order the panel out under a set whose pills haven't landed yet.
+    /// The display panel only hosts confetti now (drops live in the notch
+    /// island's own panel), so it goes as soon as the last burst has fallen.
     private func hidePanelsIfDone() {
-        guard !queueBusy, activeSet.isEmpty, goalQueue.isEmpty, otherQueue.isEmpty,
-              confettiBursts.isEmpty else { return }
+        guard confettiBursts.isEmpty else { return }
         displayPanel?.orderOut(nil)
     }
 }
