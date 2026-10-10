@@ -218,10 +218,12 @@ final class NotchIsland: ObservableObject {
         refresh()
     }
 
-    /// Called as a set is picked, before its drops land. Touching `shared`
-    /// is the point: it makes sure the island exists and is subscribed to
-    /// `activeSet` before the first drop is appended.
-    func setWillShow() {}
+    /// Prepare the hosting view before publishing the first drop. Creating
+    /// it inside `@Published`'s will-set callback can miss that first update.
+    func setWillShow() {
+        hideWork?.cancel()
+        showPanel()
+    }
 
     /// Reported by the island view after each layout.
     func islandSizeChanged(_ size: CGSize) {
