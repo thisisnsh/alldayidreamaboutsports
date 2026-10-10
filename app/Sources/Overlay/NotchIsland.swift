@@ -50,10 +50,10 @@ struct NotchGeometry {
         hasNotch ? CGSize(width: notchWidth, height: bandHeight) : CGSize(width: compactWidth, height: 0)
     }
 
-    /// What a drop splits off from: the hardware notch, or on a notchless
-    /// display a zero-height sliver of the top edge (the drop seeps out of it).
-    func dropSource(width: CGFloat) -> CGSize {
-        hasNotch ? CGSize(width: notchWidth, height: bandHeight) : CGSize(width: width * 0.5, height: 0)
+    /// Drops emerge from and disappear into the bottom center of the camera
+    /// housing. Without a notch, they use the screen's top-center edge.
+    func dropOrigin(centerX: CGFloat) -> CGPoint {
+        CGPoint(x: centerX, y: hasNotch ? bandHeight : 0)
     }
 
     func expandedWidth(_ metrics: NotchPillMetrics) -> CGFloat {

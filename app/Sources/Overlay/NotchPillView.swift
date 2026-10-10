@@ -97,130 +97,109 @@ struct SegmentLine: View {
 
 // MARK: - Drops splitting off the notch
 
-/// How far a drop is through being born: 0 = still the notch, 1 = a bar in
-/// its slot. Set per drop by `NotchDropBirth`, read by its shape and content.
-private struct NotchDropProgressKey: EnvironmentKey {
-    static let defaultValue: CGFloat = 1
-}
+private enum NotchDropPlane { case body, content }
 
-private extension EnvironmentValues {
-    var notchDropProgress: CGFloat {
-        get { self[NotchDropProgressKey.self] }
-        set { self[NotchDropProgressKey.self] = newValue }
-    }
-}
-
-/// The drops' transition. Animatable, so SwiftUI re-runs `body` every frame
-/// with the in-between progress; the shape and the content both follow it.
-/// Inserting runs 0 → 1 (split off the notch); removing runs 1 → 0 (pulled
-/// back up into it).
-private struct NotchDropBirth: ViewModifier, Animatable {
+/// Animate a complete frame, rather than passing an animating environment
+/// value into children that SwiftUI can implicitly animate a second time.
+private struct NotchDropFrame: View, Animatable {
     var progress: CGFloat
+    let item: NotchItem
+    let metrics: NotchPillMetrics
+    let geometry: NotchGeometry
+    let slot: CGRect
+    let plane: NotchDropPlane
+    let reduceMotion: Bool
+
     var animatableData: CGFloat {
         get { progress }
         set { progress = newValue }
     }
 
-    func body(content: Content) -> some View {
-        content.environment(\.notchDropProgress, progress)
+    var body: some View {
+        // Paths are in panel coordinates. Translate back into this row's
+        // local coordinates after calculating the notch's bottom-center origin.
+        let motion = NotchDropMotion(
+            progress: reduceMotion ? 1 : progress,
+            slot: slot,
+            origin: geometry.dropOrigin(centerX: slot.midX),
+            corner: metrics.corner,
+            contentInset: metrics.pillVPad
+        )
+        let local = CGAffineTransform(translationX: -slot.minX, y: -slot.minY)
+        let bodyPath = motion.bodyPath.applying(local)
+        ZStack(alignment: .topLeading) {
+            switch plane {
+            case .body:
+                bodyPath.fill(.black)
+                    .shadow(color: .black.opacity(reduceMotion ? 0.4 : motion.shadowOpacity), radius: 10, y: 4)
+                motion.silhouette.applying(local).fill(.black)
+            case .content:
+                NotchDropContent(item: item, metrics: metrics)
+                    .frame(width: slot.width, height: slot.height)
+                    .scaleEffect(reduceMotion ? 1 : motion.contentScale)
+                    .offset(y: reduceMotion ? 0 : motion.contentOffset)
+                    // Reveal text inside the moving body. It never appears
+                    // in the empty slot below, or spills out during return.
+                    .clipShape(bodyPath)
+                    .clipped()
+                    .opacity(reduceMotion ? Double(progress) : motion.contentOpacity)
+            }
+        }
+        .opacity(reduceMotion && plane == .body ? Double(progress) : 1)
+        .transaction { $0.animation = nil }
     }
 }
 
-/// One drop's black body plus the liquid neck tying it to the notch. Drawn in
-/// the drop's own frame (its final slot); `top` is that slot's distance from
-/// the screen's top edge, which is where the notch is. At progress 0 the body
-/// IS the notch; it slides down and widens into the pill while a pinched
-/// neck stretches, thins and snaps.
-private struct NotchDropShape: Shape {
-    let progress: CGFloat
-    let top: CGFloat
-    /// The notch the drop comes out of (centered on the drop).
-    let source: CGSize
-    let sourceCorner: CGFloat
-    let corner: CGFloat
-
-    func path(in rect: CGRect) -> Path {
-        let p = progress
-        func lerp(_ a: CGFloat, _ b: CGFloat) -> CGFloat { a + (b - a) * p }
-        // The body, travelling from the notch (y = -top) to its slot (y = 0).
-        let width = lerp(source.width, rect.width)
-        let height = max(0, lerp(source.height, rect.height))
-        let body = CGRect(x: rect.midX - width / 2, y: lerp(-top, rect.minY), width: width, height: height)
-        let radius = min(lerp(sourceCorner, corner), height / 2, width / 2)
-        let path = Path(roundedRect: body, cornerRadius: radius, style: .continuous)
-
-        // The neck: full at the start, pinched, gone by ~75% of the way.
-        let snap = smoothstep(0.15, 0.75, p)
-        let neckWidth = source.width * 0.7 * (1 - snap)
-        let neckTop = -top + source.height - 2
-        let neckBottom = body.minY + min(radius, height / 2)
-        guard neckWidth > 0.5, neckBottom > neckTop else { return path }
-        let midX = rect.midX
-        let midY = (neckTop + neckBottom) / 2
-        // The waist narrows as the neck stretches, like a drop about to fall.
-        let waist = neckWidth * (0.5 - 0.35 * snap) / 2
-        var neck = Path()
-        neck.move(to: CGPoint(x: midX - neckWidth / 2, y: neckTop))
-        neck.addQuadCurve(to: CGPoint(x: midX - neckWidth / 2, y: neckBottom),
-                          control: CGPoint(x: midX - waist, y: midY))
-        neck.addLine(to: CGPoint(x: midX + neckWidth / 2, y: neckBottom))
-        neck.addQuadCurve(to: CGPoint(x: midX + neckWidth / 2, y: neckTop),
-                          control: CGPoint(x: midX + waist, y: midY))
-        neck.closeSubpath()
-        // A union, not `addPath`: overlapping subpaths that wind opposite
-        // ways would leave a hole where the neck meets the body.
-        return path.union(neck)
-    }
-
-    private func smoothstep(_ edge0: CGFloat, _ edge1: CGFloat, _ x: CGFloat) -> CGFloat {
-        let t = min(max((x - edge0) / (edge1 - edge0), 0), 1)
-        return t * t * (3 - 2 * t)
-    }
-}
-
-/// A drop's black body, measured against the panel (whose top is the
-/// screen's top edge) so the shape knows how far up the notch is.
-private struct NotchDropBody: View {
-    let geometry: NotchGeometry
+/// Reserve the final slot for the entire lifetime, including return. The
+/// measured slot never collapses underneath an animation in flight.
+private struct NotchDropRow: View {
+    let item: NotchItem
     let metrics: NotchPillMetrics
-    @Environment(\.notchDropProgress) private var progress
+    let geometry: NotchGeometry
+    let plane: NotchDropPlane
+    let dismissing: Bool
+    let returnDelay: TimeInterval
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var progress: CGFloat = 0
 
     var body: some View {
-        GeometryReader { proxy in
-            let frame = proxy.frame(in: .named(NotchDropsLayer.space))
-            NotchDropShape(
-                progress: progress,
-                top: frame.minY,
-                source: geometry.dropSource(width: frame.width),
-                sourceCorner: geometry.hasNotch ? 9 : 0,
-                corner: metrics.corner
-            )
-            .fill(Color.black)
-            // The shadow only once it's its own bar, never on the notch.
-            .shadow(color: .black.opacity(0.4 * Double(max(0, min(1, progress)))), radius: 10, y: 4)
-        }
+        NotchDropContent(item: item, metrics: metrics)
+            .hidden()
+            .accessibilityHidden(true)
+            .overlay {
+                GeometryReader { proxy in
+                    NotchDropFrame(
+                        progress: progress, item: item, metrics: metrics, geometry: geometry,
+                        slot: proxy.frame(in: .named(NotchDropsLayer.space)),
+                        plane: plane, reduceMotion: reduceMotion
+                    )
+                }
+            }
+            .onAppear {
+                guard !dismissing else { return }
+                withAnimation(reduceMotion ? .easeOut(duration: 0.16) : NotchDropAnimation.arrival) {
+                    progress = 1
+                }
+            }
+            .onChange(of: dismissing) { _, leaving in
+                guard leaving else { return }
+                let animation: Animation = reduceMotion
+                    ? .easeOut(duration: 0.16)
+                    : NotchDropAnimation.returning.delay(returnDelay)
+                withAnimation(animation) { progress = 0 }
+            }
+            .onChange(of: reduceMotion) { _, _ in
+                // An accessibility change mid-flight must not leave a neck
+                // or partly revealed label stranded on screen.
+                var transaction = Transaction(animation: nil)
+                transaction.disablesAnimations = true
+                withTransaction(transaction) { progress = dismissing ? 0 : 1 }
+            }
     }
 }
 
-/// A drop's content shows once the body has mostly formed, and goes first
-/// on the way back up.
-private struct NotchDropReveal: ViewModifier {
-    @Environment(\.notchDropProgress) private var progress
-
-    func body(content: Content) -> some View {
-        let reveal = min(max((progress - 0.55) / 0.45, 0), 1)
-        content
-            .opacity(Double(reveal))
-            .scaleEffect(0.92 + 0.08 * reveal, anchor: .top)
-    }
-}
-
-/// The current set of event drops, stacked under the notch: oldest on top,
-/// newest at the bottom, each one split off the notch as it arrives. Two
-/// identical stacks — black bodies below, content above — so a later drop's
-/// neck, passing up through earlier drops to the notch, never covers their
-/// text. Click-through: the island's panel only takes the mouse over the
-/// island itself.
+/// Two matching planes keep every label above every silhouette, including a
+/// later drop's neck as it passes through an earlier notification.
 struct NotchDropsLayer: View {
     static let space = "notchPanel"
 
@@ -232,29 +211,23 @@ struct NotchDropsLayer: View {
         let geometry = NotchGeometry(screen: displayTarget.selectedScreen)
         let metrics = NotchPillMetrics(session.prefs.settings.notchDropSize ?? .medium)
         ZStack(alignment: .top) {
-            stack { item in
-                NotchDropContent(item: item, metrics: metrics)
-                    .hidden()
-                    .background(NotchDropBody(geometry: geometry, metrics: metrics))
-            }
-            stack { item in
-                NotchDropContent(item: item, metrics: metrics)
-                    .modifier(NotchDropReveal())
-            }
+            stack(plane: .body, geometry: geometry, metrics: metrics)
+                .accessibilityHidden(true)
+            stack(plane: .content, geometry: geometry, metrics: metrics)
         }
         .padding(.top, geometry.bandHeight + OverlayLayout.stackSpacing)
         .allowsHitTesting(false)
-        .respectReducedMotion()
     }
 
-    private func stack<Row: View>(@ViewBuilder row: @escaping (NotchItem) -> Row) -> some View {
+    private func stack(plane: NotchDropPlane, geometry: NotchGeometry, metrics: NotchPillMetrics) -> some View {
         VStack(spacing: OverlayLayout.stackSpacing) {
-            ForEach(overlay.activeSet) { item in
-                row(item)
-                    .transition(.modifier(
-                        active: NotchDropBirth(progress: 0),
-                        identity: NotchDropBirth(progress: 1)
-                    ))
+            ForEach(Array(overlay.activeSet.enumerated()), id: \.element.id) { index, item in
+                NotchDropRow(
+                    item: item, metrics: metrics, geometry: geometry, plane: plane,
+                    dismissing: overlay.isRetracting,
+                    returnDelay: NotchDropAnimation.returnDelay(index: index, count: overlay.activeSet.count)
+                )
+                .transition(.identity)
             }
         }
     }

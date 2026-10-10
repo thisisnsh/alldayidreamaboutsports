@@ -176,6 +176,7 @@ pin in `project.yml`, resolve deliberately, copy the new generated lockfile to
 `app/Package.resolved`, and review both changes together.
 
 ```sh
+bash scripts/test-notch-motion.sh
 bash scripts/test-security.sh
 xcodegen
 xcodebuild -scheme AllDayIDreamAboutSports -configuration Debug \

@@ -37,7 +37,7 @@ private struct QueuedNotchItem {
 ///   Each set takes goals first, then fills remaining slots with other events.
 /// - The visible stack is chronological within the selected set: oldest at the
 ///   top, newest at the bottom, and it stays up for `pillHoldSeconds`. The
-///   set is drawn by `NotchIsland`: the notch itself grows down to hold it.
+///   set is drawn by `NotchIsland`: drops emerge from the notch into fixed slots.
 /// - Fan goals fire goal confetti (the scorer's crest + paper) from the
 ///   bottom corners when their goal pill drops. It's click-through and
 ///   fire-and-forget, gone within seconds.
@@ -46,6 +46,8 @@ final class OverlayManager: ObservableObject {
     static let shared = OverlayManager()
 
     @Published private(set) var activeSet: [NotchItem] = []
+    /// Retain the slots until every drop has finished returning to the notch.
+    @Published private(set) var isRetracting = false
     @Published private(set) var confettiBursts: [ConfettiBurst] = []
 
     private var goalQueue: [QueuedNotchItem] = []
@@ -120,9 +122,6 @@ final class OverlayManager: ObservableObject {
 
     // MARK: Set lifecycle
 
-    /// Stagger between pill drops within a set.
-    private static let pillDropStagger = 0.18
-
     private func startNextSetIfIdle() {
         guard !queueBusy, !goalQueue.isEmpty || !otherQueue.isEmpty else { return }
         queueBusy = true
@@ -141,15 +140,13 @@ final class OverlayManager: ObservableObject {
             .sorted { $0.arrivalSeq < $1.arrivalSeq }
             .map(\.item)
         NotchIsland.shared.setWillShow()
+        isRetracting = false
 
         // Pills publish top-to-bottom in chronological order: oldest first,
         // newest last, even though goals were prioritized for selection.
         for (index, item) in set.enumerated() {
-            scheduleLifecycle(after: Double(index) * Self.pillDropStagger) { [self] in
-                // Long enough to see the drop split off the notch.
-                withAnimation(.spring(duration: 0.6, bounce: 0.2)) {
-                    activeSet.append(item)
-                }
+            scheduleLifecycle(after: Double(index) * NotchDropAnimation.arrivalStagger) { [self] in
+                activeSet.append(item)
             }
         }
 
@@ -162,22 +159,26 @@ final class OverlayManager: ObservableObject {
            let first = set.firstIndex(where: { $0.fanGoal != nil }) {
             let crests = fanGoals.map { crest(for: $0) }
             TeamLogoStore.shared.preload(crests)
-            scheduleLifecycle(after: Double(first) * Self.pillDropStagger) { [self] in
+            scheduleLifecycle(after: Double(first) * NotchDropAnimation.arrivalStagger) { [self] in
                 fireConfetti(for: fanGoals)
             }
         }
-        scheduleLifecycle(after: pillHoldSeconds) { [self] in endSet() }
+        let arrivalTime = Double(max(0, set.count - 1)) * NotchDropAnimation.arrivalStagger
+            + NotchDropAnimation.arrivalDuration
+        scheduleLifecycle(after: arrivalTime + pillHoldSeconds) { [self] in endSet() }
     }
 
     /// Natural expiry: the whole set leaves, then the next set follows.
     func endSet() {
-        guard !activeSet.isEmpty || queueBusy else { return }
+        guard !isRetracting, !activeSet.isEmpty || queueBusy else { return }
         cancelLifecycleScheduled()
-        // Pulled back up into the notch.
-        withAnimation(.easeInOut(duration: 0.45)) {
+        isRetracting = true
+        let delay = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+            ? 0.24 : NotchDropAnimation.retirementDelay(count: activeSet.count)
+        scheduleLifecycle(after: delay) { [self] in
+            // No layout change until the last returning silhouette is gone.
             activeSet = []
-        }
-        scheduleLifecycle(after: 0.55) { [self] in
+            isRetracting = false
             queueBusy = false
             startNextSetIfIdle()
             hidePanelsIfDone()
