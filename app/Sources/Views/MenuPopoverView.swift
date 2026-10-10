@@ -463,10 +463,8 @@ private struct NowCard: View {
     let fixture: Fixture
     @Binding var expanded: Int?
     @EnvironmentObject var session: AppSession
-    @ObservedObject private var capsules = PinnedCapsuleManager.shared
 
     private var isExpanded: Bool { expanded == fixture.fixtureId }
-    private var isPinned: Bool { capsules.isPinned(fixture.fixtureId) }
 
     var body: some View {
         let timeline = capsuleTimeline(for: fixture)
@@ -505,13 +503,7 @@ private struct NowCard: View {
             }
 
             HStack(spacing: 8) {
-                Button {
-                    capsules.toggle(fixtureId: fixture.fixtureId)
-                } label: {
-                    Label(isPinned ? "Unpin from screen" : "Pin to screen", systemImage: "pin.fill")
-                }
-                .buttonStyle(.cardButton)
-                .help(isPinned ? "Unpin the floating score" : "Float this score on screen")
+                PinButtons(fixtureId: fixture.fixtureId)
                 if timeline.count > 3 {
                     Button(isExpanded ? "Hide timeline" : "Full timeline") {
                         withAnimation(.easeOut(duration: 0.15)) {
@@ -540,6 +532,33 @@ private struct NowCard: View {
         }
         // The side that's behind reads quieter.
         .opacity(goals < other ? 0.7 : 1)
+    }
+}
+
+/// The two ways to keep a match on screen: in the notch (one match, grows
+/// out of the hardware) or floating (any number, any corner).
+private struct PinButtons: View {
+    let fixtureId: Int
+    @ObservedObject private var capsules = PinnedCapsuleManager.shared
+    @ObservedObject private var island = NotchIsland.shared
+
+    var body: some View {
+        let inNotch = island.isPinned(fixtureId)
+        let floating = capsules.isPinned(fixtureId)
+        Button {
+            island.toggle(fixtureId: fixtureId)
+        } label: {
+            Label(inNotch ? "Unpin notch" : "Pin to notch", systemImage: inNotch ? "pin.slash" : "pin.fill")
+        }
+        .buttonStyle(.cardButton)
+        .help(inNotch ? "Take the score out of the notch" : "Keep the score beside the notch; click it for the match")
+        Button {
+            capsules.toggle(fixtureId: fixtureId)
+        } label: {
+            Label(floating ? "Stop floating" : "Float", systemImage: "pip")
+        }
+        .buttonStyle(.cardButton)
+        .help(floating ? "Close the floating score" : "Float the score in a corner of the screen")
     }
 }
 
@@ -584,9 +603,10 @@ private struct FixtureRow: View {
     @Binding var expanded: Int?
     @EnvironmentObject var session: AppSession
     @ObservedObject private var capsules = PinnedCapsuleManager.shared
+    @ObservedObject private var island = NotchIsland.shared
     @State private var hovering = false
 
-    private var isPinned: Bool { capsules.isPinned(fixture.fixtureId) }
+    private var isPinned: Bool { capsules.isPinned(fixture.fixtureId) || island.isPinned(fixture.fixtureId) }
     private var isExpanded: Bool { expanded == fixture.fixtureId }
 
     var body: some View {
@@ -614,7 +634,7 @@ private struct FixtureRow: View {
                             Image(systemName: "pin.fill")
                                 .font(.system(size: 9))
                                 .foregroundStyle(Color.accentColor)
-                                .help("Pinned to screen")
+                                .help("Pinned")
                         }
                         Spacer()
                         trailing
@@ -654,12 +674,7 @@ private struct FixtureRow: View {
                 Text(note).font(.system(size: 12)).foregroundStyle(.secondary)
             }
             if pinnable {
-                Button {
-                    capsules.toggle(fixtureId: fixture.fixtureId)
-                } label: {
-                    Label(isPinned ? "Unpin from screen" : "Pin to screen", systemImage: "pin.fill")
-                }
-                .buttonStyle(.cardButton)
+                HStack(spacing: 8) { PinButtons(fixtureId: fixture.fixtureId) }
             }
         }
     }

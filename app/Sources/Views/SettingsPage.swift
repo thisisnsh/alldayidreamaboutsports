@@ -93,7 +93,7 @@ struct SettingsPage: View {
                     SettingsCard("Appearance") {
                         pickerRow("Theme", selection: themeBinding, cases: ThemeChoice.allCases) { $0.label }
                         pickerRow("Size", selection: overlaySizeBinding, cases: CapsuleSize.allCases) { $0.label }
-                        caption("Size applies to notch alerts and pinned scores. Pin a match from the menu to float its score. Click it for the timeline; drag it to any corner.")
+                        caption("Size applies to notch alerts and floating scores. From the menu, pin a match to the notch (click it for the match) or float it (drag it to any corner). The notch is always black, like the hardware.")
                     }
 
                     footer
