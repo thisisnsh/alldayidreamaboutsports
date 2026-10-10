@@ -46,7 +46,6 @@ struct SettingsPage: View {
                                 session.updateSettings { $0.launchAtLogin = on }
                             }
                         ))
-                        caption("The app starts silently in the menu bar. It never shows in the Dock; that's how it's designed.")
                         if displayTarget.displays.count > 1 {
                             screenPickerRow
                             caption("Alerts, goal confetti and pinned scores show on this screen.")
@@ -99,7 +98,7 @@ struct SettingsPage: View {
                     SettingsCard("Appearance") {
                         pickerRow("Theme", selection: themeBinding, cases: ThemeChoice.allCases) { $0.label }
                         pickerRow("Size", selection: overlaySizeBinding, cases: CapsuleSize.allCases) { $0.label }
-                        caption("Size applies to notch alerts and floating scores. From the menu, pin a match to the notch (click it for the match) or float it (drag it to any corner). The notch is always black, like the hardware.")
+                        caption("Size applies to notch alerts and floating scores.")
                     }
 
                     footer
