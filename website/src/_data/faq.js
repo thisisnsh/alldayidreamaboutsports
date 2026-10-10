@@ -32,7 +32,7 @@ const home = [
   },
   {
     q: "Can I celebrate goals with other fans?",
-    a: "Yes. When the goal alert arrives, footballs and your team's crest burst from the bottom corners of the screen, clear of whatever you're working on. Goal confetti has its own switch, and there is a Preview button to fire one on demand.",
+    a: "Yes. When the goal alert arrives, your team's crest, a few footballs and confetti burst from the bottom corners of the screen, clear of whatever you're working on. Goal confetti has its own switch, and there is a Preview button to fire one on demand.",
   },
   {
     q: "Does it work across multiple monitors?",
@@ -125,7 +125,7 @@ function forTeam(team, league) {
     },
     {
       q: `Will I get an alert when ${T} score?`,
-      a: `Yes. Alerts follow the source feed, so a short delay can occur${national ? " - this is how the 2026 tournament ran, and how 2030 will" : ""}. The goal alert drops under the notch, the capsule score updates, and if you want it, goal confetti of footballs and your team's crest bursts from the screen corners.`,
+      a: `Yes. Alerts follow the source feed, so a short delay can occur${national ? " - this is how the 2026 tournament ran, and how 2030 will" : ""}. The goal alert drops under the notch, the capsule score updates, and if you want it, goal confetti of your team's crest and footballs bursts from the screen corners.`,
     },
     {
       q: `Can I follow ${T} and other teams at the same time?`,
