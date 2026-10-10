@@ -32,10 +32,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             DemoEngine.shared.start()
         }
         #else
-        // A fresh install gets the one-time setup window. After that, launch
-        // is silent: the app lives in the menu bar (and starts at login).
+        // A fresh install gets the one-time setup window. After that, a launch
+        // the user asked for (Finder, Spotlight, Launchpad) drops the popover
+        // so they see where the app lives; a login launch stays silent.
         if OnboardingWindowController.shared.isNeeded {
             OnboardingWindowController.shared.show()
+        } else if !LaunchAtLogin.wasLaunchedAtLogin {
+            menuController.showOnOpen()
         }
         #endif
 
@@ -157,6 +160,15 @@ final class MenuPopoverController: NSObject, NSPopoverDelegate {
             close()
         } else {
             showMenu()
+        }
+    }
+
+    /// Opening an already-set-up app: without this, a menu bar app looks like
+    /// it failed to open. Deferred because the status item isn't placed in the
+    /// menu bar on the launch tick (see `showMenu`).
+    func showOnOpen() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+            self?.showMenu()
         }
     }
 

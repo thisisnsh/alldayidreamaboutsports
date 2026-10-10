@@ -1,4 +1,4 @@
-import Foundation
+import AppKit
 import ServiceManagement
 
 /// Launch-at-login starts OFF: App Review (guideline 2.4.5) bars adding a login
@@ -6,6 +6,15 @@ import ServiceManagement
 enum LaunchAtLogin {
     static var isEnabled: Bool {
         SMAppService.mainApp.status == .enabled
+    }
+
+    /// Whether the system started this process as a login item rather than the
+    /// user opening it. Only meaningful during `applicationDidFinishLaunching`,
+    /// while the launch's open-application event is still current.
+    static var wasLaunchedAtLogin: Bool {
+        guard let event = NSAppleEventManager.shared().currentAppleEvent else { return false }
+        return event.eventID == kAEOpenApplication
+            && event.paramDescriptor(forKeyword: keyAEPropData)?.enumCodeValue == keyAELaunchedAsLogInItem
     }
 
     static func set(enabled: Bool) {
