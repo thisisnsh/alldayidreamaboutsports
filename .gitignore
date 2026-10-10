@@ -28,6 +28,6 @@ tester/.staging.env
 __pycache__/
 *.pyc
 
-# Local-only tool state and publish credentials
+# Local-only tool state and retired publish credentials (keep old files ignored)
 .wrangler/
 app/scripts/.publish.env

@@ -5,27 +5,19 @@ export default {
   shortName: "Sports Alerts",
   url: "https://alldayidreamaboutsports.com",
   email: "hello@thisisnsh.com",
-  downloadUrl: "https://download.alldayidreamaboutsports.com/latest",
+  downloadUrl: "/comingsoon/",
   windowsWaitlist:
     "mailto:hello@thisisnsh.com?subject=Waitlist%20for%20Windows",
   requires: "macOS 14.0 or later",
   requiresShort: "macOS 14+",
   year: 2026,
 
-  // The background reel. Hosted on the R2 bucket that already fronts the app
-  // downloads, so there is no new infrastructure and nothing large in git.
-  video: {
-    mp4: "https://download.alldayidreamaboutsports.com/promo.mp4",
-    webm: "https://download.alldayidreamaboutsports.com/promo.webm",
-    poster: "https://download.alldayidreamaboutsports.com/promo-f1.webp",
-  },
-
   // The canonical, addressable video - the thing VideoObject describes.
   // uploadDate is read off the YouTube watch page, never guessed.
   youtube: {
     id: "B75DYFddkV0",
     watch: "https://youtu.be/B75DYFddkV0",
-    embed: "https://www.youtube.com/embed/B75DYFddkV0",
+    embed: "https://www.youtube-nocookie.com/embed/B75DYFddkV0",
     thumb: "https://i.ytimg.com/vi/B75DYFddkV0/maxresdefault.jpg",
     title: "All Day I Dream About Sports | Showcase Aug 2026",
     uploadDate: "2026-08-29T15:03:31-07:00",

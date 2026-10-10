@@ -53,7 +53,6 @@
        font natively, so this must never block the first paint) -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link rel="preconnect" href="https://download.alldayidreamaboutsports.com" />
   <link rel="stylesheet" media="print" onload="this.media='all'; this.onload=null"
         href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800&display=swap" />
   <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800&display=swap" /></noscript>
@@ -61,8 +60,6 @@
   <!-- reveal-on-scroll is a progressive enhancement; without JS the content
        must still be visible rather than sitting at opacity 0 forever. -->
   <noscript><style>.reveal{opacity:1;transform:none}</style></noscript>
-
-  {% if not noVideo %}<link rel="preload" as="image" href="{{ site.video.poster }}" fetchpriority="high" />{% endif %}
 
   <!-- Structured data -->
   <script type="application/ld+json">
@@ -149,8 +146,6 @@
         "applicationSubCategory": "Football Match Notifications",
         "operatingSystem": {{ site.requires | dump | safe }},
         "url": "{{ site.url }}/",
-        "downloadUrl": "{{ site.downloadUrl }}",
-        "installUrl": "{{ site.downloadUrl }}",
         "image": "{{ site.url }}/assets/og-image.png",
         "screenshot": "{{ site.url }}/assets/og-image.png",
         "description": "A macOS app for the Premier League, La Liga, Serie A, Bundesliga and Ligue 1 that drops match alerts - goals, cards and full-time results - right below your MacBook notch, pins a score capsule to any corner, and lets you celebrate goals with fans across the globe.",
@@ -167,7 +162,7 @@
         "author": { "@id": "{{ site.url }}/#org" },
         "publisher": { "@id": "{{ site.url }}/#org" },
         "video": { "@id": "{{ site.url }}/#demo" },
-        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD", "availability": "https://schema.org/InStock" }
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
       }{% if faqItems %},
       {
         "@type": "FAQPage",
@@ -186,8 +181,7 @@
   }
   </script>
 </head>
-<body{% if noVideo %} class="no-video"{% endif %}>
-  {% if not noVideo %}{% include "partials/video-bg.njk" %}{% endif %}
+<body>
   {% include "partials/nav.njk" %}
 
   <main class="content" id="top">

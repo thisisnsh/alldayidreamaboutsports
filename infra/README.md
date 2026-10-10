@@ -150,6 +150,15 @@ and `scores.` -> R2 custom domains (Cloudflare-proxied). The script no longer
 manages the retired `*-downloads` buckets or `download.` domains; delete them
 from the Cloudflare dashboard if they still exist.
 
+Retire only `alldayidreamaboutsports-downloads` and
+`alldayidreamaboutsports-staging-downloads`. Emptying and deleting them removes
+the stored installers/media; it does not purge cached copies. Block both
+download hostnames and purge their cached files as part of retirement. See
+[R2 cache consistency](https://developers.cloudflare.com/r2/reference/consistency/).
+The website uses YouTube and `/comingsoon/`, so its current source no longer
+depends on these buckets. Legacy direct-download builds lose their update feed.
+The scores buckets remain required by the app and backend.
+
 ## 3. API-Football
 
 Subscribe to **Ultra** ($29/mo) at
@@ -200,14 +209,42 @@ are server-side.
   gcloud scheduler jobs pause dispatch-live-scores --location=us-central1
   ```
   Recover with `gcloud scheduler jobs resume …`.
-- **Stop the app**: in the Cloudflare dashboard, add a WAF custom rule on the
-  zone that blocks the scores hostname (`scores.alldayidreamaboutsports.com`
-  for prod). WAF runs before the cache, so cached objects are blocked too.
-  Every fetch fails, and the app goes quiet: no scores, no events, failures
-  logged once per fixture per session. Recover by disabling the rule.
+- **Stop public score updates**: enable the prepared WAF custom rule below.
+  WAF runs before the cache, so cached objects are blocked too. Score fetches
+  fail, and the app stops receiving fresh scores and events. Recover by
+  disabling the rule.
 - **Old builds**: there is no forced update. Keep CDN JSON changes additive;
   put a breaking schema change under a new path (e.g. `v2/`) so older builds
   keep reading the old files.
+
+### Prepared scores emergency block
+
+The zone has a disabled custom rule named **Emergency stop - scores (enable on
+budget alert)**, with ref `allday_scores_emergency_stop`. It was created before
+the existing request guard and read back with `enabled: false`; preparing it
+does not interrupt scores. Its action is **Block** and its expression is:
+
+```text
+http.host in {
+  "scores.alldayidreamaboutsports.com"
+  "scores-staging.alldayidreamaboutsports.com"
+}
+```
+
+When a budget email arrives, open the `alldayidreamaboutsports.com` zone in
+Cloudflare, go to **Security rules → Custom rules**, and enable this named rule.
+Keep it before any Skip rules. Confirm an ordinary GET to the production
+`/catalog.json` returns 403; cached responses are also blocked. Disable the
+rule to restore access after investigating. Never enable it just to test it
+against production while the app should remain available.
+
+This rule is a manual stop, not an automatic response to budget emails. Budget
+alerts do not cap spending. Keep all public `r2.dev` bucket URLs disabled, since
+they bypass zone WAF rules. This block prevents public reads through these two
+hosts; storage and backend writes still accrue charges. To stop backend work,
+pause the Cloud Scheduler jobs and Cloud Tasks queue in each affected GCP
+project, allowing already running work to finish. Do not delete scores buckets
+as an emergency stop.
 
 ## Deployment trust
 

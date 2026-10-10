@@ -103,6 +103,9 @@ Archive → Distribute App → App Store Connect. No release CI, no DMG. See
 [app/README.md](app/README.md#mac-app-store). The website deploys to GitHub
 Pages on every push to `main` that touches `website/`.
 
+The old R2 installer publishing pipeline is retired. No `.publish.env` or
+bucket release workflow is needed; the backend still uses R2 for scores.
+
 ## Contributions
 
 Not accepting pull requests. Bug reports and ideas are welcome - open an issue

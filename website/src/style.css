@@ -1,18 +1,14 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    All Day I Dream About Sports - editorial monochrome.
 
-   The reel plays behind everything as a fixed layer; the page scrolls over it.
-   Sections alternate between transparent (the video shows through) and solid,
-   so the film is punctuation between passages of reading rather than a
-   permanent distraction. Structure comes from hairline rules and uppercase
-   micro-labels, not from boxes, icons or colour. The only images on the page
-   are crests, which are information, and the Apple logo on the download button.
+   Dark surfaces, hairline rules and rounded typography frame the app.
+   The demo is an embedded YouTube player in the page, with no background video.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 :root {
   /* Surfaces - the app's own pure black */
   --void:     #000000;
-  --panel:    rgba(0,0,0,0.78); /* reading sections with more of the reel showing through */
+  --panel:    #080808;
   --bone:     #ffffff;
   --ash:      rgba(255,255,255,0.66);
   --smoke:    rgba(255,255,255,0.42);
@@ -63,87 +59,7 @@ img { max-width: 100%; }
   overflow: hidden; clip-path: inset(50%); white-space: nowrap;
 }
 
-/* ════════════════════════ THE REEL, AS A LAYER ══════════════════════════ */
-/* Fixed behind everything. The poster is a real <img> so it paints with the
-   first paint and is the LCP element - the background is the video's own first
-   frame from the very start, never black, never empty. The <video> stays
-   transparent until it can play, so the crossfade has nothing to reveal, and
-   if it never arrives the poster simply remains. */
-.videobg {
-  position: fixed;
-  top: var(--nav-h);
-  right: 0;
-  left: 0;
-  height: calc(100dvh - var(--nav-h));
-  z-index: 0;
-  overflow: hidden;
-  background: var(--void);
-}
-.videobg-poster,
-.videobg-media {
-  position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover;
-  object-position: center top;
-  /* The reel is a screen recording of a bright desktop. Knocking it back is
-     what lets the page stay monochrome and keeps body copy readable over it. */
-  filter: brightness(0.9) saturate(0.95);
-}
-.videobg-media { opacity: 0; transition: opacity .4s var(--ease); }
-.videobg-media.is-ready { opacity: 1; }
-
-/* Text is never placed on a raw video frame. */
-.videobg-scrim {
-  position: absolute; inset: 0;
-  background:
-    /* darker down the left, which is where every line of text on this site sits */
-    linear-gradient(100deg,
-      rgba(0,0,0,0.72) 0%,
-      rgba(0,0,0,0.50) 40%,
-      rgba(0,0,0,0.22) 76%,
-      rgba(0,0,0,0.36) 100%),
-    linear-gradient(to bottom,
-      rgba(0,0,0,0.42) 0%,
-      rgba(0,0,0,0.20) 28%,
-      rgba(0,0,0,0.24) 64%,
-      rgba(0,0,0,0.66) 100%);
-}
-
-/* A compact status pill while the background reel becomes playable. */
-.video-loading {
-  position: fixed;
-  top: calc(var(--nav-h) + 14px);
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 60;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 9px 13px;
-  border-radius: 999px;
-  background: var(--bone);
-  color: var(--void);
-  font-family: var(--display);
-  font-size: 10px;
-  font-weight: 800;
-  line-height: 1;
-  letter-spacing: .12em;
-  text-transform: uppercase;
-  pointer-events: none;
-}
-.video-loading-spinner {
-  width: 12px;
-  height: 12px;
-  flex: none;
-  border: 2px solid rgba(0,0,0,0.25);
-  border-top-color: var(--void);
-  border-radius: 50%;
-  animation: video-loading-spin .7s linear infinite;
-}
-.video-loading[hidden] { display: none; }
-
-@keyframes video-loading-spin { to { transform: rotate(1turn); } }
-
-.content { position: relative; z-index: 2; padding-top: var(--nav-h); }
-body.no-video { background: var(--void); }
+.content { position: relative; padding-top: var(--nav-h); }
 
 /* ════════════════════════ NAV ═══════════════════════════════════════════ */
 .nav {
@@ -234,10 +150,10 @@ section:first-of-type { border-top: 0; }
 /* A backline already draws its own rule; the section after it must not draw a second. */
 .backline + section { border-top: 0; }
 
-/* Solid sections are the passages of reading; the rest let the reel through. */
+/* Alternate subtle surfaces between sections. */
 .solid, .faq { background: var(--panel); }
 
-.hero, .rows, .strip, .grid-sec, .faq, .cta, .prose-sec, .doc { scroll-margin-top: 84px; }
+.hero, .demo, .rows, .strip, .grid-sec, .faq, .cta, .prose-sec, .doc { scroll-margin-top: 84px; }
 
 /* ════════════════════════ TYPOGRAPHY ════════════════════════════════════ */
 /* Uppercase micro-labels carry the structure that icons used to. */
@@ -325,6 +241,22 @@ section:first-of-type { border-top: 0; }
 .hero .micro { display: inline-block; }
 .hero .body { max-width: 58ch; }
 .hero-404 { min-height: 82svh; display: flex; align-items: center; }
+
+/* YouTube demo stays in the document flow and scales to every screen. */
+.demo-intro { margin-top: 18px; max-width: 60ch; }
+.demo-player {
+  margin-top: clamp(28px, 4vw, 44px);
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border: 1px solid var(--hairline);
+  border-radius: 16px;
+  background: var(--panel);
+}
+.demo-player iframe { display: block; width: 100%; height: 100%; border: 0; }
+.demo-caption { margin-top: 14px; color: var(--ash); font-size: 14px; }
+.demo-caption a { text-decoration: underline; text-underline-offset: 4px; }
+.launch-hero { min-height: 78svh; }
+.launch-note { margin-top: 18px; }
 
 /* ════════════════════════ RULED FEATURE ROWS ════════════════════════════ */
 .rowlist { list-style: none; margin-top: clamp(34px, 5vw, 56px); }
@@ -519,6 +451,5 @@ section:first-of-type { border-top: 0; }
   html { scroll-behavior: auto; }
   .reveal { opacity: 1; transform: none; transition: none; }
   .celebration-title { animation: none; background-position: 50% 0; }
-  .videobg-media { transition: none; }
   .leaguerow a:hover, .crestgrid a:hover { padding-left: 0; }
 }

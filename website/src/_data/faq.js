@@ -8,11 +8,11 @@ import site from "./site.js";
 const home = [
   {
     q: "How do I get football match alerts on my Mac?",
-    a: "Download All Day I Dream About Sports - a free macOS app. It delivers goal, card, penalty, substitution and full-time alerts right below your MacBook notch, and pins a score capsule to any corner of your screen. No extra browser tab, no phone in your hand.",
+    a: "All Day I Dream About Sports is launching on the Mac App Store. Direct downloads are no longer available. The free macOS app delivers goal, card, penalty, substitution and full-time alerts right below your MacBook notch, and pins a score capsule to any corner of your screen.",
   },
   {
     q: "Is All Day I Dream About Sports free?",
-    a: "Yes - it is completely free on macOS 14 and later. You sign in to use the app, but there is no subscription, trial or paid tier. A Windows version is coming; join the waitlist from the download button.",
+    a: "Yes - the upcoming Mac App Store app is free on macOS 14 and later, with no subscription, trial or paid tier. Direct downloads are no longer available. A Windows version is also planned.",
   },
   {
     q: "Which leagues and teams can I follow?",
@@ -48,7 +48,7 @@ const home = [
   },
   {
     q: "How do I keep the app up to date?",
-    a: "It updates itself through Sparkle, and shows an Update available banner in the menu when a new build is ready. There is nothing to download twice.",
+    a: "The upcoming Mac App Store version will receive updates through the App Store. Direct downloads and the old Sparkle update feed have been retired.",
   },
   {
     q: "Can I see every match, not just my teams?",

@@ -71,9 +71,9 @@ for (const id of Object.keys(extras)) {
 }
 
 /* ── the page count ───────────────────────────────────────────────────── */
-// 1 home + 2 hubs + 6 competitions + 144 teams + privacy + 404, plus the
+// Home, two hubs, competitions, teams, coming soon, privacy and 404, plus the
 // /privacy.html redirect stub that is copied rather than rendered.
-const EXPECTED_PAGES = 155;
+const EXPECTED_PAGES = 6 + leagues.length + teams.length;
 const stub = htmlFiles.filter((f) => f.endsWith("privacy.html")).length;
 check(
   htmlFiles.length - stub === EXPECTED_PAGES,
@@ -83,6 +83,22 @@ check(
 /* ── the files Pages cannot do without ────────────────────────────────── */
 for (const f of ["CNAME", ".nojekyll", "robots.txt", "sitemap.xml", "style.css", "script.js", "privacy.html"]) {
   check(existsSync(join(SITE, f)), `missing ${f} in _site/`);
+}
+
+check(existsSync(join(SITE, "comingsoon", "index.html")), "missing coming-soon download destination");
+const homeHtml = readFileSync(join(SITE, "index.html"), "utf8");
+check(/<iframe[^>]+src="https:\/\/www\.youtube-nocookie\.com\/embed\/B75DYFddkV0"/.test(homeHtml),
+  "homepage is missing the embedded YouTube demo");
+check(!homeHtml.includes("autoplay=1"), "the YouTube demo must not autoplay");
+const launchHtml = readFileSync(join(SITE, "comingsoon", "index.html"), "utf8");
+check(launchHtml.includes("Direct downloads are no longer available."), "launch page must explain download retirement");
+check(launchHtml.includes("Launching on"), "launch page must announce the App Store launch");
+for (const file of files.filter((f) => /\.(html|js|css)$/.test(f))) {
+  const source = readFileSync(file, "utf8");
+  check(!/download(?:-staging)?\.alldayidreamaboutsports\.com/.test(source),
+    `${relative(SITE, file)}: references a retired download hostname`);
+  check(!/bgvideo|videobg|video-loading/.test(source),
+    `${relative(SITE, file)}: still contains the retired background video`);
 }
 
 /* ── every sitemap <loc> is a page that actually built ────────────────── */
@@ -117,6 +133,9 @@ for (const file of htmlFiles) {
 
   check(!html.includes(EM_DASH), `${url}: contains an em dash`);
   check(!/\blive scores?\b/i.test(html), `${url}: implies that the website shows live scores`);
+  for (const match of html.matchAll(/<a\b[^>]*href="([^"]+)"[^>]*>(?:(?!<\/a>)[\s\S])*?Download now<\/a>/g)) {
+    check(match[1] === "/comingsoon/", `${url}: download button does not point to coming soon`);
+  }
 
   const h1 = html.match(/<h1[\s>]/g) || [];
   check(h1.length === 1, `${url}: expected exactly one <h1>, found ${h1.length}`);

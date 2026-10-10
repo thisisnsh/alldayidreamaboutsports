@@ -1,0 +1,27 @@
+---
+layout: layouts/page.njk
+permalink: /comingsoon/index.html
+title: "Launching on the App Store - All Day I Dream About Sports"
+description: "All Day I Dream About Sports is launching on the Mac App Store. Direct downloads are no longer available. Watch the demo while you wait."
+pageName: "Launching on the App Store"
+crumbs:
+  - name: Home
+    url: /
+  - name: Coming soon
+    url: /comingsoon/
+---
+<section class="hero launch-hero" aria-labelledby="launch-h">
+  <div class="wrap wrap-narrow">
+    {% include "partials/breadcrumbs.njk" %}
+    <img class="hero-crest" src="/assets/app-icon.png" alt="" width="72" height="72" decoding="async" />
+    <p class="micro">Coming soon</p>
+    <h1 class="display" id="launch-h">Launching on<br />the App Store.</h1>
+    <p class="body">All Day I Dream About Sports is coming to the Mac App Store. Direct downloads are no longer available.</p>
+    <p class="body launch-note">Once the app launches, you'll be able to download it and receive updates through the App Store.</p>
+    <div class="actions">
+      <a class="btn btn-primary" href="/#demo">Watch the demo</a>
+      <a class="btn btn-ghost" href="/">Explore the app</a>
+    </div>
+    <span class="meta-note">Free · {{ site.requiresShort }}</span>
+  </div>
+</section>

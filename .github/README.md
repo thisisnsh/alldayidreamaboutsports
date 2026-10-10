@@ -23,3 +23,7 @@ exact check names from the first workflow runs before making them required.
 The macOS release is still archived/uploaded manually from Xcode; CI never
 uploads to the App Store. Deployment secrets/variables are documented in
 [infra/README.md](../infra/README.md).
+
+There is no app release workflow that uploads installers or an update feed to
+R2. The retired `.publish.env` file is not needed for App Store distribution.
+Keep backend R2 credentials: they publish score data, not app releases.
