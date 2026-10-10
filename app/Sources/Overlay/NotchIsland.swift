@@ -14,8 +14,7 @@ struct NotchGeometry {
     /// below: the notch's height, or the menu bar's.
     let bandHeight: CGFloat
 
-    /// Each side of the compact pin, beside the notch. Fixed — the compact
-    /// pin lives in the menu bar and doesn't follow the size setting.
+    /// Each side of the island's resting width on a notchless display.
     static let earWidth: CGFloat = 96
 
     init(screen: NSScreen?) {
@@ -100,35 +99,27 @@ struct NotchIslandShape: Shape {
 
 // MARK: - Controller
 
-/// What the island itself is showing; a match card wins over the compact pin.
-/// Event drops aren't a mode: they split off the notch as their own bars
+/// What the island itself is showing. Event drops aren't a mode: they split off the notch as their own bars
 /// (`NotchDropsLayer`) beneath whatever the island shows.
 enum IslandMode: Equatable {
     /// Nothing: the island is the hardware notch (and its panel is hidden).
     case rest
-    /// A pinned match, in the menu bar beside the notch: score left, clock right.
-    case compact(Int)
     /// One match opened up: scoreline, status and its latest events.
     case card(Int)
 }
 
-/// The notch island: the notch itself grows sideways to hold a pinned score
-/// and down to show a match card, then shrinks back into the hardware. Event
-/// drops split off the notch as separate black bars in the same panel.
+/// The notch island: the notch itself grows down to show a match card, then
+/// shrinks back into the hardware. Event drops split off the notch as
+/// separate black bars in the same panel.
 ///
 /// One panel, fixed size, at the top-center of the display chosen in
 /// Settings; everything inside it animates. The panel only takes the mouse
 /// while the pointer is over the island or a settled notification — everywhere
 /// else, clicks fall through to whatever is underneath.
-///
-/// Holds one match at a time; pinning another replaces it. Floating capsules
-/// (`PinnedCapsuleManager`) are the way to watch several matches at once.
 @MainActor
 final class NotchIsland: ObservableObject {
     static let shared = NotchIsland()
 
-    /// The match pinned to the notch.
-    @Published private(set) var pinnedFixtureId: Int?
     /// The match whose card is open.
     @Published private(set) var cardFixtureId: Int?
     @Published private(set) var hoveredNotificationID: String?
@@ -173,36 +164,6 @@ final class NotchIsland: ObservableObject {
         }
     }
 
-    func isPinned(_ fixtureId: Int) -> Bool { pinnedFixtureId == fixtureId }
-
-    /// The one place the menu, the card and the context menu funnel through,
-    /// so analytics live here.
-    func toggle(fixtureId: Int) {
-        if isPinned(fixtureId) {
-            AppAnalytics.notchUnpinned(fixtureId: fixtureId)
-            unpin()
-        } else {
-            AppAnalytics.notchPinned(fixtureId: fixtureId)
-            pin(fixtureId)
-        }
-    }
-
-    private func pin(_ fixtureId: Int) {
-        withAnimation(Self.spring) { pinnedFixtureId = fixtureId }
-        AppLog.info(.app, "notch_pinned fixture_id=\(fixtureId)")
-        refresh()
-    }
-
-    private func unpin() {
-        guard let fixtureId = pinnedFixtureId else { return }
-        withAnimation(Self.spring) {
-            pinnedFixtureId = nil
-            if cardFixtureId == fixtureId { cardFixtureId = nil }
-        }
-        AppLog.info(.app, "notch_unpinned fixture_id=\(fixtureId)")
-        refresh()
-    }
-
     /// Open a match's card. If drops are showing, the set ends first so the
     /// card has the space under the notch to itself.
     func openCard(_ fixtureId: Int, source: String) {
@@ -241,7 +202,7 @@ final class NotchIsland: ObservableObject {
 
     // MARK: State
 
-    private var isResting: Bool { !dropsShowing && cardFixtureId == nil && pinnedFixtureId == nil }
+    private var isResting: Bool { !dropsShowing && cardFixtureId == nil }
 
     private func dropsChanged(_ showing: Bool) {
         dropsShowing = showing
@@ -255,16 +216,12 @@ final class NotchIsland: ObservableObject {
         cardFixtureId = nil
     }
 
-    /// Retire a pin or card whose match rolled out of today's list. An empty
+    /// Retire a card whose match rolled out of today's list. An empty
     /// list is a reload in flight, not every match vanishing.
     private func fixturesChanged(_ fixtures: [Fixture]) {
         guard !fixtures.isEmpty else { return }
         let ids = Set(fixtures.map(\.fixtureId))
         if let cardFixtureId, !ids.contains(cardFixtureId) { closeCardImmediately() }
-        if let pinnedFixtureId, !ids.contains(pinnedFixtureId) {
-            self.pinnedFixtureId = nil
-            AppLog.info(.app, "notch_unpinned fixture_id=\(pinnedFixtureId) reason=gone")
-        }
         refresh()
     }
 
@@ -432,7 +389,7 @@ private struct NotchIslandRoot: View {
         ZStack(alignment: .top) {
             NotchDropsLayer()
             // Above the drops, so a neck passing up into the notch never
-            // covers the pinned score.
+            // covers the card.
             NotchIslandView()
         }
         .coordinateSpace(name: NotchDropsLayer.space)
@@ -450,7 +407,6 @@ private struct NotchIslandView: View {
 
     private var mode: IslandMode {
         if let id = island.cardFixtureId, fixture(id) != nil { return .card(id) }
-        if let id = island.pinnedFixtureId, fixture(id) != nil { return .compact(id) }
         return .rest
     }
 
@@ -479,14 +435,13 @@ private struct NotchIslandView: View {
     private func isDropped(_ mode: IslandMode) -> Bool {
         switch mode {
         case .card: true
-        case .rest, .compact: false
+        case .rest: false
         }
     }
 
     private func width(_ mode: IslandMode, _ geometry: NotchGeometry, _ metrics: NotchPillMetrics) -> CGFloat {
         switch mode {
         case .rest: geometry.restSize.width
-        case .compact: geometry.compactWidth
         case .card: geometry.expandedWidth(metrics)
         }
     }
@@ -495,7 +450,6 @@ private struct NotchIslandView: View {
     private func height(_ mode: IslandMode, _ geometry: NotchGeometry) -> CGFloat? {
         switch mode {
         case .rest: geometry.restSize.height
-        case .compact: geometry.bandHeight
         case .card: nil
         }
     }
@@ -505,8 +459,6 @@ private struct NotchIslandView: View {
         case .rest:
             // The hardware notch's own corners, so the shrink lands seamlessly.
             NotchIslandShape(topRadius: geometry.hasNotch ? 6 : 0, bottomRadius: geometry.hasNotch ? 9 : 0)
-        case .compact:
-            NotchIslandShape(topRadius: 6, bottomRadius: min(10, geometry.bandHeight / 2))
         case .card:
             NotchIslandShape(topRadius: 12, bottomRadius: metrics.corner)
         }
@@ -519,11 +471,6 @@ private struct NotchIslandView: View {
         switch mode {
         case .rest:
             Color.clear
-        case let .compact(id):
-            if let fixture = fixture(id) {
-                CompactIsland(fixture: fixture, geometry: geometry)
-                    .transition(.opacity)
-            }
         case let .card(id):
             if let fixture = fixture(id) {
                 IslandMatchCard(fixture: fixture, geometry: geometry, metrics: metrics)
@@ -534,7 +481,6 @@ private struct NotchIslandView: View {
 
     private func tapped(_ mode: IslandMode) {
         switch mode {
-        case let .compact(id): island.openCard(id, source: "pin")
         case .card: island.closeCard()
         case .rest: break
         }
@@ -543,19 +489,10 @@ private struct NotchIslandView: View {
     @ViewBuilder
     private func contextMenu(_ mode: IslandMode) -> some View {
         switch mode {
-        case let .compact(id), let .card(id):
-            if case .card = mode {
-                Button("Close") { island.closeCard() }
-            } else {
-                Button("Show match") { island.openCard(id, source: "pin") }
-            }
-            Button(capsules.isPinned(id) ? "Stop floating" : "Float on screen") {
+        case let .card(id):
+            Button("Close") { island.closeCard() }
+            Button(capsules.isPinned(id) ? "Unpin from screen" : "Pin to screen") {
                 capsules.toggle(fixtureId: id)
-            }
-            if island.isPinned(id) {
-                Button("Unpin from notch") { island.toggle(fixtureId: id) }
-            } else {
-                Button("Pin to notch") { island.toggle(fixtureId: id) }
             }
         case .rest:
             EmptyView()
@@ -564,43 +501,6 @@ private struct NotchIslandView: View {
 
     private func fixture(_ id: Int) -> Fixture? {
         session.fixtures.first { $0.fixtureId == id }
-    }
-}
-
-/// The pinned match, beside the notch: both crests and the score in the
-/// left ear, the clock in the right. Sized to the menu bar, not the setting.
-private struct CompactIsland: View {
-    let fixture: Fixture
-    let geometry: NotchGeometry
-    @EnvironmentObject private var session: AppSession
-
-    var body: some View {
-        let font = min(13, geometry.bandHeight * 0.42)
-        HStack(spacing: 0) {
-            HStack(spacing: 5) {
-                CachedTeamLogo(url: logo(fixture.home.id), size: font + 3)
-                Text(fixture.status == "SCHEDULED" ? "vs" : fixture.scorelineText)
-                    .font(.system(size: font, weight: .bold, design: .rounded))
-                    .monospacedDigit()
-                    .contentTransition(.numericText())
-                    .animation(.spring, value: fixture.scorelineText)
-                    .lineLimit(1)
-                    .fixedSize()
-                CachedTeamLogo(url: logo(fixture.away.id), size: font + 3)
-            }
-            .frame(width: NotchGeometry.earWidth)
-            Color.clear.frame(width: geometry.gap)
-            IslandClock(fixture: fixture, fontSize: font - 1)
-                .frame(width: NotchGeometry.earWidth)
-        }
-        .foregroundStyle(.white)
-        .frame(height: geometry.bandHeight)
-        .accessibilityElement(children: .combine)
-        .accessibilityHint("Click for the match. Right-click for options.")
-    }
-
-    private func logo(_ id: Int) -> String {
-        TeamCatalog.team(for: id, in: session.allTeams).logo
     }
 }
 
@@ -639,14 +539,13 @@ private struct IslandClock: View {
 }
 
 /// One match, opened up under the notch: crests and names either side of a
-/// big score, the clock and competition, its latest events, and the pin /
-/// float controls.
+/// big score, the clock and competition, its latest events, and the pin
+/// control.
 private struct IslandMatchCard: View {
     let fixture: Fixture
     let geometry: NotchGeometry
     let metrics: NotchPillMetrics
     @EnvironmentObject private var session: AppSession
-    @ObservedObject private var island = NotchIsland.shared
     @ObservedObject private var capsules = PinnedCapsuleManager.shared
 
     /// The most recent events; the menu has the full timeline.
@@ -686,13 +585,8 @@ private struct IslandMatchCard: View {
             HStack(spacing: 8) {
                 Spacer()
                 IslandButton(
-                    title: island.isPinned(fixture.fixtureId) ? "Unpin" : "Pin to notch",
-                    icon: island.isPinned(fixture.fixtureId) ? "pin.slash" : "pin",
-                    fontSize: metrics.subtitle
-                ) { island.toggle(fixtureId: fixture.fixtureId) }
-                IslandButton(
-                    title: capsules.isPinned(fixture.fixtureId) ? "Stop floating" : "Float",
-                    icon: "pip",
+                    title: capsules.isPinned(fixture.fixtureId) ? "Unpin" : "Pin to screen",
+                    icon: capsules.isPinned(fixture.fixtureId) ? "pin.slash" : "pin",
                     fontSize: metrics.subtitle
                 ) { capsules.toggle(fixtureId: fixture.fixtureId) }
             }

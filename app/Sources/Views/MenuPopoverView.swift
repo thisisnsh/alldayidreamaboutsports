@@ -547,30 +547,20 @@ private struct NowCard: View {
     }
 }
 
-/// The two ways to keep a match on screen: in the notch (one match, grows
-/// out of the hardware) or floating (any number, any corner).
+/// Keeps a match on screen: a pinned capsule in any corner, any number at once.
 private struct PinButtons: View {
     let fixtureId: Int
     @ObservedObject private var capsules = PinnedCapsuleManager.shared
-    @ObservedObject private var island = NotchIsland.shared
 
     var body: some View {
-        let inNotch = island.isPinned(fixtureId)
-        let floating = capsules.isPinned(fixtureId)
-        Button {
-            island.toggle(fixtureId: fixtureId)
-        } label: {
-            Label(inNotch ? "Unpin notch" : "Pin to notch", systemImage: inNotch ? "pin.slash" : "pin.fill")
-        }
-        .buttonStyle(.cardButton)
-        .help(inNotch ? "Take the score out of the notch" : "Keep the score beside the notch; click it for the match")
+        let pinned = capsules.isPinned(fixtureId)
         Button {
             capsules.toggle(fixtureId: fixtureId)
         } label: {
-            Label(floating ? "Stop floating" : "Float", systemImage: "pip")
+            Label(pinned ? "Unpin" : "Pin to screen", systemImage: pinned ? "pin.slash" : "pin.fill")
         }
         .buttonStyle(.cardButton)
-        .help(floating ? "Close the floating score" : "Float the score in a corner of the screen")
+        .help(pinned ? "Close the pinned score" : "Pin the score in a corner of the screen")
     }
 }
 
@@ -642,16 +632,15 @@ private struct PlaceholderRow: View {
 
 private struct FixtureRow: View {
     let fixture: Fixture
-    /// Only today's matches can float on screen — a capsule reads today's
+    /// Only today's matches can be pinned to the screen — a capsule reads today's
     /// live list.
     var pinnable = true
     @Binding var expanded: Int?
     @EnvironmentObject var session: AppSession
     @ObservedObject private var capsules = PinnedCapsuleManager.shared
-    @ObservedObject private var island = NotchIsland.shared
     @State private var hovering = false
 
-    private var isPinned: Bool { capsules.isPinned(fixture.fixtureId) || island.isPinned(fixture.fixtureId) }
+    private var isPinned: Bool { capsules.isPinned(fixture.fixtureId) }
     private var isExpanded: Bool { expanded == fixture.fixtureId }
 
     var body: some View {
