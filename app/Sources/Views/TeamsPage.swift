@@ -311,9 +311,9 @@ private struct TeamTile: View {
                         .font(.system(size: compact ? 11 : 12))
                         .multilineTextAlignment(.center)
                         .lineLimit(2)
-                        .frame(height: compact ? 28 : 30, alignment: .top)
                 }
-                .frame(maxWidth: .infinity)
+                // Room for a two-line name; shorter ones sit centred in it.
+                .frame(maxWidth: .infinity, minHeight: compact ? 62 : 71)
                 .padding(.vertical, compact ? 7 : 9)
                 .padding(.horizontal, 3)
                 .background(
