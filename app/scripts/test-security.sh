@@ -9,3 +9,6 @@ swiftc -parse-as-library Sources/Services/RemoteData.swift Sources/Models/League
 swiftc -parse-as-library Sources/Models/MatchModels.swift Sources/Services/MatchDiff.swift \
   Tests/MatchSecurityTests.swift -o "$test_dir/match-security-tests"
 "$test_dir/match-security-tests"
+swiftc -parse-as-library Sources/Models/DataStatus.swift Tests/DataStatusTests.swift \
+  -o "$test_dir/data-status-tests"
+"$test_dir/data-status-tests"

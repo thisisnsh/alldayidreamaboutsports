@@ -5,6 +5,7 @@ import SwiftUI
 struct TeamsPage: View {
     @EnvironmentObject var session: AppSession
     @State private var query = ""
+    @State private var followingOnly = false
     static let screen = "team_picker"
 
     var body: some View {
@@ -12,8 +13,21 @@ struct TeamsPage: View {
             PageHeader(title: "Teams", note: "\(session.fanTeams.count) followed")
             TeamSearchField(query: $query)
                 .padding(.horizontal, 12)
+            Picker("Show teams", selection: $followingOnly) {
+                Text("All teams").tag(false)
+                Text("Following").tag(true)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .padding(.horizontal, 12)
+            if session.catalogState == .unavailable {
+                DataStatusBanner(message: "Team list couldn't update", retrying: false) {
+                    Task { await session.refreshCatalog() }
+                }
+                .padding(.horizontal, 12)
+            }
             ScrollView {
-                TeamLeagueList(query: query, columns: 4)
+                TeamLeagueList(query: query, columns: 3, followingOnly: followingOnly)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 10)
             }
@@ -39,6 +53,15 @@ struct TeamSearchField: View {
             Image(systemName: "magnifyingglass").opacity(0.5)
             TextField("Search teams", text: $query)
                 .textFieldStyle(.plain)
+                .accessibilityLabel("Search teams")
+            if !query.isEmpty {
+                Button { query = "" } label: {
+                    Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .help("Clear search")
+                .accessibilityLabel("Clear search")
+            }
         }
         .padding(8)
         .background(RoundedRectangle(cornerRadius: 9).fill(.thinMaterial))
@@ -53,15 +76,41 @@ struct TeamLeagueList: View {
     @EnvironmentObject var session: AppSession
     let query: String
     let columns: Int
+    var followingOnly = false
     /// Folded leagues. View state only: every league opens unfolded.
     @State private var collapsed: Set<Int> = []
 
     var body: some View {
         LazyVStack(alignment: .leading, spacing: 18) {
+            if !hasResults {
+                VStack(spacing: 8) {
+                    if session.catalogState == .loading, session.leagues.isEmpty {
+                        ProgressView().controlSize(.small)
+                        Text("Loading teams…")
+                    } else if !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        Image(systemName: "magnifyingglass").font(.system(size: 24))
+                        Text("No teams found").fontWeight(.semibold)
+                        Text("Try another name or clear your search.")
+                    } else if followingOnly {
+                        Image(systemName: "heart.circle").font(.system(size: 24))
+                        Text("You're not following any teams yet").fontWeight(.semibold)
+                        Text("Choose All teams to find your clubs.")
+                    } else {
+                        Text("Team list unavailable").fontWeight(.semibold)
+                        Button("Try again") { Task { await session.refreshCatalog() } }
+                            .buttonStyle(.cardButton)
+                    }
+                }
+                .font(.system(size: 13))
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 30)
+            }
             ForEach(session.leagues) { league in
                 let leagueTeams = teams(for: league)
                 // While searching, hide leagues with no matches.
-                if query.isEmpty || !leagueTeams.isEmpty {
+                if (query.isEmpty && !followingOnly) || !leagueTeams.isEmpty {
                     LeagueSection(
                         league: league,
                         teams: leagueTeams,
@@ -82,10 +131,14 @@ struct TeamLeagueList: View {
         }
     }
 
+    private var hasResults: Bool { session.leagues.contains { !teams(for: $0).isEmpty } }
+
     private func teams(for league: League) -> [Team] {
-        let all = (session.teamsByLeague[league.id] ?? []).sorted { $0.name < $1.name }
-        guard !query.isEmpty else { return all }
-        return all.filter { $0.name.localizedCaseInsensitiveContains(query) }
+        let search = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        return (session.teamsByLeague[league.id] ?? [])
+            .filter { !followingOnly || session.fanTeamIds.contains($0.id) }
+            .filter { search.isEmpty || $0.name.localizedCaseInsensitiveContains(search) }
+            .sorted { $0.name < $1.name }
     }
 }
 
@@ -133,7 +186,7 @@ private struct LeagueSection: View {
                             .font(.system(size: 9, weight: .bold))
                             .rotationEffect(.degrees(collapsed ? -90 : 0))
                             .opacity(0.5)
-                        CachedTeamLogo(url: league.logo, size: 20, fallbackSymbol: "trophy.fill")
+                        CachedTeamLogo(url: league.logo, size: 24, fallbackSymbol: "trophy.fill", neutralBacking: true)
                         Text(league.name)
                             .font(.system(size: 13, weight: .bold, design: .rounded))
                             .lineLimit(1)
@@ -144,14 +197,16 @@ private struct LeagueSection: View {
                                 .background(Capsule().fill(Color.primary.opacity(0.1)))
                         } else if followedCount > 0 {
                             Text("\(followedCount) followed")
-                                .font(.system(size: 10, weight: .medium))
-                                .opacity(0.55)
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(.secondary)
                         }
                         Spacer(minLength: 0)
                     }
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(league.name)
+                .accessibilityValue(collapsed ? "Collapsed" : "Expanded")
                 bulkButton
             }
 
@@ -248,11 +303,12 @@ private struct TeamTile: View {
         Button(action: action) {
             ZStack(alignment: .topTrailing) {
                 VStack(spacing: 5) {
-                    CachedTeamLogo(url: team.logo, size: 32)
+                    CachedTeamLogo(url: team.logo, size: 36, neutralBacking: true)
                     Text(team.name)
-                        .font(.system(size: 10, weight: .medium))
+                        .font(.system(size: 12, weight: .medium))
                         .multilineTextAlignment(.center)
                         .lineLimit(2)
+                        .frame(height: 30, alignment: .top)
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 9)
@@ -270,12 +326,15 @@ private struct TeamTile: View {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.system(size: 14))
                         .foregroundStyle(scheme == .dark ? .black : .white, Color.primary)
-                        .offset(x: 4, y: -4)
+                        .padding(5)
                 }
             }
         }
         .buttonStyle(.plain)
         .hoverLift()
+        .accessibilityLabel(team.name)
+        .accessibilityValue(selected ? "Following" : "Not followed")
+        .accessibilityHint(selected ? "Unfollow this team" : "Follow for live scores and alerts")
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
 }

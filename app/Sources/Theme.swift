@@ -17,6 +17,21 @@ extension View {
     func appTheme(_ theme: ThemeChoice) -> some View {
         preferredColorScheme(theme.colorScheme)
     }
+
+    func respectReducedMotion() -> some View { modifier(ReducedMotion()) }
+}
+
+private struct ReducedMotion: ViewModifier {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        content.transaction { transaction in
+            if reduceMotion {
+                transaction.animation = nil
+                transaction.disablesAnimations = true
+            }
+        }
+    }
 }
 
 enum ThemeChoice: String, CaseIterable, Codable {
@@ -87,6 +102,7 @@ struct HoverHighlightButtonStyle: ButtonStyle {
 
     private struct HighlightBody: View {
         let configuration: Configuration
+        @Environment(\.accessibilityReduceMotion) private var reduceMotion
         @State private var hovering = false
 
         var body: some View {
@@ -97,7 +113,7 @@ struct HoverHighlightButtonStyle: ButtonStyle {
                     RoundedRectangle(cornerRadius: 8)
                         .fill(Color.primary.opacity(hovering ? 0.08 : 0))
                 )
-                .scaleEffect(configuration.isPressed ? 0.97 : (hovering ? 1.02 : 1.0))
+                .scaleEffect(reduceMotion ? 1 : (configuration.isPressed ? 0.97 : (hovering ? 1.02 : 1.0)))
                 .animation(.easeOut(duration: 0.12), value: hovering)
                 .animation(.easeOut(duration: 0.08), value: configuration.isPressed)
                 .onHover { hovering = $0 }
@@ -118,6 +134,7 @@ struct PrimaryPillButtonStyle: ButtonStyle {
     private struct PillBody: View {
         let configuration: Configuration
         @Environment(\.colorScheme) private var scheme
+        @Environment(\.accessibilityReduceMotion) private var reduceMotion
         @State private var hovering = false
 
         var body: some View {
@@ -127,7 +144,7 @@ struct PrimaryPillButtonStyle: ButtonStyle {
                 .padding(.horizontal, 22)
                 .padding(.vertical, 10)
                 .background(Capsule().fill(Color.primary.opacity(configuration.isPressed ? 0.75 : 1)))
-                .scaleEffect(configuration.isPressed ? 0.97 : (hovering ? 1.04 : 1.0))
+                .scaleEffect(reduceMotion ? 1 : (configuration.isPressed ? 0.97 : (hovering ? 1.04 : 1.0)))
                 .animation(.easeOut(duration: 0.12), value: hovering)
                 .animation(.easeOut(duration: 0.08), value: configuration.isPressed)
                 .onHover { hovering = $0 }
@@ -148,6 +165,7 @@ struct CardButtonStyle: ButtonStyle {
 
     private struct CardBody: View {
         let configuration: Configuration
+        @Environment(\.accessibilityReduceMotion) private var reduceMotion
         @State private var hovering = false
 
         var body: some View {
@@ -159,7 +177,7 @@ struct CardButtonStyle: ButtonStyle {
                     RoundedRectangle(cornerRadius: 8)
                         .fill(Color.primary.opacity(hovering ? 0.20 : 0.12))
                 )
-                .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
+                .scaleEffect(reduceMotion ? 1 : (configuration.isPressed ? 0.97 : 1.0))
                 .animation(.easeOut(duration: 0.12), value: hovering)
                 .animation(.easeOut(duration: 0.08), value: configuration.isPressed)
                 .onHover { hovering = $0 }
@@ -173,11 +191,12 @@ extension ButtonStyle where Self == CardButtonStyle {
 
 /// Bare hover lift for things that already have their own chrome.
 struct HoverLift: ViewModifier {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var hovering = false
 
     func body(content: Content) -> some View {
         content
-            .scaleEffect(hovering ? 1.03 : 1)
+            .scaleEffect(!reduceMotion && hovering ? 1.03 : 1)
             .animation(.easeOut(duration: 0.12), value: hovering)
             .onHover { hovering = $0 }
     }

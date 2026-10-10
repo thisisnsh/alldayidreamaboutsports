@@ -48,6 +48,8 @@ final class LiveStore {
     /// quiet stretch like half-time can serve for minutes). The gap since this
     /// stamp is what tells a live delta apart from a slept-through catch-up.
     private var baselineObservedAt: [Int: Date] = [:]
+    /// A 304 for a rejected representation must not make the retained score look fresh.
+    private var rejectedSnapshots: Set<Int> = []
 
     /// Our own free-running clock anchor for a fixture: `baseSeconds` at
     /// `anchorDate`, ticking forward at 1x thereafter. Reset only at a half
@@ -117,6 +119,7 @@ final class LiveStore {
     func resetBaseline() {
         baseline = [:]
         baselineObservedAt = [:]
+        rejectedSnapshots = []
         clockAnchor = [:]
         finished = []
         didReconcileThisLaunch = false
@@ -171,8 +174,11 @@ final class LiveStore {
             do {
                 current = try await scores.fetchFixture(fixtureId: previous.fixtureId)
             } catch ScoresError.notModified {
+                guard !rejectedSnapshots.contains(previous.fixtureId) else { continue }
+                session.confirmLiveScore(previous.fixtureId)
                 continue
             } catch {
+                session.markLiveScoreUnavailable(previous.fixtureId)
                 AppLog.error(.fixtures, "reconcile_fetch_failed fixture_id=\(previous.fixtureId)", error: error)
                 AppAnalytics.pollFailed(stage: "reconcile", fixtureId: previous.fixtureId, error: error)
                 continue
@@ -240,12 +246,15 @@ final class LiveStore {
             do {
                 current = try await scores.fetchFixture(fixtureId: previous.fixtureId)
             } catch ScoresError.notModified {
+                guard !rejectedSnapshots.contains(previous.fixtureId) else { continue }
                 // Byte-identical to last read — nothing to diff, but the read
                 // itself confirms the baseline is still current, so it keeps the
                 // observation gap closed through a quiet stretch.
                 baselineObservedAt[previous.fixtureId] = Date()
+                session.confirmLiveScore(previous.fixtureId)
                 continue
             } catch {
+                session.markLiveScoreUnavailable(previous.fixtureId)
                 AppLog.error(.fixtures, "poll_fetch_failed fixture_id=\(previous.fixtureId)", error: error)
                 AppAnalytics.pollFailed(stage: "poll", fixtureId: previous.fixtureId, error: error)
                 continue
@@ -366,6 +375,8 @@ final class LiveStore {
     /// A baseline gone stale (see `baselineIsStale`) re-seeds the same way.
     private func ingest(_ snapshot: Fixture) {
         guard snapshot.hasValidBounds else {
+            rejectedSnapshots.insert(snapshot.fixtureId)
+            session.markLiveScoreUnavailable(snapshot.fixtureId)
             AppLog.info(.fixtures, "snapshot_rejected reason=invalid_bounds fixture_id=\(snapshot.fixtureId)")
             return
         }
@@ -391,6 +402,8 @@ final class LiveStore {
         // Minute regressions are NOT guarded: the feed legitimately recalibrates
         // the clock backward (e.g. ET snapping 114→109).
         if let prev, prev.isLive, current.status == "SCHEDULED" {
+            rejectedSnapshots.insert(current.fixtureId)
+            session.markLiveScoreUnavailable(current.fixtureId)
             AppLog.info(.fixtures, "stale_snapshot_ignored fixture_id=\(current.fixtureId) prev=\(prev.status) next=\(current.status)")
             AppAnalytics.snapshotRejected(reason: "stale_snapshot")
             return
@@ -406,6 +419,7 @@ final class LiveStore {
         }
         establishClockAnchor(isFirstObservation: prev == nil || resync, current: current)
 
+        rejectedSnapshots.remove(current.fixtureId)
         session.applyLiveFixture(current)
 
         if prev == nil || resync {

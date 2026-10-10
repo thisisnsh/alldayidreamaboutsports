@@ -77,6 +77,7 @@ struct MenuPopoverView: View {
         .clipped()
         .background(AppBackground())
         .appTheme(session.prefs.settings.theme ?? .system)
+        .respectReducedMotion()
     }
 
     private var slide: AnyTransition {
@@ -146,56 +147,7 @@ struct ToolbarIconButton: View {
     }
 }
 
-/// The header's power button. Turns red on hover; the first click only asks
-/// ("Quit?"), the second quits. The ask lapses on its own after a few seconds.
-private struct QuitButton: View {
-    @State private var hovering = false
-    @State private var confirming = false
-
-    var body: some View {
-        Button {
-            if confirming {
-                AppAnalytics.appQuit(source: "menu")
-                NSApp.terminate(nil)
-            } else {
-                withAnimation(.easeOut(duration: 0.15)) { confirming = true }
-            }
-        } label: {
-            Group {
-                if confirming {
-                    Text("Quit?")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 9)
-                } else {
-                    Image(systemName: "power")
-                        .font(.system(size: 14))
-                        .foregroundStyle(hovering ? Color.red : Color.primary)
-                        .frame(width: 28)
-                }
-            }
-            .frame(height: 26)
-            .background(
-                RoundedRectangle(cornerRadius: 7)
-                    .fill(confirming ? Color.red : Color.red.opacity(hovering ? 0.15 : 0))
-            )
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .onHover { hovering = $0 }
-        .help(confirming ? "Click again to quit" : "Quit")
-        .accessibilityLabel(confirming ? "Confirm quit" : "Quit")
-        .task(id: confirming) {
-            guard confirming, (try? await Task.sleep(for: .seconds(3))) != nil else { return }
-            withAnimation(.easeOut(duration: 0.15)) { confirming = false }
-        }
-        // A stale ask shouldn't greet the next open.
-        .onDisappear { confirming = false }
-    }
-}
-
-/// Today's matches: the scope switch, Settings and Quit on top, the list
-/// in the middle, the followed teams (the way to Teams) along the bottom.
+/// Today's matches grouped by state, with followed teams along the bottom.
 struct HomePage: View {
     @EnvironmentObject var session: AppSession
     /// Which slice of today the fixture list shows. Stored locally rather than
@@ -235,7 +187,6 @@ struct HomePage: View {
             Spacer()
             FixtureScopePicker(scope: $fixtureScope)
             ToolbarIconButton(symbol: "gearshape", help: "Settings") { PopoverRouter.shared.go(.settings) }
-            QuitButton()
         }
         .padding(.leading, 16)
         .padding(.trailing, 10)
@@ -243,22 +194,28 @@ struct HomePage: View {
         .padding(.bottom, 8)
     }
 
-    /// The followed match being played right now, if any — it gets the big
-    /// card on top. The first by kickoff when several overlap.
-    private var nowFixture: Fixture? {
-        session.fixtures.first { $0.isLive }
-    }
-
     @ViewBuilder private var fixturesList: some View {
-        let now = nowFixture
-        let shown = shownFixtures.filter { $0.fixtureId != now?.fixtureId }
-        if shown.isEmpty, now == nil {
-            VStack(spacing: 6) {
+        if shownFixtures.isEmpty {
+            VStack(spacing: 10) {
                 Spacer()
-                Text(emptyMessage).font(.system(size: 13)).opacity(0.7)
-                if fixtureScope == .mine, session.hasFixturesToday {
-                    Text("Switch to All Teams to see the full matchday.")
-                        .font(.system(size: 11)).opacity(0.5)
+                if fixtureScope == .mine, session.fanTeamIds.isEmpty {
+                    Image(systemName: "heart.circle").font(.system(size: 28)).foregroundStyle(.secondary)
+                    Text("Follow a team to see its matches").font(.system(size: 13, weight: .medium))
+                    Button("Choose teams") { PopoverRouter.shared.go(.teams) }
+                        .buttonStyle(.cardButton)
+                } else if session.scheduleState == .loading {
+                    ProgressView().controlSize(.small)
+                    Text("Loading today's matches…").font(.system(size: 13)).foregroundStyle(.secondary)
+                } else if session.scheduleState == .unavailable {
+                    Image(systemName: "wifi.exclamationmark").font(.system(size: 24)).foregroundStyle(.secondary)
+                    Text("Couldn't load today's matches").font(.system(size: 13, weight: .medium))
+                    retryButton
+                } else {
+                    Text(emptyMessage).font(.system(size: 13)).foregroundStyle(.secondary)
+                    if fixtureScope == .mine, session.hasFixturesToday {
+                        Button("View all matches") { fixtureScope = .all }
+                            .buttonStyle(.cardButton)
+                    }
                 }
                 Spacer()
             }
@@ -266,29 +223,28 @@ struct HomePage: View {
             .onAppear { listHeight = Self.emptyListHeight; reportFit() }
         } else {
             ScrollView(.vertical, showsIndicators: true) {
-                VStack(alignment: .leading, spacing: 4) {
-                    if let now {
-                        NowCard(fixture: now, expanded: $expanded)
-                            .padding(.bottom, 6)
+                VStack(alignment: .leading, spacing: 12) {
+                    if session.scheduleState == .unavailable {
+                        DataStatusBanner(message: "Schedule couldn't update", retrying: session.isRefreshingFixtures) {
+                            Task { await session.refreshFixtures() }
+                        }
                     }
-                    ForEach(shown) { fixture in
-                        FixtureRow(
-                            fixture: fixture,
-                            // A followed team's match always carries live state
-                            // (LiveStore polls it), whichever list it's in.
-                            live: fixtureScope == .mine || fixture.involves(session.fanTeamIds),
-                            expanded: $expanded
-                        )
-                    }
+                    fixtureSection("Live", fixtures: followedFixtures.filter { $0.isLive }, liveCards: true)
+                    fixtureSection("Upcoming", fixtures: followedFixtures.filter {
+                        !$0.isLive && $0.status != "FINISHED" && !$0.isCalledOff && ($0.kickoff ?? .distantPast) > Date()
+                    })
+                    fixtureSection("Finished", fixtures: followedFixtures.filter { $0.status == "FINISHED" })
+                    fixtureSection("Match updates", fixtures: followedFixtures.filter {
+                        !$0.isLive && $0.status != "FINISHED" && ($0.isCalledOff || ($0.kickoff ?? .distantPast) <= Date())
+                    })
+                    fixtureSection("Other matches · schedule only", fixtures: shownFixtures.filter {
+                        !$0.involves(session.fanTeamIds)
+                    })
                 }
                 .padding(.horizontal, 8)
                 .padding(.vertical, Self.fadeHeight)
-                // Measured inside the scroll view, so it's the content's
-                // natural height, whatever the viewport.
                 .onGeometryChange(for: CGFloat.self, of: \.size.height) { listHeight = $0; reportFit() }
             }
-            // Rows dissolve into the popover at both ends instead of being
-            // sliced off by the scroll view's edge.
             .mask(
                 VStack(spacing: 0) {
                     LinearGradient(colors: [.clear, .black], startPoint: .top, endPoint: .bottom)
@@ -300,6 +256,33 @@ struct HomePage: View {
             )
             .frame(maxHeight: .infinity)
         }
+    }
+
+    private var followedFixtures: [Fixture] {
+        shownFixtures.filter { $0.involves(session.fanTeamIds) }
+    }
+
+    @ViewBuilder private func fixtureSection(_ title: String, fixtures: [Fixture], liveCards: Bool = false) -> some View {
+        if !fixtures.isEmpty {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(title).font(.system(size: 12, weight: .semibold)).foregroundStyle(.secondary)
+                    .padding(.horizontal, 8)
+                    .accessibilityAddTraits(.isHeader)
+                ForEach(fixtures) { fixture in
+                    if liveCards {
+                        NowCard(fixture: fixture, expanded: $expanded)
+                    } else {
+                        FixtureRow(fixture: fixture, live: fixture.involves(session.fanTeamIds), expanded: $expanded)
+                    }
+                }
+            }
+        }
+    }
+
+    private var retryButton: some View {
+        Button("Try again") { Task { await session.refreshFixtures() } }
+            .buttonStyle(.cardButton)
+            .disabled(session.isRefreshingFixtures)
     }
 
     private static let fadeHeight: CGFloat = 10
@@ -396,7 +379,7 @@ private struct FixtureScopePicker: View {
         var body: some View {
             Button(action: action) {
                 Text(option.label)
-                    .font(.system(size: 10, weight: selected ? .semibold : .regular))
+                    .font(.system(size: 12, weight: selected ? .semibold : .regular))
                     .opacity(selected ? 1 : 0.6)
                     .padding(.horizontal, 7)
                     .padding(.vertical, 3)
@@ -408,6 +391,8 @@ private struct FixtureScopePicker: View {
             }
             .buttonStyle(.plain)
             .onHover { hovering = $0 }
+            .accessibilityAddTraits(selected ? .isSelected : [])
+            .accessibilityValue(selected ? "Selected" : "Not selected")
         }
     }
 }
@@ -427,25 +412,31 @@ private struct NowCard: View {
         let timeline = capsuleTimeline(for: fixture)
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
-                Circle().fill(.red).frame(width: 7, height: 7)
-                TimelineView(.periodic(from: .now, by: 1)) { ctx in
-                    Text(fixture.liveMinuteText(
-                        localElapsed: LiveStore.shared.localElapsedSeconds(fixture.fixtureId, at: ctx.date)))
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(.red)
-                }
+                LiveMatchStatus(fixture: fixture)
                 Spacer()
                 if let league = session.leagueName(for: fixture.leagueId) {
-                    Text(league).font(.system(size: 10)).opacity(0.6).lineLimit(1)
+                    Text(league).font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(1)
                 }
             }
             teamLine(fixture.home, goals: fixture.home.goals, other: fixture.away.goals)
             teamLine(fixture.away, goals: fixture.away.goals, other: fixture.home.goals)
+            TimelineView(.periodic(from: .now, by: 5)) { context in
+                if session.liveScoreStatus(fixture.fixtureId, at: context.date) != .current {
+                    HStack {
+                        Text("Showing the last known score")
+                            .font(.system(size: 12)).foregroundStyle(.secondary)
+                        Spacer()
+                        Button("Retry") { Task { await session.refreshFixtures() } }
+                            .buttonStyle(.cardButton)
+                            .disabled(session.isRefreshingFixtures)
+                    }
+                }
+            }
             if let pens = fixture.shootout {
                 Text("Penalties \(pens.home) – \(pens.away)").font(.system(size: 11, weight: .semibold)).opacity(0.7)
             }
 
-            let shownEvents = isExpanded ? timeline : Array(timeline.suffix(3).reversed())
+            let shownEvents = isExpanded ? timeline : Array(timeline.suffix(3))
             if !shownEvents.isEmpty {
                 Divider()
                 VStack(alignment: .leading, spacing: 4) {
@@ -457,7 +448,7 @@ private struct NowCard: View {
                 Button {
                     capsules.toggle(fixtureId: fixture.fixtureId)
                 } label: {
-                    Label(isPinned ? "Pinned to screen" : "Pin to screen", systemImage: "pin.fill")
+                    Label(isPinned ? "Unpin from screen" : "Pin to screen", systemImage: "pin.fill")
                 }
                 .buttonStyle(.cardButton)
                 .help(isPinned ? "Unpin the floating score" : "Float this score on screen")
@@ -482,7 +473,7 @@ private struct NowCard: View {
             Text(team.name).font(.system(size: 15, weight: .bold, design: .rounded)).lineLimit(1)
             Spacer()
             Text("\(goals)")
-                .font(.system(size: 24, weight: .heavy, design: .rounded))
+                .font(.system(size: 20, weight: .bold, design: .rounded))
                 .monospacedDigit()
                 .contentTransition(.numericText())
                 .animation(.spring, value: goals)
@@ -501,9 +492,9 @@ private struct TimelineEventLine: View {
     var body: some View {
         HStack(spacing: 6) {
             Text(row.minuteText)
-                .font(.system(size: 10, weight: .semibold, design: .rounded))
+                .font(.system(size: 12, weight: .semibold, design: .rounded))
                 .monospacedDigit()
-                .opacity(0.6)
+                .foregroundStyle(.secondary)
                 .frame(width: 34, alignment: .trailing)
             if let teamId = row.teamId {
                 CachedTeamLogo(url: TeamCatalog.team(for: teamId, in: session.allTeams).logo, size: 12)
@@ -515,10 +506,10 @@ private struct TimelineEventLine: View {
                 .foregroundStyle(row.disallowed ? Color.secondary : row.color)
                 .frame(width: 14)
             Text(row.label)
-                .font(.system(size: 11, weight: .semibold))
+                .font(.system(size: 12, weight: .semibold))
                 .strikethrough(row.disallowed)
             if let text = row.text {
-                Text(text).font(.system(size: 11)).opacity(0.65).lineLimit(1).strikethrough(row.disallowed)
+                Text(text).font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(1).strikethrough(row.disallowed)
             }
             Spacer(minLength: 0)
         }
@@ -607,7 +598,13 @@ private struct FixtureRow: View {
                     ForEach(timeline) { TimelineEventLine(row: $0) }
                 }
             } else if let note = detailNote {
-                Text(note).font(.system(size: 11)).opacity(0.6)
+                Text(note).font(.system(size: 12)).foregroundStyle(.secondary)
+            }
+            if !live {
+                HStack {
+                    followButton(fixture.home)
+                    followButton(fixture.away)
+                }
             }
             if pinnable {
                 Button {
@@ -620,14 +617,26 @@ private struct FixtureRow: View {
         }
     }
 
+    private func followButton(_ team: ScoreboardTeam) -> some View {
+        Button("Follow \(shortName(team))") {
+            session.setFanTeams(session.prefs.fanTeamIds + [String(team.id)])
+        }
+        .buttonStyle(.cardButton)
+        .accessibilityLabel("Follow \(team.name) for live scores and alerts")
+    }
+
     private var detailNote: String? {
         let kickoff = fixture.kickoff.map { $0.formatted(date: .omitted, time: .shortened) }
         if !live {
-            let when = kickoff.map { "Kicks off at \($0). " } ?? ""
+            let when = kickoff.map { "Scheduled for \($0). " } ?? ""
             return when + "Follow either team for live scores and alerts."
         }
         switch fixture.status {
-        case "SCHEDULED": return kickoff.map { "Kicks off at \($0)." }
+        case "SCHEDULED":
+            if (fixture.kickoff ?? .distantFuture) <= Date() {
+                return "Waiting for a confirmed match update."
+            }
+            return kickoff.map { "Kicks off at \($0)." }
         case "FINISHED": return "No goals or cards."
         default: return fixture.isLive ? "Nothing yet." : nil
         }
@@ -638,7 +647,7 @@ private struct FixtureRow: View {
         let league = session.leagueName(for: fixture.leagueId)
         if let text = [league, fixture.stageLabel]
             .compactMap({ $0 }).joined(separator: " · ").trimmedNonEmpty {
-            Text(text).font(.system(size: 10)).opacity(0.6).lineLimit(1)
+            Text(text).font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(1)
         }
     }
 
@@ -652,22 +661,19 @@ private struct FixtureRow: View {
     @ViewBuilder private var trailing: some View {
         if !live {
             if let kickoff = fixture.kickoff {
-                Text(kickoff, style: .time).font(.system(size: 11)).opacity(0.7)
+                Text(kickoff, style: .time).font(.system(size: 12)).foregroundStyle(.secondary)
             }
         } else if fixture.isLive {
-            HStack(spacing: 4) {
-                Circle().fill(.red).frame(width: 6, height: 6)
-                TimelineView(.periodic(from: .now, by: 1)) { ctx in
-                    Text(fixture.liveMinuteText(
-                        localElapsed: LiveStore.shared.localElapsedSeconds(fixture.fixtureId, at: ctx.date)))
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundStyle(.red)
-                }
-            }
+            LiveMatchStatus(fixture: fixture)
         } else if fixture.status == "FINISHED" {
-            Text("FT").font(.system(size: 10, weight: .semibold)).foregroundStyle(.green)
+            Text("FT").font(.system(size: 12, weight: .semibold)).foregroundStyle(.green)
+        } else if fixture.isCalledOff {
+            Text(fixture.rawStatus == "PST" ? "Postponed" : "Called off")
+                .font(.system(size: 12)).foregroundStyle(.secondary)
+        } else if (fixture.kickoff ?? .distantFuture) <= Date() {
+            Text("Awaiting update").font(.system(size: 12)).foregroundStyle(.secondary)
         } else if let kickoff = fixture.kickoff {
-            Text(kickoff, style: .time).font(.system(size: 11)).opacity(0.7)
+            Text(kickoff, style: .time).font(.system(size: 12)).foregroundStyle(.secondary)
         }
     }
 
@@ -677,5 +683,51 @@ private struct FixtureRow: View {
 
     private func shortName(_ team: ScoreboardTeam) -> String {
         TeamCatalog.shortName(for: team.id, in: session.allTeams, fallback: team.name)
+    }
+}
+
+/// A clock only claims to be live while the latest read is confirmed current.
+struct LiveMatchStatus: View {
+    let fixture: Fixture
+    var fontSize: CGFloat = 12
+    @EnvironmentObject var session: AppSession
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { context in
+            let status = session.liveScoreStatus(fixture.fixtureId, at: context.date)
+            HStack(spacing: 5) {
+                if status == .current {
+                    Circle().fill(.red).frame(width: 6, height: 6)
+                    Text(fixture.liveMinuteText(localElapsed: LiveStore.shared.localElapsedSeconds(fixture.fixtureId, at: context.date)))
+                        .foregroundStyle(.red)
+                } else {
+                    Image(systemName: status == .checking ? "arrow.clockwise" : "wifi.exclamationmark")
+                    Text(status == .checking ? "Checking…" : "Updates delayed")
+                }
+            }
+            .font(.system(size: fontSize, weight: .semibold))
+            .foregroundStyle(.secondary)
+            .fixedSize()
+            .accessibilityElement(children: .combine)
+        }
+    }
+}
+
+struct DataStatusBanner: View {
+    let message: String
+    var retrying = false
+    let retry: () -> Void
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "wifi.exclamationmark").accessibilityHidden(true)
+            Text(message).font(.system(size: 12)).fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+            Button(retrying ? "Retrying…" : "Retry", action: retry)
+                .buttonStyle(.cardButton).disabled(retrying)
+        }
+        .foregroundStyle(.secondary)
+        .padding(8)
+        .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.06)))
     }
 }

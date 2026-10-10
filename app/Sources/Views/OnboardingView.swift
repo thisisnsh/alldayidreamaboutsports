@@ -69,6 +69,8 @@ struct OnboardingView: View {
     @State private var query = ""
     @State private var launchAtLogin = LaunchAtLogin.isEnabled
     @State private var kicks = 0
+    @State private var movingForward = true
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     static let size = CGSize(width: 580, height: 500)
 
     enum Step: Int, CaseIterable {
@@ -96,8 +98,8 @@ struct OnboardingView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .transition(.asymmetric(
-                insertion: .move(edge: .trailing).combined(with: .opacity),
-                removal: .move(edge: .leading).combined(with: .opacity)
+                insertion: .move(edge: movingForward ? .trailing : .leading).combined(with: .opacity),
+                removal: .move(edge: movingForward ? .leading : .trailing).combined(with: .opacity)
             ))
             .id(step)
             footer
@@ -106,6 +108,7 @@ struct OnboardingView: View {
         .clipped()
         .background(AppBackground())
         .appTheme(session.prefs.settings.theme ?? .system)
+        .respectReducedMotion()
         .onAppear { AppAnalytics.screenView(step.screen) }
         .onChange(of: step) { _, step in AppAnalytics.screenView(step.screen) }
         .task { TeamLogoStore.shared.warm(session.leagues.map(\.logo) + session.allTeams.map(\.logo)) }
@@ -113,7 +116,14 @@ struct OnboardingView: View {
 
     private func advance() {
         guard let next = Step(rawValue: step.rawValue + 1) else { return }
+        movingForward = true
         withAnimation(.easeOut(duration: 0.25)) { step = next }
+    }
+
+    private func goBack() {
+        guard let previous = Step(rawValue: step.rawValue - 1) else { return }
+        movingForward = false
+        withAnimation(.easeOut(duration: 0.25)) { step = previous }
     }
 
     // MARK: Steps
@@ -126,7 +136,7 @@ struct OnboardingView: View {
             } label: {
                 Image(systemName: "soccerball")
                     .font(.system(size: 64))
-                    .rotationEffect(.degrees(Double(kicks) * 360))
+                    .rotationEffect(.degrees(reduceMotion ? 0 : Double(kicks) * 360))
                     .animation(.spring(response: 0.6, dampingFraction: 0.6), value: kicks)
                     .shadow(radius: 8)
             }
@@ -180,7 +190,7 @@ struct OnboardingView: View {
             HStack {
                 Text("Open at login so you never miss a goal").font(.system(size: 13))
                 Spacer()
-                Toggle("", isOn: Binding(
+                Toggle("Open at login", isOn: Binding(
                     get: { launchAtLogin },
                     set: { on in
                         launchAtLogin = on
@@ -259,6 +269,12 @@ struct OnboardingView: View {
 
     private var footer: some View {
         HStack(spacing: 12) {
+            if step != .hello {
+                Button(action: goBack) {
+                    Label("Back", systemImage: "chevron.left")
+                }
+                .buttonStyle(.hoverHighlight)
+            }
             HStack(spacing: 6) {
                 ForEach(Step.allCases, id: \.self) { s in
                     Circle()
@@ -266,6 +282,8 @@ struct OnboardingView: View {
                         .frame(width: 6, height: 6)
                 }
             }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Step \(step.rawValue + 1) of \(Step.allCases.count)")
             Spacer()
             switch step {
             case .teams:

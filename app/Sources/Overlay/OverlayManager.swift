@@ -237,7 +237,7 @@ final class OverlayManager: ObservableObject {
     // MARK: Confetti — fire and forget, never waits for anything
 
     private func fireConfetti(count: Int) {
-        guard count > 0 else { return }
+        guard count > 0, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else { return }
         for _ in 0 ..< count {
             let burst = ConfettiBurst()
             confettiBursts.append(burst)
@@ -467,5 +467,6 @@ struct DismissCrossButton: View {
         }
         .buttonStyle(.plain)
         .hoverLift()
+        .accessibilityLabel("Dismiss goal celebration")
     }
 }

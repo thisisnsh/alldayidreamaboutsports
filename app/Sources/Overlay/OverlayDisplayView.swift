@@ -4,6 +4,7 @@ import SwiftUI
 /// the center ball scene for the set's fan goals, and passive notch pills.
 struct OverlayDisplayView: View {
     @EnvironmentObject var overlay: OverlayManager
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         GeometryReader { geo in
@@ -18,7 +19,7 @@ struct OverlayDisplayView: View {
 
                 // Bursts overlap freely and outlive their set — each token is
                 // an independent ConfettiView with its own clock.
-                ForEach(overlay.confettiBursts) { burst in
+                ForEach(reduceMotion ? [] : overlay.confettiBursts) { burst in
                     ConfettiView(size: geo.size)
                         .id(burst.id)
                 }
@@ -29,6 +30,7 @@ struct OverlayDisplayView: View {
             .frame(width: geo.size.width, height: geo.size.height)
         }
         .ignoresSafeArea()
+        .respectReducedMotion()
     }
 }
 

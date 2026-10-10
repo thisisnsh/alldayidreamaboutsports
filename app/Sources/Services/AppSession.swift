@@ -16,6 +16,11 @@ final class AppSession: ObservableObject {
     /// as SCHEDULED / 0-0 by construction): matches outside `fixtures` are
     /// never polled, so they carry a kickoff time and nothing live.
     @Published var todayFixtures: [Fixture] = []
+    @Published private(set) var scheduleState: DataLoadState = .loading
+    @Published private(set) var catalogState: DataLoadState = .loading
+    @Published private(set) var liveScoreUpdates: [Int: LiveScoreUpdate] = [:]
+    @Published private(set) var isRefreshingFixtures = false
+    private var isRefreshingCatalog = false
 
     private var scores: ScoresProviding { Services.scores }
     private let defaults = AppDefaults.shared
@@ -202,22 +207,29 @@ final class AppSession: ObservableObject {
     // MARK: Data refresh
 
     func refreshCatalog() async {
+        guard !isRefreshingCatalog else { return }
+        isRefreshingCatalog = true
+        catalogState = .loading
+        defer { isRefreshingCatalog = false }
         AppLog.info(.catalog, "refresh_start")
         let catalog: Catalog
         do {
             catalog = try await scores.fetchCatalog().validated()
         } catch {
             AppLog.error(.catalog, "refresh_failed", error: error)
+            catalogState = .unavailable
             return
         }
         guard !catalog.leagues.isEmpty else {
             AppLog.info(.catalog, "refresh_discarded leagues=0")
+            catalogState = .unavailable
             return
         }
         leagues = catalog.leagues
         teamsByLeague = Dictionary(
             uniqueKeysWithValues: catalog.leagues.map { ($0.id, catalog.teams(for: $0.id)) },
         )
+        catalogState = .ready
         AppLog.info(.catalog, "refresh_complete leagues=\(leagues.count) teams=\(allTeams.count)")
     }
 
@@ -225,6 +237,9 @@ final class AppSession: ObservableObject {
     /// one live poll pass now (fetch each live fan match, merge its score, fire
     /// any new goal).
     func refreshFixtures() async {
+        guard !isRefreshingFixtures else { return }
+        isRefreshingFixtures = true
+        defer { isRefreshingFixtures = false }
         await bootstrapFixturesIfNeeded(force: true)
         #if !DEV_BACKEND
         // Un-stick a past-window finished match too: refreshNow()/pollCycle is
@@ -254,14 +269,21 @@ final class AppSession: ObservableObject {
         var loaded = Set(defaults.stringArray(forKey: CacheKey.fixtureBootstrapDates) ?? [])
             .filter { $0.hasPrefix("\(bootstrapDay):") }
         let pending = force ? dates : dates.filter { !loaded.contains(key($0)) }
-        guard !pending.isEmpty else { return }
+        guard !pending.isEmpty else {
+            scheduleState = .ready
+            return
+        }
         if !force, let last = lastBootstrapAttempt,
            now.timeIntervalSince(last) < Self.bootstrapRetryInterval {
             return
         }
         lastBootstrapAttempt = now
         isBootstrappingFixtures = true
+        scheduleState = .loading
         defer { isBootstrappingFixtures = false }
+        // A failed forced refresh must remain retryable even if yesterday's
+        // attempt for this UTC day succeeded.
+        for date in pending { loaded.remove(key(date)) }
 
         AppLog.info(.fixtures, "bootstrap_start cached=\(fixturesById.count) fan_teams=\(fanTeamIds.sorted()) pending=\(pending.count)")
         for date in pending {
@@ -291,6 +313,7 @@ final class AppSession: ObservableObject {
             }
         }
         defaults.set(loaded.sorted(), forKey: CacheKey.fixtureBootstrapDates)
+        scheduleState = dates.allSatisfy { loaded.contains(key($0)) } ? .ready : .unavailable
         publishFixtures()
         AppLog.info(.fixtures, "bootstrap_complete fixtures=\(fixturesById.count) loaded_dates=\(loaded.count)")
     }
@@ -299,6 +322,21 @@ final class AppSession: ObservableObject {
     /// `LiveStore` each poll cycle; `publishFixtures()` projects the visible list.
     func applyLiveFixture(_ fixture: Fixture) {
         fixturesById[fixture.fixtureId] = fixture
+        confirmLiveScore(fixture.fixtureId)
+    }
+
+    func confirmLiveScore(_ fixtureId: Int) {
+        liveScoreUpdates[fixtureId] = LiveScoreUpdate(confirmedAt: Date())
+    }
+
+    func markLiveScoreUnavailable(_ fixtureId: Int) {
+        var update = liveScoreUpdates[fixtureId] ?? LiveScoreUpdate()
+        update.failed = true
+        liveScoreUpdates[fixtureId] = update
+    }
+
+    func liveScoreStatus(_ fixtureId: Int, at date: Date) -> LiveScoreUpdate.Status {
+        (liveScoreUpdates[fixtureId] ?? LiveScoreUpdate()).status(at: date)
     }
 
     /// Project the working set into the two published, sorted lists and persist
@@ -369,6 +407,8 @@ final class AppSession: ObservableObject {
         fixtures = []
         todayFixtures = []
         fixturesById = [:]
+        liveScoreUpdates = [:]
+        scheduleState = .loading
         defaults.removeObject(forKey: CacheKey.fixtures)
         defaults.removeObject(forKey: CacheKey.fixtureBootstrapDates)
         lastBootstrapAttempt = nil

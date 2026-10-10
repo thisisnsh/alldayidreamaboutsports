@@ -10,6 +10,8 @@ struct CachedTeamLogo: View {
     let url: String
     var size: CGFloat = 28
     var fallbackSymbol: String = "shield.lefthalf.filled"
+    var neutralBacking = false
+    @Environment(\.colorScheme) private var scheme
 
     @ObservedObject private var store = TeamLogoStore.shared
 
@@ -21,7 +23,14 @@ struct CachedTeamLogo: View {
                 placeholder
             }
         }
+        .padding(neutralBacking && scheme == .dark ? size * 0.1 : 0)
         .frame(width: size, height: size)
+        .background {
+            if neutralBacking && scheme == .dark {
+                RoundedRectangle(cornerRadius: size * 0.2).fill(Color.white.opacity(0.92))
+            }
+        }
+        .accessibilityHidden(true)
     }
 
     private var placeholder: some View {

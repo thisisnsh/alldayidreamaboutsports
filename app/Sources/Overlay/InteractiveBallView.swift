@@ -6,6 +6,7 @@ import SwiftUI
 struct InteractiveBallView: View {
     @EnvironmentObject var overlay: OverlayManager
     @State private var pulse = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// The teams that scored, one entry each — two goals by the same side
     /// in one set shouldn't badge the ball twice or name it twice. Names are
@@ -34,7 +35,7 @@ struct InteractiveBallView: View {
                 .allowsHitTesting(false)
 
             BallView(teams: scorers.map(\.team), diameter: 160)
-                .scaleEffect(pulse ? 1.06 : 1.0)
+                .scaleEffect(!reduceMotion && pulse ? 1.06 : 1.0)
                 .animation(.easeInOut(duration: 0.7).repeatForever(autoreverses: true), value: pulse)
                 .allowsHitTesting(false)
 
@@ -44,5 +45,6 @@ struct InteractiveBallView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear { pulse = true }
+        .respectReducedMotion()
     }
 }

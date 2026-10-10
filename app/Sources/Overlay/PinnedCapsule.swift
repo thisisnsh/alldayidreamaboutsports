@@ -492,6 +492,7 @@ struct PinnedCapsuleView: View {
             }
         }
         .fixedSize()
+        .respectReducedMotion()
     }
 
     @ViewBuilder private func capsule(_ fixture: Fixture) -> some View {
@@ -580,15 +581,7 @@ struct PinnedCapsuleView: View {
 
     @ViewBuilder private func trailing(_ fixture: Fixture) -> some View {
         if fixture.isLive {
-            HStack(spacing: 4) {
-                Circle().fill(.red).frame(width: 6, height: 6)
-                TimelineView(.periodic(from: .now, by: 1)) { ctx in
-                    Text(fixture.liveMinuteText(
-                        localElapsed: LiveStore.shared.localElapsedSeconds(fixture.fixtureId, at: ctx.date)))
-                        .font(.system(size: metrics.timeFont, weight: .bold, design: .rounded))
-                        .foregroundStyle(.red)
-                }
-            }
+            LiveMatchStatus(fixture: fixture, fontSize: metrics.timeFont)
         } else if fixture.status == "FINISHED" {
             Text("FT")
                 .font(.system(size: metrics.timeFont, weight: .semibold, design: .rounded))

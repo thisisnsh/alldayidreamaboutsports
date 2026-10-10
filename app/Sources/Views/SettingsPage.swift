@@ -132,9 +132,16 @@ struct SettingsPage: View {
                 }
             }
             .buttonStyle(.cardButton)
+            Button {
+                AppAnalytics.appQuit(source: "settings")
+                NSApp.terminate(nil)
+            } label: {
+                Label("Quit app", systemImage: "power")
+            }
+            .buttonStyle(.hoverHighlight)
             Text("\(AppEnvironment.profileName) v\(AppEnvironment.appVersion) (Build \(AppEnvironment.buildNumber))")
                 .font(.caption)
-                .opacity(0.6)
+                .foregroundStyle(.secondary)
         }
         .padding(.top, 4)
     }
@@ -147,7 +154,7 @@ struct SettingsPage: View {
         HStack {
             HStack(spacing: 8) {
                 Image(systemName: pillIcon(for: type))
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(pillIconColor(for: type))
                     // Symbols vary in width (arrow.left.arrow.right vs the
                     // card rectangle) — a fixed column keeps the names aligned.
@@ -161,7 +168,7 @@ struct SettingsPage: View {
             .padding(.vertical, 6)
             .background(Capsule().fill(scheme == .dark ? Color.black : Color.white))
             Spacer()
-            Toggle("", isOn: eventBinding(type))
+            Toggle(type.displayName, isOn: eventBinding(type))
                 .labelsHidden()
                 .toggleStyle(.switch)
                 .controlSize(.small)
@@ -206,7 +213,7 @@ struct SettingsPage: View {
         HStack {
             Text(label).font(.system(size: 13))
             Spacer()
-            Toggle("", isOn: isOn)
+            Toggle(label, isOn: isOn)
                 .labelsHidden()
                 .toggleStyle(.switch)
                 .controlSize(.small)
@@ -216,7 +223,7 @@ struct SettingsPage: View {
     private func caption(_ text: String) -> some View {
         Text(text)
             .font(.caption)
-            .opacity(0.6)
+            .foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
     }
 
@@ -353,9 +360,9 @@ private struct SettingsCard<Content: View>: View {
         VStack(alignment: .leading, spacing: 10) {
             if let title {
                 Text(title)
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.system(size: 12, weight: .semibold))
                     .textCase(.uppercase)
-                    .opacity(0.55)
+                    .foregroundStyle(.secondary)
             }
             content
         }
@@ -428,7 +435,7 @@ private struct DemoControls: View {
         .buttonStyle(.cardButton)
         Text("Deterministic timeline from Dev/DevConfig.swift — the same events fire at the same seconds every run.")
             .font(.caption)
-            .opacity(0.6)
+            .foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
     }
 }
