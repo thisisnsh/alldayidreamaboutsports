@@ -392,10 +392,12 @@ private struct NotchIslandRoot: View {
             // covers the card.
             NotchIslandView()
         }
-        .coordinateSpace(name: NotchDropsLayer.space)
         .frame(width: NotchIsland.panelSize.width, height: NotchIsland.panelSize.height, alignment: .top)
-            .ignoresSafeArea()
-            .environment(\.colorScheme, .dark)
+        // Hit regions and drop paths use the panel's origin, including the
+        // space beside the centered content. Name the fixed frame itself.
+        .coordinateSpace(name: NotchDropsLayer.space)
+        .ignoresSafeArea()
+        .environment(\.colorScheme, .dark)
     }
 }
 
