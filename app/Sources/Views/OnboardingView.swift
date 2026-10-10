@@ -68,9 +68,7 @@ struct OnboardingView: View {
     @State private var step: Step = .hello
     @State private var query = ""
     @State private var launchAtLogin = LaunchAtLogin.isEnabled
-    @State private var kicks = 0
     @State private var movingForward = true
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     static let size = CGSize(width: 580, height: 500)
 
     enum Step: Int, CaseIterable {
@@ -129,37 +127,29 @@ struct OnboardingView: View {
     // MARK: Steps
 
     private var hello: some View {
-        VStack(spacing: 18) {
-            Spacer()
-            Button {
-                kicks += 1
-            } label: {
-                Image(systemName: "soccerball")
-                    .font(.system(size: 64))
-                    .rotationEffect(.degrees(reduceMotion ? 0 : Double(kicks) * 360))
-                    .animation(.spring(response: 0.6, dampingFraction: 0.6), value: kicks)
-                    .shadow(radius: 8)
+        ZStack(alignment: .bottom) {
+            LogoMarquee(logos: marqueeLogos, fadeTo: 0.7)
+            VStack(spacing: 14) {
+                Text("All Day I Dream\nAbout Sports")
+                    .font(.system(size: 30, weight: .heavy, design: .rounded))
+                    .multilineTextAlignment(.center)
+                Text("Live scores and goal alerts for the teams you follow, right at the top of your screen.")
+                    .font(.system(size: 14, design: .rounded))
+                    .multilineTextAlignment(.center)
+                    .opacity(0.7)
+                    .frame(maxWidth: 360)
+                Button("Get started", action: advance)
+                    .buttonStyle(.primaryPill)
+                    .keyboardShortcut(.defaultAction)
+                Text("No account needed.")
+                    .font(.system(size: 12))
+                    .opacity(0.5)
             }
-            .buttonStyle(.plain)
-            .help("Kick it")
-            Text("All Day I Dream\nAbout Sports")
-                .font(.system(size: 30, weight: .heavy, design: .rounded))
-                .multilineTextAlignment(.center)
-            Text("Live scores and goal alerts for the teams you follow, right at the top of your screen.")
-                .font(.system(size: 14, design: .rounded))
-                .multilineTextAlignment(.center)
-                .opacity(0.7)
-                .frame(maxWidth: 360)
-            Button("Get started", action: advance)
-                .buttonStyle(.primaryPill)
-                .keyboardShortcut(.defaultAction)
-            Text("No account needed.")
-                .font(.system(size: 12))
-                .opacity(0.5)
-            Spacer()
+            .padding(28)
         }
-        .padding(28)
     }
+
+    private var marqueeLogos: [String] { session.allTeams.map(\.logo) }
 
     private var teams: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -241,24 +231,25 @@ struct OnboardingView: View {
     }
 
     private var done: some View {
-        VStack(spacing: 18) {
-            Spacer()
-            Image(systemName: "arrow.up.right")
-                .font(.system(size: 48, weight: .bold))
-                .opacity(0.8)
-            Text("I live in your menu bar")
-                .font(.system(size: 28, weight: .heavy, design: .rounded))
-            Text("Click the \(Image(systemName: "soccerball")) at the top of your screen for scores, teams and settings. When your team scores, you'll see it wherever you are.")
-                .font(.system(size: 14, design: .rounded))
-                .multilineTextAlignment(.center)
-                .opacity(0.7)
-                .frame(maxWidth: 380)
-            Button("Show me") { OnboardingWindowController.shared.finish() }
-                .buttonStyle(.primaryPill)
-                .keyboardShortcut(.defaultAction)
-            Spacer()
+        ZStack(alignment: .bottom) {
+            LogoMarquee(logos: marqueeLogos, fadeTo: 0.7)
+            VStack(spacing: 14) {
+                Image(systemName: "arrow.up.right")
+                    .font(.system(size: 36, weight: .bold))
+                    .opacity(0.8)
+                Text("I live in your menu bar")
+                    .font(.system(size: 28, weight: .heavy, design: .rounded))
+                Text("Click the \(Image(systemName: "soccerball")) at the top of your screen for scores, teams and settings. When your team scores, you'll see it wherever you are.")
+                    .font(.system(size: 14, design: .rounded))
+                    .multilineTextAlignment(.center)
+                    .opacity(0.7)
+                    .frame(maxWidth: 380)
+                Button("Show me") { OnboardingWindowController.shared.finish() }
+                    .buttonStyle(.primaryPill)
+                    .keyboardShortcut(.defaultAction)
+            }
+            .padding(28)
         }
-        .padding(28)
     }
 
     private func heading(_ title: String, _ subtitle: String) -> some View {
