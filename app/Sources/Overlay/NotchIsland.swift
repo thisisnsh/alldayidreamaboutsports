@@ -118,8 +118,8 @@ enum IslandMode: Equatable {
 ///
 /// One panel, fixed size, at the top-center of the display chosen in
 /// Settings; everything inside it animates. The panel only takes the mouse
-/// while the pointer is over the island — everywhere else, drops included,
-/// clicks fall through to whatever is underneath.
+/// while the pointer is over the island or a settled notification — everywhere
+/// else, clicks fall through to whatever is underneath.
 ///
 /// Holds one match at a time; pinning another replaces it. Floating capsules
 /// (`PinnedCapsuleManager`) are the way to watch several matches at once.
@@ -131,6 +131,7 @@ final class NotchIsland: ObservableObject {
     @Published private(set) var pinnedFixtureId: Int?
     /// The match whose card is open.
     @Published private(set) var cardFixtureId: Int?
+    @Published private(set) var hoveredNotificationID: String?
 
     /// Fixed panel size: room for the widest, tallest content (a large-size
     /// card, or a full set of long drops) plus shoulders and shadow.
@@ -141,6 +142,8 @@ final class NotchIsland: ObservableObject {
     private var dropsShowing = false
     /// The island body's size as last laid out (shoulders excluded).
     private var islandSize: CGSize = .zero
+    /// Settled notification slots in panel coordinates, from the SwiftUI view.
+    private var notificationFrames: [String: CGRect] = [:]
     private var hovering = false
     private var mouseMonitors: [Any] = []
     private var cancellables: Set<AnyCancellable> = []
@@ -231,6 +234,11 @@ final class NotchIsland: ObservableObject {
         trackPointer()
     }
 
+    func notificationFramesChanged(_ frames: [String: CGRect]) {
+        notificationFrames = frames
+        trackPointer()
+    }
+
     // MARK: State
 
     private var isResting: Bool { !dropsShowing && cardFixtureId == nil && pinnedFixtureId == nil }
@@ -267,6 +275,7 @@ final class NotchIsland: ObservableObject {
         if isResting {
             panel?.ignoresMouseEvents = true
             setHovering(false)
+            setHoveredNotification(nil)
             let work = DispatchWorkItem { [weak self] in
                 guard let self, self.isResting else { return }
                 self.panel?.orderOut(nil)
@@ -282,8 +291,8 @@ final class NotchIsland: ObservableObject {
     // MARK: Pointer
 
     /// Monitors (not tracking areas) follow the pointer, because the panel
-    /// ignores the mouse until the pointer is over the island — and a window
-    /// that ignores the mouse gets no tracking events.
+    /// ignores the mouse until the pointer is over the island or a notification
+    /// — and a window that ignores the mouse gets no tracking events.
     private func installMouseMonitors() {
         let mask: NSEvent.EventTypeMask = [.mouseMoved, .leftMouseDragged, .leftMouseUp]
         if let global = NSEvent.addGlobalMonitorForEvents(matching: mask, handler: { [weak self] _ in
@@ -303,6 +312,7 @@ final class NotchIsland: ObservableObject {
         guard let panel, panel.isVisible, !isResting,
               let screen = OverlayDisplayTarget.shared.selectedScreen else {
             setHovering(false)
+            setHoveredNotification(nil)
             return
         }
         let island = CGRect(
@@ -312,8 +322,18 @@ final class NotchIsland: ObservableObject {
             height: islandSize.height
         )
         let inside = island.contains(NSEvent.mouseLocation)
-        if panel.ignoresMouseEvents == inside { panel.ignoresMouseEvents = !inside }
+        let pointer = CGPoint(x: NSEvent.mouseLocation.x - panel.frame.minX,
+                              y: panel.frame.maxY - NSEvent.mouseLocation.y)
+        let notification = notificationFrames.first { $0.value.contains(pointer) }?.key
+        let interactive = inside || notification != nil
+        if panel.ignoresMouseEvents == interactive { panel.ignoresMouseEvents = !interactive }
+        setHoveredNotification(notification)
         setHovering(inside)
+    }
+
+    private func setHoveredNotification(_ id: String?) {
+        guard hoveredNotificationID != id else { return }
+        hoveredNotificationID = id
     }
 
     /// An open card folds back up shortly after the pointer leaves it.

@@ -48,6 +48,7 @@ final class OverlayManager: ObservableObject {
     @Published private(set) var activeSet: [NotchItem] = []
     /// Retain the slots until every drop has finished returning to the notch.
     @Published private(set) var isRetracting = false
+    @Published private(set) var retractingItemIDs: Set<String> = []
     @Published private(set) var confettiBursts: [ConfettiBurst] = []
 
     private var goalQueue: [QueuedNotchItem] = []
@@ -55,6 +56,7 @@ final class OverlayManager: ObservableObject {
     private var nextArrivalSeq = 0
     private var lifecycleScheduled: [DispatchWorkItem] = []
     private var queueBusy = false  // set synchronously so rapid-fire pushes can't race startNextSetIfIdle
+    private var pendingDropCount = 0
     private var displayPanel: NSPanel?
     /// Confetti waves after a goal's first burst, still to fire. Cancelled with
     /// the goal (VAR) or by a preview.
@@ -139,6 +141,23 @@ final class OverlayManager: ObservableObject {
 
     // MARK: Set lifecycle
 
+    /// Close one notification without disturbing the other drops or their
+    /// hold timer. Its slot stays reserved until the return has finished.
+    func dismissNotification(_ id: String) {
+        guard !isRetracting, activeSet.contains(where: { $0.id == id }),
+              !retractingItemIDs.contains(id) else { return }
+        retractingItemIDs.insert(id)
+        let delay = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+            ? 0.24 : NotchDropAnimation.retirementDelay(count: 1)
+        scheduleLifecycle(after: delay) { [self] in
+            withAnimation(NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? nil : NotchIsland.spring) {
+                activeSet.removeAll { $0.id == id }
+            }
+            retractingItemIDs.remove(id)
+            if activeSet.isEmpty && pendingDropCount == 0 { finishSet() }
+        }
+    }
+
     private func startNextSetIfIdle() {
         guard !queueBusy, !goalQueue.isEmpty || !otherQueue.isEmpty else { return }
         queueBusy = true
@@ -158,11 +177,13 @@ final class OverlayManager: ObservableObject {
             .map(\.item)
         NotchIsland.shared.setWillShow()
         isRetracting = false
+        pendingDropCount = set.count
 
         // Pills publish top-to-bottom in chronological order: oldest first,
         // newest last, even though goals were prioritized for selection.
         for (index, item) in set.enumerated() {
             scheduleLifecycle(after: Double(index) * NotchDropAnimation.arrivalStagger) { [self] in
+                pendingDropCount -= 1
                 activeSet.append(item)
             }
         }
@@ -194,12 +215,19 @@ final class OverlayManager: ObservableObject {
             ? 0.24 : NotchDropAnimation.retirementDelay(count: activeSet.count)
         scheduleLifecycle(after: delay) { [self] in
             // No layout change until the last returning silhouette is gone.
-            activeSet = []
-            isRetracting = false
-            queueBusy = false
-            startNextSetIfIdle()
-            hidePanelsIfDone()
+            finishSet()
         }
+    }
+
+    private func finishSet() {
+        cancelLifecycleScheduled()
+        activeSet = []
+        retractingItemIDs = []
+        pendingDropCount = 0
+        isRetracting = false
+        queueBusy = false
+        startNextSetIfIdle()
+        hidePanelsIfDone()
     }
 
     // MARK: Confetti — fire and forget, never waits for anything

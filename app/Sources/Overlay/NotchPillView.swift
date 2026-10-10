@@ -99,6 +99,14 @@ struct SegmentLine: View {
 
 private enum NotchDropPlane { case body, content }
 
+private struct NotchNotificationFramesKey: PreferenceKey {
+    static let defaultValue: [String: CGRect] = [:]
+
+    static func reduce(value: inout [String: CGRect], nextValue: () -> [String: CGRect]) {
+        value.merge(nextValue(), uniquingKeysWith: { _, frame in frame })
+    }
+}
+
 /// Animate a complete frame, rather than passing an animating environment
 /// value into children that SwiftUI can implicitly animate a second time.
 private struct NotchDropFrame: View, Animatable {
@@ -109,6 +117,7 @@ private struct NotchDropFrame: View, Animatable {
     let slot: CGRect
     let plane: NotchDropPlane
     let reduceMotion: Bool
+    let hovered: Bool
 
     var animatableData: CGFloat {
         get { progress }
@@ -143,6 +152,7 @@ private struct NotchDropFrame: View, Animatable {
                     .clipShape(bodyPath)
                     .clipped()
                     .opacity(reduceMotion ? Double(progress) : motion.contentOpacity)
+                    .opacity(hovered ? 0.2 : 1)
             }
         }
         .opacity(reduceMotion && plane == .body ? Double(progress) : 1)
@@ -159,8 +169,10 @@ private struct NotchDropRow: View {
     let plane: NotchDropPlane
     let dismissing: Bool
     let returnDelay: TimeInterval
+    let hovered: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var progress: CGFloat = 0
+    @State private var readyForInteraction = false
 
     var body: some View {
         NotchDropContent(item: item, metrics: metrics)
@@ -168,12 +180,48 @@ private struct NotchDropRow: View {
             .accessibilityHidden(true)
             .overlay {
                 GeometryReader { proxy in
-                    NotchDropFrame(
-                        progress: progress, item: item, metrics: metrics, geometry: geometry,
-                        slot: proxy.frame(in: .named(NotchDropsLayer.space)),
-                        plane: plane, reduceMotion: reduceMotion
-                    )
+                    let slot = proxy.frame(in: .named(NotchDropsLayer.space))
+                    ZStack {
+                        NotchDropFrame(
+                            progress: progress, item: item, metrics: metrics, geometry: geometry,
+                            slot: slot, plane: plane, reduceMotion: reduceMotion, hovered: hovered
+                        )
+                        .allowsHitTesting(false)
+                        if plane == .content && readyForInteraction && !dismissing {
+                            Button {
+                                OverlayManager.shared.dismissNotification(item.id)
+                            } label: {
+                                Image(systemName: "xmark")
+                                    .font(.system(size: 11, weight: .bold))
+                                    .foregroundStyle(.white)
+                                    .frame(width: 28, height: 28)
+                                    .background(Circle().fill(Color(white: 0.16)))
+                                    .overlay(Circle().strokeBorder(.white.opacity(0.18), lineWidth: 0.5))
+                                    .contentShape(Circle())
+                            }
+                            .buttonStyle(.plain)
+                            .help("Close notification")
+                            .accessibilityLabel("Close notification")
+                            .opacity(hovered ? 1 : 0)
+                            .allowsHitTesting(hovered)
+                            .accessibilityHidden(!hovered)
+                            .animation(.easeOut(duration: 0.12), value: hovered)
+                        }
+                    }
+                    .frame(width: proxy.size.width, height: proxy.size.height)
+                    .preference(key: NotchNotificationFramesKey.self,
+                                value: plane == .content && readyForInteraction && !dismissing ? [item.id: slot] : [:])
                 }
+            }
+            .task {
+                guard plane == .content else { return }
+                let duration = reduceMotion ? 0.16 : NotchDropAnimation.arrivalDuration
+                try? await Task.sleep(for: .seconds(duration))
+                guard !Task.isCancelled else { return }
+                readyForInteraction = true
+            }
+            .accessibilityAction(named: Text("Close notification")) {
+                OverlayManager.shared.dismissNotification(item.id)
             }
             .onAppear {
                 guard !dismissing else { return }
@@ -205,6 +253,7 @@ struct NotchDropsLayer: View {
 
     @ObservedObject private var overlay = OverlayManager.shared
     @ObservedObject private var displayTarget = OverlayDisplayTarget.shared
+    @ObservedObject private var island = NotchIsland.shared
     @EnvironmentObject private var session: AppSession
 
     var body: some View {
@@ -213,10 +262,13 @@ struct NotchDropsLayer: View {
         ZStack(alignment: .top) {
             stack(plane: .body, geometry: geometry, metrics: metrics)
                 .accessibilityHidden(true)
+                .allowsHitTesting(false)
             stack(plane: .content, geometry: geometry, metrics: metrics)
         }
         .padding(.top, geometry.bandHeight + OverlayLayout.stackSpacing)
-        .allowsHitTesting(false)
+        .onPreferenceChange(NotchNotificationFramesKey.self) { frames in
+            DispatchQueue.main.async { NotchIsland.shared.notificationFramesChanged(frames) }
+        }
     }
 
     private func stack(plane: NotchDropPlane, geometry: NotchGeometry, metrics: NotchPillMetrics) -> some View {
@@ -224,8 +276,10 @@ struct NotchDropsLayer: View {
             ForEach(Array(overlay.activeSet.enumerated()), id: \.element.id) { index, item in
                 NotchDropRow(
                     item: item, metrics: metrics, geometry: geometry, plane: plane,
-                    dismissing: overlay.isRetracting,
-                    returnDelay: NotchDropAnimation.returnDelay(index: index, count: overlay.activeSet.count)
+                    dismissing: overlay.isRetracting || overlay.retractingItemIDs.contains(item.id),
+                    returnDelay: overlay.retractingItemIDs.contains(item.id) ? 0
+                        : NotchDropAnimation.returnDelay(index: index, count: overlay.activeSet.count),
+                    hovered: plane == .content && island.hoveredNotificationID == item.id
                 )
                 .transition(.identity)
             }
