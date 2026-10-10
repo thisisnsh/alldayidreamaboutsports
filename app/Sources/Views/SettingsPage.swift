@@ -31,6 +31,12 @@ struct SettingsPage: View {
                     }
                     #endif
 
+                    #if DEV_BACKEND || STAGING
+                    SettingsCard("Testing") {
+                        LaunchTestControls()
+                    }
+                    #endif
+
                     SettingsCard("General") {
                         toggleRow("Open at login", isOn: Binding(
                             get: { launchAtLogin },
@@ -409,11 +415,32 @@ private struct DemoControls: View {
             }
             .buttonStyle(.cardButton)
         }
-        Button("Show onboarding") {
-            OnboardingWindowController.shared.show()
-        }
-        .buttonStyle(.cardButton)
         Text("Deterministic timeline from Dev/DevConfig.swift — the same events fire at the same seconds every run.")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+}
+#endif
+
+#if DEV_BACKEND || STAGING
+/// Replays what a user sees when they open the app, without reinstalling or
+/// quitting. Not in App Store builds.
+private struct LaunchTestControls: View {
+    var body: some View {
+        HStack(spacing: 8) {
+            Button("Welcome screen") {
+                MenuPopoverController.shared.close()
+                OnboardingWindowController.shared.show()
+            }
+            .buttonStyle(.cardButton)
+            Button("App opened again") {
+                MenuPopoverController.shared.close()
+                MenuPopoverController.shared.showOnOpen()
+            }
+            .buttonStyle(.cardButton)
+        }
+        Text("Welcome screen is the first-run setup. App opened again is what a set-up user sees on opening the app from Finder or Spotlight.")
             .font(.caption)
             .foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
