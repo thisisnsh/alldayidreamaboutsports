@@ -191,8 +191,8 @@ struct OnboardingView: View {
     // MARK: Steps
 
     private var hello: some View {
-        ZStack(alignment: .bottom) {
-            LogoMarquee(logos: marqueeLogos, fadeTo: 0.7)
+        ZStack {
+            LogoMarquee(logos: marqueeLogos, fadeTo: 0.55)
             VStack(spacing: 14) {
                 Text("All Day I Dream\nAbout Sports")
                     .font(.system(size: 30, weight: .heavy, design: .rounded))
@@ -303,8 +303,8 @@ struct OnboardingView: View {
     }
 
     private var done: some View {
-        ZStack(alignment: .bottom) {
-            LogoMarquee(logos: marqueeLogos, fadeTo: 0.7)
+        ZStack {
+            LogoMarquee(logos: marqueeLogos, fadeTo: 0.55)
             VStack(spacing: 14) {
                 Image(systemName: "arrow.up.right")
                     .font(.system(size: 36, weight: .bold))
