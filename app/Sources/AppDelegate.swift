@@ -105,7 +105,6 @@ final class MenuPopoverController: NSObject, NSPopoverDelegate {
     static let shared = MenuPopoverController()
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
     private let popover = NSPopover()
-    private var hostingView: NSView?
     private var eventMonitor: Any?
     private var keyMonitor: Any?
     /// When the popover went up, for the `menu_closed` duration. Non-nil only
@@ -121,21 +120,14 @@ final class MenuPopoverController: NSObject, NSPopoverDelegate {
         button.sendAction(on: [.leftMouseUp, .rightMouseUp])
         popover.behavior = .transient
         popover.delegate = self
-        // The popover's size is ours to set (`applyHeight`), not the SwiftUI
-        // content's, so the two can't disagree about the height.
+        // One fixed size, set here and never changed, not the SwiftUI
+        // content's: resizing a shown popover shakes it.
         let hosting = NSHostingController(
             rootView: MenuPopoverView().environmentObject(AppSession.shared)
         )
         hosting.sizingOptions = []
         popover.contentViewController = hosting
-        hostingView = hosting.view
-    }
-
-    private func applyHeight(_ height: CGFloat) {
-        let router = PopoverRouter.shared
-        if router.height != height { router.height = height }
-        let size = CGSize(width: MenuPopoverView.width, height: height)
-        if popover.contentSize != size { popover.contentSize = size }
+        popover.contentSize = CGSize(width: MenuPopoverView.width, height: MenuPopoverView.height)
     }
 
     @objc private func statusItemClicked() {
@@ -179,10 +171,6 @@ final class MenuPopoverController: NSObject, NSPopoverDelegate {
         }
         PopoverRouter.shared.reset(to: page)
         PopoverRouter.shared.openHint = openHint
-        // Let the home page re-measure (matches may have changed while it was
-        // closed) so the popover opens at the right height.
-        hostingView?.layoutSubtreeIfNeeded()
-        applyHeight(MenuPopoverView.height(for: page, homeFit: PopoverRouter.shared.homeFit))
         NSApp.activate(ignoringOtherApps: true)
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
         button.highlight(true)

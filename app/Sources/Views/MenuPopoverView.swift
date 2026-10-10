@@ -15,12 +15,6 @@ final class PopoverRouter: ObservableObject {
     @Published private(set) var page: PopoverPage = .home
     /// Whether the last move went deeper, so the slide runs the matching way.
     @Published private(set) var forward = true
-    /// The popover's height, set by `MenuPopoverController` each time it opens
-    /// and held until it closes.
-    @Published var height = MenuPopoverView.maxHeight
-    /// How tall the home page wants to be to show all its matches without
-    /// scrolling, as last measured. nil until it first lays out.
-    @Published var homeFit: CGFloat?
     /// The home header is asking "Quit the app?" in place of its controls.
     @Published var confirmingQuit = false
     /// The day the home page lists: -1 yesterday, 0 today, 1 tomorrow. Every
@@ -66,9 +60,9 @@ final class PopoverRouter: ObservableObject {
     }
 }
 
-/// The menu bar popover: a fixed-width frame that swaps between pages. It opens
-/// at one of three heights and keeps it until it closes: resizing a shown
-/// NSPopover shakes everything in it.
+/// The menu bar popover: a fixed-size frame that swaps between pages. One size
+/// for every page: resizing a shown NSPopover shakes everything in it, so home
+/// fills its spare room with placeholder rows instead of shrinking.
 struct MenuPopoverView: View {
     @EnvironmentObject var session: AppSession
     @ObservedObject private var router = PopoverRouter.shared
@@ -77,15 +71,7 @@ struct MenuPopoverView: View {
     /// built once and reused, so `.onAppear` here would only fire once a launch.
     static let screen = "menu"
     static let width: CGFloat = 360
-    static let maxHeight: CGFloat = 540
-    /// Small, medium, large. Home opens at the smallest that fits its matches;
-    /// Teams and Settings open large.
-    static let heights: [CGFloat] = [320, 430, maxHeight]
-
-    static func height(for page: PopoverPage, homeFit: CGFloat?) -> CGFloat {
-        guard page == .home, let homeFit else { return maxHeight }
-        return heights.first { $0 >= homeFit.rounded(.up) } ?? maxHeight
-    }
+    static let height: CGFloat = 540
 
     var body: some View {
         ZStack {
@@ -95,7 +81,7 @@ struct MenuPopoverView: View {
             case .settings: SettingsPage().transition(slide)
             }
         }
-        .frame(width: Self.width, height: router.height)
+        .frame(width: Self.width, height: Self.height)
         .clipped()
         .background(AppBackground())
         .appTheme(session.prefs.settings.theme ?? .system)
@@ -181,30 +167,19 @@ struct HomePage: View {
     @ObservedObject private var router = PopoverRouter.shared
     /// The one row (or Now card) showing its timeline.
     @State private var expanded: Int?
-    /// Natural heights of the three parts, for `PopoverRouter.homeFit`.
-    @State private var headerHeight: CGFloat = 0
+    /// The match list's visible height and its matches' height, for how many
+    /// placeholder rows fill the space under them.
+    @State private var viewportHeight: CGFloat = 0
     @State private var listHeight: CGFloat = 0
-    @State private var footerHeight: CGFloat = 0
 
     var body: some View {
         VStack(spacing: 0) {
-            header.onGeometryChange(for: CGFloat.self, of: \.size.height) { headerHeight = $0; reportFit() }
+            header
             fixturesList
             Divider()
-            followingFooter.onGeometryChange(for: CGFloat.self, of: \.size.height) { footerHeight = $0; reportFit() }
+            followingFooter
         }
     }
-
-    /// The height that shows every match without scrolling or leftover space.
-    private func reportFit() {
-        guard headerHeight > 0, listHeight > 0, footerHeight > 0 else { return }
-        let fit = headerHeight + listHeight + 1 + footerHeight // 1 = divider
-        if PopoverRouter.shared.homeFit != fit { PopoverRouter.shared.homeFit = fit }
-    }
-
-    /// The empty state's share of the fit — its own frame just fills whatever
-    /// it's given, so it can't be measured.
-    private static let emptyListHeight: CGFloat = 140
 
     private var header: some View {
         VStack(spacing: 0) {
@@ -311,7 +286,6 @@ struct HomePage: View {
     @ViewBuilder private var fixturesList: some View {
         if shownFixtures.isEmpty {
             VStack(spacing: 10) {
-                Spacer()
                 if session.fanTeamIds.isEmpty {
                     Image(systemName: "heart.circle").font(.system(size: 28)).foregroundStyle(.secondary)
                     Text("Follow a team to see its matches").font(.system(size: 13, weight: .medium))
@@ -327,31 +301,49 @@ struct HomePage: View {
                 } else {
                     Text(emptyMessage).font(.system(size: 13)).foregroundStyle(.secondary)
                 }
-                Spacer()
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .onAppear { listHeight = Self.emptyListHeight; reportFit() }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 24)
+            // The rest of the menu reads as a match list waiting to fill.
+            VStack(spacing: PlaceholderRow.spacing) {
+                ForEach(0..<Self.placeholderLimit, id: \.self) { PlaceholderRow(index: $0) }
+            }
+            .padding(.horizontal, 8)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .clipped()
+            .mask(Self.bottomFade)
         } else {
             ScrollView(.vertical, showsIndicators: true) {
-                VStack(alignment: .leading, spacing: 12) {
-                    if session.scheduleState == .unavailable {
-                        DataStatusBanner(message: "Schedule couldn't update", retrying: session.isRefreshingFixtures) {
-                            Task { await session.refreshFixtures() }
+                VStack(spacing: 0) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        if session.scheduleState == .unavailable {
+                            DataStatusBanner(message: "Schedule couldn't update", retrying: session.isRefreshingFixtures) {
+                                Task { await session.refreshFixtures() }
+                            }
                         }
+                        fixtureSection("Live", fixtures: shownFixtures.filter { $0.isLive }, liveCards: true)
+                        fixtureSection("Upcoming", fixtures: shownFixtures.filter {
+                            !$0.isLive && $0.status != "FINISHED" && !$0.isCalledOff && ($0.kickoff ?? .distantPast) > Date()
+                        })
+                        fixtureSection("Finished", fixtures: shownFixtures.filter { $0.status == "FINISHED" })
+                        fixtureSection("Match updates", fixtures: shownFixtures.filter {
+                            !$0.isLive && $0.status != "FINISHED" && ($0.isCalledOff || ($0.kickoff ?? .distantPast) <= Date())
+                        })
                     }
-                    fixtureSection("Live", fixtures: shownFixtures.filter { $0.isLive }, liveCards: true)
-                    fixtureSection("Upcoming", fixtures: shownFixtures.filter {
-                        !$0.isLive && $0.status != "FINISHED" && !$0.isCalledOff && ($0.kickoff ?? .distantPast) > Date()
-                    })
-                    fixtureSection("Finished", fixtures: shownFixtures.filter { $0.status == "FINISHED" })
-                    fixtureSection("Match updates", fixtures: shownFixtures.filter {
-                        !$0.isLive && $0.status != "FINISHED" && ($0.isCalledOff || ($0.kickoff ?? .distantPast) <= Date())
-                    })
+                    .onGeometryChange(for: CGFloat.self, of: \.size.height) { listHeight = $0 }
+                    .padding(.horizontal, 8)
+                    .padding(.top, Self.fadeHeight)
+                    // Spare room under the matches holds placeholder rows, never
+                    // enough to make the list scroll.
+                    VStack(spacing: PlaceholderRow.spacing) {
+                        ForEach(0..<placeholderCount, id: \.self) { PlaceholderRow(index: $0) }
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.top, placeholderCount > 0 ? 12 : 0)
+                    .padding(.bottom, Self.fadeHeight)
                 }
-                .padding(.horizontal, 8)
-                .padding(.vertical, Self.fadeHeight)
-                .onGeometryChange(for: CGFloat.self, of: \.size.height) { listHeight = $0; reportFit() }
             }
+            .onGeometryChange(for: CGFloat.self, of: \.size.height) { viewportHeight = $0 }
             .mask(
                 VStack(spacing: 0) {
                     LinearGradient(colors: [.clear, .black], startPoint: .top, endPoint: .bottom)
@@ -389,6 +381,19 @@ struct HomePage: View {
     }
 
     private static let fadeHeight: CGFloat = 10
+    private static let placeholderLimit = 12
+
+    private static let bottomFade = LinearGradient(
+        stops: [.init(color: .black, location: 0), .init(color: .black, location: 0.4), .init(color: .clear, location: 1)],
+        startPoint: .top, endPoint: .bottom
+    )
+
+    /// Placeholder rows that fit under the matches without overflowing.
+    private var placeholderCount: Int {
+        let spare = viewportHeight - listHeight - 2 * Self.fadeHeight - 12
+        let rows = Int((spare + PlaceholderRow.spacing) / (PlaceholderRow.height + PlaceholderRow.spacing))
+        return min(Self.placeholderLimit, max(0, rows))
+    }
 
     private var shownFixtures: [Fixture] { session.fixtures(dayOffset: router.dayOffset) }
 
@@ -621,6 +626,39 @@ private struct TimelineEventLine: View {
             }
             Spacer(minLength: 0)
         }
+    }
+}
+
+/// A grey stand-in shaped like a `FixtureRow` — crests, names, score, time
+/// and the competition line — filling the menu's spare room. Each row fades a
+/// little more than the one above.
+private struct PlaceholderRow: View {
+    let index: Int
+    static let height: CGFloat = 38
+    static let spacing: CGFloat = 6
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            HStack(spacing: 6) {
+                Circle().frame(width: 16, height: 16)
+                bar(width: 34)
+                bar(width: 18)
+                bar(width: 34)
+                Circle().frame(width: 16, height: 16)
+                Spacer()
+                bar(width: 40)
+            }
+            bar(width: 120)
+        }
+        .foregroundStyle(Color.primary.opacity(0.07))
+        .padding(.horizontal, 8)
+        .frame(height: Self.height)
+        .opacity(max(0.25, 1 - Double(index) * 0.12))
+        .accessibilityHidden(true)
+    }
+
+    private func bar(width: CGFloat) -> some View {
+        Capsule().frame(width: width, height: 8)
     }
 }
 
