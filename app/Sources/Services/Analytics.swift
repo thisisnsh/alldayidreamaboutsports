@@ -130,6 +130,22 @@ enum AppAnalytics {
         log("capsule_unpinned", ["fixture_id": fixtureId])
     }
 
+    // MARK: Notch
+
+    static func notchPinned(fixtureId: Int) {
+        log("notch_pinned", ["fixture_id": fixtureId])
+    }
+
+    static func notchUnpinned(fixtureId: Int) {
+        log("notch_unpinned", ["fixture_id": fixtureId])
+    }
+
+    /// The match card opened from the notch: `source` is `pin` (clicking the
+    /// pinned score) or `drop` (clicking an event drop).
+    static func notchCardOpened(fixtureId: Int, source: String) {
+        log("notch_card_opened", ["fixture_id": fixtureId, "source": source])
+    }
+
     // MARK: Fan teams
 
     static func teamFollow(teamId: String, fanCount: Int) {
