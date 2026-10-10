@@ -44,7 +44,7 @@ const home = [
   },
   {
     q: "Does it track me or need an account?",
-    a: "Yes, you sign in with Google to use the app. We store the profile details needed for sign-in, while the teams you follow and your app settings stay on your device. We do count anonymous usage - screens opened, buttons used, settings toggled - but only as aggregate numbers that are never tied to your account, and your teams and settings are not stored on our side. See the privacy policy for the full details.",
+    a: "No account and no sign-in. The teams you follow and your app settings stay on your Mac and are never stored on our side. We do count anonymous usage - screens opened, buttons used, settings toggled - plus crash reports, tied only to a random app-instance id, never to you. See the privacy policy for the full details.",
   },
   {
     q: "How do I keep the app up to date?",
@@ -74,7 +74,7 @@ function forLeague(league) {
   return [
     {
       q: `How do I follow the ${L} for free on my Mac?`,
-      a: `All Day I Dream About Sports is coming to the Mac App Store, free on ${site.requires}. Once it launches, sign in and follow a ${L} team or the whole competition. Direct downloads are no longer available.`,
+      a: `All Day I Dream About Sports is coming to the Mac App Store, free on ${site.requires}. Once it launches, follow a ${L} team or the whole competition. Direct downloads are no longer available.`,
     },
     {
       q: `Can I get ${L} goal alerts without keeping a browser tab open?`,
@@ -94,7 +94,7 @@ function forLeague(league) {
     },
     {
       q: `Do I need an account to follow the ${L}?`,
-      a: `Yes. Sign in with Google to use the app. Your ${L} picks and settings stay on your device rather than being attached to your profile.`,
+      a: `No. There is no account or sign-in - just open the app and pick your ${L} teams. Your picks and settings stay on your Mac.`,
     },
     {
       q: `Is this app affiliated with the ${L}?`,
@@ -117,11 +117,11 @@ function forTeam(team, league) {
       q: `How do I follow ${T} on my Mac?`,
       a: national
         ? `All Day I Dream About Sports is coming to the Mac App Store. ${T} are saved from the 2026 World Cup in the team picker for the next tournament. Direct downloads are no longer available.`
-        : `All Day I Dream About Sports is coming to the Mac App Store. Once it launches, sign in and follow ${T} in the team picker for goal, card and VAR alerts below your MacBook notch, plus a pinned score capsule. Direct downloads are no longer available.`,
+        : `All Day I Dream About Sports is coming to the Mac App Store. Once it launches, follow ${T} in the team picker for goal, card and VAR alerts below your MacBook notch, plus a pinned score capsule. Direct downloads are no longer available.`,
     },
     {
       q: `Can I follow ${T} for free?`,
-      a: `Yes - the app is free on ${site.requires}. You need to sign in, but there is no ${T} subscription or paid tier.`,
+      a: `Yes - the app is free on ${site.requires}. No account, no ${T} subscription and no paid tier.`,
     },
     {
       q: `Will I get an alert when ${T} score?`,
