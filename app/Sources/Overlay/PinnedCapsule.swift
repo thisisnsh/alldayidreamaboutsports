@@ -109,6 +109,8 @@ final class PinnedCapsuleManager: ObservableObject {
     @Published private(set) var pinnedFixtureIds: Set<Int> = []
     /// Capsules showing full names and the timeline.
     @Published private(set) var expandedFixtureIds: Set<Int> = []
+    /// The capsule under the pointer — it shows a click-to-expand hint.
+    @Published private(set) var hoveredFixtureId: Int?
 
     /// Each corner's capsules, nearest the corner first.
     private var stacks: [CapsuleCorner: [Int]] = [:]
@@ -136,6 +138,15 @@ final class PinnedCapsuleManager: ObservableObject {
 
     func isPinned(_ fixtureId: Int) -> Bool { pinnedFixtureIds.contains(fixtureId) }
     func isExpanded(_ fixtureId: Int) -> Bool { expandedFixtureIds.contains(fixtureId) }
+    func isHovered(_ fixtureId: Int) -> Bool { hoveredFixtureId == fixtureId }
+
+    func setHovered(_ fixtureId: Int, _ hovered: Bool) {
+        if hovered {
+            hoveredFixtureId = fixtureId
+        } else if hoveredFixtureId == fixtureId {
+            hoveredFixtureId = nil
+        }
+    }
 
     /// The one place both the menu row's pin affordance and any other caller
     /// funnel through, so the analytics live here rather than at each call site.
@@ -165,6 +176,7 @@ final class PinnedCapsuleManager: ObservableObject {
         guard isPinned(fixtureId) else { return }
         pinnedFixtureIds.remove(fixtureId)
         expandedFixtureIds.remove(fixtureId)
+        setHovered(fixtureId, false)
         for corner in CapsuleCorner.allCases { stacks[corner]?.removeAll { $0 == fixtureId } }
         panels[fixtureId]?.orderOut(nil)
         panels[fixtureId] = nil
@@ -355,6 +367,26 @@ private final class CapsuleInteractionView: NSView {
 
     override var fittingSize: NSSize { subviews.first?.fittingSize ?? super.fittingSize }
 
+    /// `.activeAlways`: the panel never becomes key, so hover must be tracked
+    /// regardless of which app is active.
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        trackingAreas.forEach(removeTrackingArea)
+        addTrackingArea(NSTrackingArea(
+            rect: .zero,
+            options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect],
+            owner: self
+        ))
+    }
+
+    override func mouseEntered(with event: NSEvent) {
+        PinnedCapsuleManager.shared.setHovered(fixtureId, true)
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        PinnedCapsuleManager.shared.setHovered(fixtureId, false)
+    }
+
     /// Only the capsule itself is solid; the shadow margin lets clicks fall
     /// through to whatever is behind.
     override func hitTest(_ point: NSPoint) -> NSView? {
@@ -378,6 +410,8 @@ private final class CapsuleInteractionView: NSView {
             // A few points of wobble is still a click.
             guard hypot(dx, dy) > 3 else { return }
             isDragging = true
+            // Hide the hint so the capsule doesn't change size mid-drag.
+            PinnedCapsuleManager.shared.setHovered(fixtureId, false)
             PinnedCapsuleManager.shared.beginDrag(fixtureId)
         }
         window?.setFrameOrigin(CGPoint(x: dragStartOrigin.x + dx, y: dragStartOrigin.y + dy))
@@ -590,6 +624,12 @@ struct PinnedCapsuleView: View {
                     Divider().padding(.vertical, metrics.rowSpacing / 2)
                     timelineList(rows)
                 }
+            }
+            if manager.isHovered(fixtureId) {
+                Text(expanded ? "Click to collapse" : "Click to expand")
+                    .font(.system(size: metrics.eventFont - 1, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity)
             }
         }
         .padding(.horizontal, metrics.hPad)
