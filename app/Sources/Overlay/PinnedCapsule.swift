@@ -98,9 +98,9 @@ enum CapsuleCorner: CaseIterable {
 /// Owns one small panel per pinned match, all on the display selected in
 /// Settings. A new pin opens top-right; the user can drag it anywhere and on
 /// release it snaps to the nearest corner, stacking with whatever is there.
-/// A click expands or collapses it, a right-click offers Unpin, and the
-/// pointer over it fades it so what's behind shows through. All panels float
-/// above every app, including full screen (`OverlayWindow`).
+/// A click expands or collapses it, a right-click offers Unpin, and the eye
+/// badge (shown on hover) turns it see-through so what's behind shows. All
+/// panels float above every app, including full screen (`OverlayWindow`).
 @MainActor
 final class PinnedCapsuleManager: ObservableObject {
     static let shared = PinnedCapsuleManager()
@@ -110,6 +110,10 @@ final class PinnedCapsuleManager: ObservableObject {
     @Published private(set) var pinnedFixtureIds: Set<Int> = []
     /// Capsules showing full names and the timeline.
     @Published private(set) var expandedFixtureIds: Set<Int> = []
+    /// Capsules the user made see-through with the eye badge.
+    @Published private(set) var seeThroughFixtureIds: Set<Int> = []
+    /// The capsule under the pointer — shows its eye badge.
+    @Published private(set) var hoveredFixtureId: Int?
 
     /// Each corner's capsules, nearest the corner first.
     private var stacks: [CapsuleCorner: [Int]] = [:]
@@ -122,10 +126,15 @@ final class PinnedCapsuleManager: ObservableObject {
 
     /// Gap between a capsule and the screen edge, and between stacked capsules.
     static let edgeGap: CGFloat = 12
-    /// Transparent margin around each capsule so its shadow isn't clipped.
-    static let shadowMargin: CGFloat = 8
-    /// How far the capsule fades while the pointer is over it.
-    static let hoverAlpha: CGFloat = 0.22
+    /// Transparent margin around each capsule so its shadow and the eye
+    /// badge (which straddles the top-left corner) aren't clipped.
+    static let shadowMargin: CGFloat = 10
+    /// The eye badge's diameter; it's centered on the capsule's top-left corner.
+    static let eyeBadgeSize: CGFloat = 18
+    /// A see-through capsule's opacity, and while the pointer is over it (so
+    /// it can be read and the eye found again).
+    static let seeThroughAlpha: CGFloat = 0.25
+    static let seeThroughHoverAlpha: CGFloat = 0.7
 
     private init() {
         displayObserver = NotificationCenter.default.addObserver(
@@ -139,6 +148,7 @@ final class PinnedCapsuleManager: ObservableObject {
 
     func isPinned(_ fixtureId: Int) -> Bool { pinnedFixtureIds.contains(fixtureId) }
     func isExpanded(_ fixtureId: Int) -> Bool { expandedFixtureIds.contains(fixtureId) }
+    func isSeeThrough(_ fixtureId: Int) -> Bool { seeThroughFixtureIds.contains(fixtureId) }
 
     /// The one place both the menu row's pin affordance and any other caller
     /// funnel through, so the analytics live here rather than at each call site.
@@ -168,6 +178,8 @@ final class PinnedCapsuleManager: ObservableObject {
         guard isPinned(fixtureId) else { return }
         pinnedFixtureIds.remove(fixtureId)
         expandedFixtureIds.remove(fixtureId)
+        seeThroughFixtureIds.remove(fixtureId)
+        if hoveredFixtureId == fixtureId { hoveredFixtureId = nil }
         for corner in CapsuleCorner.allCases { stacks[corner]?.removeAll { $0 == fixtureId } }
         panels[fixtureId]?.orderOut(nil)
         panels[fixtureId] = nil
@@ -182,6 +194,36 @@ final class PinnedCapsuleManager: ObservableObject {
             expandedFixtureIds.remove(fixtureId)
         } else {
             expandedFixtureIds.insert(fixtureId)
+        }
+    }
+
+    func toggleSeeThrough(_ fixtureId: Int) {
+        if seeThroughFixtureIds.contains(fixtureId) {
+            seeThroughFixtureIds.remove(fixtureId)
+        } else {
+            seeThroughFixtureIds.insert(fixtureId)
+        }
+        updateAlpha(fixtureId)
+    }
+
+    func setHovered(_ fixtureId: Int, _ hovering: Bool) {
+        if hovering {
+            hoveredFixtureId = fixtureId
+        } else if hoveredFixtureId == fixtureId {
+            hoveredFixtureId = nil
+        }
+        updateAlpha(fixtureId)
+    }
+
+    /// Solid unless see-through; a see-through capsule firms up a little
+    /// under the pointer.
+    private func updateAlpha(_ fixtureId: Int) {
+        guard let panel = panels[fixtureId] else { return }
+        let alpha: CGFloat = !isSeeThrough(fixtureId) ? 1
+            : hoveredFixtureId == fixtureId ? Self.seeThroughHoverAlpha : Self.seeThroughAlpha
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.15
+            panel.animator().alphaValue = alpha
         }
     }
 
@@ -338,14 +380,14 @@ final class PinnedCapsuleManager: ObservableObject {
     }
 }
 
-/// The capsule panel's content view: takes every mouse event itself (the
-/// capsule has no controls of its own) to tell a click from a drag, and fades
-/// the panel while the pointer is over it.
+/// The capsule panel's content view: takes every mouse event itself to tell a
+/// click from a drag, and a click on the eye badge from one on the capsule.
 private final class CapsuleInteractionView: NSView {
     let fixtureId: Int
     private var dragStartMouse: CGPoint = .zero
     private var dragStartOrigin: CGPoint = .zero
     private var isDragging = false
+    private var pressedEye = false
 
     init(fixtureId: Int, content: NSView) {
         self.fixtureId = fixtureId
@@ -359,12 +401,28 @@ private final class CapsuleInteractionView: NSView {
 
     override var fittingSize: NSSize { subviews.first?.fittingSize ?? super.fittingSize }
 
-    /// Only the capsule itself is solid; the shadow margin lets clicks fall
-    /// through to whatever is behind.
+    private var capsuleRect: CGRect {
+        let margin = PinnedCapsuleManager.shadowMargin
+        return bounds.insetBy(dx: margin, dy: margin)
+    }
+
+    /// The eye badge, centered on the capsule's top-left corner (this view
+    /// isn't flipped, so the top is `maxY`).
+    private var eyeRect: CGRect {
+        let size = PinnedCapsuleManager.eyeBadgeSize
+        return CGRect(x: capsuleRect.minX - size / 2, y: capsuleRect.maxY - size / 2, width: size, height: size)
+    }
+
+    private var eyeShowing: Bool {
+        let manager = PinnedCapsuleManager.shared
+        return manager.hoveredFixtureId == fixtureId || manager.isSeeThrough(fixtureId)
+    }
+
+    /// Only the capsule (and its eye, when shown) is solid; the rest of the
+    /// shadow margin lets clicks fall through to whatever is behind.
     override func hitTest(_ point: NSPoint) -> NSView? {
         let local = convert(point, from: superview)
-        let margin = PinnedCapsuleManager.shadowMargin
-        return bounds.insetBy(dx: margin, dy: margin).contains(local) ? self : nil
+        return capsuleRect.contains(local) || (eyeShowing && eyeRect.contains(local)) ? self : nil
     }
 
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
@@ -372,32 +430,29 @@ private final class CapsuleInteractionView: NSView {
     override func updateTrackingAreas() {
         super.updateTrackingAreas()
         trackingAreas.forEach(removeTrackingArea)
-        let margin = PinnedCapsuleManager.shadowMargin
+        // The capsule plus the eye's corner, so moving onto the eye
+        // doesn't count as leaving.
         addTrackingArea(NSTrackingArea(
-            rect: bounds.insetBy(dx: margin, dy: margin),
+            rect: capsuleRect.union(eyeRect),
             options: [.mouseEnteredAndExited, .activeAlways],
             owner: self
         ))
     }
 
-    override func mouseEntered(with event: NSEvent) { fade(to: PinnedCapsuleManager.hoverAlpha) }
-    override func mouseExited(with event: NSEvent) {
-        guard !isDragging else { return }
-        fade(to: 1)
+    override func mouseEntered(with event: NSEvent) {
+        PinnedCapsuleManager.shared.setHovered(fixtureId, true)
     }
 
-    private func fade(to alpha: CGFloat) {
-        guard let window else { return }
-        NSAnimationContext.runAnimationGroup { context in
-            context.duration = 0.15
-            window.animator().alphaValue = alpha
-        }
+    override func mouseExited(with event: NSEvent) {
+        guard !isDragging else { return }
+        PinnedCapsuleManager.shared.setHovered(fixtureId, false)
     }
 
     override func mouseDown(with event: NSEvent) {
         dragStartMouse = NSEvent.mouseLocation
         dragStartOrigin = window?.frame.origin ?? .zero
         isDragging = false
+        pressedEye = eyeShowing && eyeRect.contains(convert(event.locationInWindow, from: nil))
     }
 
     override func mouseDragged(with event: NSEvent) {
@@ -417,7 +472,11 @@ private final class CapsuleInteractionView: NSView {
             isDragging = false
             PinnedCapsuleManager.shared.endDrag(fixtureId)
             // The snap can carry the capsule out from under the pointer.
-            if let window, !window.frame.contains(NSEvent.mouseLocation) { fade(to: 1) }
+            if let window, !window.frame.contains(NSEvent.mouseLocation) {
+                PinnedCapsuleManager.shared.setHovered(fixtureId, false)
+            }
+        } else if pressedEye {
+            PinnedCapsuleManager.shared.toggleSeeThrough(fixtureId)
         } else {
             PinnedCapsuleManager.shared.toggleExpanded(fixtureId)
         }
@@ -432,6 +491,12 @@ private final class CapsuleInteractionView: NSView {
         )
         expand.target = self
         menu.addItem(expand)
+        let seeThrough = NSMenuItem(
+            title: manager.isSeeThrough(fixtureId) ? "Make solid" : "See through",
+            action: #selector(toggleSeeThrough), keyEquivalent: ""
+        )
+        seeThrough.target = self
+        menu.addItem(seeThrough)
         let unpin = NSMenuItem(title: "Unpin", action: #selector(unpin), keyEquivalent: "")
         unpin.target = self
         menu.addItem(unpin)
@@ -439,6 +504,7 @@ private final class CapsuleInteractionView: NSView {
     }
 
     @objc private func toggleExpanded() { PinnedCapsuleManager.shared.toggleExpanded(fixtureId) }
+    @objc private func toggleSeeThrough() { PinnedCapsuleManager.shared.toggleSeeThrough(fixtureId) }
     @objc private func unpin() { PinnedCapsuleManager.shared.toggle(fixtureId: fixtureId) }
 }
 
@@ -636,9 +702,29 @@ struct PinnedCapsuleView: View {
             RoundedRectangle(cornerRadius: capsuleCorner, style: .continuous)
                 .strokeBorder(Color.primary.opacity(0.12), lineWidth: 0.5)
         )
+        .overlay(alignment: .topLeading) {
+            if manager.hoveredFixtureId == fixtureId || manager.isSeeThrough(fixtureId) {
+                eyeBadge.offset(x: -PinnedCapsuleManager.eyeBadgeSize / 2, y: -PinnedCapsuleManager.eyeBadgeSize / 2)
+            }
+        }
         .contentShape(RoundedRectangle(cornerRadius: capsuleCorner, style: .continuous))
         .accessibilityElement(children: .combine)
         .accessibilityHint(expanded ? "Click to collapse. Drag to move." : "Click for the timeline. Drag to move.")
+    }
+
+    /// Straddles the top-left corner like a notification's close button.
+    /// Clicks on it are caught by `CapsuleInteractionView`, which knows where
+    /// it sits.
+    private var eyeBadge: some View {
+        let seeThrough = manager.isSeeThrough(fixtureId)
+        return Image(systemName: seeThrough ? "eye.slash.fill" : "eye.fill")
+            .font(.system(size: 8, weight: .bold))
+            .foregroundStyle(.secondary)
+            .frame(width: PinnedCapsuleManager.eyeBadgeSize, height: PinnedCapsuleManager.eyeBadgeSize)
+            .background(Circle().fill(scheme == .dark ? Color(white: 0.18) : Color(white: 0.94)))
+            .overlay(Circle().strokeBorder(Color.primary.opacity(0.15), lineWidth: 0.5))
+            .shadow(color: .black.opacity(0.25), radius: 2, y: 1)
+            .help(seeThrough ? "Make solid" : "See through")
     }
 
     /// One side of the scoreline: the short code collapsed, the club's full

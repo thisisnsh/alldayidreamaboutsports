@@ -24,7 +24,7 @@ const home = [
   },
   {
     q: "Will match notifications interrupt my work?",
-    a: "No. Alerts slide in below the notch and get out of the way, and the floating score capsule fades almost clear when your pointer is over it, so you can see the window behind. It is built to keep you in flow while you follow the match.",
+    a: "No. Alerts slide in below the notch and get out of the way, and the floating score capsule has an eye button that turns it see-through, so you can see the window behind. It is built to keep you in flow while you follow the match.",
   },
   {
     q: "Can I pin more than one match to my screen?",
