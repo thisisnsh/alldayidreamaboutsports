@@ -109,8 +109,6 @@ final class PinnedCapsuleManager: ObservableObject {
     @Published private(set) var pinnedFixtureIds: Set<Int> = []
     /// Capsules showing full names and the timeline.
     @Published private(set) var expandedFixtureIds: Set<Int> = []
-    /// The capsule under the pointer — it shows a click-to-expand hint.
-    @Published private(set) var hoveredFixtureId: Int?
 
     /// Each corner's capsules, nearest the corner first.
     private var stacks: [CapsuleCorner: [Int]] = [:]
@@ -138,14 +136,12 @@ final class PinnedCapsuleManager: ObservableObject {
 
     func isPinned(_ fixtureId: Int) -> Bool { pinnedFixtureIds.contains(fixtureId) }
     func isExpanded(_ fixtureId: Int) -> Bool { expandedFixtureIds.contains(fixtureId) }
-    func isHovered(_ fixtureId: Int) -> Bool { hoveredFixtureId == fixtureId }
 
-    func setHovered(_ fixtureId: Int, _ hovered: Bool) {
-        if hovered {
-            hoveredFixtureId = fixtureId
-        } else if hoveredFixtureId == fixtureId {
-            hoveredFixtureId = nil
-        }
+    /// A click only toggles when there's a timeline to show — or to hide.
+    func canToggleExpanded(_ fixtureId: Int) -> Bool {
+        if isExpanded(fixtureId) { return true }
+        guard let fixture = AppSession.shared.fixtures.first(where: { $0.fixtureId == fixtureId }) else { return false }
+        return !capsuleTimeline(for: fixture).isEmpty
     }
 
     /// The one place both the menu row's pin affordance and any other caller
@@ -176,7 +172,6 @@ final class PinnedCapsuleManager: ObservableObject {
         guard isPinned(fixtureId) else { return }
         pinnedFixtureIds.remove(fixtureId)
         expandedFixtureIds.remove(fixtureId)
-        setHovered(fixtureId, false)
         for corner in CapsuleCorner.allCases { stacks[corner]?.removeAll { $0 == fixtureId } }
         panels[fixtureId]?.orderOut(nil)
         panels[fixtureId] = nil
@@ -187,6 +182,7 @@ final class PinnedCapsuleManager: ObservableObject {
     }
 
     func toggleExpanded(_ fixtureId: Int) {
+        guard canToggleExpanded(fixtureId) else { return }
         if expandedFixtureIds.contains(fixtureId) {
             expandedFixtureIds.remove(fixtureId)
         } else {
@@ -367,26 +363,6 @@ private final class CapsuleInteractionView: NSView {
 
     override var fittingSize: NSSize { subviews.first?.fittingSize ?? super.fittingSize }
 
-    /// `.activeAlways`: the panel never becomes key, so hover must be tracked
-    /// regardless of which app is active.
-    override func updateTrackingAreas() {
-        super.updateTrackingAreas()
-        trackingAreas.forEach(removeTrackingArea)
-        addTrackingArea(NSTrackingArea(
-            rect: .zero,
-            options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect],
-            owner: self
-        ))
-    }
-
-    override func mouseEntered(with event: NSEvent) {
-        PinnedCapsuleManager.shared.setHovered(fixtureId, true)
-    }
-
-    override func mouseExited(with event: NSEvent) {
-        PinnedCapsuleManager.shared.setHovered(fixtureId, false)
-    }
-
     /// Only the capsule itself is solid; the shadow margin lets clicks fall
     /// through to whatever is behind.
     override func hitTest(_ point: NSPoint) -> NSView? {
@@ -410,8 +386,6 @@ private final class CapsuleInteractionView: NSView {
             // A few points of wobble is still a click.
             guard hypot(dx, dy) > 3 else { return }
             isDragging = true
-            // Hide the hint so the capsule doesn't change size mid-drag.
-            PinnedCapsuleManager.shared.setHovered(fixtureId, false)
             PinnedCapsuleManager.shared.beginDrag(fixtureId)
         }
         window?.setFrameOrigin(CGPoint(x: dragStartOrigin.x + dx, y: dragStartOrigin.y + dy))
@@ -429,12 +403,14 @@ private final class CapsuleInteractionView: NSView {
     override func rightMouseDown(with event: NSEvent) {
         let manager = PinnedCapsuleManager.shared
         let menu = NSMenu()
-        let expand = NSMenuItem(
-            title: manager.isExpanded(fixtureId) ? "Collapse" : "Show timeline",
-            action: #selector(toggleExpanded), keyEquivalent: ""
-        )
-        expand.target = self
-        menu.addItem(expand)
+        if manager.canToggleExpanded(fixtureId) {
+            let expand = NSMenuItem(
+                title: manager.isExpanded(fixtureId) ? "Collapse" : "Show timeline",
+                action: #selector(toggleExpanded), keyEquivalent: ""
+            )
+            expand.target = self
+            menu.addItem(expand)
+        }
         let unpin = NSMenuItem(title: "Unpin", action: #selector(unpin), keyEquivalent: "")
         unpin.target = self
         menu.addItem(unpin)
@@ -615,21 +591,15 @@ struct PinnedCapsuleView: View {
     /// the panel snaps to the new size, and an animated body would be clipped
     /// mid-way.
     private func capsuleBody(_ fixture: Fixture) -> some View {
-        let rows = expanded ? capsuleTimeline(for: fixture) : []
+        let rows = capsuleTimeline(for: fixture)
         return VStack(alignment: .leading, spacing: metrics.rowSpacing) {
-            header(fixture)
+            header(fixture, hasTimeline: !rows.isEmpty)
             if expanded {
                 subtitle(fixture)
                 if !rows.isEmpty {
                     Divider().padding(.vertical, metrics.rowSpacing / 2)
                     timelineList(rows)
                 }
-            }
-            if manager.isHovered(fixtureId) {
-                Text(expanded ? "Click to collapse" : "Click to expand")
-                    .font(.system(size: metrics.eventFont - 1, design: .rounded))
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity)
             }
         }
         .padding(.horizontal, metrics.hPad)
@@ -647,7 +617,7 @@ struct PinnedCapsuleView: View {
         )
         .contentShape(RoundedRectangle(cornerRadius: capsuleCorner, style: .continuous))
         .accessibilityElement(children: .combine)
-        .accessibilityHint(expanded ? "Click to collapse. Drag to move." : "Click for the timeline. Drag to move.")
+        .accessibilityHint(rows.isEmpty ? "Drag to move." : expanded ? "Click to collapse. Drag to move." : "Click for the timeline. Drag to move.")
     }
 
     /// One side of the scoreline: the short code collapsed, the club's full
@@ -658,8 +628,9 @@ struct PinnedCapsuleView: View {
             .lineLimit(1)
     }
 
-    /// The scoreline row: `logo name score name logo time`.
-    private func header(_ fixture: Fixture) -> some View {
+    /// The scoreline row: `logo name score name logo time`, plus a chevron
+    /// when there's a timeline to expand into.
+    private func header(_ fixture: Fixture, hasTimeline: Bool) -> some View {
         HStack(spacing: 6) {
             // The scoreline itself hugs its content on ONE line (the inner
             // `.fixedSize`). Keeping it as its own group lets it sit flush-left
@@ -684,6 +655,11 @@ struct PinnedCapsuleView: View {
             }
             trailing(fixture)
                 .padding(.leading, 2)
+            if hasTimeline {
+                Image(systemName: expanded ? "chevron.up" : "chevron.down")
+                    .font(.system(size: metrics.timeFont - 2, weight: .semibold))
+                    .foregroundStyle(.secondary)
+            }
         }
     }
 
