@@ -24,7 +24,7 @@ const home = [
   },
   {
     q: "Will match notifications interrupt my work?",
-    a: "No. Alerts slide in below the notch and get out of the way, and the floating score capsule sits in whichever corner you drag it to. It is built to keep you in flow while you follow the match.",
+    a: "No. Alerts slide in below the notch and get out of the way - pick a short, medium or long alert time - and the floating score capsule sits in whichever corner you drag it to. It is built to keep you in flow while you follow the match.",
   },
   {
     q: "Can I pin more than one match to my screen?",
@@ -32,7 +32,7 @@ const home = [
   },
   {
     q: "Can I celebrate goals with other fans?",
-    a: "Yes. When the goal alert arrives, your team's crest and confetti burst from the bottom corners of the screen and sweep in toward the middle, gone within seconds. Goal confetti has its own switch, and there is a Preview button to fire one on demand.",
+    a: "Yes. When the goal alert arrives, your team's crest and confetti burst from the bottom corners of the screen and sweep in toward the middle, gone within seconds. Goal confetti has its own switch - flipping it on plays a sample burst - and a short, medium or long confetti time.",
   },
   {
     q: "Does it work across multiple monitors?",
