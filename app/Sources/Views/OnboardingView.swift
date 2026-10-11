@@ -54,18 +54,38 @@ final class OnboardingWindowController: NSObject, NSWindowDelegate {
         window.isReleasedWhenClosed = false
         window.delegate = self
         // Fixed size: left to size itself, the hosting controller resizes the
-        // window after `center()`, knocking it off centre.
+        // window after centring, knocking it off centre.
         let hosting = NSHostingController(rootView: view.environmentObject(AppSession.shared))
         hosting.sizingOptions = []
         window.contentViewController = hosting
         window.setContentSize(size)
-        window.center()
+        Self.centre(window)
         window.makeKeyAndOrderFront(nil)
         // An accessory app's window doesn't reliably come above other apps on
         // its own.
         window.orderFrontRegardless()
+        // Ordering front can still nudge the frame (first layout, screen
+        // pick), so centre again once it's on screen.
+        Self.centre(window)
+        DispatchQueue.main.async { Self.centre(window) }
         self.window = window
         showing = kind
+    }
+
+    /// Dead centre of the screen under the pointer. `NSWindow.center()` sits
+    /// the window "somewhat above" centre, and on launch an accessory app
+    /// has no key window for it to pick the right screen from.
+    private static func centre(_ window: NSWindow) {
+        let mouse = NSEvent.mouseLocation
+        guard let screen = NSScreen.screens.first(where: { NSMouseInRect(mouse, $0.frame, false) })
+            ?? NSScreen.main ?? NSScreen.screens.first
+        else { return window.center() }
+        let visible = screen.visibleFrame
+        let size = window.frame.size
+        window.setFrameOrigin(NSPoint(
+            x: (visible.midX - size.width / 2).rounded(),
+            y: (visible.midY - size.height / 2).rounded()
+        ))
     }
 
     /// The last step's button: remember setup is done, swap the window for
