@@ -695,13 +695,16 @@ struct PinnedCapsuleView: View {
             // the real minute is trailing-aligned inside it.
             Text(minuteColumn)
                 .font(.system(size: metrics.eventFont, weight: .semibold, design: .rounded))
+                .monospacedDigit()
                 .frame(minWidth: metrics.eventFont * 2.6, alignment: .trailing)
                 .fixedSize()
                 .hidden()
                 .overlay(alignment: .trailing) {
                     Text(row.minuteText)
                         .font(.system(size: metrics.eventFont, weight: .semibold, design: .rounded))
+                        .monospacedDigit()
                         .foregroundStyle(.secondary)
+                        .fixedSize()
                 }
             if let teamId = row.teamId {
                 CachedTeamLogo(url: logo(teamId), size: metrics.eventLogo)
