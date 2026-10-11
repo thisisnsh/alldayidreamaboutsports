@@ -296,11 +296,6 @@ struct HomePage: View {
             ScrollView(.vertical, showsIndicators: true) {
                 VStack(spacing: 0) {
                     VStack(alignment: .leading, spacing: 12) {
-                        if session.scheduleState == .unavailable {
-                            DataStatusBanner(message: "Schedule couldn't update", retrying: session.isRefreshingFixtures) {
-                                Task { await session.refreshFixtures() }
-                            }
-                        }
                         fixtureSection("Live", fixtures: shownFixtures.filter { $0.isLive }, liveCards: true)
                         fixtureSection("Upcoming", fixtures: shownFixtures.filter {
                             !$0.isLive && $0.status != "FINISHED" && !$0.isCalledOff && ($0.kickoff ?? .distantPast) > Date()

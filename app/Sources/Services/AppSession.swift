@@ -321,6 +321,11 @@ final class AppSession: ObservableObject {
             } catch ScoresError.notModified {
                 loaded.insert(key(date))
                 continue
+            } catch ScoresError.notFound {
+                // Not published yet (the backend writes today±1, we read ±2):
+                // no fixtures that day, not a failure.
+                loaded.insert(key(date))
+                continue
             } catch {
                 AppLog.error(.fixtures, "date_bootstrap_failed date=\(ISO8601DateFormatter.dateOnly.string(from: date))", error: error)
                 continue
