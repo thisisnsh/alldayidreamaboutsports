@@ -578,7 +578,9 @@ private struct TimelineEventLine: View {
                 .font(.system(size: 12, weight: .semibold, design: .rounded))
                 .monospacedDigit()
                 .foregroundStyle(.secondary)
-                .frame(width: 34, alignment: .trailing)
+                .lineLimit(1)
+                .fixedSize()
+                .frame(width: 44, alignment: .trailing)
             if let teamId = row.teamId {
                 CachedTeamLogo(url: TeamCatalog.team(for: teamId, in: session.allTeams).logo, size: 12)
             } else {
@@ -591,8 +593,9 @@ private struct TimelineEventLine: View {
             Text(row.label)
                 .font(.system(size: 12, weight: .semibold))
                 .strikethrough(row.disallowed)
+                .fixedSize()
             if let text = row.text {
-                Text(text).font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(1).strikethrough(row.disallowed)
+                Text(text).font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(1).truncationMode(.tail).strikethrough(row.disallowed)
             }
             Spacer(minLength: 0)
         }

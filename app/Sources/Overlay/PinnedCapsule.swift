@@ -696,6 +696,7 @@ struct PinnedCapsuleView: View {
             Text(minuteColumn)
                 .font(.system(size: metrics.eventFont, weight: .semibold, design: .rounded))
                 .frame(minWidth: metrics.eventFont * 2.6, alignment: .trailing)
+                .fixedSize()
                 .hidden()
                 .overlay(alignment: .trailing) {
                     Text(row.minuteText)
@@ -717,11 +718,16 @@ struct PinnedCapsuleView: View {
                 .font(.system(size: metrics.eventFont, weight: .semibold, design: .rounded))
                 .strikethrough(row.disallowed)
                 .foregroundStyle(row.disallowed ? Color.secondary : .primary)
+                .fixedSize()
             if let text = row.text {
+                // Long names ellipsize instead of widening the capsule.
                 Text(text)
                     .font(.system(size: metrics.eventFont, design: .rounded))
                     .foregroundStyle(.secondary)
                     .strikethrough(row.disallowed)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .frame(maxWidth: metrics.eventFont * 11, alignment: .leading)
             }
             Spacer(minLength: 6)
         }
