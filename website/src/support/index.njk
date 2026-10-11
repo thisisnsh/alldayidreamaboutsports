@@ -1,0 +1,68 @@
+---
+layout: layouts/page.njk
+permalink: /support/
+title: "Support - All Day I Dream About Sports"
+description: "Get help with All Day I Dream About Sports - email the developer, plus fixes for missing alerts, the notch, pinned capsules and multiple screens."
+pageName: "Support"
+ogTitle: "Support - All Day I Dream About Sports"
+ogDescription: "Something not working? Email the developer - fixes for the most common questions inside."
+crumbs:
+  - name: Home
+    url: /
+  - name: Support
+    url: /support/
+---
+<article class="doc">
+  <div class="wrap wrap-narrow">
+    {% include "partials/breadcrumbs.njk" %}
+    <p class="micro">Support</p>
+    <h1 class="doc-h">Something not working? Tell us.</h1>
+
+    <div class="prose">
+      <p>All Day I Dream About Sports is made by one developer, so the person
+      who reads your email is the one who fixes the bug. No ticket queue, no
+      bot.</p>
+      <div class="actions">
+        <a class="btn btn-primary" href="mailto:{{ site.email }}?subject=Support%3A%20All%20Day%20I%20Dream%20About%20Sports">Email {{ site.email }}</a>
+        <a class="btn btn-ghost" href="/#faq">Read the FAQ</a>
+      </div>
+      <p>Replies usually arrive within a couple of days, in English. Mention
+      your macOS version, your Mac model and, if it's a bug, the match and
+      roughly when it happened.</p>
+
+      <h2>Alerts aren't showing up</h2>
+      <ul>
+        <li>Check you follow the team - alerts only fire for teams you follow,
+        and only while their match is live.</li>
+        <li>Each event type has its own switch in settings. Make sure the ones
+        you want (goal, card, full-time…) are on.</li>
+        <li>With more than one display, check which screen is picked in
+        settings - alerts and capsules appear only there.</li>
+        <li>Alerts follow the live data feed, so a short delay after the real
+        event is normal.</li>
+      </ul>
+
+      <h2>My Mac doesn't have a notch</h2>
+      <p>That's fine. On Macs and external displays without a notch, alerts
+      drop from the top centre of the screen, just under the menu bar.</p>
+
+      <h2>A pinned capsule is in the way</h2>
+      <p>Drag it to any other corner - it snaps into place. You can also set
+      capsules to small, medium or large in settings.</p>
+
+      <h2>The app isn't running after a restart</h2>
+      <p>Turn on <b>Open at login</b> in settings. The app lives in the menu
+      bar and never appears in the Dock, so look for its icon at the top of
+      your screen.</p>
+
+      <h2>Privacy and your data</h2>
+      <p>There are no accounts. Your teams and settings stay on your Mac; see
+      the <a href="/privacy/">privacy policy</a> for exactly what is
+      collected.</p>
+
+      <h2>Still stuck?</h2>
+      <p>Just ask: <a href="mailto:{{ site.email }}">{{ site.email }}</a>. A
+      person reads every email.</p>
+    </div>
+  </div>
+</article>

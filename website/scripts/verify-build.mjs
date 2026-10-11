@@ -74,9 +74,9 @@ for (const id of Object.keys(extras)) {
 }
 
 /* ── the page count ───────────────────────────────────────────────────── */
-// Home, two hubs, competitions, teams, coming soon, privacy and 404, plus the
+// Home, two hubs, competitions, teams, coming soon, support, privacy and 404, plus the
 // /privacy.html redirect stub that is copied rather than rendered.
-const EXPECTED_PAGES = 6 + leagues.length + teams.length;
+const EXPECTED_PAGES = 7 + leagues.length + teams.length;
 const stub = htmlFiles.filter((f) => f.endsWith("privacy.html")).length;
 check(
   htmlFiles.length - stub === EXPECTED_PAGES,
