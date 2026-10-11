@@ -134,8 +134,8 @@ section[id], .grid-sec, .cta, .doc { scroll-margin-top: calc(var(--nav-h) + 20px
 .step-number { font-family: var(--display); font-size: 26px; color: var(--orange); }
 .steps h3 { margin-top: 10px; font-family: var(--display); font-size: 28px; line-height: 1.1; }
 .steps p { color: var(--muted); font-size: 14px; line-height: 1.8; margin-top: 12px; }
-.steps a, .prose a { color: var(--green); text-decoration: underline; text-underline-offset: 3px; }
-.steps a:hover, .prose a:hover { color: var(--orange); }
+.steps a, .prose a:not(.btn) { color: var(--green); text-decoration: underline; text-underline-offset: 3px; }
+.steps a:hover, .prose a:not(.btn):hover { color: var(--orange); }
 .demo-intro { max-width: 60ch; }
 .demo-player { margin-top: 32px; aspect-ratio: 16 / 9; overflow: hidden; border: 8px solid var(--ink); border-radius: 16px; background: var(--ink); box-shadow: 0 12px 32px #173c2d0f; }
 .demo-player iframe { display: block; width: 100%; height: 100%; border: 0; }
