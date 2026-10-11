@@ -84,6 +84,7 @@ struct SettingsPage: View {
                         if session.prefs.settings.eventEnabled(.goal) {
                             Divider()
                             toggleRow("Goal confetti", isOn: goalAnimationBinding)
+                            caption("Bursts across your screen when a team you follow scores.")
                             if session.prefs.settings.goalCenter ?? true {
                                 pickerRow("Confetti time", selection: confettiDurationBinding, cases: OverlayDuration.allCases) { $0.label }
                             }
