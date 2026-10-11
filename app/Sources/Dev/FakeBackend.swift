@@ -152,7 +152,7 @@ final class FakeStore {
         let s = states[def.id] ?? LiveMatchState()
         // A FIXED fake kickoff — today at the fixture's own scheduled time (see
         // DemoFixture.kickoffTime), never derived from the wall clock or from
-        // how far the reel has run. That's what makes the "All Teams" list read
+        // how far the reel has run. That's what makes the menu read
         // like a printed matchday, an hour between kickoffs, no matter when you
         // hit Play. The live minute label doesn't come from here: it's driven by
         // the half changes the timeline fires (LiveStore's local clock).

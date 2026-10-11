@@ -29,11 +29,12 @@ picks the implementation — that's the release flag:
 
 **Day-to-day dev loop:**
 
-1. Build & run **Debug** from Xcode (⌘R). You're already following the club sides in `DevConfig.fanTeams` (Liverpool, Man City,
-   Arsenal, Inter). The popover shows the demo matchday: Manchester City vs
-   Manchester United live, Inter vs Juventus decided on penalties, and two
-   scheduled fixtures. `DevConfig.timeline` starts playing at launch, so pills and
-   local goal animations all appear hands-free.
+1. Build & run **Debug** from Xcode (⌘R). You're already following the club sides in `DevConfig.fanTeams` (Real Madrid, Man City,
+   Liverpool, Bayern, PSG, Inter). The popover shows the demo matchday: City vs
+   Arsenal and Madrid vs Barça live, Bayern vs Dortmund kicking off during the
+   show, Liverpool vs United finished, two later kickoffs, plus results on
+   yesterday's page and fixtures on tomorrow's. `DevConfig.timeline` plays once
+   at launch (~3.5 min), so pills and goal celebrations all appear hands-free.
 2. **Everything is a code knob in `Sources/Dev/DevConfig.swift`**: the fan-team
    list, the deterministic timeline itself, autostart,
    looping, and the two warm-up passes (`showcaseAtStart`, `clockWalkAtStart`).
