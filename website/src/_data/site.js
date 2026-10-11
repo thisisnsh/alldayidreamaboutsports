@@ -5,6 +5,7 @@ export default {
   shortName: "Sports Alerts",
   url: "https://alldayidreamaboutsports.com",
   email: "hello@thisisnsh.com",
+  issuesUrl: "https://github.com/thisisnsh/alldayidreamaboutsports/issues",
   downloadUrl: "/comingsoon/",
   windowsWaitlist:
     "mailto:hello@thisisnsh.com?subject=Waitlist%20for%20Windows",

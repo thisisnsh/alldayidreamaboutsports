@@ -24,11 +24,22 @@ crumbs:
       bot.</p>
       <div class="actions">
         <a class="btn btn-primary" href="mailto:{{ site.email }}?subject=Support%3A%20All%20Day%20I%20Dream%20About%20Sports">Email {{ site.email }}</a>
-        <a class="btn btn-ghost" href="/#faq">Read the FAQ</a>
+        <a class="btn btn-ghost" href="{{ site.issuesUrl }}/new">Report a bug on GitHub</a>
       </div>
       <p>Replies usually arrive within a couple of days, in English. Mention
       your macOS version, your Mac model and, if it's a bug, the match and
       roughly when it happened.</p>
+
+      <h2>Ways to reach us</h2>
+      <ul>
+        <li><b>Email</b> - questions, bugs, feature requests and privacy
+        questions: <a href="mailto:{{ site.email }}">{{ site.email }}</a>.</li>
+        <li><b>GitHub issues</b> - bugs and feature requests are public, so you
+        can follow a fix and see whether someone has already reported it:
+        <a href="{{ site.issuesUrl }}">open issues</a>.</li>
+        <li><b>The FAQ</b> - answers to the common questions on the
+        <a href="/#faq">home page</a>.</li>
+      </ul>
 
       <h2>Alerts aren't showing up</h2>
       <ul>
@@ -61,8 +72,9 @@ crumbs:
       collected.</p>
 
       <h2>Still stuck?</h2>
-      <p>Just ask: <a href="mailto:{{ site.email }}">{{ site.email }}</a>. A
-      person reads every email.</p>
+      <p>Just ask: email <a href="mailto:{{ site.email }}">{{ site.email }}</a>
+      or <a href="{{ site.issuesUrl }}/new">open a GitHub issue</a>. A person
+      reads both.</p>
     </div>
   </div>
 </article>
