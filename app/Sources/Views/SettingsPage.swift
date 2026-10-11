@@ -87,15 +87,6 @@ struct SettingsPage: View {
                             if session.prefs.settings.goalCenter ?? true {
                                 pickerRow("Confetti time", selection: confettiDurationBinding, cases: OverlayDuration.allCases) { $0.label }
                             }
-                            Button {
-                                // No event here: `OverlayManager.preview()`
-                                // reports the same click as
-                                // `celebration_preview`.
-                                OverlayManager.shared.preview()
-                            } label: {
-                                Text("Preview goal confetti").frame(maxWidth: .infinity)
-                            }
-                            .buttonStyle(.cardButton)
                         }
                     }
 
@@ -248,7 +239,6 @@ struct SettingsPage: View {
                             $0.goalCenter = true
                         }
                     }
-                    OverlayManager.shared.previewAlert(preset.sampleEvent)
                 }
             }
         )
@@ -277,17 +267,21 @@ struct SettingsPage: View {
         )
     }
 
-    /// The goal confetti switch.
+    /// The goal confetti switch. Turning it on plays a sample burst — the one
+    /// settings change that shows itself; `previewConfetti()` reports it as
+    /// `celebration_preview`.
     private var goalAnimationBinding: Binding<Bool> {
         Binding(
             get: { session.prefs.settings.goalCenter ?? true },
-            set: { on in session.updateSettings { $0.goalCenter = on } }
+            set: { on in
+                session.updateSettings { $0.goalCenter = on }
+                if on { OverlayManager.shared.previewConfetti() }
+            }
         )
     }
 
     /// One size for both overlays: the capsule and the notch drops. Reads
-    /// the capsule's (they only differ if set apart by an older build), and
-    /// replays a notch alert so the new size is visible straight away.
+    /// the capsule's (they only differ if set apart by an older build).
     private var overlaySizeBinding: Binding<CapsuleSize> {
         Binding(
             get: { session.prefs.settings.capsuleSize ?? .medium },
@@ -299,7 +293,6 @@ struct SettingsPage: View {
                         $0.capsuleSize = choice
                         $0.notchDropSize = choice
                     }
-                    OverlayManager.shared.previewAlert(.goal)
                 }
             }
         )

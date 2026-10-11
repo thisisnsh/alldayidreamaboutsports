@@ -84,7 +84,7 @@ enum AppAnalytics {
     // and both the total and the split are worth having — `app_quit`'s
     // `source`. A control whose click is
     // already reported by the thing it triggers gets no event of its own:
-    // "Preview goal confetti" is `celebration_preview`.
+    // switching the goal confetti on is `celebration_preview`.
 
     /// The last onboarding step's "Show me". `fan_count` = teams followed by
     /// then; the step funnel itself is the `onboarding_*` screen views.
@@ -166,7 +166,7 @@ enum AppAnalytics {
         log("celebration_shown", [:])
     }
 
-    /// Settings → "Preview goal confetti".
+    /// Settings → Goal confetti switched on (plays a sample burst).
     static func celebrationPreview() {
         log("celebration_preview", [:])
     }

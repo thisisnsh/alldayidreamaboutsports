@@ -284,33 +284,30 @@ final class OverlayManager: ObservableObject {
 
     // MARK: Preview
 
-    /// Settings "Preview goal confetti": a generic fan goal (Team A vs Team B)
-    /// through the exact same pipeline — pill set + confetti, per the
-    /// user's toggles. Jumps ahead of anything queued.
-    func preview() {
+    /// Settings, on switching the goal confetti on: a sample burst alone — no
+    /// pill, and the app's ball instead of a team crest (no `teamId`).
+    func previewConfetti() {
         let event = MatchEvent(
             eventId: "preview:\(Date().timeIntervalSince1970)",
             type: .goal,
             fixtureId: 0,
             leagueId: 1,
-            teamId: TeamCatalog.previewHome.id,
-            player: "Player Name",
-            minute: 73,
+            teamId: nil,
+            player: nil,
+            minute: nil,
             homeTeamId: TeamCatalog.previewHome.id,
             awayTeamId: TeamCatalog.previewAway.id,
             homeName: TeamCatalog.previewHome.name,
             awayName: TeamCatalog.previewAway.name,
-            homeGoals: 1,
+            homeGoals: 0,
             awayGoals: 0
         )
         AppAnalytics.celebrationPreview()
-        dismissAll()
-        submit(event, isFanGoal: true)
+        fireConfetti(for: [event])
     }
 
-    /// Settings / onboarding sample: one notch drop of `type` for a generic
-    /// match, so a size or alert-level change shows what it does. Never a fan
-    /// goal — the goal confetti has its own Preview.
+    /// Onboarding sample: one notch drop of `type` for a generic match, so an
+    /// alert-level choice shows what it does. Never a fan goal.
     func previewAlert(_ type: MatchEventType) {
         let event = MatchEvent(
             eventId: "preview-alert:\(Date().timeIntervalSince1970)",

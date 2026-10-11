@@ -6,6 +6,7 @@ import SwiftUI
 struct ConfettiView: View {
     let size: CGSize
     /// The scoring team's crest; crest pieces stay hidden until it loads.
+    /// Empty (the Settings sample) draws the app's ball instead.
     let logo: String
     /// Fixed at first init — the burst token is created and shown in the
     /// same tick, so this is when the burst appears.
@@ -49,7 +50,15 @@ struct ConfettiView: View {
             // renderer; nil until the crest has loaded.
             let crest = logos.image(for: logo)
             Canvas { canvas, _ in
-                let crestImage = crest.map { canvas.resolve(Image(nsImage: $0)) }
+                let crestImage: GraphicsContext.ResolvedImage? = if logo.isEmpty {
+                    {
+                        var ball = canvas.resolve(Image(systemName: "soccerball"))
+                        ball.shading = .color(.white)
+                        return ball
+                    }()
+                } else {
+                    crest.map { canvas.resolve(Image(nsImage: $0)) }
+                }
                 for p in particles {
                     let t = elapsed - p.delay
                     guard t > 0, t < Self.lifetime else { continue }
