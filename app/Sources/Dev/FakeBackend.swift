@@ -1,12 +1,12 @@
-#if DEV_BACKEND
 import AppKit
 import Foundation
 
-// Fake service layer for development: compiled only when DEV_BACKEND is set
-// (Debug builds). Match reads return seeded in-memory data without spending
-// API-Football quota. The catalog alone uses the public CDN. Each parallel match's
-// score is walked through DevConfig.timeline by DemoEngine, so what the popover
-// shows always matches the events that have fired.
+// Fake service layer behind the demo: the only scores source in Debug
+// (DEV_BACKEND) builds, and the one every build switches to while DemoMode is
+// on. Match reads return seeded in-memory data without spending API-Football
+// quota. The catalog alone uses the public CDN. Each parallel match's score is
+// walked through DevConfig.timeline by DemoEngine, so what the popover shows
+// always matches the events that have fired.
 
 /// Per-match live state the demo timeline mutates. The per-side event arrays
 /// mirror what the backend stores on a real fixture — the capsule's hover
@@ -47,8 +47,8 @@ final class FakeStore {
     var states: [Int: LiveMatchState] = FakeStore.freshStates()
     var eventSeq = 0
 
-    // EventRouter's dedupe list persists in UserDefaults, but Debug demo event
-    // ids restart on every app launch. Stamp each launch so the showcase always
+    // EventRouter's dedupe list persists in UserDefaults, but demo event ids
+    // restart on every app launch. Stamp each launch so the show always
     // routes, even if the same timeline played in a previous run.
     let launchToken = UUID().uuidString.prefix(8)
 
@@ -292,7 +292,7 @@ final class FakeScores: ScoresProviding {
 /// Plays DevConfig.timeline: a fixed list of (seconds-after-start → event)
 /// beats, fired through the real EventRouter → OverlayManager pipeline exactly
 /// as a polled state change would be. Deterministic — same show, same timing, every run.
-/// Settings → Developer drives it by hand (Play / Stop / Restart).
+/// Settings → Demo drives it by hand (Play / Stop / Restart).
 @MainActor
 final class DemoEngine: ObservableObject {
     static let shared = DemoEngine()
@@ -344,27 +344,27 @@ final class DemoEngine: ObservableObject {
     }
 
     /// A one-off parade of every pill layout, fired through the real pipeline
-    /// before the timeline proper. Uses one match (Bayern vs Dortmund) and only
-    /// the opponent (Dortmund) side for goal-type events, so each shows as a
+    /// before the timeline proper. Uses one match (Inter vs Juventus) and only
+    /// the opponent (Juventus) side for goal-type events, so each shows as a
     /// notch PILL rather than a fan-goal celebration — the point here is to
     /// preview the pills. Unlike the timeline this is a synthetic parade, not a
     /// real match: scores are coherent so the subtitle row reads sensibly, and
     /// a shootout decides it so full-time shows the "won on pens" variant.
     private func runShowcase() async {
-        let f = DemoFixture.bayDor
+        let f = DemoFixture.intJuv
         let beats: [DemoMoment] = [
             DemoMoment(at: 0, f, minute: 1,   .kickoff),
-            DemoMoment(at: 0, f, minute: 9,   .goal(.away, player: "Serhou Guirassy")), // DOR 0–1 → goal pill
-            DemoMoment(at: 0, f, minute: 20,  .yellowCard(.away, player: "Julian Brandt")),
+            DemoMoment(at: 0, f, minute: 9,   .goal(.away, player: "Kenan Yıldız")),     // JUV 0–1 → goal pill
+            DemoMoment(at: 0, f, minute: 20,  .yellowCard(.away, player: "Manuel Locatelli")),
             DemoMoment(at: 0, f, minute: 24,  .goalDisallowed(.away)),                  // VAR → back to 0–0
-            DemoMoment(at: 0, f, minute: 33,  .goal(.away, player: "Karim Adeyemi")),   // DOR 0–1 again, for a leader
-            DemoMoment(at: 0, f, minute: 41,  .redCard(.away, player: "Nico Schlotterbeck")),
-            DemoMoment(at: 0, f, minute: 45,  .halfTime),                               // "Dortmund ahead"
+            DemoMoment(at: 0, f, minute: 33,  .goal(.away, player: "Dušan Vlahović")),   // JUV 0–1 again, for a leader
+            DemoMoment(at: 0, f, minute: 41,  .redCard(.away, player: "Gleison Bremer")),
+            DemoMoment(at: 0, f, minute: 45,  .halfTime),                               // "Juventus ahead"
             DemoMoment(at: 0, f, minute: 91,  .extraTime),
             DemoMoment(at: 0, f, minute: 120, .penaltyShootout),
-            DemoMoment(at: 0, f, minute: 120, .penaltyKick(.home, player: "Harry Kane",     scored: true)),  // pens 1–0
-            DemoMoment(at: 0, f, minute: 120, .penaltyKick(.away, player: "Julian Brandt",  scored: false)), // missed ✗
-            DemoMoment(at: 0, f, minute: 120, .fullTime),                               // "Bayern won on pens"
+            DemoMoment(at: 0, f, minute: 120, .penaltyKick(.home, player: "Lautaro Martínez", scored: true)),  // pens 1–0
+            DemoMoment(at: 0, f, minute: 120, .penaltyKick(.away, player: "Manuel Locatelli", scored: false)), // missed ✗
+            DemoMoment(at: 0, f, minute: 120, .fullTime),                               // "Inter won on pens"
         ]
         FakeStore.shared.resetMatches()
         publishAllFixtures()
@@ -630,4 +630,3 @@ final class DemoEngine: ObservableObject {
         AppSession.shared.publishFixtures()
     }
 }
-#endif

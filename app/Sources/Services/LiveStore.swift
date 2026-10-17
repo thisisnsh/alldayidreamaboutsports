@@ -77,9 +77,10 @@ final class LiveStore {
     private var session: AppSession { AppSession.shared }
     private var scores: ScoresProviding { Services.scores }
 
-    /// Start the loop if it isn't already running. Idempotent.
+    /// Start the loop if it isn't already running. Idempotent. Never while
+    /// the demo is on: DemoEngine is the only thing that moves its scores.
     func start() {
-        guard loopTask == nil else { return }
+        guard loopTask == nil, !DemoMode.isActive else { return }
         AppLog.info(.fixtures, "live_loop_start")
         loopTask = Task { @MainActor in
             await self.run()
@@ -138,6 +139,7 @@ final class LiveStore {
     /// each live fan match's `matches/{id}.json`, diff/merge the score, fire any
     /// new goal's events.
     func refreshNow() async {
+        guard !DemoMode.isActive else { return }
         await pollCycle()
     }
 
@@ -156,6 +158,7 @@ final class LiveStore {
     /// Reuses `ingest`, whose baseline guard emits no events on first observation
     /// — so reconciling a long-finished match never replays its goals.
     func reconcileFanMatches(teamIds: Set<Int>? = nil) async {
+        guard !DemoMode.isActive else { return }
         let teams = teamIds ?? session.fanTeamIds
         guard !teams.isEmpty else { return }
         let now = Date()

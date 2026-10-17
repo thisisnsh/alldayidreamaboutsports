@@ -113,6 +113,28 @@ final class AppSession: ObservableObject {
         MenuPopoverController.shared.close()
     }
 
+    // MARK: Demo
+
+    /// DemoMode is switching on: drop every real fixture and follow the demo's
+    /// teams for this session only (never persisted — see `persistFanTeamIds`).
+    /// DemoEngine fills the board from here.
+    func enterDemo(fanTeams: [String]) {
+        clearMatchCache()
+        prefs.fanTeamIds = fanTeams
+        publishFixtures()
+    }
+
+    /// DemoMode is switching off: the user's own teams back from disk, the
+    /// demo's fixtures gone, and the real schedule, archive and poll loop back.
+    func leaveDemo() {
+        clearMatchCache()
+        prefs.fanTeamIds = defaults.stringArray(forKey: CacheKey.fanTeamIds) ?? []
+        loadArchive()
+        publishFixtures()
+        LiveStore.shared.start()
+        Task { await refreshFixtures() }
+    }
+
     // MARK: Prefs
 
     func setFanTeams(_ ids: [String]) {
@@ -208,6 +230,8 @@ final class AppSession: ObservableObject {
     }
 
     private func persistFanTeamIds() {
+        // The demo's teams (and any picked during it) last the session only.
+        guard !DemoMode.isActive else { return }
         defaults.set(prefs.fanTeamIds, forKey: CacheKey.fanTeamIds)
     }
 
@@ -345,7 +369,10 @@ final class AppSession: ObservableObject {
                 fixturesById[fixture.fixtureId] = fixture
             }
         }
-        defaults.set(loaded.sorted(), forKey: CacheKey.fixtureBootstrapDates)
+        // A demo "load" must not mark today's real schedule files as read.
+        if !DemoMode.isActive {
+            defaults.set(loaded.sorted(), forKey: CacheKey.fixtureBootstrapDates)
+        }
         scheduleState = dates.allSatisfy { loaded.contains(key($0)) } ? .ready : .unavailable
         publishFixtures()
         AppLog.info(.fixtures, "bootstrap_complete fixtures=\(fixturesById.count) loaded_dates=\(loaded.count)")
@@ -356,13 +383,11 @@ final class AppSession: ObservableObject {
     func applyLiveFixture(_ fixture: Fixture) {
         fixturesById[fixture.fixtureId] = fixture
         confirmLiveScore(fixture.fixtureId)
-        #if !DEV_BACKEND
-        // The demo replays its reel every launch; nothing of it is kept.
-        if fixture.status != "SCHEDULED", archive[fixture.fixtureId] != fixture {
+        // The demo replays its reel every time; nothing of it is kept.
+        if !DemoMode.isActive, fixture.status != "SCHEDULED", archive[fixture.fixtureId] != fixture {
             archive[fixture.fixtureId] = fixture
             persistArchive()
         }
-        #endif
     }
 
     /// The last state archived for a match, events included — `LiveStore`
@@ -402,7 +427,10 @@ final class AppSession: ObservableObject {
     }
 
     func liveScoreStatus(_ fixtureId: Int, at date: Date) -> LiveScoreUpdate.Status {
-        (liveScoreUpdates[fixtureId] ?? LiveScoreUpdate()).status(at: date)
+        // Demo scores move only on scripted beats, and stop when the script
+        // does — a quiet minute there isn't a delayed feed.
+        if DemoMode.isActive { return .current }
+        return (liveScoreUpdates[fixtureId] ?? LiveScoreUpdate()).status(at: date)
     }
 
     /// Project the working set into the published, sorted per-day lists and
@@ -483,6 +511,7 @@ final class AppSession: ObservableObject {
     }
 
     private func persistFixtureCache() {
+        guard !DemoMode.isActive else { return }
         // The whole working set: the schedule bootstrap runs once a UTC day,
         // so a relaunch later that day rebuilds it from this cache alone.
         if let data = try? JSONEncoder().encode(Array(fixturesById.values)) {

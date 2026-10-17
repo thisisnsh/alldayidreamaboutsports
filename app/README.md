@@ -29,24 +29,40 @@ picks the implementation — that's the release flag:
 
 **Day-to-day dev loop:**
 
-1. Build & run **Debug** from Xcode (⌘R). You're already following the club sides in `DevConfig.fanTeams` (Real Madrid, Man City,
-   Liverpool, Bayern, PSG, Inter). The popover shows the demo matchday: City vs
-   Arsenal and Madrid vs Barça live, Bayern vs Dortmund kicking off during the
-   show, Liverpool vs United finished, two later kickoffs, plus results on
-   yesterday's page and fixtures on tomorrow's. `DevConfig.timeline` plays once
-   at launch (~3.5 min), so pills and goal celebrations all appear hands-free.
+1. Build & run **Debug** from Xcode (⌘R). You're already following one club
+   in each of the demo's ten matches (`DevConfig.fanTeams`; 20 clubs, none
+   twice). The popover shows the demo matchday: City vs Arsenal and Madrid vs
+   Barça live, Inter vs Juventus kicking off during the show, Liverpool vs
+   United finished, two later kickoffs, plus results on yesterday's page and
+   fixtures on tomorrow's. `DevConfig.timeline` plays once at launch (~4 min),
+   so pills and goal celebrations all appear hands-free.
 2. **Everything is a code knob in `Sources/Dev/DevConfig.swift`**: the fan-team
    list, the deterministic timeline itself, autostart,
    looping, and the two warm-up passes (`showcaseAtStart`, `clockWalkAtStart`).
    The fixtures those beats play out on, and the fake catalog behind the picker,
    live next door in `Sources/Dev/FakeBackend.swift`. Edit, ⌘R, observe.
-3. Settings shows a small 🧪 pill so you always know you're in a dev session
-   (no dev controls — the auto loop and `DevConfig` are the controls). The
+3. Settings shows a small 🧪 pill so you always know you're in a dev session,
+   and a Demo card (Restart / Play / Stop) for the timeline. The
    simulated events run through the real EventRouter/Overlay pipeline, exactly
    as a state change polled from the scores CDN would; `Settings → Celebration
    → Preview animation` fires one on demand.
 4. Tap the ball during the window for local mini-ball animations. No taps are
    uploaded and no shared count is displayed.
+
+**Demo data in any build (App Review):** tap the **Settings** title five
+times (within 3s of each other) and any build — Staging and Release included —
+swaps real scores for the same demo, re-anchored to now, and jumps back to the
+matches. Five more taps replay it; Settings → Demo → Exit demo (or quitting)
+returns to real scores and your own teams. Nothing the demo touches is
+persisted, the live poll loop is paused while it runs, and demo goals don't
+count toward the rating prompt. `demo_activated` / `demo_exited` show up in
+Analytics. App Review notes for each submission:
+
+> Live scores only appear while the user's teams are playing. To see the app
+> with live matches at any time: click the ⚽ menu bar icon → gear (Settings) →
+> click the "Settings" title five times. The app loads a made-up matchday
+> (finished, live and upcoming matches; goal alerts and celebrations start
+> within seconds). Settings → Demo → Exit demo returns to real data.
 
 **Why Debug needs no backend** (each network path, and what disables it):
 

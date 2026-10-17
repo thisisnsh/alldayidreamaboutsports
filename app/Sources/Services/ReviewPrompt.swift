@@ -19,7 +19,8 @@ enum ReviewPrompt {
     /// Count a goal if a followed team scored it. Called once per GOAL event —
     /// EventRouter's dedupe guarantees one call per goal.
     static func recordGoal(_ event: MatchEvent, fans: Set<Int>) {
-        guard event.type == .goal,
+        // Demo goals aren't the user's teams scoring — never ask on their back.
+        guard !DemoMode.isActive, event.type == .goal,
               let scorer = event.teamId, fans.contains(scorer) else { return }
         let goals = AppDefaults.shared.integer(forKey: goalCountKey) + 1
         AppDefaults.shared.set(goals, forKey: goalCountKey)

@@ -288,10 +288,20 @@ enum AppAnalytics {
         log("overlay_set_shown", ["count": count, "has_fan_goal": hasFanGoal ? "yes" : "no"])
     }
 
-    // MARK: Dev demo controls
+    // MARK: Demo controls
 
-    /// Debug-only, like everything else in `Dev/` — never reaches real Firebase
-    /// (see the type doc), but surfaces through the `AppLog.debug` fallback.
+    /// The hidden demo was switched on (five taps on the Settings title) —
+    /// in a shipped build that's almost always App Review.
+    static func demoActivated() {
+        log("demo_activated")
+    }
+
+    static func demoExited() {
+        log("demo_exited")
+    }
+
+    /// Settings → Demo buttons. In Debug these never reach real Firebase (see
+    /// the type doc), but surface through the `AppLog.debug` fallback.
     static func demoRestart() {
         log("demo_restart")
     }

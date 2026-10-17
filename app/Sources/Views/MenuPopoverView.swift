@@ -97,11 +97,16 @@ struct MenuPopoverView: View {
 /// centered, and an optional control on the right.
 struct PageHeader<Trailing: View>: View {
     let title: String
+    /// A tap on the title. Unmarked on purpose: Settings counts these to
+    /// unlock the demo (see `DemoMode`).
+    var onTitleTap: (() -> Void)? = nil
     @ViewBuilder var trailing: Trailing
 
     var body: some View {
         ZStack {
             Text(title).font(.system(size: 15, weight: .bold, design: .rounded))
+                .contentShape(Rectangle())
+                .onTapGesture { onTitleTap?() }
             HStack {
                 Button {
                     PopoverRouter.shared.go(.home)
@@ -126,8 +131,8 @@ struct PageHeader<Trailing: View>: View {
 }
 
 extension PageHeader where Trailing == EmptyView {
-    init(title: String) {
-        self.init(title: title) { EmptyView() }
+    init(title: String, onTitleTap: (() -> Void)? = nil) {
+        self.init(title: title, onTitleTap: onTitleTap) { EmptyView() }
     }
 }
 

@@ -3,7 +3,8 @@ import Foundation
 // The app talks to the outside world only through the scores interface.
 // Debug builds (SWIFT_ACTIVE_COMPILATION_CONDITIONS includes DEV_BACKEND) get
 // fake in-memory implementations: no network, no API quota.
-// Release builds get the real ones. Build either flavor locally:
+// Release builds get the real ones — except while DemoMode is on, when they
+// read the same fakes. Build either flavor locally:
 //   xcodebuild -configuration Debug    # fake
 //   xcodebuild -configuration Release  # real
 
@@ -17,11 +18,13 @@ protocol ScoresProviding {
 /// Service locator — the single place where the flavor is decided.
 @MainActor
 enum Services {
+    private static let demo: ScoresProviding = FakeScores()
     #if DEV_BACKEND
-    static let scores: ScoresProviding = FakeScores()
+    static var scores: ScoresProviding { demo }
     static let isDev = true
     #else
-    static let scores: ScoresProviding = CDNScoresClient()
+    private static let live: ScoresProviding = CDNScoresClient()
+    static var scores: ScoresProviding { DemoMode.isActive ? demo : live }
     static let isDev = false
     #endif
 }

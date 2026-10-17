@@ -12,11 +12,14 @@ struct SettingsPage: View {
     /// The twelve per-event switches sit behind the presets, folded.
     @State private var customizing = false
     @ObservedObject private var displayTarget = OverlayDisplayTarget.shared
+    @ObservedObject private var demo = DemoMode.shared
+    /// Recent taps on the page title, for the hidden demo switch.
+    @State private var titleTaps: [Date] = []
     static let screen = "settings"
 
     var body: some View {
         VStack(spacing: 0) {
-            PageHeader(title: "Settings")
+            PageHeader(title: "Settings", onTitleTap: countTitleTap)
             ScrollView {
                 VStack(spacing: 12) {
                     #if DEV_BACKEND
@@ -25,11 +28,13 @@ struct SettingsPage: View {
                         .padding(.horizontal, 10)
                         .padding(.vertical, 4)
                         .background(Capsule().fill(.yellow.opacity(0.25)))
-
-                    SettingsCard("Developer") {
-                        DemoControls()
-                    }
                     #endif
+
+                    if demo.isActive {
+                        SettingsCard("Demo") {
+                            DemoControls()
+                        }
+                    }
 
                     #if DEV_BACKEND || STAGING
                     SettingsCard("Testing") {
@@ -408,8 +413,22 @@ extension MatchEventType {
     }
 }
 
-#if DEV_BACKEND
-/// Hand controls for the scripted demo timeline (DevConfig.timeline).
+extension SettingsPage {
+    /// Five quick taps on the title start the demo (or replay it) and jump to
+    /// the matches, where it plays. Taps more than 3s apart start over.
+    private func countTitleTap() {
+        let now = Date()
+        titleTaps = titleTaps.filter { now.timeIntervalSince($0) < 3 } + [now]
+        guard titleTaps.count >= DemoMode.tapsToActivate else { return }
+        titleTaps = []
+        DemoMode.shared.activate()
+        PopoverRouter.shared.dayOffset = 0
+        PopoverRouter.shared.go(.home)
+    }
+}
+
+/// Hand controls for the scripted demo timeline (DevConfig.timeline), shown
+/// while DemoMode is on.
 private struct DemoControls: View {
     @ObservedObject private var engine = DemoEngine.shared
 
@@ -435,14 +454,26 @@ private struct DemoControls: View {
                 engine.isPlaying ? DemoEngine.shared.stop() : DemoEngine.shared.start()
             }
             .buttonStyle(.cardButton)
+            #if !DEV_BACKEND
+            Button("Exit demo") {
+                DemoMode.shared.exit()
+            }
+            .buttonStyle(.cardButton)
+            #endif
         }
+        #if DEV_BACKEND
         Text("Deterministic timeline from Dev/DevConfig.swift — the same events fire at the same seconds every run.")
             .font(.caption)
             .foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
+        #else
+        Text("Made-up matches, so you can see live scores, alerts and goal celebrations when none of your teams is playing. Exit, or quit the app, to go back to real scores and your own teams.")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+        #endif
     }
 }
-#endif
 
 #if DEV_BACKEND || STAGING
 /// Replays what a user sees when they open the app, without reinstalling or
