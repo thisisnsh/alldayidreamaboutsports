@@ -319,6 +319,10 @@ final class DemoEngine: ObservableObject {
                 await playThrough()
                 if !DevConfig.loops { break }
             }
+            // A cancelled show has already been reset by stop() — and by now
+            // restart() may have started its successor. Clearing `task` here
+            // would orphan that one: still firing, but out of stop()'s reach.
+            guard !Task.isCancelled else { return }
             isPlaying = false
             task = nil
         }
@@ -583,7 +587,7 @@ final class DemoEngine: ObservableObject {
                       side: DemoSide? = nil, player: String? = nil, minute: Int,
                       extra: Int? = nil, scored: Bool? = nil, goalKind: String? = nil,
                       playerOut: String? = nil, varDetail: String? = nil) {
-        guard !suppressPush else { return }
+        guard !suppressPush, DemoMode.isActive else { return }
         let store = FakeStore.shared
         let s = store.states[def.id] ?? LiveMatchState()
         let teamId = side.map { $0 == .home ? def.home.id : def.away.id }
@@ -615,7 +619,10 @@ final class DemoEngine: ObservableObject {
         EventRouter.shared.route(event)
     }
 
+    // Never publish into a session that has left the demo: these would land
+    // in the real working set, archive and poll loop.
     private func publishFixture(_ def: DemoFixture) {
+        guard DemoMode.isActive else { return }
         let fixture = FakeStore.shared.fixture(def)
         LiveStore.shared.noteClockObservation(fixture)
         AppSession.shared.applyLiveFixture(fixture)
@@ -623,6 +630,7 @@ final class DemoEngine: ObservableObject {
     }
 
     private func publishAllFixtures() {
+        guard DemoMode.isActive else { return }
         for fixture in FakeStore.shared.allFixtures {
             LiveStore.shared.noteClockObservation(fixture)
             AppSession.shared.applyLiveFixture(fixture)

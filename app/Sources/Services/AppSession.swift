@@ -83,6 +83,7 @@ final class AppSession: ObservableObject {
         if let data = defaults.data(forKey: CacheKey.fixtures) {
             do {
                 let stored = try JSONDecoder().decode([Fixture].self, from: data)
+                    .filter { !DemoFixture.isDemo($0.fixtureId) }
                 fixturesById.merge(stored.map { ($0.fixtureId, $0) }, uniquingKeysWith: { _, last in last })
                 publishFixtures()
             } catch {
@@ -381,6 +382,8 @@ final class AppSession: ObservableObject {
     /// Merge one freshly-polled live fixture into the working set. Called by
     /// `LiveStore` each poll cycle; `publishFixtures()` projects the visible list.
     func applyLiveFixture(_ fixture: Fixture) {
+        // A demo match arriving after the demo ended is a straggler, not news.
+        guard DemoMode.isActive || !DemoFixture.isDemo(fixture.fixtureId) else { return }
         fixturesById[fixture.fixtureId] = fixture
         confirmLiveScore(fixture.fixtureId)
         // The demo replays its reel every time; nothing of it is kept.
@@ -400,8 +403,9 @@ final class AppSession: ObservableObject {
         guard let data = defaults.data(forKey: CacheKey.archive),
               let stored = try? JSONDecoder().decode([Fixture].self, from: data) else { return }
         let cutoff = Calendar.current.date(byAdding: .day, value: -Self.archiveDays, to: Date()) ?? .distantPast
+        // Also drops demo matches an earlier build let leak into the archive.
         archive = Dictionary(
-            stored.filter { ($0.kickoff ?? .distantPast) >= cutoff }.map { ($0.fixtureId, $0) },
+            stored.filter { ($0.kickoff ?? .distantPast) >= cutoff && !DemoFixture.isDemo($0.fixtureId) }.map { ($0.fixtureId, $0) },
             uniquingKeysWith: { _, last in last }
         )
         fixturesById.merge(archive) { _, archived in archived }

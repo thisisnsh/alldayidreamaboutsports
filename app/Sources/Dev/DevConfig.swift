@@ -268,6 +268,11 @@ struct DemoFixture {
 // Ids sit in a block (99000xx) no real API-Football fixture uses, so a demo
 // match can never be mistaken for, or merged over, a real one.
 extension DemoFixture {
+    /// The demo's id block. Outside the demo, AppSession drops any fixture in
+    /// it — from disk as well as live — so a demo match can't outlive the demo.
+    static let idRange = 9_900_000 ..< 9_901_000
+
+    static func isDemo(_ fixtureId: Int) -> Bool { idRange.contains(fixtureId) }
 
     // ── Yesterday (finished)
     static let atmSev = DemoFixture(
