@@ -229,12 +229,11 @@ enum DemoKickoff {
         anchor = quarterHourFloor(Date())
     }
 
+    /// Every time zone is offset from UTC by whole quarter hours, so flooring
+    /// absolute time to 15 minutes lands on a local quarter hour too.
     private static func quarterHourFloor(_ now: Date) -> Date {
-        let calendar = Calendar.current
-        let minute = calendar.component(.minute, from: now)
-        let second = calendar.component(.second, from: now)
-        let floored = calendar.date(bySetting: .second, value: 0, of: now) ?? now
-        return floored.addingTimeInterval(-Double((minute % 15) * 60 + second))
+        let quarter: TimeInterval = 15 * 60
+        return Date(timeIntervalSinceReferenceDate: (now.timeIntervalSinceReferenceDate / quarter).rounded(.down) * quarter)
     }
 
     var date: Date {
