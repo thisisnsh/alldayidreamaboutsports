@@ -6,7 +6,7 @@ export default {
   url: "https://alldayidreamaboutsports.com",
   email: "hello@thisisnsh.com",
   issuesUrl: "https://github.com/thisisnsh/alldayidreamaboutsports/issues",
-  downloadUrl: "/comingsoon/",
+  downloadUrl: "https://apps.apple.com/app/all-day-i-dream-about-sports/id6818873010",
   windowsWaitlist:
     "mailto:hello@thisisnsh.com?subject=Waitlist%20for%20Windows",
   requires: "macOS 14.0 or later",

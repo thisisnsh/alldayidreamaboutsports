@@ -21,7 +21,8 @@ catalog being up.
 See the [root README](../README.md) for the app, backend and architecture.
 
 The homepage demo is an embedded YouTube player. All download buttons lead to
-`/comingsoon/` while the Mac App Store launch is pending; the website no longer
+the Mac App Store listing (`site.downloadUrl`); the old `/comingsoon/` page is
+now a noindex redirect stub to it, like `/privacy.html`. The website no longer
 requests media or installers from the retired R2 download buckets.
 
 The shared design uses warm white surfaces, pitch green and orange accents.
@@ -42,5 +43,5 @@ internal links and unique metadata in place before publishing.
 Team and league directories expose `CollectionPage` / `ItemList` structured
 data matching their visible links. Video metadata uses the YouTube player as
 `embedUrl`; a watch-page URL is not a video file and must not be `contentUrl`.
-Search descriptions and onboarding FAQs reflect the pending Mac App Store
-launch. Update those alongside the download destination when the app launches.
+Search descriptions and onboarding FAQs point at the Mac App Store listing;
+`npm run verify` fails if a page still announces a pending launch.

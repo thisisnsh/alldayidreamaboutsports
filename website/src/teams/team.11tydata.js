@@ -23,8 +23,8 @@ export default {
     description: (data) => {
       const t = data.team;
       return t.national
-        ? `Explore ${t.displayName}'s 2026 World Cup coverage in our free Mac football app. National teams stay saved between tournaments. Coming to the Mac App Store.`
-        : `${t.displayName} goal alerts, match notifications and pinned ${t.leagueName} scores on your Mac. Free football app, coming to the Mac App Store.`;
+        ? `Explore ${t.displayName}'s 2026 World Cup coverage in our free Mac football app. National teams stay saved between tournaments. On the Mac App Store.`
+        : `${t.displayName} goal alerts, match notifications and pinned ${t.leagueName} scores on your Mac. Free football app on the Mac App Store.`;
     },
     keywords: (data) => {
       const t = data.team;

@@ -74,10 +74,13 @@ for (const id of Object.keys(extras)) {
 }
 
 /* ── the page count ───────────────────────────────────────────────────── */
-// Home, two hubs, competitions, teams, coming soon, support, privacy and 404, plus the
-// /privacy.html redirect stub that is copied rather than rendered.
-const EXPECTED_PAGES = 7 + leagues.length + teams.length;
-const stub = htmlFiles.filter((f) => f.endsWith("privacy.html")).length;
+// Home, two hubs, competitions, teams, support, privacy and 404, plus the
+// /privacy.html and /comingsoon/ redirect stubs that are copied rather than rendered.
+const APP_STORE = "https://apps.apple.com/app/all-day-i-dream-about-sports/id6818873010";
+const STUBS = ["/privacy.html", "/comingsoon/"];
+const isStub = (file) => STUBS.includes(("/" + relative(SITE, file)).replace(/index\.html$/, ""));
+const EXPECTED_PAGES = 6 + leagues.length + teams.length;
+const stub = htmlFiles.filter(isStub).length;
 check(
   htmlFiles.length - stub === EXPECTED_PAGES,
   `expected ${EXPECTED_PAGES} rendered pages, found ${htmlFiles.length - stub}`
@@ -88,14 +91,13 @@ for (const f of ["CNAME", ".nojekyll", "robots.txt", "sitemap.xml", "style.css",
   check(existsSync(join(SITE, f)), `missing ${f} in _site/`);
 }
 
-check(existsSync(join(SITE, "comingsoon", "index.html")), "missing coming-soon download destination");
 const homeHtml = readFileSync(join(SITE, "index.html"), "utf8");
 check(/<iframe[^>]+src="https:\/\/www\.youtube-nocookie\.com\/embed\/B75DYFddkV0"/.test(homeHtml),
   "homepage is missing the embedded YouTube demo");
 check(!homeHtml.includes("autoplay=1"), "the YouTube demo must not autoplay");
-const launchHtml = readFileSync(join(SITE, "comingsoon", "index.html"), "utf8");
-check(launchHtml.includes("Direct downloads are no longer available."), "launch page must explain download retirement");
-check(launchHtml.includes("Launching on"), "launch page must announce the App Store launch");
+check(stub === STUBS.length, "missing a redirect stub (/privacy.html or /comingsoon/)");
+check(readFileSync(join(SITE, "comingsoon", "index.html"), "utf8").includes(`url=${APP_STORE}`),
+  "/comingsoon/ must redirect to the App Store");
 for (const file of files.filter((f) => /\.(html|js|css)$/.test(f))) {
   const source = readFileSync(file, "utf8");
   check(!/download(?:-staging)?\.alldayidreamaboutsports\.com/.test(source),
@@ -137,7 +139,7 @@ const fragments = new Map(htmlFiles.map((file) => {
 for (const file of htmlFiles) {
   const rel = "/" + relative(SITE, file);
   const html = readFileSync(file, "utf8");
-  if (rel.endsWith("privacy.html")) continue;
+  if (isStub(file)) continue;
 
   const url = rel.endsWith("/index.html") ? rel.slice(0, -"index.html".length) : rel;
   const isNoindex = /<meta name="robots" content="noindex/.test(html);
@@ -145,9 +147,10 @@ for (const file of htmlFiles) {
 
   check(!html.includes(EM_DASH), `${url}: contains an em dash`);
   check(!/\blive scores?\b/i.test(html), `${url}: implies that the website shows live scores`);
-  for (const match of html.matchAll(/<a\b[^>]*href="([^"]+)"[^>]*>(?:(?!<\/a>)[\s\S])*?(?:Download now|Coming to the App Store|Coming soon)<\/a>/g)) {
-    check(match[1] === "/comingsoon/", `${url}: download button does not point to coming soon`);
+  for (const match of html.matchAll(/<a\b[^>]*href="([^"]+)"[^>]*>(?:(?!<\/a>)[\s\S])*?(?:Download|App Store)[^<]*<\/a>/g)) {
+    check(match[1] === APP_STORE, `${url}: download button does not point to the App Store`);
   }
+  check(!/coming to the (?:mac )?app store|launching on|comingsoon/i.test(html), `${url}: still announces a pending launch`);
 
   const h1 = html.match(/<h1[\s>]/g) || [];
   check(h1.length === 1, `${url}: expected exactly one <h1>, found ${h1.length}`);
@@ -234,7 +237,7 @@ for (const file of htmlFiles) {
 /* ── sitemap exactly covers the indexable pages ───────────────────────── */
 const sitemapUrls = new Set(locs);
 for (const url of built) {
-  const indexable = !noindex.has(url) && url !== "/privacy.html";
+  const indexable = !noindex.has(url) && !STUBS.includes(url);
   check(sitemapUrls.has(`${ORIGIN}${url}`) === indexable,
     indexable ? `indexable page missing from sitemap: ${url}` : `noindex page included in sitemap: ${url}`);
 }
@@ -248,7 +251,7 @@ for (const [href, from] of internalLinks) {
 
 /* ── no orphans: every indexable page is linked from somewhere else ───── */
 for (const url of built) {
-  if (url === "/" || noindex.has(url) || url.endsWith("privacy.html")) continue;
+  if (url === "/" || noindex.has(url) || STUBS.includes(url)) continue;
   const linkers = internalLinks.get(url);
   const external = linkers && [...linkers].some((from) => from !== url);
   check(external, `orphan: nothing links to ${url}`);

@@ -8,11 +8,11 @@ import site from "./site.js";
 const home = [
   {
     q: "How do I get football match alerts on my Mac?",
-    a: "All Day I Dream About Sports is launching on the Mac App Store. Direct downloads are no longer available. The free macOS app delivers goal, card, penalty, substitution and full-time alerts right below your MacBook notch, and pins a score capsule to any corner of your screen.",
+    a: "Download All Day I Dream About Sports from the Mac App Store. The free macOS app delivers goal, card, penalty, substitution and full-time alerts right below your MacBook notch, and pins a score capsule to any corner of your screen.",
   },
   {
     q: "Is All Day I Dream About Sports free?",
-    a: "Yes - the upcoming Mac App Store app is free on macOS 14 and later, with no subscription, trial or paid tier. Direct downloads are no longer available. A Windows version is also planned.",
+    a: "Yes - the app is free on the Mac App Store for macOS 14 and later, with no subscription, trial or paid tier. A Windows version is also planned.",
   },
   {
     q: "Which leagues and teams can I follow?",
@@ -48,7 +48,7 @@ const home = [
   },
   {
     q: "How do I keep the app up to date?",
-    a: "The upcoming Mac App Store version will receive updates through the App Store. Direct downloads and the old Sparkle update feed have been retired.",
+    a: "The Mac App Store installs updates automatically. Direct downloads and the old Sparkle update feed have been retired.",
   },
   {
     q: "Is it affiliated with FIFA?",
@@ -70,7 +70,7 @@ function forLeague(league) {
   return [
     {
       q: `How do I follow the ${L} for free on my Mac?`,
-      a: `All Day I Dream About Sports is coming to the Mac App Store, free on ${site.requires}. Once it launches, follow a ${L} team or the whole competition. Direct downloads are no longer available.`,
+      a: `Download All Day I Dream About Sports from the Mac App Store, free on ${site.requires}, then follow a ${L} team or the whole competition.`,
     },
     {
       q: `Can I get ${L} goal alerts without keeping a browser tab open?`,
@@ -112,8 +112,8 @@ function forTeam(team, league) {
     {
       q: `How do I follow ${T} on my Mac?`,
       a: national
-        ? `All Day I Dream About Sports is coming to the Mac App Store. ${T} are saved from the 2026 World Cup in the team picker for the next tournament. Direct downloads are no longer available.`
-        : `All Day I Dream About Sports is coming to the Mac App Store. Once it launches, follow ${T} in the team picker for goal, card and VAR alerts below your MacBook notch, plus a pinned score capsule. Direct downloads are no longer available.`,
+        ? `Download All Day I Dream About Sports from the Mac App Store. ${T} are saved from the 2026 World Cup in the team picker for the next tournament.`
+        : `Download All Day I Dream About Sports from the Mac App Store, then follow ${T} in the team picker for goal, card and VAR alerts below your MacBook notch, plus a pinned score capsule.`,
     },
     {
       q: `Can I follow ${T} for free?`,

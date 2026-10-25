@@ -224,8 +224,7 @@ section[id], .grid-sec, .cta, .doc { scroll-margin-top: calc(var(--nav-h) + 20px
 .prose li { margin-bottom: 10px; }
 .prose b { color: var(--ink); }
 .prose .actions { margin: 24px 0; }
-.hero-404, .launch-hero { min-height: 70svh; }
-.launch-note { margin-top: 18px; }
+.hero-404 { min-height: 70svh; }
 
 /* Content is always visible; motion is only a small progressive enhancement. */
 @media (prefers-reduced-motion: no-preference) {

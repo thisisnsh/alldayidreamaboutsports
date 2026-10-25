@@ -13,6 +13,10 @@ export default function (eleventyConfig) {
   // old /privacy.html URL to /privacy/, and must stay crawlable.
   eleventyConfig.addPassthroughCopy("src/privacy.html");
   eleventyConfig.ignores.add("src/privacy.html");
+  // Same for the retired pre-launch page: old /comingsoon/ links now bounce
+  // straight to the App Store listing.
+  eleventyConfig.addPassthroughCopy("src/comingsoon/index.html");
+  eleventyConfig.ignores.add("src/comingsoon/index.html");
   eleventyConfig.addPassthroughCopy("src/*.png");
   eleventyConfig.addPassthroughCopy("src/*.ico");
   eleventyConfig.addPassthroughCopy({ "src/CNAME": "CNAME" });

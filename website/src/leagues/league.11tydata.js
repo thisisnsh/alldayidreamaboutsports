@@ -13,8 +13,8 @@ export default {
     extras: (data) => leagueExtras[String(data.league.id)] || {},
     title: (data) => `${data.league.name} Match Alerts on Mac - Free`,
     description: (data) => data.league.type === "Cup"
-      ? "Explore 2026 World Cup teams and match alerts for Mac. National teams stay saved between tournaments. Free football app, coming to the Mac App Store."
-      : `${data.league.name} goal alerts, match notifications and pinned scores on your Mac. Follow a club or the whole league. Free app, coming to the Mac App Store.`,
+      ? "Explore 2026 World Cup teams and match alerts for Mac. National teams stay saved between tournaments. Free football app on the Mac App Store."
+      : `${data.league.name} goal alerts, match notifications and pinned scores on your Mac. Follow a club or the whole league. Free app on the Mac App Store.`,
     keywords: (data) => (leagueExtras[String(data.league.id)] || {}).keywords,
     pageName: (data) => `${data.league.name} match alerts on your Mac`,
     introHeading: (data) =>
