@@ -10,7 +10,7 @@ A free menu bar app for people who are supposed to be working while their team p
 
 [![GPL-3.0 License](https://img.shields.io/badge/License-GPL--3.0-blue.svg)](LICENSE)
 [![macOS](https://img.shields.io/badge/macOS-14%2B-000000?logo=apple&logoColor=white)](https://alldayidreamaboutsports.com)
-![Mac App Store Coming Soon](https://img.shields.io/badge/Mac_App_Store-Coming_Soon-0D96F6?logo=appstore&logoColor=white)
+[![Mac App Store](https://img.shields.io/badge/Mac_App_Store-Download-0D96F6?logo=appstore&logoColor=white)](https://apps.apple.com/app/all-day-i-dream-about-sports/id6818873010)
 ![Windows Planned](https://img.shields.io/badge/Windows-Planned-0078D6?logo=windows&logoColor=white)
 
 [![Website](https://img.shields.io/badge/Website-alldayidreamaboutsports.com-blue)](https://alldayidreamaboutsports.com)
@@ -45,11 +45,11 @@ Pick the clubs you care about, or follow a whole league. When something happens 
 
 ### 💻 On your Mac
 
-*Launching on the Mac App Store. Direct downloads are no longer available.*
+*Free on the Mac App Store for macOS 14 and later.*
 
-![Mac App Store Coming Soon](https://img.shields.io/badge/Mac_App_Store-Coming_Soon-000000?style=for-the-badge&logo=apple&logoColor=white)
+[![Download on the Mac App Store](https://img.shields.io/badge/Download_on_the-Mac_App_Store-000000?style=for-the-badge&logo=apple&logoColor=white)](https://apps.apple.com/app/all-day-i-dream-about-sports/id6818873010)
 
-**Launch updates live at [alldayidreamaboutsports.com](https://alldayidreamaboutsports.com)**
+**More at [alldayidreamaboutsports.com](https://alldayidreamaboutsports.com)**
 
 </div>
 

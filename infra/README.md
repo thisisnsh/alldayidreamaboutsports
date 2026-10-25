@@ -155,7 +155,7 @@ Retire only `alldayidreamaboutsports-downloads` and
 the stored installers/media; it does not purge cached copies. Block both
 download hostnames and purge their cached files as part of retirement. See
 [R2 cache consistency](https://developers.cloudflare.com/r2/reference/consistency/).
-The website uses YouTube and `/comingsoon/`, so its current source no longer
+The website uses YouTube and the App Store listing, so its current source no longer
 depends on these buckets. Legacy direct-download builds lose their update feed.
 The scores buckets remain required by the app and backend.
 
