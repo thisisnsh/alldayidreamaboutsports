@@ -127,6 +127,10 @@ final class MenuPopoverController: NSObject, NSPopoverDelegate {
             rootView: MenuPopoverView().environmentObject(AppSession.shared)
         )
         hosting.sizingOptions = []
+        // NSPopover hands its content safe-area insets that it re-derives on
+        // every SwiftUI update, so each settings write shifted the pages'
+        // edge margins. The pages carry their own padding; ignore the insets.
+        hosting.safeAreaRegions = []
         popover.contentViewController = hosting
         popover.contentSize = CGSize(width: MenuPopoverView.width, height: MenuPopoverView.height)
     }
