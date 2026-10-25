@@ -12,7 +12,7 @@
     </div>
     <span class="meta-note reveal d3">Free for {{ site.requiresShort }} · Built for football fans</span>
     {% if heroHome %}
-    <div class="hero-proof"><span><b>5</b> European leagues</span><span><b>14</b> match event types</span><span><b>Free</b> No subscription</span></div>
+    <div class="hero-proof"><span><b>5</b> European leagues</span><span><b>{{ teams | length }}</b> teams</span><span><b>14</b> match event types</span><span><b>Free</b> No subscription</span></div>
     {% endif %}
     </div>
     {% if heroHome %}{% include "partials/app-preview.njk" %}{% endif %}
