@@ -78,7 +78,11 @@ struct MenuPopoverView: View {
             case .settings: SettingsPage().transition(slide)
             }
         }
+        #if os(macOS)
         .frame(width: Self.width, height: Self.height)
+        #else
+        .frame(maxWidth: 680, maxHeight: .infinity)
+        #endif
         .clipped()
         .background(AppBackground())
         .appTheme(session.prefs.settings.theme ?? .system)
@@ -143,12 +147,26 @@ struct ToolbarIconButton: View {
     var size: CGFloat = 14
     let action: () -> Void
     @State private var hovering = false
+    private var toolbarHeight: CGFloat {
+        #if os(iOS)
+        44
+        #else
+        26
+        #endif
+    }
+    private var toolbarTarget: CGFloat {
+        #if os(iOS)
+        44
+        #else
+        28
+        #endif
+    }
 
     var body: some View {
         Button(action: action) {
             Image(systemName: symbol)
                 .font(.system(size: size, weight: size < 14 ? .semibold : .regular))
-                .frame(width: 28, height: 26)
+                .frame(width: toolbarTarget, height: toolbarHeight)
                 .background(
                     RoundedRectangle(cornerRadius: 7).fill(Color.primary.opacity(hovering ? 0.1 : 0))
                 )
@@ -195,11 +213,17 @@ struct HomePage: View {
                 daySwitcher
                 Spacer()
                 ToolbarIconButton(symbol: "gearshape", help: "Settings") { router.go(.settings) }
+                #if os(macOS)
                 ToolbarIconButton(symbol: "power", help: "Quit") { router.askToQuit() }
+                #endif
             }
         }
         // Same height either way, so confirming never resizes the popover.
+        #if os(iOS)
+        .frame(minHeight: 44)
+        #else
         .frame(height: 26)
+        #endif
         .padding(.leading, 16)
         .padding(.trailing, 10)
         .padding(.top, 12)
@@ -258,7 +282,9 @@ struct HomePage: View {
         .keyboardShortcut(.cancelAction)
         Button {
             AppAnalytics.appQuit(source: "menu")
+            #if os(macOS)
             NSApp.terminate(nil)
+            #endif
         } label: {
             Text("Quit").fontWeight(.semibold).foregroundStyle(.red)
         }
@@ -559,7 +585,11 @@ private struct PinButtons: View {
         Button {
             capsules.toggle(fixtureId: fixtureId)
         } label: {
+            #if os(iOS)
+            Label(pinned ? "Unpin" : "Pin to Lock Screen", systemImage: pinned ? "pin.slash" : "pin.fill")
+            #else
             Label(pinned ? "Unpin" : "Pin to screen", systemImage: pinned ? "pin.slash" : "pin.fill")
+            #endif
         }
         .buttonStyle(.cardButton)
         .help(pinned ? "Close the pinned score" : "Pin the score in a corner of the screen")

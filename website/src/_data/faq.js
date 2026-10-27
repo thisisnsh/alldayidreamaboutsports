@@ -15,6 +15,10 @@ const home = [
     a: "Yes - the app is free on the Mac App Store for macOS 14 and later, with no subscription, trial or paid tier. A Windows version is also planned.",
   },
   {
+    q: "Is the app available on iPhone and iPad?",
+    a: "iPhone and iPad support is coming soon. The app is currently available for Mac on the Mac App Store.",
+  },
+  {
     q: "Which leagues and teams can I follow?",
     a: "The Premier League, La Liga, Serie A, Bundesliga and Ligue 1 are live, and national teams are saved from the 2026 World Cup. The UEFA Champions League, Europa League and more sports are coming.",
   },

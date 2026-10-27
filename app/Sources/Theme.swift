@@ -1,4 +1,6 @@
+#if os(macOS)
 import AppKit
+#endif
 import SwiftUI
 
 /// Monochrome surfaces: pure white app in light mode, pure black in dark.
@@ -48,6 +50,7 @@ enum ThemeChoice: String, CaseIterable, Codable {
     /// AppKit owns the appearance of window chrome and popovers. Setting the
     /// application appearance also makes clearing an explicit Light/Dark choice
     /// back to System take effect on windows that are already open.
+    #if os(macOS)
     var appKitAppearance: NSAppearance? {
         switch self {
         case .system: nil
@@ -55,6 +58,8 @@ enum ThemeChoice: String, CaseIterable, Codable {
         case .dark: NSAppearance(named: .darkAqua)
         }
     }
+
+    #endif
 
     var label: String {
         switch self {

@@ -69,7 +69,9 @@ final class EventRouter {
 
         // Count followed-team goals before the mute check: a muted goal pill
         // still means the team scored.
+        #if os(macOS)
         ReviewPrompt.recordGoal(event, fans: AppSession.shared.fanTeamIds)
+        #endif
 
         let settings = AppSession.shared.prefs.settings
         guard settings.eventEnabled(event.type) else {
@@ -110,6 +112,7 @@ final class EventRouter {
             maxNotifiedMinute[event.fixtureId] = maxNotifiedMinute[event.fixtureId].map { Swift.max($0, absMin) } ?? absMin
         }
 
+        #if os(macOS)
         let isFanGoal = event.type == .goal && event.teamId.map(fans.contains) == true
         AppLog.info(.fixtures, "event_routed event_id=\(event.eventId) type=\(event.type.rawValue) fixture_id=\(event.fixtureId) fan_goal=\(isFanGoal)")
         // The accepted half of the `event_dropped` split above: between them
@@ -123,6 +126,9 @@ final class EventRouter {
         // next displayed set; followed-team goals fire their confetti only
         // once their goal pill reaches that set.
         OverlayManager.shared.submit(event, isFanGoal: isFanGoal)
+        #elseif os(iOS)
+        MatchNotifications.shared.post(event)
+        #endif
     }
 
     /// A goal was taken back — stop celebrating it, and un-dedupe the matching
@@ -132,7 +138,9 @@ final class EventRouter {
     /// dedupe silently swallowing it. This is state, not presentation, so it
     /// runs even when the "Goal disallowed" pill itself is muted.
     private func applyGoalCancellation(_ event: MatchEvent) {
+        #if os(macOS)
         OverlayManager.shared.cancelGoal(fixtureId: event.fixtureId, teamId: event.teamId)
+        #endif
         forgetEventId(event.eventId.replacingOccurrences(of: ":GOAL_CANCELLED:", with: ":GOAL:"))
     }
 

@@ -1,11 +1,59 @@
-# macOS app
+# Apple apps
 
-SwiftUI menu bar app, macOS 14+, team `983LBM5U6B`, bundle id
-`com.thisisnsh.alldaysports`. Distributed only through the Mac App Store: built, tested,
-archived and uploaded from Xcode. The Xcode project is
-generated — never edit the `.xcodeproj`, edit `project.yml` and rerun `xcodegen`.
+SwiftUI menu bar app for macOS 14+, plus an iPhone/iPad app for iOS/iPadOS 17+.
+Team `983LBM5U6B`, app bundle id `com.thisisnsh.alldaysports` (shared across platforms).
+The Xcode project is generated — edit `project.yml` and rerun `xcodegen`, rather
+than editing the ignored `.xcodeproj`.
 
-## Build & run
+## iPhone and iPad
+
+Select **AllDayIDreamAboutSportsMobile** in Xcode and an iPhone or iPad destination.
+The mobile app embeds **ScoreLiveActivity**, a WidgetKit extension with Lock Screen
+and Dynamic Island presentations. Onboarding runs inside the app; afterward, the
+Mac menu's matches, teams, and timeline views fill the app. The iPad content column
+is centered and bounded to 680 points; it also adapts to narrower windows.
+Mobile settings omit Mac-only launch-at-login, display, and overlay controls.
+
+Debug uses the existing scripted matchday. Staging and Release use the existing
+scores CDN configurations. Mobile builds select optional `GoogleService-Info-iOS-Staging.plist` /
+`GoogleService-Info-iOS-Production.plist` files. Background delivery requires the
+matching mobile Firebase/App Check configuration; no Mac configuration is copied automatically.
+
+```sh
+xcodegen
+xcodebuild -scheme AllDayIDreamAboutSportsMobile -configuration Debug \
+  -destination 'platform=iOS Simulator,name=iPhone 17 Pro' test
+```
+
+`SportsMobileUITests` exercises onboarding completion and persistence, matches,
+Live Activity pin/unpin, and settings. Run the same scheme's tests with an iPad
+destination to cover the tablet layout. Screenshots are attached to test results.
+
+### Foreground polling and background push
+
+The mobile app retains the Mac CDN poll/diff pipeline while active. The separate
+[`push/` service](../push/README.md) polls the CDN independently and can send APNs
+updates directly to pinned Live Activities and normal match notifications while
+the device is locked. It does not modify or depend on the existing backend's code.
+
+Background delivery requires the mobile push endpoint, Firebase App Check setup,
+Apple provisioning and service credentials described in that README. Until they
+are configured, contributor builds retain foreground polling and display an honest
+“not configured” status. Debug/demo builds never register fake matches remotely.
+
+The mobile target contains App Attest and push entitlements, frequent Live Activity
+support, device/activity token rotation, and subscription sync. Settings expose the
+connection status and per-event notification choices. Local polling supplies alerts
+while active; foreground remote alerts are suppressed to avoid duplicate banners.
+“Keep screen awake” remains optional. Scores remain stale-labeled if neither polling
+nor push confirms them. APNs cannot guarantee delivery timing or every alert.
+
+Signing keys are never included in the app or repository. Background subscriptions
+contain only the delivery tokens, pinned fixture IDs, and (when alerts are enabled)
+selected team IDs/event preferences, under a random installation credential. See
+`push/README.md` for retention, deployment, verification and rollback details.
+
+## Mac build & run
 
 ```sh
 brew install xcodegen

@@ -103,6 +103,7 @@ final class LiveStore {
     /// Mac sleep normally — wake/foreground reconciliation (AppDelegate)
     /// recovers after sleep.
     private func updateAppNapActivity(active: Bool) {
+        #if os(macOS)
         if active, liveActivity == nil {
             liveActivity = ProcessInfo.processInfo.beginActivity(
                 options: .userInitiatedAllowingIdleSystemSleep, reason: "Polling live fan matches",
@@ -113,6 +114,7 @@ final class LiveStore {
             liveActivity = nil
             AppLog.info(.fixtures, "app_nap_activity_end")
         }
+        #endif
     }
 
     /// Drop the diff baseline (when the match cache is cleared) so the next

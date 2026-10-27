@@ -1,0 +1,4 @@
+// Optional local configuration. No push endpoint is shipped until configured.
+// In Push.local.xcconfig use https:/$()/host.run.app to avoid xcconfig's // comment syntax.
+APP_PUSH_BASE_URL =
+#include? "Push.local.xcconfig"

@@ -3,6 +3,7 @@ options:
   bundleIdPrefix: com.thisisnsh
   deploymentTarget:
     macOS: "14.0"
+    iOS: "17.0"
   createIntermediateGroups: true
   postGenCommand: bash scripts/restore-package-lock.sh
 
@@ -134,11 +135,180 @@ targets:
             echo "warning: Crashlytics run script not found at $RUN — skipping dSYM upload"
           fi
 
+  AllDayIDreamAboutSportsMobile:
+    type: application
+    platform: iOS
+    sources:
+      - path: Sources
+        excludes:
+          - App.swift
+          - AppDelegate.swift
+          - Overlay
+          - Views/OnboardingView.swift
+          - Views/SettingsPage.swift
+          - Services/LaunchAtLogin.swift
+          - Services/Feedback.swift
+          - Services/ReviewPrompt.swift
+      - Sources/Overlay/TeamLogoStore.swift
+      - path: iOS
+        excludes:
+          - "*.xcconfig"
+      - LiveActivity/ScoreActivityAttributes.swift
+      - path: Resources
+        excludes:
+          - "GoogleService-Info*.plist"
+    dependencies:
+      - package: Firebase
+        product: FirebaseCrashlytics
+      - package: Firebase
+        product: FirebaseAnalyticsCore
+      - package: Firebase
+        product: FirebaseAppCheck
+      - target: ScoreLiveActivity
+        embed: true
+    configFiles:
+      Debug: iOS/Push.xcconfig
+      Staging: iOS/Push.xcconfig
+      Release: iOS/Push.xcconfig
+    settings:
+      base:
+        PRODUCT_NAME: All Day I Dream About Sports
+        PRODUCT_BUNDLE_IDENTIFIER: com.thisisnsh.alldaysports
+        DEVELOPMENT_TEAM: 983LBM5U6B
+        CODE_SIGN_STYLE: Automatic
+        CODE_SIGN_ENTITLEMENTS: iOS/App.entitlements
+        APP_APNS_ENVIRONMENT: development
+        MARKETING_VERSION: 1.1.0
+        CURRENT_PROJECT_VERSION: 3
+        SWIFT_VERSION: 5.10
+        TARGETED_DEVICE_FAMILY: "1,2"
+        SUPPORTS_MACCATALYST: false
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIconMobile
+      configs:
+        Debug:
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: DEBUG DEV_BACKEND
+          APP_SCORES_BASE_URL: https://scores.alldayidreamaboutsports.com
+        Staging:
+          GOOGLE_SERVICE_INFO_PLIST: GoogleService-Info-iOS-Staging.plist
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: STAGING
+          APP_SCORES_BASE_URL: https://scores-staging.alldayidreamaboutsports.com
+        Release:
+          APP_APNS_ENVIRONMENT: production
+          GOOGLE_SERVICE_INFO_PLIST: GoogleService-Info-iOS-Production.plist
+          APP_SCORES_BASE_URL: https://scores.alldayidreamaboutsports.com
+    info:
+      path: iOS/Info.plist
+      properties:
+        CFBundleDisplayName: All Day I Dream About Sports
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        ScoresBaseURL: $(APP_SCORES_BASE_URL)
+        PushBaseURL: $(APP_PUSH_BASE_URL)
+        NSSupportsLiveActivities: true
+        NSSupportsLiveActivitiesFrequentUpdates: true
+        ITSAppUsesNonExemptEncryption: false
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        CFBundleURLTypes:
+          - CFBundleURLName: com.thisisnsh.alldaysports.match
+            CFBundleURLSchemes: [alldaysports]
+        FirebaseAutomaticScreenReportingEnabled: false
+        GOOGLE_ANALYTICS_DEFAULT_ALLOW_AD_PERSONALIZATION_SIGNALS: false
+        GOOGLE_ANALYTICS_IDFV_COLLECTION_ENABLED: false
+    postBuildScripts:
+      - name: Select iOS Firebase configuration
+        basedOnDependencyAnalysis: false
+        script: |
+          DESTINATION="${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/GoogleService-Info.plist"
+          if [ -z "${GOOGLE_SERVICE_INFO_PLIST:-}" ]; then
+            rm -f "$DESTINATION"
+            exit 0
+          fi
+          SOURCE="${SRCROOT}/Resources/${GOOGLE_SERVICE_INFO_PLIST}"
+          if [ ! -f "$SOURCE" ]; then
+            rm -f "$DESTINATION"
+            if [ -n "${APP_PUSH_BASE_URL:-}" ]; then
+              echo "error: Configured push delivery requires the iOS Firebase plist. See push/README.md."
+              exit 1
+            fi
+            exit 0
+          fi
+          CONFIG_BUNDLE_ID=$(/usr/libexec/PlistBuddy -c 'Print :BUNDLE_ID' "$SOURCE")
+          if [ "$CONFIG_BUNDLE_ID" != "$PRODUCT_BUNDLE_IDENTIFIER" ]; then
+            echo "error: iOS Firebase bundle identifier mismatch."
+            exit 1
+          fi
+          cp "$SOURCE" "$DESTINATION"
+
+  ScoreLiveActivity:
+    type: app-extension
+    platform: iOS
+    sources:
+      - LiveActivity
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.thisisnsh.alldaysports.liveactivity
+        DEVELOPMENT_TEAM: 983LBM5U6B
+        CODE_SIGN_STYLE: Automatic
+        MARKETING_VERSION: 1.1.0
+        CURRENT_PROJECT_VERSION: 3
+        SWIFT_VERSION: 5.10
+        TARGETED_DEVICE_FAMILY: "1,2"
+        APPLICATION_EXTENSION_API_ONLY: true
+        SKIP_INSTALL: true
+    info:
+      path: LiveActivity/Info.plist
+      properties:
+        CFBundleDisplayName: Pinned Scores
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+
+  SportsMobileUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - MobileUITests
+    dependencies:
+      - target: AllDayIDreamAboutSportsMobile
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.thisisnsh.alldaysports.uitests
+        GENERATE_INFOPLIST_FILE: true
+        SWIFT_VERSION: 5.10
+        TARGETED_DEVICE_FAMILY: "1,2"
+        TEST_TARGET_NAME: AllDayIDreamAboutSportsMobile
+
 schemes:
   AllDayIDreamAboutSports:
     build:
       targets:
         AllDayIDreamAboutSports: all
+    run:
+      config: Debug
+    profile:
+      config: Staging
+    archive:
+      config: Release
+
+  AllDayIDreamAboutSportsMobile:
+    build:
+      targets:
+        AllDayIDreamAboutSportsMobile: all
+        SportsMobileUITests: [test]
+    test:
+      config: Debug
+      targets:
+        - SportsMobileUITests
     run:
       config: Debug
     profile:

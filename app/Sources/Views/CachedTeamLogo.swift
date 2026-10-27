@@ -18,7 +18,11 @@ struct CachedTeamLogo: View {
     var body: some View {
         Group {
             if let image = store.image(for: url) {
+                #if os(macOS)
                 Image(nsImage: image).resizable().scaledToFit()
+                #else
+                Image(uiImage: image).resizable().scaledToFit()
+                #endif
             } else {
                 placeholder
             }

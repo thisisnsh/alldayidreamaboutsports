@@ -101,7 +101,11 @@ struct LogoMarquee: View {
     private func crest(_ item: Item) -> some View {
         Group {
             if let image = store.image(for: item.logo) {
+                #if os(macOS)
                 Image(nsImage: image).resizable().scaledToFit()
+                #else
+                Image(uiImage: image).resizable().scaledToFit()
+                #endif
             } else {
                 Color.clear
             }

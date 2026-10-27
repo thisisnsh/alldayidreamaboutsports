@@ -1,4 +1,6 @@
+#if os(macOS)
 import AppKit
+#endif
 import Foundation
 import SwiftUI
 
@@ -111,7 +113,9 @@ final class AppSession: ObservableObject {
 
     /// Closes the menu (killing its refresh timer).
     func stopAllActivity() {
+        #if os(macOS)
         MenuPopoverController.shared.close()
+        #endif
     }
 
     // MARK: Demo
@@ -164,7 +168,7 @@ final class AppSession: ObservableObject {
         }
     }
 
-    /// Settings are device-local and never sent to the backend. The anonymous
+    /// Settings are device-local on Mac; iOS syncs alert preferences with its isolated push service. The anonymous
     /// analytics below see only which toggles flipped, never any identity.
     func updateSettings(_ mutate: (inout PrefSettings) -> Void) {
         let before = prefs.settings
@@ -178,14 +182,18 @@ final class AppSession: ObservableObject {
             applyApplicationTheme()
             // Overlay panels carry their own appearance overrides, so keep
             // them synchronized separately.
+            #if os(macOS)
             OverlayManager.shared.applyOverlayTheme()
             PinnedCapsuleManager.shared.applyTheme()
+            #endif
         }
         reportSettingsChange(before: before, after: prefs.settings)
     }
 
     private func applyApplicationTheme() {
+        #if os(macOS)
         NSApp.appearance = (prefs.settings.theme ?? .system).appKitAppearance
+        #endif
     }
 
     /// Emit one `setting_changed` per field that actually changed.

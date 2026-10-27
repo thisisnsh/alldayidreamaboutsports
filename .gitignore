@@ -31,3 +31,8 @@ __pycache__/
 # Local-only tool state and retired publish credentials (keep old files ignored)
 .wrangler/
 app/scripts/.publish.env
+
+# Device push endpoint overrides; signing keys must never enter the repository.
+app/iOS/Push.local.xcconfig
+push/secrets/*
+!push/secrets/*.example

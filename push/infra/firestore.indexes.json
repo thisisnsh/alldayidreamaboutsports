@@ -1,0 +1,19 @@
+{
+  "indexes": [
+    { "collectionGroup": "installations", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "topics", "arrayConfig": "CONTAINS" }, { "fieldPath": "expiresAt", "order": "ASCENDING" }
+    ] },
+    { "collectionGroup": "deliveries", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "nextAttempt", "order": "ASCENDING" }
+    ] }
+  ],
+  "fieldOverrides": [
+    { "collectionGroup": "matches", "fieldPath": "snapshot", "indexes": [] },
+    { "collectionGroup": "transitions", "fieldPath": "previous", "indexes": [] },
+    { "collectionGroup": "transitions", "fieldPath": "match", "indexes": [] },
+    { "collectionGroup": "deliveries", "fieldPath": "payload", "indexes": [] },
+    { "collectionGroup": "deliveries", "fieldPath": "token", "indexes": [] },
+    { "collectionGroup": "installations", "fieldPath": "deviceToken", "indexes": [] },
+    { "collectionGroup": "installations", "fieldPath": "activities", "indexes": [] }
+  ]
+}

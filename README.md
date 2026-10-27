@@ -189,3 +189,10 @@ Not affiliated with FIFA, UEFA or any league or club. Team names, crests and mar
 [cdn]: https://developers.cloudflare.com/cache/
 [tiered]: https://developers.cloudflare.com/cache/how-to/tiered-cache/
 [actions]: https://github.com/features/actions
+
+
+### iPhone/iPad background delivery
+
+The mobile target adds an optional, isolated [CDN-to-APNs service](push/README.md).
+It reads cached scores independently, without changing the Mac polling path or
+existing backend. See its README for GitHub Secrets, deployment and native setup.

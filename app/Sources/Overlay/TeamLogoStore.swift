@@ -1,4 +1,10 @@
+#if os(macOS)
 import AppKit
+typealias TeamImage = NSImage
+#else
+import UIKit
+typealias TeamImage = UIImage
+#endif
 import ImageIO
 import SwiftUI
 
@@ -15,14 +21,14 @@ final class TeamLogoStore: ObservableObject {
     /// Bumped whenever a new image finishes loading — observe to trigger redraws.
     @Published private(set) var version = 0
 
-    private let images: NSCache<NSString, NSImage> = {
-        let cache = NSCache<NSString, NSImage>()
+    private let images: NSCache<NSString, TeamImage> = {
+        let cache = NSCache<NSString, TeamImage>()
         cache.countLimit = 256
         cache.totalCostLimit = 32 * 1024 * 1024
         return cache
     }()
 
-    private func cache(_ image: NSImage, for url: String) {
+    private func cache(_ image: TeamImage, for url: String) {
         let cost = Int(image.size.width) * Int(image.size.height) * 4
         images.setObject(image, forKey: url as NSString, cost: cost)
     }
@@ -36,7 +42,7 @@ final class TeamLogoStore: ObservableObject {
     /// The cached image for a URL, or nil while it loads (kicking off a fetch).
     /// A URL that has just failed twice is in its cooldown and returns nil
     /// without touching the network until the window is up.
-    func image(for url: String) -> NSImage? {
+    func image(for url: String) -> TeamImage? {
         if let img = images.object(forKey: url as NSString) { return img }
         if let until = coolingUntil[url], until > Date() { return nil }
         guard !url.isEmpty, let parsed = URL(string: url), !loading.contains(url) else { return nil }
@@ -124,7 +130,7 @@ final class TeamLogoStore: ObservableObject {
     /// rather than `Duration` because it is compared against `Date()`.
     private static let failureCooldown: TimeInterval = 6 * 3600
 
-    private static func load(_ url: URL) async -> NSImage? {
+    private static func load(_ url: URL) async -> TeamImage? {
         guard let (data, response) = try? await RemoteData.load(
             URLRequest(url: url), maxBytes: 1024 * 1024, hosts: ["media.api-sports.io"]
         ), (response as? HTTPURLResponse)?.statusCode == 200,
@@ -135,6 +141,10 @@ final class TeamLogoStore: ObservableObject {
            let height = properties[kCGImagePropertyPixelHeight] as? Int,
            width > 0, height > 0, width <= 2048, height <= 2048,
            let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else { return nil }
+        #if os(macOS)
         return NSImage(cgImage: image, size: NSSize(width: width, height: height))
+        #else
+        return UIImage(cgImage: image)
+        #endif
     }
 }

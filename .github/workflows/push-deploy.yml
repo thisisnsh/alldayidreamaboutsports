@@ -1,0 +1,104 @@
+name: push-deploy
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Isolated push deployment environment
+        type: choice
+        options: [push-staging, push-production]
+        default: push-staging
+        required: true
+      dry_run:
+        description: Validate processing without sending APNs notifications
+        type: boolean
+        default: true
+        required: true
+permissions:
+  contents: read
+concurrency:
+  group: push-deploy-${{ inputs.environment }}
+  cancel-in-progress: false
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      PUSH_PROJECT: ${{ vars.PUSH_GCP_PROJECT_ID }}
+      PUSH_REGION: ${{ vars.PUSH_GCP_REGION }}
+      APNS_ENVIRONMENT: ${{ vars.APNS_ENVIRONMENT }}
+      FIREBASE_APP_ID: ${{ vars.PUSH_FIREBASE_APP_ID }}
+      APNS_KEY_ID: ${{ secrets.APNS_KEY_ID }}
+      APNS_TEAM_ID: ${{ vars.APNS_TEAM_ID }}
+      PUSH_CDN: ${{ vars.PUSH_SCORES_ORIGIN }}
+      DRY_RUN: ${{ inputs.dry_run }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: push/package-lock.json
+      - run: npm ci --ignore-scripts && npm run typecheck && npm test && npm run build && npm audit --audit-level=low
+        working-directory: push
+      - name: Validate non-secret configuration
+        run: |
+          test -n "$PUSH_PROJECT" && test -n "$PUSH_REGION" && test -n "$FIREBASE_APP_ID"
+          test -n "$APNS_KEY_ID" && test -n "$APNS_TEAM_ID"
+          case "$APNS_ENVIRONMENT" in sandbox|production) ;; *) exit 1 ;; esac
+          case "$PUSH_CDN" in https://scores.alldayidreamaboutsports.com|https://scores-staging.alldayidreamaboutsports.com) ;; *) exit 1 ;; esac
+      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
+        with:
+          workload_identity_provider: ${{ secrets.PUSH_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.PUSH_DEPLOY_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
+      - name: Install signing key in the isolated Secret Manager secret
+        env:
+          APNS_PRIVATE_KEY: ${{ secrets.APNS_PRIVATE_KEY }}
+        run: |
+          KEY_FILE=$(mktemp)
+          trap 'rm -f "$KEY_FILE"' EXIT
+          python3 - "$KEY_FILE" <<'PY'
+          import os, pathlib, sys
+          key = os.environ.get("APNS_PRIVATE_KEY", "")
+          if "-----BEGIN PRIVATE KEY-----" not in key:
+              raise SystemExit("Configure APNS_PRIVATE_KEY in this GitHub environment; the placeholder is not a signing key.")
+          pathlib.Path(sys.argv[1]).write_text(key)
+          PY
+          openssl pkey -in "$KEY_FILE" -noout
+          gcloud secrets versions add sports-push-apns-key --project "$PUSH_PROJECT" --data-file "$KEY_FILE"
+      - name: Build and push isolated image
+        run: |
+          gcloud auth configure-docker "${PUSH_REGION}-docker.pkg.dev" --quiet
+          IMAGE="${PUSH_REGION}-docker.pkg.dev/${PUSH_PROJECT}/sports-push/service:${GITHUB_SHA}"
+          docker build --tag "$IMAGE" push
+          docker push "$IMAGE"
+          echo "PUSH_IMAGE=$IMAGE" >> "$GITHUB_ENV"
+      - name: Deploy only the prepared push service
+        run: |
+          # The setup script creates the service, database, IAM, queue and paused scheduler separately.
+          URL=$(gcloud run services describe sports-cdn-push --project "$PUSH_PROJECT" --region "$PUSH_REGION" --format='value(status.url)')
+          ENV_FILE=$(mktemp)
+          trap 'rm -f "$ENV_FILE"' EXIT
+          export URL
+          python3 - "$ENV_FILE" <<'PY'
+          import json, os, sys
+          e = os.environ
+          with open(sys.argv[1], 'w') as f:
+              json.dump(dict(GCP_PROJECT_ID=e['PUSH_PROJECT'], SERVICE_URL=e['URL'],
+                  SCORES_ORIGIN=e['PUSH_CDN'], TASKS_LOCATION=e['PUSH_REGION'], TASKS_QUEUE='sports-push',
+                  FIRESTORE_DATABASE='sports-push', FIREBASE_APP_IDS=e['FIREBASE_APP_ID'],
+                  INVOKER_EMAIL='sports-push-invoker@'+e['PUSH_PROJECT']+'.iam.gserviceaccount.com',
+                  APNS_KEY_ID=e['APNS_KEY_ID'], APNS_TEAM_ID=e['APNS_TEAM_ID'],
+                  APNS_BUNDLE_ID='com.thisisnsh.alldaysports', APNS_ENVIRONMENT=e['APNS_ENVIRONMENT'],
+                  DRY_RUN=e['DRY_RUN'], POLL_SECONDS='5'), f)
+          PY
+          gcloud run services update sports-cdn-push --project "$PUSH_PROJECT" --region "$PUSH_REGION" \
+            --image "$PUSH_IMAGE" --env-vars-file "$ENV_FILE" --update-secrets APNS_PRIVATE_KEY=sports-push-apns-key:latest
+          curl --fail --silent --show-error "$URL/health"
+          # Do not change the existing backend or automatically resume a paused push scheduler.

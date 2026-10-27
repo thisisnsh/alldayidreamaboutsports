@@ -387,32 +387,6 @@ private struct SettingsCard<Content: View>: View {
     }
 }
 
-extension MatchEventType {
-    static let settingsOrder: [MatchEventType] = [
-        .kickoff, .goal, .goalCancelled, .varDecision, .yellowCard, .redCard,
-        .substitution, .halfTime, .extraTime, .penaltyShootout, .penaltyKick,
-        .fullTime,
-    ]
-
-    var displayName: String {
-        switch self {
-        case .kickoff: "Kickoff"
-        case .goal: "Goal"
-        case .goalCancelled: "Goal disallowed"
-        case .varDecision: "VAR decisions"
-        case .yellowCard: "Yellow card"
-        case .redCard: "Red card"
-        case .substitution: "Substitution"
-        case .halfTime: "Half-time"
-        case .secondHalf: "Second half"
-        case .fullTime: "Full-time"
-        case .extraTime: "Extra time"
-        case .penaltyShootout: "Penalty shootout"
-        case .penaltyKick: "Penalty kicks"
-        }
-    }
-}
-
 extension SettingsPage {
     /// Five quick taps on the title start the demo (or replay it) and jump to
     /// the matches, where it plays. Taps more than 3s apart start over.

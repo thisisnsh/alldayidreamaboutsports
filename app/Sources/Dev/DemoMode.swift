@@ -59,7 +59,9 @@ final class DemoMode: ObservableObject {
     /// Pills, celebrations and pinned capsules belong to one data source;
     /// none may outlive the switch to the other.
     private func clearOverlays() {
+        #if os(macOS)
         OverlayManager.shared.dismissAll()
+        #endif
         for fixtureId in PinnedCapsuleManager.shared.pinnedFixtureIds {
             PinnedCapsuleManager.shared.unpin(fixtureId: fixtureId)
         }
