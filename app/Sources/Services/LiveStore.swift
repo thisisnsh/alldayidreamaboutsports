@@ -474,7 +474,7 @@ final class LiveStore {
 
     /// True from ~5 min before kickoff until the match file reports FINISHED,
     /// capped at kickoff+3.5h — driven by the SCHEDULE's kickoff time, never the
-    /// fixtures file's possibly-stale cached status (§3 coupling).
+    /// fixtures file's possibly-stale cached status.
     private func isInLiveWindow(_ fixture: Fixture, at now: Date) -> Bool {
         if finished.contains(fixture.fixtureId) || fixture.isCalledOff { return false }
         guard let kickoff = fixture.kickoff else {

@@ -2,7 +2,7 @@
 # Creates/updates only the isolated sports-push resources. Existing backend resources are never targeted.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-PUSH_PROJECT="${1:?usage: deploy.sh PROJECT REGION APNS_KEY_ID FIREBASE_APP_ID sandbox|production}"
+PUSH_PROJECT="${1:?usage: setup-push.sh PROJECT REGION APNS_KEY_ID FIREBASE_APP_ID sandbox|production}"
 PUSH_REGION="${2:?missing region}"
 PUSH_KEY_ID="${3:?missing Apple APNs Key ID}"
 PUSH_APP_ID="${4:?missing Firebase Apple app ID}"
@@ -75,7 +75,8 @@ with open(path, 'w') as f:
         APNS_BUNDLE_ID='com.thisisnsh.alldaysports', DRY_RUN='true', POLL_SECONDS='5'), f)
 PY
 # Public registration is App Check + device-secret authenticated. Internal routes additionally require OIDC.
-gcloud run deploy "$PUSH_SERVICE" --source . --project "$PUSH_PROJECT" --region "$PUSH_REGION" \
+gcloud run deploy "$PUSH_SERVICE" --source backend --project "$PUSH_PROJECT" --region "$PUSH_REGION" \
+  --command node --args dist/push/index.js \
   --service-account "$PUSH_RUNTIME" --allow-unauthenticated --min-instances 0 --max-instances 2 \
   --cpu 1 --memory 512Mi --concurrency 20 --timeout 120 --env-vars-file "$PUSH_ENV_FILE" \
   --set-secrets "APNS_PRIVATE_KEY=${PUSH_SECRET}:latest"
@@ -91,4 +92,4 @@ gcloud scheduler jobs "$PUSH_JOB_ACTION" http sports-push-dispatch --project "$P
   --oidc-service-account-email "$PUSH_INVOKER" --oidc-token-audience "$PUSH_URL" --attempt-deadline 120s
 gcloud scheduler jobs pause sports-push-dispatch --project "$PUSH_PROJECT" --location "$PUSH_REGION"
 printf 'Push service prepared in dry-run mode; scheduler paused. URL: %s\n' "$PUSH_URL"
-printf 'Complete the physical-device checks in push/README.md before enabling sends.\n'
+printf 'Complete the physical-device checks in backend/PUSH.md before enabling sends.\n'

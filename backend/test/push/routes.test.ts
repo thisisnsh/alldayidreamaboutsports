@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Server } from "node:http";
-import { createApp, type Dependencies } from "../src/routes.js";
-import type { Config } from "../src/config.js";
-import { hash } from "../src/model.js";
+import { createApp, type Dependencies } from "../../src/push/routes.js";
+import type { Config } from "../../src/push/config.js";
+import { hash } from "../../src/push/model.js";
 
 let server: Server, origin: string, deps: Dependencies;
 const config = { INVOKER_EMAIL: "invoker@example.com", FIREBASE_APP_IDS: "allowed", DRY_RUN: "true" } as Config;

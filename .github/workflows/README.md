@@ -2,7 +2,8 @@
 
 | Workflow | Trigger | Checks |
 |---|---|---|
-| `backend-ci.yml` | All PRs/main pushes; reusable by deployments | Backend/tester clean install without lifecycle scripts, typechecks, tests, build, dependency audit, infrastructure tests |
+| `backend-ci.yml` | All PRs/main pushes; reusable by deployments | Scores, mobile push and tester clean install without lifecycle scripts, typechecks, tests, build, dependency audit, infrastructure tests |
+| `push-deploy.yml` | Manual, separate push environments | Shared backend verification and image build; deploys the mobile push entry point |
 | `app-ci.yml` | PRs/main pushes touching `app/` or the workflow | Remote-data security tests and unsigned Debug build using the committed Swift lockfile |
 | `security.yml` | PRs/main pushes, weekly, manual | Full-history secret scanning and recurring dependency audits |
 | `website-deploy.yml` | `website/` main pushes, manual | Clean install, Eleventy build and built-site verification, then GitHub Pages deploy |
@@ -18,12 +19,10 @@ and secret checks and no force pushes. Keep prod restricted to main, require a
 deployment reviewer, and require approval before running workflows from
 outside forks.
 These account settings are separate from committed workflow files; verify the
-exact check names from the first workflow runs before making them required.
+check names against the current workflows when changing branch protection.
 
 The macOS release is still archived/uploaded manually from Xcode; CI never
 uploads to the App Store. Deployment secrets/variables are documented in
 [infra/README.md](../infra/README.md).
 
-There is no app release workflow that uploads installers or an update feed to
-R2. The retired `.publish.env` file is not needed for App Store distribution.
-Keep backend R2 credentials: they publish score data, not app releases.
+App releases go through the App Store. Backend R2 credentials publish score data.

@@ -110,10 +110,6 @@ leave the last published object intact, protecting older clients too. Upstream
 API responses are limited to 8 MiB of decoded bytes and 2,048 rows; redirects
 remain disabled. The native app independently validates received data.
 
-Legacy data cleanup: `node infra/retire-celebrations.mjs --project <project>`
-from the repository root previews old Firestore/R2 data; add `--apply` only
-after deploying the backend without `/celebrate`.
-
 ## Deploy
 
 Push to `main` (paths `backend/**`) → `backend-deploy.yml` → staging.
@@ -130,3 +126,10 @@ Service OIDC is not user sign-in. It remains required for scheduler/tasks calls
 and authenticated deployment checks. Startup fails if `SERVICE_URL` is absent
 or is not an HTTPS origin, and request verification fails closed if configuration
 is lost. Never remove audience validation merely because the caller runs on GCP.
+
+## Mobile push service
+
+The independently deployed CDN-to-APNs service lives in `src/push/`, with tests
+in `test/push/`. It shares this package and Dockerfile; `npm test` checks both
+services. Run it with `npm run start:push` after building. Configuration and
+deployment instructions: [PUSH.md](PUSH.md).

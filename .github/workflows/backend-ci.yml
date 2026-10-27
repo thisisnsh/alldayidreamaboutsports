@@ -30,3 +30,4 @@ jobs:
       - run: npm ci --ignore-scripts && npm run typecheck && npm audit --audit-level=low
         working-directory: tester
       - run: python3 -m unittest discover -s infra/test -v
+      - run: bash -n infra/setup-push.sh infra/configure-push-trust.sh

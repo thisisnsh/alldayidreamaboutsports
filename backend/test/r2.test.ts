@@ -76,7 +76,7 @@ describe("R2MatchStateStore", () => {
   });
 });
 
-describe("R2 cache-control invariant (§0: no write path omits it)", () => {
+describe("R2 cache-control invariant (no write path omits it)", () => {
   it("the live header carries a short TTL + stale-while-revalidate", () => {
     expect(CACHE_CONTROL_LIVE).toBe("public, max-age=5, stale-while-revalidate=25");
   });

@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
-import { Worker } from "../src/worker.js";
-import type { Store } from "../src/store.js";
-import type { CDN } from "../src/cdn.js";
-import type { Config } from "../src/config.js";
-import type { Delivery } from "../src/model.js";
-import type { Sender } from "../src/apns.js";
+import { Worker } from "../../src/push/worker.js";
+import type { Store } from "../../src/push/store.js";
+import type { CDN } from "../../src/push/cdn.js";
+import type { Config } from "../../src/push/config.js";
+import type { Delivery } from "../../src/push/model.js";
+import type { Sender } from "../../src/push/apns.js";
 
 function fixture() {
   const store = {

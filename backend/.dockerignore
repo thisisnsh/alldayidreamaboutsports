@@ -1,6 +1,7 @@
 node_modules
 dist
 .env*
+.git
 *.p8
 *.pem
 

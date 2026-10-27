@@ -41,11 +41,11 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
-          cache-dependency-path: push/package-lock.json
+          cache-dependency-path: backend/package-lock.json
       - run: npm ci --ignore-scripts && npm run typecheck && npm test && npm run build && npm audit --audit-level=low
-        working-directory: push
+        working-directory: backend
       - name: Validate non-secret configuration
         run: |
           test -n "$PUSH_PROJECT" && test -n "$PUSH_REGION" && test -n "$FIREBASE_APP_ID"
@@ -76,7 +76,7 @@ jobs:
         run: |
           gcloud auth configure-docker "${PUSH_REGION}-docker.pkg.dev" --quiet
           IMAGE="${PUSH_REGION}-docker.pkg.dev/${PUSH_PROJECT}/sports-push/service:${GITHUB_SHA}"
-          docker build --tag "$IMAGE" push
+          docker build --tag "$IMAGE" backend
           docker push "$IMAGE"
           echo "PUSH_IMAGE=$IMAGE" >> "$GITHUB_ENV"
       - name: Deploy only the prepared push service
@@ -99,6 +99,6 @@ jobs:
                   DRY_RUN=e['DRY_RUN'], POLL_SECONDS='5'), f)
           PY
           gcloud run services update sports-cdn-push --project "$PUSH_PROJECT" --region "$PUSH_REGION" \
-            --image "$PUSH_IMAGE" --env-vars-file "$ENV_FILE" --update-secrets APNS_PRIVATE_KEY=sports-push-apns-key:latest
+            --image "$PUSH_IMAGE" --command node --args dist/push/index.js --env-vars-file "$ENV_FILE" --update-secrets APNS_PRIVATE_KEY=sports-push-apns-key:latest
           curl --fail --silent --show-error "$URL/health"
           # Do not change the existing backend or automatically resume a paused push scheduler.

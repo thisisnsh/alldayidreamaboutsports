@@ -15,6 +15,7 @@ app/Resources/GoogleService-Info-*.plist
 .env
 .env.*
 !.env.example
+!.env.push.example
 
 # Node
 node_modules/
@@ -34,5 +35,5 @@ app/scripts/.publish.env
 
 # Device push endpoint overrides; signing keys must never enter the repository.
 app/iOS/Push.local.xcconfig
-push/secrets/*
-!push/secrets/*.example
+backend/secrets/*
+!backend/secrets/*.example

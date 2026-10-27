@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
-import { CDN } from "../src/cdn.js";
-import { classify } from "../src/apns.js";
-import { diff, mergeHistory } from "../src/events.js";
-import { contentState, matchSchema, registrationSchema, topicsFor, type Installation, type Match, type MatchRecord } from "../src/model.js";
-import { plan } from "../src/planner.js";
+import { CDN } from "../../src/push/cdn.js";
+import { classify } from "../../src/push/apns.js";
+import { diff, mergeHistory } from "../../src/push/events.js";
+import { contentState, matchSchema, registrationSchema, topicsFor, type Installation, type Match, type MatchRecord } from "../../src/push/model.js";
+import { plan } from "../../src/push/planner.js";
 
 const now = 1_800_000_000_000;
 function match(): Match {

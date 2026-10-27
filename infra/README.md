@@ -1,4 +1,4 @@
-# Infra — one-time setup checklist
+# Infrastructure setup and operations
 
 Two environments: `dreamaboutsports-staging` and `dreamaboutsports-prod`. Everything
 below is per environment unless marked global.
@@ -17,13 +17,9 @@ Then in the [Firebase console](https://console.firebase.google.com):
    Save it locally as `app/Resources/GoogleService-Info-Staging.plist` or
    `app/Resources/GoogleService-Info-Production.plist`. See
    [`app/README.md`](../app/README.md#real-service-configuration).
-   Firebase is used for Analytics and Crashlytics only — there is no Remote
-   Config and no Cloud Messaging / APNs setup (push was dropped in favour of
-   polling + CDN).
-2. Firestore is no longer used. Keep existing databases deny-all; retire only
-   the legacy celebration collection with `retire-celebrations.mjs` after deploy.
-   The cleanup also removes retired count files, Remote Config parameters, and
-   the runtime's obsolete Firestore/Firebase Admin IAM grants.
+   The Mac app uses Firebase for Analytics and Crashlytics and polls the scores
+   CDN. The scores backend does not use Firestore. Mobile notifications use a
+   separate [push service and named Firestore database](../backend/PUSH.md).
 
 ### Private backend
 
@@ -81,7 +77,7 @@ R2 and incurs a Class B operation. Smart Tiered Caching is mandatory —
 ~26 R2 reads/s vs ~600/s — because it absorbs the per-TTL expiry stampede by
 funneling edge misses through a small number of upper-tier data centers.
 
-Object TTLs (plan §3): `matches/*` are
+Object TTLs: `matches/*` are
 `public, max-age=5, stale-while-revalidate=25`; `fixtures-*` and `catalog.json`
 are `public, max-age=43200` (12h). The `/internal/cache-health` scheduler job
 (every 5 min) reads `cf-cache-status` and alerts if users start hitting R2 —
@@ -139,25 +135,11 @@ curl -fsS https://scores-staging.alldayidreamaboutsports.com/catalog.json >/dev/
 curl -fsS https://scores-staging.alldayidreamaboutsports.com/fixtures-$(date -u +%F).json >/dev/null
 ```
 
-Production `scores.alldayidreamaboutsports.com` remains empty until the
-production backend is deployed and its jobs run.
-
 DNS for `alldayidreamaboutsports.com`: apex → **GitHub Pages** (A records
-185.199.108.153/.109/.110/.111). The website lives in the separate repo
-`thisisnsh/alldayidreamaboutsports.com` (Settings → Pages → Source = "Deploy
-from a branch" `main`/root, custom domain + HTTPS enforced). `scores-staging.`
-and `scores.` -> R2 custom domains (Cloudflare-proxied). The script no longer
-manages the retired `*-downloads` buckets or `download.` domains; delete them
-from the Cloudflare dashboard if they still exist.
-
-Retire only `alldayidreamaboutsports-downloads` and
-`alldayidreamaboutsports-staging-downloads`. Emptying and deleting them removes
-the stored installers/media; it does not purge cached copies. Block both
-download hostnames and purge their cached files as part of retirement. See
-[R2 cache consistency](https://developers.cloudflare.com/r2/reference/consistency/).
-The website uses YouTube and the App Store listing, so its current source no longer
-depends on these buckets. Legacy direct-download builds lose their update feed.
-The scores buckets remain required by the app and backend.
+185.199.108.153/.109/.110/.111). The website lives in this repository's `website/`
+directory and is published by `.github/workflows/website-deploy.yml` using
+GitHub Actions. `scores-staging.` and `scores.` point to R2 custom domains
+(Cloudflare-proxied). The scores buckets are required by the app and backend.
 
 ## 3. API-Football
 
@@ -174,16 +156,16 @@ Ultra allows 75,000 calls/day. A peak Saturday is ~51,900 (69%): five range
 calls plus one enrichment call per 5s tick, across a ~12h union match window,
 plus 20 for the schedule sync and 12 for the catalog sync. An average day is
 nearer 22,000. A sixth league does not fit without the Mega plan — watch the
-request counter on the first live weekend.
+request counter during busy match windows.
 
 ## 4. Apple (global, once)
 
 The app ships only through the Mac App Store and is signed by Xcode's automatic
 signing — no certificates, notarization or signing secrets live in this repo or
 in CI. At [developer.apple.com](https://developer.apple.com/account/resources/identifiers/list),
-register the explicit App ID `com.thisisnsh.alldaysports` with **Keychain Sharing**. Push
-Notifications are not used (the app polls the scores CDN), so no APNs key /
-Cloud Messaging setup is required. App Store Connect setup and the
+register the explicit App ID `com.thisisnsh.alldaysports` with **Keychain Sharing**.
+Match notifications on Mac use CDN polling. Mobile APNs configuration is documented
+in [backend/PUSH.md](../backend/PUSH.md). App Store Connect setup and the
 archive/upload flow: [`app/README.md`](../app/README.md#mac-app-store).
 
 ## GitHub secrets/vars summary
@@ -193,7 +175,8 @@ archive/upload flow: [`app/README.md`](../app/README.md#mac-app-store).
 | env secret | `GCP_WORKLOAD_IDENTITY_PROVIDER`, `GCP_DEPLOY_SERVICE_ACCOUNT` | setup-gcp.sh output |
 | env var | `GCP_PROJECT_ID`, `GCP_REGION`, `R2_BUCKET_SCORES` | setup-gcp.sh output + scores bucket table |
 
-There are no app secrets in GitHub: the app is built and uploaded from Xcode.
+The Mac app is built and uploaded from Xcode; it needs no GitHub signing secrets.
+Mobile push service secrets are documented in [backend/PUSH.md](../backend/PUSH.md).
 The backend reads its R2 creds from GCP Secret Manager (`r2-*`, via
 `backend-deploy.yml`).
 
@@ -309,15 +292,5 @@ Deployment can act as the runtime and default Cloud Build identity, and manage
 source objects only in the project's regional `run-sources` bucket. It no longer
 grants project-wide Secret Accessor, Service Account User, or Storage Admin.
 
-For existing projects, review the read-only plan first:
-
-```sh
-bash infra/scope-backend-iam.sh dreamaboutsports-staging us-central1 --plan
-bash infra/scope-backend-iam.sh dreamaboutsports-staging us-central1 --apply
-```
-
-The script preflights required resources and adds replacements before removing
-legacy unconditional grants. It preserves conditional and unrelated bindings.
-Test a staging source deployment before applying the same migration to prod.
-If using a custom build service account instead of the project's default, adapt
-the build identity resolution before applying this script.
+For a custom Cloud Build service account, adapt the build identity resolution
+in `setup-gcp.sh` before provisioning the environment.

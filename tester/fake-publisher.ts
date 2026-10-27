@@ -4,7 +4,7 @@
  * Seeds fake matches in arbitrary states into the STAGING scores bucket and
  * mutates them (advance state, score goals) by writing
  * directly to R2 via the S3 SDK — reusing the deployed `R2` class and cache
- * constants so every object carries the §0 Cache-Control. This exercises the full
+ * constants so every object carries an explicit Cache-Control header. This exercises the full
  * live overlay / celebration UI end-to-end without API-Football or the Cloud
  * Scheduler/Tasks pipeline.
  *

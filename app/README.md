@@ -32,7 +32,7 @@ destination to cover the tablet layout. Screenshots are attached to test results
 ### Foreground polling and background push
 
 The mobile app retains the Mac CDN poll/diff pipeline while active. The separate
-[`push/` service](../push/README.md) polls the CDN independently and can send APNs
+[mobile push service](../backend/PUSH.md) polls the CDN independently and can send APNs
 updates directly to pinned Live Activities and normal match notifications while
 the device is locked. It does not modify or depend on the existing backend's code.
 
@@ -51,7 +51,7 @@ nor push confirms them. APNs cannot guarantee delivery timing or every alert.
 Signing keys are never included in the app or repository. Background subscriptions
 contain only the delivery tokens, pinned fixture IDs, and (when alerts are enabled)
 selected team IDs/event preferences, under a random installation credential. See
-`push/README.md` for retention, deployment, verification and rollback details.
+`backend/PUSH.md` for retention, deployment, verification and rollback details.
 
 ## Mac build & run
 

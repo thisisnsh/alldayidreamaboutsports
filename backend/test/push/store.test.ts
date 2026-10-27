@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Firestore } from "firebase-admin/firestore";
-import { Store } from "../src/store.js";
-import type { Delivery, Registration } from "../src/model.js";
+import { Store } from "../../src/push/store.js";
+import type { Delivery, Registration } from "../../src/push/model.js";
 
 // Minimal transactional double: commit is atomic; no emulator or external services.
 class DB {

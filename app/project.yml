@@ -236,7 +236,7 @@ targets:
           if [ ! -f "$SOURCE" ]; then
             rm -f "$DESTINATION"
             if [ -n "${APP_PUSH_BASE_URL:-}" ]; then
-              echo "error: Configured push delivery requires the iOS Firebase plist. See push/README.md."
+              echo "error: Configured push delivery requires the iOS Firebase plist. See backend/PUSH.md."
               exit 1
             fi
             exit 0

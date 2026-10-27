@@ -298,8 +298,7 @@ configure_cloudflare_zone() {
 
   scores_expression="$(host_expression "${SCORES_HOSTS[@]}")"
 
-  # The retired downloads ref stays listed so reruns remove its old rule.
-  cache_refs='["allday_scores_cache_settings", "allday_downloads_cache_settings"]'
+  cache_refs='["allday_scores_cache_settings"]'
   cache_rules="$(
     jq -s '.' \
       <(cache_rule \

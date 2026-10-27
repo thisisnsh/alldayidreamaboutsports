@@ -36,7 +36,7 @@ export const env = {
   get deployServiceAccount() {
     return process.env.DEPLOY_SA_EMAIL ?? `sports-deploy@${required("GCP_PROJECT_ID")}.iam.gserviceaccount.com`;
   },
-  // CDN hostname for the scores bucket (the §0 cache-only hostname), e.g.
+  // CDN hostname for the scores bucket, e.g.
   // https://scores.alldayidreamaboutsports.com. Used by the cache-health probe.
   get scoresDomain() {
     const value = required("SCORES_DOMAIN");

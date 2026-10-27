@@ -9,7 +9,7 @@ function response(cacheStatus: string | null, status = 200) {
   };
 }
 
-describe("probeCacheHealth (§0 cf-cache-status probe)", () => {
+describe("probeCacheHealth (cf-cache-status probe)", () => {
   it("probes catalog.json + each live match file on the scores hostname", async () => {
     const fetchMock = vi.fn().mockResolvedValue(response("HIT"));
     const result = await probeCacheHealth("https://scores.example.com", [101, 202], fetchMock as never);

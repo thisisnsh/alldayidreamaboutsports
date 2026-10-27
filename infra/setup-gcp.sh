@@ -108,7 +108,7 @@ if SERVICE_URL=$(gcloud run services describe "$SERVICE" --region "$REGION" --fo
   upsert_scheduler_job sync-catalog '0 4 * * *' /internal/sync-catalog
 
   echo "── Cloud Scheduler → /internal/cache-health every 5 min (cf-cache-status probe)"
-  # Enforces the §0 cache-only invariant: GETs a warm file + each live match file on
+  # Checks the CDN cache: GETs a warm file and each live match file on
   # $SCORES_DOMAIN, reads cf-cache-status, and alerts on sustained MISS/BYPASS/DYNAMIC
   # (the signal that users are reaching R2 instead of the edge). Runs year-round so a
   # cache regression is caught even outside match windows.
@@ -136,7 +136,23 @@ if ! gcloud storage buckets describe "$SOURCE_BUCKET" >/dev/null 2>&1; then
   gcloud storage buckets create "$SOURCE_BUCKET" --project "$PROJECT_ID" --location "$REGION" \
     --uniform-bucket-level-access
 fi
-bash "$(dirname "$0")/scope-backend-iam.sh" "$PROJECT_ID" "$REGION" --apply
+# Grant access only to the resources used by this backend and its deployment.
+BUILD_SA=$(gcloud builds get-default-service-account --project "$PROJECT_ID" --region "$REGION")
+BUILD_SA="${BUILD_SA##*/}"
+[[ "$BUILD_SA" == *@*.gserviceaccount.com ]] || { echo "Cannot resolve build identity" >&2; exit 1; }
+for secret in api-football-key r2-access-key-id r2-secret-access-key r2-endpoint; do
+  gcloud secrets add-iam-policy-binding "$secret" --project "$PROJECT_ID" \
+    --member "serviceAccount:$RUNTIME_SA" --role roles/secretmanager.secretAccessor --condition=None --quiet
+done
+for identity in "$RUNTIME_SA" "$BUILD_SA"; do
+  gcloud iam service-accounts add-iam-policy-binding "$identity" --project "$PROJECT_ID" \
+    --member "serviceAccount:$DEPLOY_SA" --role roles/iam.serviceAccountUser --condition=None --quiet
+done
+for role in roles/storage.objectAdmin roles/storage.legacyBucketReader; do
+  gcloud storage buckets add-iam-policy-binding "$SOURCE_BUCKET" \
+    --member "serviceAccount:$DEPLOY_SA" --role "$role" --quiet
+done
+
 case "$PROJECT_ID" in
   *-staging) DEPLOY_ENVIRONMENT=staging ;;
   *-prod) DEPLOY_ENVIRONMENT=prod ;;

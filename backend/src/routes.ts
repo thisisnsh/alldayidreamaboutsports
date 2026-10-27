@@ -38,7 +38,7 @@ export interface Deps {
   r2: R2;
 }
 
-/** Cache statuses that prove the edge — not R2 — served the request (§0). */
+/** Cache statuses that prove the edge — not R2 — served the request. */
 const HEALTHY_CACHE_STATUS = new Set(["HIT", "REVALIDATED", "STALE", "UPDATING"]);
 const RETRYABLE_CACHE_STATUS = new Set(["MISS", "EXPIRED"]);
 
@@ -60,7 +60,7 @@ export interface CacheHealthResult {
  * GETs a warm file (`catalog.json`) + each live `matches/{id}.json` on the
  * scores hostname and reads `cf-cache-status`. Steady-state must be served by
  * the edge (HIT/REVALIDATED/STALE/UPDATING); sustained MISS/BYPASS/DYNAMIC means
- * users would reach R2 directly — the §0 catastrophe. Pure (takes `fetchImpl`)
+ * users would reach R2 directly — bypassing the cache. Pure (takes `fetchImpl`)
  * so it's unit-testable without the OIDC-guarded route.
  */
 export async function probeCacheHealth(
@@ -212,7 +212,7 @@ export function buildApp(
     res.json({ ok: true, fixtureId: d.fixtureId });
   }));
 
-  // §0 enforcement probe (Cloud Scheduler every 5 min): GET a warm file +
+  // Cache-health probe (Cloud Scheduler every 5 min): GET a warm file +
   // each live matches/{id}.json on the scores hostname and read `cf-cache-status`.
   // Steady-state must be HIT/REVALIDATED (a lone MISS at a 5s boundary is fine);
   // sustained MISS/BYPASS/DYNAMIC means the cache is broken → users would hit R2.
@@ -227,7 +227,7 @@ export function buildApp(
     // a cache regression must be caught even when no football is on.
     const windowOpen = await window.isOpen();
     // The scheduler job sends no ids, so sample the in-play matches from the
-    // schedule itself — the live files are what §0 is really about.
+    // schedule itself — the live files must also be served from the cache.
     const requested = body.data.fixtureIds.length > 0
       ? body.data.fixtureIds
       : windowOpen ? (await window.inPlayFixtureIds()).slice(0, 64) : [];
@@ -237,9 +237,8 @@ export function buildApp(
     }
 
     const result = await probeCacheHealth(env.scoresDomain, fixtureIds);
-    // R2 Class B (read) ops baseline check: no per-request metric is available
-    // from this process (it needs CF/R2 analytics), so the dedicated Class B
-    // alarm lives in infra. TODO(infra): wire the R2 Class B ops alarm (§0).
+    // R2 read-operation metrics come from Cloudflare account analytics; this
+    // endpoint checks CDN cache status. See infra/README.md for monitoring.
     if (!result.ok) {
       log.error("cache_health_degraded", new Error("non-cache reads detected"), { ...result, windowOpen });
       return void res.status(503).json({ ...result, windowOpen });

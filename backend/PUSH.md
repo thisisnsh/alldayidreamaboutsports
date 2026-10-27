@@ -3,8 +3,10 @@
 This is a separate Node/Cloud Run service. It reads the same public, cached JSON as
 the native app and sends ActivityKit updates and match notifications. It never
 calls API-Football, reads R2 directly, writes scores, changes the Mac app's delivery
-path, or invokes the existing backend. No existing backend code or deployment
-workflow is imported or modified.
+path, or invokes the scores backend. Its implementation lives in `src/push/`,
+with tests in `test/push/`. Both
+services share the backend package, lockfile, Dockerfile and CI checks. The
+push deployment selects `dist/push/index.js`; scores use `dist/index.js`.
 
 ## Architecture and cost
 
@@ -74,7 +76,7 @@ Sources: [Cloud Run](https://cloud.google.com/run/pricing),
 ## Build and checks (no credentials or simulators)
 
 ```sh
-cd push
+cd backend
 npm ci
 npm run typecheck
 npm test
@@ -89,10 +91,9 @@ Apple delivery. No simulator is used.
 
 ## Open-source configuration and secrets
 
-`secrets/AuthKey.p8.example` is a **nonfunctional placeholder**. An ignored
-`secrets/AuthKey.p8` placeholder is also available in the current local workspace;
-replace its entire contents with the real Apple signing key for local setup.
-`.env.example` documents the environment contract; copy it to an ignored `.env` if
+`secrets/AuthKey.p8.example` is a **nonfunctional placeholder**. For local setup,
+save the real Apple signing key as ignored `secrets/AuthKey.p8`.
+`.env.push.example` documents the environment contract; copy it to an ignored `.env` if
 needed. Neither private keys nor real `.env` files belong in Git. `.dockerignore`
 and `.gcloudignore` exclude them from images **and source uploads**.
 
@@ -103,8 +104,8 @@ environments. Keep the original backend environments/secrets unchanged.
 | --- | --- |
 | `APNS_PRIVATE_KEY` | Entire real `.p8` PEM, including BEGIN/END lines |
 | `APNS_KEY_ID` | Apple's 10-character signing-key ID |
-| `PUSH_WORKLOAD_IDENTITY_PROVIDER` | Output of `infra/github.sh` |
-| `PUSH_DEPLOY_SERVICE_ACCOUNT` | Output of `infra/github.sh` |
+| `PUSH_WORKLOAD_IDENTITY_PROVIDER` | Output of `../infra/configure-push-trust.sh` |
+| `PUSH_DEPLOY_SERVICE_ACCOUNT` | Output of `../infra/configure-push-trust.sh` |
 
 | GitHub environment variable | Value |
 | --- | --- |
@@ -126,8 +127,10 @@ explicit project/CDN allowlists and native project configuration.
 
 ## Initial infrastructure setup (once per environment)
 
-Use an administrator with gcloud and Firebase CLI credentials. These commands are
-provided for review; no infrastructure has been deployed by this change.
+Run the commands below from the repository root.
+
+Use an administrator with gcloud and Firebase CLI credentials when provisioning
+a new environment.
 
 1. In Apple Developer, enable Push Notifications and App Attest for the mobile
    app ID, refresh provisioning, and create an APNs token signing key permitted
@@ -140,8 +143,8 @@ provided for review; no infrastructure has been deployed by this change.
 
    ```sh
    gcloud secrets create sports-push-apns-key --replication-policy automatic --project PROJECT
-   gcloud secrets versions add sports-push-apns-key --data-file push/secrets/AuthKey.p8 --project PROJECT
-   bash push/infra/deploy.sh PROJECT us-central1 APPLE_KEY_ID FIREBASE_APP_ID sandbox
+   gcloud secrets versions add sports-push-apns-key --data-file backend/secrets/AuthKey.p8 --project PROJECT
+   bash infra/setup-push.sh PROJECT us-central1 APPLE_KEY_ID FIREBASE_APP_ID sandbox
    ```
 
    The setup script fails before changes if that secret is absent. It prepares a
@@ -156,7 +159,7 @@ provided for review; no infrastructure has been deployed by this change.
    IDs from GitHub (not reusable names alone):
 
    ```sh
-   bash push/infra/github.sh PROJECT us-central1 OWNER/REPO REPOSITORY_ID OWNER_ID
+   bash infra/configure-push-trust.sh PROJECT us-central1 OWNER/REPO REPOSITORY_ID OWNER_ID
    ```
 
    It creates its own WIF pool/provider and deploy identity. Trust is restricted to

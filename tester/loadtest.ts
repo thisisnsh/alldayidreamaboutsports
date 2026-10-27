@@ -4,7 +4,7 @@
  * Spawns N virtual clients that poll the public scores hostname exactly like the
  * real app (GET matches/{id}.json every ~5s, plus today's
  * fixtures file + catalog.json). It records latency and `cf-cache-status` per
- * response and reports a §0 verdict: in steady state ~100% of responses must be
+ * response and reports a cache-health verdict: in steady state ~100% of responses must be
  * served by the edge (HIT/REVALIDATED/STALE/UPDATING), or rejected by the edge
  * rate limiter (429). A high MISS/BYPASS/DYNAMIC share means clients are
  * reaching R2 directly — a broken cache rule.
@@ -17,7 +17,7 @@
 import { env } from "../backend/src/env.js";
 import { utcPollRange } from "../backend/src/poller.js";
 
-/** Cache statuses that prove the edge — not R2 — served the request (§0). */
+/** Cache statuses that prove the edge — not R2 — served the request. */
 const HEALTHY_CACHE_STATUS = new Set(["HIT", "REVALIDATED", "STALE", "UPDATING"]);
 const RATE_LIMITED_STATUS = 429;
 
@@ -181,7 +181,7 @@ async function main(): Promise<void> {
 
   const verdict = acceptedShare >= 99 ? "PASS" : acceptedShare >= 90 ? "WARN" : "FAIL";
   console.log(
-    `\n§0 verdict: ${verdict} — ${acceptedShare.toFixed(1)}% accepted ` +
+    `\ncache-health verdict: ${verdict} — ${acceptedShare.toFixed(1)}% accepted ` +
       `(${healthy}/${total} HIT/REVALIDATED/STALE/UPDATING, ` +
       `${rateLimited}/${total} rate limited; ${healthyShare.toFixed(1)}% cache-served)`,
   );

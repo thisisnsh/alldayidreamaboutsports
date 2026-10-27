@@ -33,7 +33,7 @@ function playerName(name: string | null | undefined): string | null {
 /**
  * Map the API-Football short code (+ elapsed for the two ET halves) to a
  * fine-grained `Period`. ET is cumulative (91→105 first half, 106→120 second),
- * so the split is on `elapsed <= 105` per §1.
+ * so the split is on `elapsed <= 105`.
  * "BT" (Break Time) shows up at THREE distinct pauses, split by elapsed:
  * • ET setup break (or a null-elapsed blip) at ≤90' → BREAK ("BT")
  * • the pause between the two ET halves (~91–105') → EXTRA_BREAK ("ET HT")

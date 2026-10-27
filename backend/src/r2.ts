@@ -12,8 +12,7 @@ export class R2ConflictError extends Error {}
 
 /**
  * Cache-Control for the two live tiers. The zone cache rule serves users from
- * the edge and revalidates with R2 at most once per `max-age` per object — the
- * §0 invariant. `stale-while-revalidate` lets the edge serve the stale copy
+ * the edge and revalidates with R2 at most once per `max-age` per object. `stale-while-revalidate` lets the edge serve the stale copy
  * during that revalidation so a user never waits on origin. EVERY R2 write must
  * set one of these (or a long TTL); a header-less object bypasses the cache.
  */
@@ -43,7 +42,7 @@ export class R2 {
   }
 
   /**
-   * Writes a JSON object with an EXPLICIT `Cache-Control` (§0: every object must
+   * Writes a JSON object with an EXPLICIT `Cache-Control` (every object must
    * carry one or the zone cache rule bypasses it). Callers pass a full header
    * string (e.g. `CACHE_CONTROL_LIVE` / `CACHE_CONTROL_LONG`).
    */

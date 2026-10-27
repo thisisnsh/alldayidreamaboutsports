@@ -1,6 +1,6 @@
 # tester/ — staging-only dev tooling
 
-Two scripts for exercising the §0 edge path and the live overlay/celebration UI
+Two scripts for exercising the CDN cache path and the live overlay/celebration UI
 against **staging**, without API-Football or the Cloud Scheduler/Tasks pipeline:
 
 - **`loadtest.ts`** — fires N virtual clients at the staging scores CDN and reports
@@ -109,7 +109,7 @@ Run everything from `tester/`. A typical end-to-end pass:
    ```
 
    Expect low p99 latency and a `cf-cache-status` histogram dominated by
-   HIT/REVALIDATED — the §0 verdict should be ~100% healthy. A high
+   HIT/REVALIDATED — the cache-health verdict should be ~100% healthy. A high
    MISS/BYPASS/DYNAMIC share flags a broken cache rule.
 
 7. **Clean up** — remove all fakes from R2 and from the fixtures files:
